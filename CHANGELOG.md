@@ -36,6 +36,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `foundry_unblock` - Unblock tasks and track resolution
   - `foundry_list_blocked` - List all blocked tasks
   - `foundry_unjournaled_tasks` - Find tasks needing journal entries
+- Rendering module (`foundry_mcp.core.rendering`):
+  - `render_spec_to_markdown` - Generate formatted markdown with RenderOptions
+  - `render_progress_bar` - Text-based progress visualization
+  - `render_task_list` - Flat task listing with status filtering
+  - `get_status_icon` - Status to icon mapping (⏳🔄✅🚫❌)
+  - RenderOptions dataclass with mode, include_metadata, include_progress, etc.
+- Lifecycle module (`foundry_mcp.core.lifecycle`):
+  - `move_spec` - Move specs between folders with transition validation
+  - `activate_spec` - Move pending to active
+  - `complete_spec` - Move to completed with force option
+  - `archive_spec` - Move to archived
+  - `get_lifecycle_state` - Get folder, progress, can_complete/can_archive
+  - `list_specs_by_folder` - Organized spec listing
+  - MoveResult and LifecycleState dataclasses
+- MCP rendering tools (`foundry_mcp.tools.rendering`):
+  - `foundry_render_spec` - Render spec to markdown with mode options
+  - `foundry_render_progress` - ASCII progress bars for spec and phases
+  - `foundry_list_tasks` - Flat task list with filtering
+- MCP lifecycle tools (`foundry_mcp.tools.lifecycle`):
+  - `foundry_move_spec` - Move spec between folders
+  - `foundry_activate_spec` - Activate pending spec
+  - `foundry_complete_spec` - Mark spec completed
+  - `foundry_archive_spec` - Archive spec
+  - `foundry_lifecycle_state` - Get lifecycle state and transition eligibility
+  - `foundry_list_specs_by_folder` - List specs by folder
 - Task operations module (`foundry_mcp.core.task`):
   - `get_next_task` - Find next actionable task based on status and dependencies
   - `check_dependencies` - Analyze blocking and soft dependencies
