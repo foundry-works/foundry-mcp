@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T17:19:26.527532Z",
+  "last_updated": "2025-11-25T15:31:16.828784",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -13,7 +13,34 @@
       "Workflow prompts for common tasks"
     ],
     "complexity": "high",
-    "estimated_hours": 40
+    "estimated_hours": 40,
+    "repo_structure": {
+      "src/foundry_mcp": "Python package root added to sys.path via hatch/uv",
+      "src/foundry_mcp/core": "Shared logic for specs, tasks, validation, lifecycle, docs, testing",
+      "src/foundry_mcp/tools": "FastMCP tool definitions mirroring claude-sdd-toolkit CLI",
+      "src/foundry_mcp/resources": "MCP resource handlers for specs/templates/journals",
+      "src/foundry_mcp/prompts": "Workflow prompt definitions consumed by MCP clients",
+      "README.md & CHANGELOG.md": "Top-level docs updated every phase"
+    },
+    "dependency_notes": [
+      "Extract spec/task/progress primitives from claude-sdd-toolkit common/ and sdd_next/ modules",
+      "Port validation, journal, lifecycle helpers from sdd_validate/, sdd_update/, sdd_render/",
+      "Reuse doc_query/ and run_tests/ discovery logic with agent-agnostic abstractions",
+      "Ensure FastMCP 2.0 + hatch/uv build chain is configured before MCP tool wiring"
+    ],
+    "mcp_best_practices": [
+      "Secure resources with workspace-scoped roots and optional API keys",
+      "Version all MCP tool schemas and surface schema_version in responses",
+      "Ship a machine-readable capabilities manifest for client discovery",
+      "Implement MCP Notifications for reactive clients and Sampling for AI tasks",
+      "Document API key provisioning (FOUNDRY_MCP_API_KEYS, tenant TOML overrides) and rotation expectations"
+    ],
+    "operational_practices": [
+      "Centralized structured logging for every tool/resource invocation",
+      "Metrics hooks for latency/success exported via standard logger",
+      "Configuration file + env overrides to support multi-tenant hosting",
+      "Server-side middleware enforces manifest rate limits and emits audit logs"
+    ]
   },
   "hierarchy": {
     "spec-root": {
@@ -29,9 +56,14 @@
         "phase-5",
         "phase-6"
       ],
-      "total_tasks": 43,
+      "total_tasks": 58,
       "completed_tasks": 0,
-      "metadata": {}
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
     },
     "phase-1": {
       "type": "phase",
@@ -42,12 +74,13 @@
         "phase-1-files",
         "phase-1-verify"
       ],
-      "total_tasks": 8,
+      "total_tasks": 11,
       "completed_tasks": 0,
       "metadata": {
         "purpose": "Establish the foundry-mcp repo structure, package configuration, and extract core spec CRUD operations",
         "risk_level": "low",
-        "estimated_hours": 6
+        "estimated_hours": 6,
+        "repo_notes": "Follow top-level repo_structure for package layout and shared utilities"
       },
       "dependencies": {
         "blocks": [
@@ -70,9 +103,12 @@
         "task-1-3",
         "task-1-4",
         "task-1-5",
-        "task-1-6"
+        "task-1-6",
+        "task-1-7",
+        "task-1-8",
+        "task-1-9"
       ],
-      "total_tasks": 6,
+      "total_tasks": 9,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -92,7 +128,9 @@
       "dependencies": {
         "blocks": [
           "task-1-2",
-          "task-1-3"
+          "task-1-3",
+          "task-1-8",
+          "task-1-9"
         ],
         "blocked_by": [],
         "depends": []
@@ -146,7 +184,9 @@
           "task-1-6"
         ],
         "blocked_by": [
-          "task-1-1"
+          "task-1-1",
+          "task-1-8",
+          "task-1-9"
         ],
         "depends": []
       },
@@ -202,7 +242,8 @@
         "blocks": [],
         "blocked_by": [
           "task-1-3",
-          "task-1-4"
+          "task-1-4",
+          "task-1-9"
         ],
         "depends": []
       },
@@ -247,6 +288,91 @@
         ]
       }
     },
+    "task-1-7": {
+      "type": "task",
+      "title": "CHANGELOG.md entry",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "CHANGELOG.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Create initial CHANGELOG.md with version 0.1.0 entry",
+          "Record repository bootstrap decisions and tooling setup",
+          "Define format for future phase updates"
+        ]
+      }
+    },
+    "task-1-8": {
+      "type": "task",
+      "title": "src/foundry_mcp/config.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-1-3",
+          "task-1-9"
+        ],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/config.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.75,
+        "details": [
+          "Define server configuration (workspace roots, journals path, log levels)",
+          "Support env vars + TOML file overrides for multi-tenant hosting",
+          "Implement optional API key requirement for tools/resources (FOUNDRY_MCP_API_KEYS, tenant-scoped secrets)",
+          "Document rotation + revocation flow for API keys",
+          "Provide helper to emit structured logging + metrics decorators"
+        ]
+      }
+    },
+    "task-1-9": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/observability.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-1-3",
+          "task-1-5"
+        ],
+        "blocked_by": [
+          "task-1-1",
+          "task-1-8"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/observability.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "details": [
+          "Implement structured logging decorators shared by all tools/resources",
+          "Emit latency + status metrics to standard logger with tool/resource labels",
+          "Add audit log helper for security events (auth, rate limit, resource access)",
+          "Document how observability hooks integrate with FastMCP middleware"
+        ]
+      }
+    },
     "phase-1-verify": {
       "type": "group",
       "title": "Verification",
@@ -277,8 +403,12 @@
       "completed_tasks": 0,
       "metadata": {
         "verification_type": "auto",
-        "command": "cd foundry-mcp && python -c \"from foundry_mcp.server import mcp; print('Server imported successfully')\"",
-        "expected": "Server imports and initializes without errors"
+        "command": "uv run python -c \"from foundry_mcp.server import mcp; print('Server imported successfully')\"",
+        "expected": "Server imports and initializes without errors",
+        "runbook": [
+          "Execute from repository root after running `uv pip install -e .`",
+          "Command inserts src/ on PYTHONPATH via uv so imports work pre-PyPI"
+        ]
       }
     },
     "verify-1-2": {
@@ -304,6 +434,14 @@
         "phase-2-files",
         "phase-2-verify"
       ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Implement the core task workflow - finding tasks, preparing context, updating status",
+        "risk_level": "medium",
+        "estimated_hours": 10,
+        "parallelism_notes": "Task/progress extraction may start immediately after Phase 1 helpers land even if later phases remain blocked"
+      },
       "dependencies": {
         "blocked_by": [
           "phase-1"
@@ -312,13 +450,6 @@
           "phase-4"
         ],
         "depends": []
-      },
-      "total_tasks": 9,
-      "completed_tasks": 0,
-      "metadata": {
-        "purpose": "Implement the core task workflow - finding tasks, preparing context, updating status",
-        "risk_level": "medium",
-        "estimated_hours": 10
       }
     },
     "phase-2-files": {
@@ -330,9 +461,10 @@
         "task-2-1",
         "task-2-2",
         "task-2-3",
-        "task-2-4"
+        "task-2-4",
+        "task-2-5"
       ],
-      "total_tasks": 7,
+      "total_tasks": 8,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -507,6 +639,29 @@
         "details": "Unit tests for task discovery, status updates, and progress calculation"
       }
     },
+    "task-2-5": {
+      "type": "task",
+      "title": "CHANGELOG.md (Phase 2)",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "CHANGELOG.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Capture task workflow extraction milestones",
+          "Document new MCP task tools and schemas",
+          "Link to any breaking changes for clients"
+        ]
+      }
+    },
     "phase-2-verify": {
       "type": "group",
       "title": "Verification",
@@ -552,7 +707,12 @@
       "metadata": {
         "verification_type": "manual",
         "expected": "MCP inspector shows all task tools registered with correct schemas",
-        "command": ""
+        "command": "",
+        "runbook": [
+          "Launch Foundry MCP with `uv run foundry-mcp --inspect`",
+          "Open MCP Inspector and expand foundry_task* tools",
+          "Confirm schemas align with spec inputs/outputs and tools respond"
+        ]
       },
       "dependencies": {
         "blocks": [],
@@ -569,6 +729,13 @@
         "phase-3-files",
         "phase-3-verify"
       ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Implement spec validation, auto-fixing, and journal/blocker management",
+        "risk_level": "medium",
+        "estimated_hours": 6
+      },
       "dependencies": {
         "blocked_by": [
           "phase-1"
@@ -577,13 +744,6 @@
           "phase-4"
         ],
         "depends": []
-      },
-      "total_tasks": 6,
-      "completed_tasks": 0,
-      "metadata": {
-        "purpose": "Implement spec validation, auto-fixing, and journal/blocker management",
-        "risk_level": "medium",
-        "estimated_hours": 6
       }
     },
     "phase-3-files": {
@@ -595,9 +755,10 @@
         "task-3-1",
         "task-3-2",
         "task-3-3",
-        "task-3-4"
+        "task-3-4",
+        "task-3-5"
       ],
-      "total_tasks": 4,
+      "total_tasks": 5,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -631,7 +792,8 @@
           "Extract validate_spec from sdd_validate/",
           "Extract get_fix_actions for auto-fix suggestions",
           "Extract apply_fixes for applying fixes",
-          "Extract calculate_stats for spec statistics"
+          "Extract calculate_stats for spec statistics",
+          "Emit structured diagnostics (code, message, suggested_fix) for MCP consumption"
         ]
       }
     },
@@ -657,7 +819,8 @@
         "details": [
           "Extract add_journal_entry from sdd_update/journal.py",
           "Extract mark_blocked and unblock from sdd_update/status.py",
-          "Handle blocker metadata and timestamps"
+          "Handle blocker metadata and timestamps",
+          "Define on-disk journal layout (status folders + journal.json NDJSON) shared with resources"
         ]
       }
     },
@@ -683,7 +846,8 @@
         "details": [
           "Implement foundry_validate_spec MCP tool",
           "Implement foundry_fix_spec MCP tool",
-          "Implement foundry_stats MCP tool"
+          "Implement foundry_stats MCP tool",
+          "Return structured diagnostics + stats payload compatible with Phase 6 resources"
         ]
       }
     },
@@ -710,6 +874,29 @@
           "Implement foundry_add_journal MCP tool",
           "Implement foundry_mark_blocked MCP tool",
           "Implement foundry_unblock MCP tool"
+        ]
+      }
+    },
+    "task-3-5": {
+      "type": "task",
+      "title": "CHANGELOG.md (Phase 3)",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "CHANGELOG.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Document validation/journal schema changes",
+          "Capture new MCP tools and structured error outputs",
+          "Link to any migration notes for existing specs"
         ]
       }
     },
@@ -770,6 +957,13 @@
         "phase-4-files",
         "phase-4-verify"
       ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
+        "risk_level": "low",
+        "estimated_hours": 5
+      },
       "dependencies": {
         "blocked_by": [
           "phase-2",
@@ -779,13 +973,6 @@
           "phase-6"
         ],
         "depends": []
-      },
-      "total_tasks": 7,
-      "completed_tasks": 0,
-      "metadata": {
-        "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
-        "risk_level": "low",
-        "estimated_hours": 5
       }
     },
     "phase-4-files": {
@@ -797,9 +984,10 @@
         "task-4-1",
         "task-4-2",
         "task-4-3",
-        "task-4-4"
+        "task-4-4",
+        "task-4-5"
       ],
-      "total_tasks": 5,
+      "total_tasks": 6,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -934,6 +1122,29 @@
         ]
       }
     },
+    "task-4-5": {
+      "type": "task",
+      "title": "CHANGELOG.md (Phase 4)",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "CHANGELOG.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Describe rendering modes, lifecycle APIs, and template workflows",
+          "Note introduction of MCP smoke tests",
+          "Capture any schema updates for downstream consumers"
+        ]
+      }
+    },
     "phase-4-verify": {
       "type": "group",
       "title": "Verification",
@@ -941,7 +1152,8 @@
       "parent": "phase-4",
       "children": [
         "verify-4-1",
-        "verify-4-2"
+        "verify-4-2",
+        "verify-4-3"
       ],
       "dependencies": {
         "blocked_by": [
@@ -950,7 +1162,7 @@
         "blocks": [],
         "depends": []
       },
-      "total_tasks": 2,
+      "total_tasks": 3,
       "completed_tasks": 0,
       "metadata": {}
     },
@@ -982,6 +1194,24 @@
         "expected": "Specs move between folders correctly, completion timestamps added"
       }
     },
+    "verify-4-3": {
+      "type": "verify",
+      "title": "MCP registration smoke test",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "uv run python -m pytest tests/integration/test_mcp_smoke.py -v",
+        "expected": "FastMCP server registers rendering/lifecycle tools without schema errors",
+        "runbook": [
+          "Run after rendering + lifecycle tools are wired",
+          "Test ensures foundry_render_spec and lifecycle tools appear via FastMCP client registry"
+        ]
+      }
+    },
     "phase-5": {
       "type": "phase",
       "title": "Documentation & Testing Tools",
@@ -991,6 +1221,14 @@
         "phase-5-files",
         "phase-5-verify"
       ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add doc-query and run-tests functionality for full toolkit parity",
+        "risk_level": "medium",
+        "estimated_hours": 8,
+        "scope_notes": "Doc/query + testing tools must work for Foundry repo and arbitrary user repos via request payload overrides"
+      },
       "dependencies": {
         "blocked_by": [
           "phase-1"
@@ -999,13 +1237,6 @@
           "phase-6"
         ],
         "depends": []
-      },
-      "total_tasks": 6,
-      "completed_tasks": 0,
-      "metadata": {
-        "purpose": "Add doc-query and run-tests functionality for full toolkit parity",
-        "risk_level": "medium",
-        "estimated_hours": 8
       }
     },
     "phase-5-files": {
@@ -1017,9 +1248,10 @@
         "task-5-1",
         "task-5-2",
         "task-5-3",
-        "task-5-4"
+        "task-5-4",
+        "task-5-5"
       ],
-      "total_tasks": 4,
+      "total_tasks": 5,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -1053,7 +1285,9 @@
           "Extract documentation query functions from doc_query/",
           "Implement find_class, find_function",
           "Implement trace_calls for call graph",
-          "Implement impact_analysis for change impact"
+          "Implement impact_analysis for change impact",
+          "Support arbitrary repository roots via request payload (defaults to Foundry workspace)",
+          "Include schema_version + compatibility metadata in every response"
         ]
       }
     },
@@ -1079,7 +1313,9 @@
         "details": [
           "Extract pytest runner from run_tests/",
           "Implement run_tests with presets",
-          "Implement discover_tests for test discovery"
+          "Implement discover_tests for test discovery",
+          "Allow repo path overrides + selective test targets for arbitrary workspaces",
+          "Attach schema_version + execution_id to every run result"
         ]
       }
     },
@@ -1106,7 +1342,8 @@
           "Implement foundry_find_class MCP tool",
           "Implement foundry_find_function MCP tool",
           "Implement foundry_trace_calls MCP tool",
-          "Implement foundry_impact_analysis MCP tool"
+          "Implement foundry_impact_analysis MCP tool",
+          "Surface schema_version + auth requirement tags in tool metadata"
         ]
       }
     },
@@ -1132,7 +1369,31 @@
         "details": [
           "Implement foundry_run_tests MCP tool",
           "Implement foundry_discover_tests MCP tool",
-          "Add progress reporting for long-running tests"
+          "Add progress reporting for long-running tests",
+          "Expose schema_version + auth scopes via MCP tool registry"
+        ]
+      }
+    },
+    "task-5-5": {
+      "type": "task",
+      "title": "CHANGELOG.md (Phase 5)",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "CHANGELOG.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Capture doc-query and run-tests capabilities",
+          "Describe new MCP schemas + presets",
+          "Reference manual QA steps for reproducibility"
         ]
       }
     },
@@ -1167,7 +1428,12 @@
       "metadata": {
         "verification_type": "manual",
         "expected": "Documentation queries return expected class/function information",
-        "command": ""
+        "command": "",
+        "runbook": [
+          "Start server with `uv run foundry-mcp --inspect` and open MCP Inspector",
+          "Invoke foundry_find_class against src/foundry_mcp/core/spec.py",
+          "Confirm response lists symbols + file paths for sample repo and for alternate repo override"
+        ]
       },
       "dependencies": {
         "blocks": [],
@@ -1186,7 +1452,12 @@
       "metadata": {
         "verification_type": "manual",
         "expected": "foundry_run_tests executes pytest and returns results",
-        "command": ""
+        "command": "",
+        "runbook": [
+          "Invoke foundry_run_tests via MCP Inspector with preset=unit",
+          "Verify streaming progress events + final summary payload",
+          "Re-run with `repo_root` override pointing to sample fixture repo"
+        ]
       },
       "dependencies": {
         "blocks": [],
@@ -1203,6 +1474,13 @@
         "phase-6-files",
         "phase-6-verify"
       ],
+      "total_tasks": 14,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Complete MCP primitives (resources, prompts), test, and publish to PyPI",
+        "risk_level": "low",
+        "estimated_hours": 5
+      },
       "dependencies": {
         "blocked_by": [
           "phase-4",
@@ -1210,13 +1488,6 @@
         ],
         "blocks": [],
         "depends": []
-      },
-      "total_tasks": 7,
-      "completed_tasks": 0,
-      "metadata": {
-        "purpose": "Complete MCP primitives (resources, prompts), test, and publish to PyPI",
-        "risk_level": "low",
-        "estimated_hours": 5
       }
     },
     "phase-6-files": {
@@ -1228,9 +1499,14 @@
         "task-6-1",
         "task-6-2",
         "task-6-3",
-        "task-6-4"
+        "task-6-4",
+        "task-6-5",
+        "task-6-6",
+        "task-6-7",
+        "task-6-8",
+        "task-6-9"
       ],
-      "total_tasks": 4,
+      "total_tasks": 9,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -1248,7 +1524,10 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-6",
+          "task-6-7"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1262,7 +1541,9 @@
           "Implement foundry://specs/ resource (list specs)",
           "Implement foundry://specs/{status}/{spec_id} resource",
           "Implement foundry://specs/{spec_id}/journal resource",
-          "Implement foundry://templates/ resource"
+          "Implement foundry://templates/ resource",
+          "Reuse Phase 1/3 storage contract (status folders + journal layout)",
+          "Enforce workspace-root sandbox + optional API key check per request"
         ]
       }
     },
@@ -1273,7 +1554,9 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-7"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1300,7 +1583,9 @@
         "blocks": [
           "task-6-4"
         ],
-        "blocked_by": [],
+        "blocked_by": [
+          "task-6-8"
+        ],
         "depends": []
       },
       "total_tasks": 1,
@@ -1326,7 +1611,8 @@
       "dependencies": {
         "blocks": [],
         "blocked_by": [
-          "task-6-3"
+          "task-6-3",
+          "task-6-8"
         ],
         "depends": []
       },
@@ -1336,12 +1622,157 @@
         "task_category": "implementation",
         "estimated_hours": 1,
         "details": [
+          "Roll Phase 1-5 CHANGELOG entries into a release summary",
           "Update README with full tool documentation",
-          "Add CHANGELOG.md",
           "Build and publish to PyPI with hatch",
           "Test installation with pip install foundry-mcp"
         ],
         "file_path": "task-6-4.md"
+      }
+    },
+    "task-6-5": {
+      "type": "task",
+      "title": "CHANGELOG.md (Phase 6)",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "CHANGELOG.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Capture MCP resources/prompts additions",
+          "Document publication steps and version numbers",
+          "Note manual verification results for release"
+        ]
+      }
+    },
+    "task-6-6": {
+      "type": "task",
+      "title": "mcp/capabilities_manifest.json",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-6-8"
+        ],
+        "blocked_by": [
+          "task-6-1"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "mcp/capabilities_manifest.json",
+        "task_category": "implementation",
+        "estimated_hours": 0.5,
+        "details": [
+          "Emit machine-readable list of tools/resources/prompts with schema_version",
+          "Include auth requirements + rate limits per capability",
+          "Serve manifest over MCP discovery endpoint and ship with package"
+        ]
+      }
+    },
+    "task-6-7": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/capabilities.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-6-8",
+          "task-6-9",
+          "verify-6-5"
+        ],
+        "blocked_by": [
+          "task-6-1",
+          "task-6-2"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/capabilities.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": [
+          "Implement MCP Notifications for resource updates (foundry/specs/updated)",
+          "Implement MCP Sampling for server-side AI requests (impact analysis)",
+          "Update capabilities manifest with notification/sampling support"
+        ]
+      }
+    },
+    "task-6-8": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/rate_limit.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-6-3",
+          "task-6-4",
+          "task-6-9",
+          "verify-6-5"
+        ],
+        "blocked_by": [
+          "task-6-6",
+          "task-6-7"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/rate_limit.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.25,
+        "details": [
+          "Implement FastMCP middleware enforcing per-tool rate limits declared in manifest",
+          "Expose config knobs for burst/steady limits per tenant via TOML + env",
+          "Emit structured audit logs when throttling or auth failures occur",
+          "Feed rate limit counters into observability helpers"
+        ]
+      }
+    },
+    "task-6-9": {
+      "type": "task",
+      "title": "tests/integration/test_notifications_sampling.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "verify-6-5"
+        ],
+        "blocked_by": [
+          "task-6-7",
+          "task-6-8"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_notifications_sampling.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "details": [
+          "Add integration coverage for notification emission on spec/resource changes",
+          "Validate MCP Sampling requests execute server-side impact analysis",
+          "Assert rate limit middleware surfaces throttling events via FastMCP client",
+          "Share fixtures with existing integration suite"
+        ]
       }
     },
     "phase-6-verify": {
@@ -1352,18 +1783,20 @@
       "children": [
         "verify-6-1",
         "verify-6-2",
-        "verify-6-3"
+        "verify-6-3",
+        "verify-6-4",
+        "verify-6-5"
       ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {},
       "dependencies": {
+        "blocks": [],
         "blocked_by": [
           "phase-6-files"
         ],
-        "blocks": [],
         "depends": []
-      },
-      "total_tasks": 3,
-      "completed_tasks": 0,
-      "metadata": {}
+      }
     },
     "verify-6-1": {
       "type": "verify",
@@ -1375,7 +1808,7 @@
       "completed_tasks": 0,
       "metadata": {
         "verification_type": "auto",
-        "command": "cd foundry-mcp && python -m pytest tests/integration/ -v",
+        "command": "uv run python -m pytest tests/integration/ -v",
         "expected": "All MCP integration tests pass"
       }
     },
@@ -1390,7 +1823,12 @@
       "metadata": {
         "verification_type": "manual",
         "expected": "Foundry MCP server starts in Claude Desktop, tools are visible and callable",
-        "command": ""
+        "command": "",
+        "runbook": [
+          "Install package locally (pip install -e . or PyPI build)",
+          "Add foundry-mcp server entry to Claude Desktop settings",
+          "Launch Claude Desktop, open MCP Inspector, trigger sample tool"
+        ]
       },
       "dependencies": {
         "blocks": [],
@@ -1409,11 +1847,66 @@
       "metadata": {
         "verification_type": "manual",
         "expected": "pip install foundry-mcp works, foundry-mcp command starts server",
-        "command": ""
+        "command": "",
+        "runbook": [
+          "Create clean virtual environment",
+          "Run `pip install foundry-mcp` from PyPI",
+          "Execute `foundry-mcp --help` and `foundry-mcp --inspect` to confirm server starts"
+        ]
       },
       "dependencies": {
         "blocks": [],
         "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-4": {
+      "type": "verify",
+      "title": "Capabilities manifest is current",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "uv run python scripts/validate_capabilities_manifest.py",
+        "expected": "Manifest lists all tools/resources/prompts with matching schema_version",
+        "runbook": [
+          "Script cross-checks FastMCP registry to ensure manifest sync",
+          "Fails if auth requirements or rate limits are missing"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-5": {
+      "type": "verify",
+      "title": "Notifications, sampling, and rate limits",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "uv run python -m pytest tests/integration/test_notifications_sampling.py -v",
+        "expected": "Notifications emit on spec changes, sampling requests execute, and throttling surfaces structured errors",
+        "runbook": [
+          "Run after capabilities + rate limit middleware are wired",
+          "Test asserts FastMCP client receives notification events, sampling responses, and throttling telemetry"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-6-7",
+          "task-6-8",
+          "task-6-9"
+        ],
         "depends": []
       }
     }
