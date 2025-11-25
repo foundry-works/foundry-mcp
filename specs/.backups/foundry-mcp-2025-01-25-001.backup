@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:17:42.587129Z",
+  "last_updated": "2025-11-25T23:19:36.627529Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 58,
+    "progress_percentage": 60,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 35,
+      "completed_tasks": 36,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1156,7 +1156,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 9,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
         "risk_level": "low",
@@ -1404,7 +1404,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {}
     },
     "verify-4-1": {
@@ -1430,15 +1430,21 @@
     "verify-4-2": {
       "type": "verify",
       "title": "Lifecycle operations work correctly",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "auto",
         "command": "cd foundry-mcp && python -m pytest tests/unit/test_core/test_lifecycle.py -v",
-        "expected": "Specs move between folders correctly, completion timestamps added"
+        "expected": "Specs move between folders correctly, completion timestamps added",
+        "started_at": "2025-11-25T23:18:14.045405Z",
+        "status_note": "Starting automated verification for lifecycle tests",
+        "completed_at": "2025-11-25T23:19:36.622512Z",
+        "needs_journaling": false,
+        "actual_hours": 0.023,
+        "journaled_at": "2025-11-25T23:19:36.627497Z"
       }
     },
     "verify-4-3": {
@@ -2572,6 +2578,15 @@
       "content": "Created comprehensive unit test file tests/unit/test_core/test_rendering.py with 47 tests covering all core rendering functions: render_progress_bar, get_status_icon, render_spec_to_markdown, render_task_list, RenderOptions, and RenderResult. All tests pass. Tests verify markdown validity, progress bar generation, status icons, task filtering, options handling, and edge cases like empty specs.",
       "metadata": {},
       "task_id": "verify-4-1"
+    },
+    {
+      "timestamp": "2025-11-25T23:19:36.627492Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Lifecycle operations work correctly",
+      "author": "claude-code",
+      "content": "Created comprehensive unit test file tests/unit/test_core/test_lifecycle.py with 48 tests covering all core lifecycle functions: move_spec, activate_spec, complete_spec, archive_spec, get_lifecycle_state, list_specs_by_folder, and get_folder_for_spec. All tests pass. Tests verify folder transitions, status mapping, state calculations, edge cases like corrupted files and missing folders.",
+      "metadata": {},
+      "task_id": "verify-4-2"
     }
   ]
 }
