@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T21:15:59.541966Z",
+  "last_updated": "2025-11-25T21:21:39.503814Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 3,
+    "progress_percentage": 5,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -78,7 +78,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 11,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Establish the foundry-mcp repo structure, package configuration, and extract core spec CRUD operations",
         "risk_level": "low",
@@ -112,7 +112,7 @@
         "task-1-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -222,7 +222,7 @@
     "task-1-4": {
       "type": "task",
       "title": "src/foundry_mcp/core/spec.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [],
       "dependencies": {
@@ -233,7 +233,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/spec.py",
         "task_category": "implementation",
@@ -244,7 +244,13 @@
           "Extract find_spec_path across status folders",
           "Extract list_specs with filtering",
           "Adapt to standalone package (remove external dependencies)"
-        ]
+        ],
+        "started_at": "2025-11-25T21:17:03.790467Z",
+        "status_note": "Creating core/spec.py with spec loading, saving, finding, and listing functions",
+        "completed_at": "2025-11-25T21:21:39.496981Z",
+        "needs_journaling": false,
+        "actual_hours": 0.077,
+        "journaled_at": "2025-11-25T21:21:39.502247Z"
       }
     },
     "task-1-5": {
@@ -1944,6 +1950,15 @@
       "content": "Created src/foundry_mcp/__init__.py with package version 0.1.0, imports for create_server and main from server module, and __all__ exports list. Created necessary directory structure src/foundry_mcp/.",
       "metadata": {},
       "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2025-11-25T21:21:39.502241Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/spec.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/core/spec.py with standalone implementations extracted from claude-sdd-toolkit: load_spec, save_spec (with atomic write and backup), find_spec_file, find_specs_directory, resolve_spec_file, list_specs, get_node, update_node, backup_spec. Also created core/__init__.py with public exports. All functions adapted to work standalone without external dependencies.",
+      "metadata": {},
+      "task_id": "task-1-4"
     }
   ]
 }
