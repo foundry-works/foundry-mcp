@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:41:56.554433Z",
+  "last_updated": "2025-11-25T23:44:18.949853Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,9 +41,9 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 75,
+    "progress_percentage": 77,
     "status": "active",
-    "current_phase": "phase-5"
+    "current_phase": "phase-6"
   },
   "hierarchy": {
     "spec-root": {
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 44,
+      "completed_tasks": 45,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1784,14 +1784,14 @@
     "phase-6": {
       "type": "phase",
       "title": "MCP Resources, Prompts & Publishing",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-6-files",
         "phase-6-verify"
       ],
       "total_tasks": 14,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Complete MCP primitives (resources, prompts), test, and publish to PyPI",
         "risk_level": "low",
@@ -1809,7 +1809,7 @@
     "phase-6-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-6",
       "children": [
         "task-6-1",
@@ -1823,7 +1823,7 @@
         "task-6-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1836,7 +1836,7 @@
     "task-6-1": {
       "type": "task",
       "title": "src/foundry_mcp/resources/specs.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -1848,7 +1848,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/resources/specs.py",
         "task_category": "implementation",
@@ -1860,7 +1860,13 @@
           "Implement foundry://templates/ resource",
           "Reuse Phase 1/3 storage contract (status folders + journal layout)",
           "Enforce workspace-root sandbox + optional API key check per request"
-        ]
+        ],
+        "started_at": "2025-11-25T23:42:22.219754Z",
+        "status_note": "Starting MCP resources implementation",
+        "completed_at": "2025-11-25T23:44:18.942600Z",
+        "needs_journaling": false,
+        "actual_hours": 0.032,
+        "journaled_at": "2025-11-25T23:44:18.947764Z"
       }
     },
     "task-6-2": {
@@ -2767,6 +2773,15 @@
       "content": "All child tasks in phase phase-5 have been completed.",
       "metadata": {},
       "task_id": "phase-5"
+    },
+    {
+      "timestamp": "2025-11-25T23:44:18.947759Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/resources/specs.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/resources/specs.py with MCP resources for spec access. Implemented: foundry://specs/ (list all specs), foundry://specs/{status}/ (list by status), foundry://specs/{status}/{spec_id} (get specific spec), foundry://specs/{spec_id}/journal (get journal entries), foundry://templates/ (list templates), foundry://templates/{template_id} (get template). Added workspace sandbox validation and builtin templates (basic, feature, bugfix). Updated server.py to register docs tools, testing tools, and spec resources. All imports verified working.",
+      "metadata": {},
+      "task_id": "task-6-1"
     }
   ]
 }
