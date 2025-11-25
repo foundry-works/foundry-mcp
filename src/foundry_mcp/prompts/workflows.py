@@ -294,7 +294,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
             prompt_parts.extend([
                 "## Current Progress",
                 f"- **Overall:** {progress_info['percentage']}% complete",
-                f"- **Tasks:** {progress_info['completed']}/{progress_info['total']} done",
+                f"- **Tasks:** {progress_info['completed_tasks']}/{progress_info['total_tasks']} done",
                 "",
             ])
 
@@ -415,10 +415,8 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         prompt_parts.extend([
             "### Progress Overview",
             f"- **Completion:** {progress_info['percentage']}%",
-            f"- **Tasks:** {progress_info['completed']}/{progress_info['total']}",
-            f"- **Pending:** {progress_info.get('pending', 0)}",
-            f"- **In Progress:** {progress_info.get('in_progress', 0)}",
-            f"- **Blocked:** {progress_info.get('blocked', 0)}",
+            f"- **Tasks:** {progress_info['completed_tasks']}/{progress_info['total_tasks']}",
+            f"- **Remaining:** {progress_info.get('remaining_tasks', 0)}",
             "",
         ])
 

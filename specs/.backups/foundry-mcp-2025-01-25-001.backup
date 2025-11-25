@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:51:38.434273Z",
+  "last_updated": "2025-11-25T23:56:15.975389Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 84,
+    "progress_percentage": 86,
     "status": "active",
     "current_phase": "phase-6"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 50,
+      "completed_tasks": 51,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1791,7 +1791,7 @@
         "phase-6-verify"
       ],
       "total_tasks": 14,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Complete MCP primitives (resources, prompts), test, and publish to PyPI",
         "risk_level": "low",
@@ -1823,7 +1823,7 @@
         "task-6-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1904,7 +1904,7 @@
     "task-6-3": {
       "type": "task",
       "title": "tests/integration/test_mcp_tools.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -1917,7 +1917,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/integration/test_mcp_tools.py",
         "task_category": "implementation",
@@ -1927,7 +1927,13 @@
           "Test tool input/output schemas",
           "Test resource access",
           "Test prompt expansion"
-        ]
+        ],
+        "started_at": "2025-11-25T23:53:57.181186Z",
+        "status_note": "Starting integration tests for MCP tools",
+        "completed_at": "2025-11-25T23:56:15.969776Z",
+        "needs_journaling": false,
+        "actual_hours": 0.039,
+        "journaled_at": "2025-11-25T23:56:15.975362Z"
       }
     },
     "task-6-4": {
@@ -2857,6 +2863,15 @@
       "content": "Created src/foundry_mcp/core/rate_limit.py with token bucket rate limiting. Implemented: TokenBucketLimiter (smooth rate limiting with burst support), RateLimitManager (multi-tool/tenant management, manifest loading, env overrides), RateLimitConfig/State/Result dataclasses. Supports FOUNDRY_RATE_LIMIT_DEFAULT, FOUNDRY_RATE_LIMIT_BURST, and per-tool FOUNDRY_RATE_LIMIT_{TOOL} env vars. Integrates with observability audit_log for throttle and auth failure events. Global accessor get_rate_limit_manager() and check_rate_limit() helper. All imports verified.",
       "metadata": {},
       "task_id": "task-6-8"
+    },
+    {
+      "timestamp": "2025-11-25T23:56:15.975355Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/integration/test_mcp_tools.py",
+      "author": "claude-code",
+      "content": "Created tests/integration/test_mcp_tools.py with 45 comprehensive integration tests for MCP tools. Tests cover: tool input/output schema validation (5 tests), tool output format validation (7 tests), resource access patterns (10 tests), prompt expansion (12 tests), tool interaction workflows (2 tests), resource integrity (2 tests), docs tools registration (3 tests), and tool categories (4 tests). Also fixed bugs in src/foundry_mcp/prompts/workflows.py where get_progress_summary return keys were incorrect (used 'completed'/'total' instead of 'completed_tasks'/'total_tasks'). All 45 tests pass.",
+      "metadata": {},
+      "task_id": "task-6-3"
     }
   ]
 }
