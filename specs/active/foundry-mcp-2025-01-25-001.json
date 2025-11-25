@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:19:36.629545Z",
+  "last_updated": "2025-11-25T23:21:39.674355Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 62,
+    "progress_percentage": 63,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 36,
+      "completed_tasks": 37,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1149,18 +1149,21 @@
     "phase-4": {
       "type": "phase",
       "title": "Planning, Lifecycle & Rendering",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "phase-4-files",
         "phase-4-verify"
       ],
       "total_tasks": 9,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {
         "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
         "risk_level": "low",
-        "estimated_hours": 5
+        "estimated_hours": 5,
+        "needs_journaling": false,
+        "completed_at": "2025-11-25T23:21:39.663318Z",
+        "journaled_at": "2025-11-25T23:21:39.674330Z"
       },
       "dependencies": {
         "blocked_by": [
@@ -1389,7 +1392,7 @@
     "phase-4-verify": {
       "type": "group",
       "title": "Verification",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "verify-4-1",
@@ -1404,8 +1407,12 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
-      "metadata": {}
+      "completed_tasks": 3,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-25T23:21:39.663315Z",
+        "journaled_at": "2025-11-25T23:21:39.672375Z"
+      }
     },
     "verify-4-1": {
       "type": "verify",
@@ -1450,11 +1457,11 @@
     "verify-4-3": {
       "type": "verify",
       "title": "MCP registration smoke test",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "auto",
         "command": "uv run python -m pytest tests/integration/test_mcp_smoke.py -v",
@@ -1462,7 +1469,13 @@
         "runbook": [
           "Run after rendering + lifecycle tools are wired",
           "Test ensures foundry_render_spec and lifecycle tools appear via FastMCP client registry"
-        ]
+        ],
+        "started_at": "2025-11-25T23:20:03.314324Z",
+        "status_note": "Starting automated verification for MCP registration smoke test",
+        "completed_at": "2025-11-25T23:21:39.663149Z",
+        "needs_journaling": false,
+        "actual_hours": 0.027,
+        "journaled_at": "2025-11-25T23:21:39.668098Z"
       }
     },
     "phase-5": {
@@ -2587,6 +2600,33 @@
       "content": "Created comprehensive unit test file tests/unit/test_core/test_lifecycle.py with 48 tests covering all core lifecycle functions: move_spec, activate_spec, complete_spec, archive_spec, get_lifecycle_state, list_specs_by_folder, and get_folder_for_spec. All tests pass. Tests verify folder transitions, status mapping, state calculations, edge cases like corrupted files and missing folders.",
       "metadata": {},
       "task_id": "verify-4-2"
+    },
+    {
+      "timestamp": "2025-11-25T23:21:39.668094Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: MCP registration smoke test",
+      "author": "claude-code",
+      "content": "Created integration test file tests/integration/test_mcp_smoke.py with 25 tests verifying FastMCP server tool registration. All tests pass. Updated server.py to register rendering and lifecycle tools (register_rendering_tools, register_lifecycle_tools). Tests verify all rendering tools (foundry_render_spec, foundry_render_progress, foundry_list_tasks), lifecycle tools (foundry_move_spec, foundry_activate_spec, foundry_complete_spec, foundry_archive_spec, foundry_lifecycle_state, foundry_list_specs_by_folder), core tools, validation tools, journal tools, query tools, and task tools are registered correctly without schema errors.",
+      "metadata": {},
+      "task_id": "verify-4-3"
+    },
+    {
+      "timestamp": "2025-11-25T23:21:39.672372Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Verification",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-verify have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-verify"
+    },
+    {
+      "timestamp": "2025-11-25T23:21:39.674327Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Planning, Lifecycle & Rendering",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-4 have been completed.",
+      "metadata": {},
+      "task_id": "phase-4"
     }
   ]
 }
