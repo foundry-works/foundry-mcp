@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:08:01.358521Z",
+  "last_updated": "2025-11-25T23:09:44.512855Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 50,
+    "progress_percentage": 51,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 29,
+      "completed_tasks": 30,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1156,7 +1156,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 9,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
         "risk_level": "low",
@@ -1186,7 +1186,7 @@
         "task-4-5"
       ],
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1231,7 +1231,7 @@
     "task-4-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/lifecycle.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-4-files",
       "children": [
         "task-4-2-1",
@@ -1245,23 +1245,31 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/lifecycle.py",
         "task_category": "implementation",
-        "estimated_hours": 1.5
+        "estimated_hours": 1.5,
+        "started_at": "2025-11-25T23:08:34.188273Z",
+        "status_note": "Creating lifecycle.py core module"
       }
     },
     "task-4-2-1": {
       "type": "subtask",
       "title": "Implement move_spec between status folders",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Move specs between pending/active/completed/archived"
+        "details": "Move specs between pending/active/completed/archived",
+        "started_at": "2025-11-25T23:08:37.958163Z",
+        "status_note": "Implementing move_spec",
+        "completed_at": "2025-11-25T23:09:44.505694Z",
+        "needs_journaling": false,
+        "actual_hours": 0.018,
+        "journaled_at": "2025-11-25T23:09:44.510916Z"
       }
     },
     "task-4-2-2": {
@@ -2457,6 +2465,15 @@
       "content": "Created src/foundry_mcp/core/rendering.py with render_spec_to_markdown (main function with RenderOptions for basic/enhanced modes, include_metadata, include_progress, include_dependencies, include_journal, max_depth, phase_filter), render_progress_bar (text-based progress visualization [\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591] 40%), render_task_list (flat task listing with status_filter, include_completed), get_status_icon (\u23f3\ud83d\udd04\u2705\ud83d\udeab\u274c mapping), RenderOptions dataclass, RenderResult dataclass, internal helpers for _render_header, _render_objectives, _render_phase, _render_group, _render_task, _render_verification, _render_journal_summary. Committed as 099aa81.",
       "metadata": {},
       "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2025-11-25T23:09:44.510911Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement move_spec between status folders",
+      "author": "claude-code",
+      "content": "Implemented move_spec() function with folder transition validation (FOLDER_TRANSITIONS defines allowed moves), target folder validation, conflict detection, shutil.move for atomic moves, optional status update.",
+      "metadata": {},
+      "task_id": "task-4-2-1"
     }
   ]
 }
