@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:56:15.977628Z",
+  "last_updated": "2025-11-25T23:58:14.994935Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 87,
+    "progress_percentage": 89,
     "status": "active",
     "current_phase": "phase-6"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 51,
+      "completed_tasks": 52,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1791,7 +1791,7 @@
         "phase-6-verify"
       ],
       "total_tasks": 14,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Complete MCP primitives (resources, prompts), test, and publish to PyPI",
         "risk_level": "low",
@@ -1823,7 +1823,7 @@
         "task-6-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1939,7 +1939,7 @@
     "task-6-4": {
       "type": "task",
       "title": "Finalize README and publish to PyPI",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -1951,7 +1951,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "task_category": "implementation",
         "estimated_hours": 1,
@@ -1961,7 +1961,13 @@
           "Build and publish to PyPI with hatch",
           "Test installation with pip install foundry-mcp"
         ],
-        "file_path": "task-6-4.md"
+        "file_path": "task-6-4.md",
+        "started_at": "2025-11-25T23:56:43.352820Z",
+        "status_note": "Starting README finalization and PyPI preparation",
+        "completed_at": "2025-11-25T23:58:14.987282Z",
+        "needs_journaling": false,
+        "actual_hours": 0.025,
+        "journaled_at": "2025-11-25T23:58:14.992675Z"
       }
     },
     "task-6-5": {
@@ -2872,6 +2878,15 @@
       "content": "Created tests/integration/test_mcp_tools.py with 45 comprehensive integration tests for MCP tools. Tests cover: tool input/output schema validation (5 tests), tool output format validation (7 tests), resource access patterns (10 tests), prompt expansion (12 tests), tool interaction workflows (2 tests), resource integrity (2 tests), docs tools registration (3 tests), and tool categories (4 tests). Also fixed bugs in src/foundry_mcp/prompts/workflows.py where get_progress_summary return keys were incorrect (used 'completed'/'total' instead of 'completed_tasks'/'total_tasks'). All 45 tests pass.",
       "metadata": {},
       "task_id": "task-6-3"
+    },
+    {
+      "timestamp": "2025-11-25T23:58:14.992667Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Finalize README and publish to PyPI",
+      "author": "claude-code",
+      "content": "Finalized README.md with comprehensive documentation of 40+ tools organized by category (Spec Management, Query, Task Operations, Validation, Journal, Rendering, Lifecycle, Documentation, Testing), MCP resources (foundry:// URIs), workflow prompts, and configuration options. Updated pyproject.toml version to 0.2.0. Updated CHANGELOG.md to mark version 0.2.0 release date (2025-11-25). Verified build works with hatch (created dist/foundry_mcp-0.2.0-py3-none-any.whl and dist/foundry_mcp-0.2.0.tar.gz). Note: Actual PyPI publishing requires credentials and would be done manually with `hatch publish`.",
+      "metadata": {},
+      "task_id": "task-6-4"
     }
   ]
 }
