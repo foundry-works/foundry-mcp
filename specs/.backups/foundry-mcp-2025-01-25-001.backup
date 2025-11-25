@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:11:04.759939Z",
+  "last_updated": "2025-11-25T23:12:15.454330Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 53,
+    "progress_percentage": 55,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 32,
+      "completed_tasks": 33,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1156,7 +1156,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 9,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
         "risk_level": "low",
@@ -1186,7 +1186,7 @@
         "task-4-5"
       ],
       "total_tasks": 6,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1322,7 +1322,7 @@
     "task-4-4": {
       "type": "task",
       "title": "src/foundry_mcp/tools/lifecycle.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [],
       "dependencies": {
@@ -1333,7 +1333,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/lifecycle.py",
         "task_category": "implementation",
@@ -1344,7 +1344,13 @@
           "Implement foundry_archive_spec MCP tool",
           "Implement foundry_create_spec MCP tool",
           "Implement foundry_list_templates MCP tool"
-        ]
+        ],
+        "started_at": "2025-11-25T23:11:28.069230Z",
+        "status_note": "Creating lifecycle MCP tools",
+        "completed_at": "2025-11-25T23:12:15.449546Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-25T23:12:15.454296Z"
       }
     },
     "task-4-5": {
@@ -2514,6 +2520,15 @@
       "content": "Created src/foundry_mcp/tools/rendering.py with MCP tools: foundry_render_spec (renders spec to markdown with mode options basic/enhanced, include_journal, max_depth), foundry_render_progress (ASCII progress bars for overall spec and each phase), foundry_list_tasks (flat task list with status_filter, include_completed, returns both raw data and markdown). Committed as b85d646.",
       "metadata": {},
       "task_id": "task-4-3"
+    },
+    {
+      "timestamp": "2025-11-25T23:12:15.454292Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/tools/lifecycle.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/tools/lifecycle.py with MCP tools: foundry_move_spec (moves spec between folders with transition validation), foundry_activate_spec (pending -> active), foundry_complete_spec (to completed with force option), foundry_archive_spec (to archived), foundry_lifecycle_state (returns folder, status, progress_percentage, can_complete, can_archive), foundry_list_specs_by_folder (lists specs organized by folder with totals). Committed as b207a02.",
+      "metadata": {},
+      "task_id": "task-4-4"
     }
   ]
 }
