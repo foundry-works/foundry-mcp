@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:12:15.456318Z",
+  "last_updated": "2025-11-25T23:13:15.278254Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 56,
+    "progress_percentage": 58,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 33,
+      "completed_tasks": 34,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1156,7 +1156,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 9,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
         "risk_level": "low",
@@ -1176,7 +1176,7 @@
     "phase-4-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "task-4-1",
@@ -1186,8 +1186,12 @@
         "task-4-5"
       ],
       "total_tasks": 6,
-      "completed_tasks": 5,
-      "metadata": {},
+      "completed_tasks": 6,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-25T23:13:15.269465Z",
+        "journaled_at": "2025-11-25T23:13:15.278230Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-4-verify"
@@ -1356,7 +1360,7 @@
     "task-4-5": {
       "type": "task",
       "title": "CHANGELOG.md (Phase 4)",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [],
       "dependencies": {
@@ -1365,7 +1369,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "CHANGELOG.md",
         "estimated_hours": 0.25,
@@ -1373,7 +1377,13 @@
           "Describe rendering modes, lifecycle APIs, and template workflows",
           "Note introduction of MCP smoke tests",
           "Capture any schema updates for downstream consumers"
-        ]
+        ],
+        "started_at": "2025-11-25T23:12:38.135316Z",
+        "status_note": "Updating CHANGELOG for Phase 4",
+        "completed_at": "2025-11-25T23:13:15.269282Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2025-11-25T23:13:15.274151Z"
       }
     },
     "phase-4-verify": {
@@ -2529,6 +2539,24 @@
       "content": "Created src/foundry_mcp/tools/lifecycle.py with MCP tools: foundry_move_spec (moves spec between folders with transition validation), foundry_activate_spec (pending -> active), foundry_complete_spec (to completed with force option), foundry_archive_spec (to archived), foundry_lifecycle_state (returns folder, status, progress_percentage, can_complete, can_archive), foundry_list_specs_by_folder (lists specs organized by folder with totals). Committed as b207a02.",
       "metadata": {},
       "task_id": "task-4-4"
+    },
+    {
+      "timestamp": "2025-11-25T23:13:15.274147Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: CHANGELOG.md (Phase 4)",
+      "author": "claude-code",
+      "content": "Updated CHANGELOG.md with Phase 4 features: rendering module (render_spec_to_markdown with RenderOptions, render_progress_bar, render_task_list, get_status_icon), lifecycle module (move_spec, activate_spec, complete_spec, archive_spec, get_lifecycle_state, list_specs_by_folder, MoveResult/LifecycleState dataclasses), MCP rendering tools (foundry_render_spec, foundry_render_progress, foundry_list_tasks), MCP lifecycle tools (foundry_move_spec, foundry_activate_spec, foundry_complete_spec, foundry_archive_spec, foundry_lifecycle_state, foundry_list_specs_by_folder). Committed as 04fece2.",
+      "metadata": {},
+      "task_id": "task-4-5"
+    },
+    {
+      "timestamp": "2025-11-25T23:13:15.278226Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-files"
     }
   ]
 }
