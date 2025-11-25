@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Validation module (`foundry_mcp.core.validation`):
+  - `validate_spec` - Validate spec structure and return structured Diagnostic objects
+  - `get_fix_actions` - Generate fix actions from validation diagnostics
+  - `apply_fixes` - Apply auto-fixes to spec files with backup support
+  - `calculate_stats` - Calculate comprehensive spec statistics
+  - Structured diagnostics with code, message, severity, category, location, suggested_fix
+  - Auto-fix support for common issues (counts, hierarchy, metadata)
+- Journal module (`foundry_mcp.core.journal`):
+  - `add_journal_entry` - Add timestamped journal entries with entry types
+  - `get_journal_entries` - Retrieve and filter journal entries
+  - `mark_blocked` - Mark tasks as blocked with blocker metadata
+  - `unblock` - Unblock tasks with resolution tracking
+  - `list_blocked_tasks` - List all blocked tasks in a spec
+  - `find_unjournaled_tasks` - Find completed tasks needing journal entries
+  - Entry types: status_change, deviation, blocker, decision, note
+  - Blocker types: dependency, technical, resource, decision
+- MCP validation tools (`foundry_mcp.tools.validation`):
+  - `foundry_validate_spec` - Validate spec and return structured diagnostics
+  - `foundry_fix_spec` - Apply auto-fixes with dry-run support
+  - `foundry_spec_stats` - Get comprehensive spec statistics
+  - `foundry_validate_and_fix` - Combined validation and fix in one operation
+- MCP journal tools (`foundry_mcp.tools.journal`):
+  - `foundry_add_journal` - Add journal entries with optional task association
+  - `foundry_get_journal` - Retrieve journal entries with filtering
+  - `foundry_mark_blocked` - Mark tasks as blocked with metadata
+  - `foundry_unblock` - Unblock tasks and track resolution
+  - `foundry_list_blocked` - List all blocked tasks
+  - `foundry_unjournaled_tasks` - Find tasks needing journal entries
 - Task operations module (`foundry_mcp.core.task`):
   - `get_next_task` - Find next actionable task based on status and dependencies
   - `check_dependencies` - Analyze blocking and soft dependencies
