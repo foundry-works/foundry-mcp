@@ -1,4 +1,4 @@
-"""Core spec operations for foundry-mcp."""
+"""Core spec and task operations for foundry-mcp."""
 
 from foundry_mcp.core.spec import (
     find_specs_directory,
@@ -12,6 +12,12 @@ from foundry_mcp.core.spec import (
     update_node,
 )
 
+from foundry_mcp.core.task import (
+    is_unblocked,
+    is_in_current_phase,
+    get_next_task,
+)
+
 __all__ = [
     "find_specs_directory",
     "find_spec_file",
@@ -22,4 +28,7 @@ __all__ = [
     "list_specs",
     "get_node",
     "update_node",
+    "is_unblocked",
+    "is_in_current_phase",
+    "get_next_task",
 ]
