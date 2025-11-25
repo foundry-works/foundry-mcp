@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T21:42:21.142898Z",
+  "last_updated": "2025-11-25T21:44:22.961924Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 25,
+    "progress_percentage": 27,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 16,
+      "completed_tasks": 17,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -515,7 +515,7 @@
         "phase-2-verify"
       ],
       "total_tasks": 10,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Implement the core task workflow - finding tasks, preparing context, updating status",
         "risk_level": "medium",
@@ -545,7 +545,7 @@
         "task-2-5"
       ],
       "total_tasks": 8,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -692,7 +692,7 @@
     "task-2-3": {
       "type": "task",
       "title": "src/foundry_mcp/tools/tasks.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [],
       "dependencies": {
@@ -704,7 +704,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/tasks.py",
         "task_category": "implementation",
@@ -718,7 +718,13 @@
           "Implement foundry_complete_task MCP tool",
           "Implement foundry_start_task MCP tool",
           "Implement foundry_progress MCP tool"
-        ]
+        ],
+        "started_at": "2025-11-25T21:42:41.461024Z",
+        "status_note": "Starting MCP tools implementation for task operations",
+        "completed_at": "2025-11-25T21:44:22.957333Z",
+        "needs_journaling": false,
+        "actual_hours": 0.028,
+        "journaled_at": "2025-11-25T21:44:22.961896Z"
       }
     },
     "task-2-4": {
@@ -2186,6 +2192,15 @@
       "content": "update_parent_status function was implemented as part of task-2-2-1 in progress.py. It propagates status changes up the parent chain by calling recalculate_progress for each ancestor.",
       "metadata": {},
       "task_id": "task-2-2-2"
+    },
+    {
+      "timestamp": "2025-11-25T21:44:22.961890Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/tools/tasks.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/tools/tasks.py with 8 MCP tools: foundry_prepare_task, foundry_next_task, foundry_task_info, foundry_check_deps, foundry_update_status, foundry_complete_task, foundry_start_task, foundry_progress. Updated server.py to register task tools. Updated tools/__init__.py exports. All imports verified.",
+      "metadata": {},
+      "task_id": "task-2-3"
     }
   ]
 }

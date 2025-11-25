@@ -19,6 +19,7 @@ from foundry_mcp.core.spec import (
     find_specs_directory,
 )
 from foundry_mcp.tools.queries import register_query_tools
+from foundry_mcp.tools.tasks import register_task_tools
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     # Register tools
     _register_tools(mcp, config)
     register_query_tools(mcp, config)
+    register_task_tools(mcp, config)
 
     # Register resources
     _register_resources(mcp, config)
