@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T21:40:34.921476Z",
+  "last_updated": "2025-11-25T21:40:50.901516Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 22,
+    "progress_percentage": 24,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 13,
+      "completed_tasks": 14,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -515,7 +515,7 @@
         "phase-2-verify"
       ],
       "total_tasks": 10,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Implement the core task workflow - finding tasks, preparing context, updating status",
         "risk_level": "medium",
@@ -545,7 +545,7 @@
         "task-2-5"
       ],
       "total_tasks": 8,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -558,7 +558,7 @@
     "task-2-1": {
       "type": "task",
       "title": "src/foundry_mcp/core/task.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [
         "task-2-1-1",
@@ -574,7 +574,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/core/task.py",
         "task_category": "implementation",
@@ -620,13 +620,16 @@
     "task-2-1-3": {
       "type": "subtask",
       "title": "Extract check_dependencies for dependency analysis",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Analyze task dependencies and blockers"
+        "details": "Analyze task dependencies and blockers",
+        "completed_at": "2025-11-25T21:40:50.895922Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-25T21:40:50.899161Z"
       }
     },
     "task-2-2": {
@@ -2147,6 +2150,15 @@
       "content": "Added prepare_task function to task.py with full context gathering including get_previous_sibling, get_parent_context, get_phase_context, and get_task_journal_summary. Also added check_dependencies function. All functions exported from core/__init__.py. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-2-1-2"
+    },
+    {
+      "timestamp": "2025-11-25T21:40:50.899148Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Extract check_dependencies for dependency analysis",
+      "author": "claude-code",
+      "content": "check_dependencies function was implemented as part of task-2-1-2. It provides dependency analysis including can_start status, blocked_by list with task details, soft_depends list, and blocks list. Function exported from core/__init__.py.",
+      "metadata": {},
+      "task_id": "task-2-1-3"
     }
   ]
 }
