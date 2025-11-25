@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:47:25.265746Z",
+  "last_updated": "2025-11-25T23:48:48.276718Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 79,
+    "progress_percentage": 81,
     "status": "active",
     "current_phase": "phase-6"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 47,
+      "completed_tasks": 48,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1791,7 +1791,7 @@
         "phase-6-verify"
       ],
       "total_tasks": 14,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Complete MCP primitives (resources, prompts), test, and publish to PyPI",
         "risk_level": "low",
@@ -1823,7 +1823,7 @@
         "task-6-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1990,7 +1990,7 @@
     "task-6-6": {
       "type": "task",
       "title": "mcp/capabilities_manifest.json",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -2003,7 +2003,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "mcp/capabilities_manifest.json",
         "task_category": "implementation",
@@ -2012,7 +2012,13 @@
           "Emit machine-readable list of tools/resources/prompts with schema_version",
           "Include auth requirements + rate limits per capability",
           "Serve manifest over MCP discovery endpoint and ship with package"
-        ]
+        ],
+        "started_at": "2025-11-25T23:47:52.809907Z",
+        "status_note": "Creating capabilities manifest",
+        "completed_at": "2025-11-25T23:48:48.271215Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-25T23:48:48.276692Z"
       }
     },
     "task-6-7": {
@@ -2812,6 +2818,15 @@
       "content": "Updated CHANGELOG.md to document Phase 6 additions. Added MCP resources (foundry://specs/ endpoints for spec listing, status filtering, journal access, templates) and MCP workflow prompts (start_feature, debug_test, complete_phase, review_spec). Documented schema versioning and workspace sandbox validation.",
       "metadata": {},
       "task_id": "task-6-5"
+    },
+    {
+      "timestamp": "2025-11-25T23:48:48.276686Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: mcp/capabilities_manifest.json",
+      "author": "claude-code",
+      "content": "Created mcp/capabilities_manifest.json with machine-readable list of all capabilities. Documented 40+ tools organized by category (spec_management, query, task, validation, journal, rendering, lifecycle, docs, testing), 8 resources (foundry://specs/* and foundry://templates/* URIs plus legacy specs://* URIs marked deprecated), 4 prompts with parameter schemas. Included auth_required flags (all false), rate_limit specs for test execution tools (10 rpm), and schema_version 1.0.0.",
+      "metadata": {},
+      "task_id": "task-6-6"
     }
   ]
 }

@@ -1,0 +1,393 @@
+{
+  "schema_version": "1.0.0",
+  "server": {
+    "name": "foundry-mcp",
+    "version": "0.2.0",
+    "description": "MCP server for SDD spec management with tools, resources, and prompts"
+  },
+  "tools": {
+    "spec_management": [
+      {
+        "name": "list_specs",
+        "description": "List all specification files with optional filtering",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "get_spec",
+        "description": "Get a specification by ID",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "get_spec_hierarchy",
+        "description": "Get the full hierarchy of a specification",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "get_task",
+        "description": "Get a specific task from a specification",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "query_tools": [
+      {
+        "name": "foundry_query_tasks",
+        "description": "Query tasks with filtering by status, type, parent",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "task_tools": [
+      {
+        "name": "foundry_prepare_task",
+        "description": "Prepare task with full context for implementation",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_next_task",
+        "description": "Find next actionable task",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_task_info",
+        "description": "Get detailed task information",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_check_deps",
+        "description": "Check dependency status for a task",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_update_status",
+        "description": "Update task status",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_complete_task",
+        "description": "Mark task complete with journal entry",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_start_task",
+        "description": "Start working on a task",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_progress",
+        "description": "Get spec/phase progress summary",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "validation_tools": [
+      {
+        "name": "foundry_validate_spec",
+        "description": "Validate spec and return structured diagnostics",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_fix_spec",
+        "description": "Apply auto-fixes with dry-run support",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_spec_stats",
+        "description": "Get comprehensive spec statistics",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_validate_and_fix",
+        "description": "Combined validation and fix in one operation",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "journal_tools": [
+      {
+        "name": "foundry_add_journal",
+        "description": "Add journal entries with optional task association",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_get_journal",
+        "description": "Retrieve journal entries with filtering",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_mark_blocked",
+        "description": "Mark tasks as blocked with metadata",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_unblock",
+        "description": "Unblock tasks and track resolution",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_list_blocked",
+        "description": "List all blocked tasks",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_unjournaled_tasks",
+        "description": "Find tasks needing journal entries",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "rendering_tools": [
+      {
+        "name": "foundry_render_spec",
+        "description": "Render spec to markdown with mode options",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_render_progress",
+        "description": "ASCII progress bars for spec and phases",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_list_tasks",
+        "description": "Flat task list with filtering",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "lifecycle_tools": [
+      {
+        "name": "foundry_move_spec",
+        "description": "Move spec between folders",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_activate_spec",
+        "description": "Activate pending spec",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_complete_spec",
+        "description": "Mark spec completed",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_archive_spec",
+        "description": "Archive spec",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_lifecycle_state",
+        "description": "Get lifecycle state and transition eligibility",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_list_specs_by_folder",
+        "description": "List specs by folder",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "docs_tools": [
+      {
+        "name": "foundry_find_class",
+        "description": "Find class in documentation",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_find_function",
+        "description": "Find function in documentation",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_trace_calls",
+        "description": "Trace call graph with direction and depth",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_impact_analysis",
+        "description": "Analyze change impact",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_get_callers",
+        "description": "Get caller functions",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_get_callees",
+        "description": "Get callee functions",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_docs_stats",
+        "description": "Get documentation statistics",
+        "auth_required": false,
+        "rate_limit": null
+      }
+    ],
+    "testing_tools": [
+      {
+        "name": "foundry_run_tests",
+        "description": "Full-featured test execution with presets",
+        "auth_required": false,
+        "rate_limit": {
+          "requests_per_minute": 10,
+          "reason": "Resource-intensive operation"
+        }
+      },
+      {
+        "name": "foundry_discover_tests",
+        "description": "Test discovery without execution",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_test_presets",
+        "description": "List available test presets",
+        "auth_required": false,
+        "rate_limit": null
+      },
+      {
+        "name": "foundry_run_quick_tests",
+        "description": "Quick test preset shortcut",
+        "auth_required": false,
+        "rate_limit": {
+          "requests_per_minute": 10,
+          "reason": "Resource-intensive operation"
+        }
+      },
+      {
+        "name": "foundry_run_unit_tests",
+        "description": "Unit test preset shortcut",
+        "auth_required": false,
+        "rate_limit": {
+          "requests_per_minute": 10,
+          "reason": "Resource-intensive operation"
+        }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "uri_template": "foundry://specs/",
+      "description": "List all specifications",
+      "auth_required": false,
+      "rate_limit": null
+    },
+    {
+      "uri_template": "foundry://specs/{status}/",
+      "description": "List specs by status (active, pending, completed, archived)",
+      "auth_required": false,
+      "rate_limit": null
+    },
+    {
+      "uri_template": "foundry://specs/{status}/{spec_id}",
+      "description": "Get specific spec with full hierarchy",
+      "auth_required": false,
+      "rate_limit": null
+    },
+    {
+      "uri_template": "foundry://specs/{spec_id}/journal",
+      "description": "Get journal entries for a spec",
+      "auth_required": false,
+      "rate_limit": null
+    },
+    {
+      "uri_template": "foundry://templates/",
+      "description": "List available spec templates",
+      "auth_required": false,
+      "rate_limit": null
+    },
+    {
+      "uri_template": "foundry://templates/{template_id}",
+      "description": "Get specific template",
+      "auth_required": false,
+      "rate_limit": null
+    },
+    {
+      "uri_template": "specs://list",
+      "description": "Legacy: List all specifications",
+      "auth_required": false,
+      "rate_limit": null,
+      "deprecated": true
+    },
+    {
+      "uri_template": "specs://{spec_id}",
+      "description": "Legacy: Get specification by ID",
+      "auth_required": false,
+      "rate_limit": null,
+      "deprecated": true
+    }
+  ],
+  "prompts": [
+    {
+      "name": "start_feature",
+      "description": "Guide new feature setup with template selection",
+      "parameters": [
+        {"name": "feature_name", "type": "string", "required": true},
+        {"name": "description", "type": "string", "required": false},
+        {"name": "template", "type": "string", "required": false, "default": "feature"}
+      ]
+    },
+    {
+      "name": "debug_test",
+      "description": "Systematic test debugging workflow",
+      "parameters": [
+        {"name": "test_name", "type": "string", "required": false},
+        {"name": "error_message", "type": "string", "required": false},
+        {"name": "spec_id", "type": "string", "required": false}
+      ]
+    },
+    {
+      "name": "complete_phase",
+      "description": "Phase completion checklist and guidance",
+      "parameters": [
+        {"name": "spec_id", "type": "string", "required": true},
+        {"name": "phase_id", "type": "string", "required": false}
+      ]
+    },
+    {
+      "name": "review_spec",
+      "description": "Comprehensive spec status review",
+      "parameters": [
+        {"name": "spec_id", "type": "string", "required": true}
+      ]
+    }
+  ],
+  "metadata": {
+    "generated_at": "2025-11-25T23:48:00Z",
+    "generator": "foundry-mcp",
+    "documentation_url": "https://github.com/foundry-mcp/foundry-mcp"
+  }
+}
