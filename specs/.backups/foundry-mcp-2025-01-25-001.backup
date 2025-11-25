@@ -2,7 +2,7 @@
   "spec_id": "foundry-mcp-2025-01-25-001",
   "title": "Foundry MCP Server",
   "generated": "2025-01-25T12:00:00Z",
-  "last_updated": "2025-11-25T23:09:44.510949Z",
+  "last_updated": "2025-11-25T23:09:47.723311Z",
   "metadata": {
     "description": "Create Foundry MCP, a standalone MCP server for Spec-Driven Development published to PyPI. Extracts and refactors core business logic from claude-sdd-toolkit into an agent-agnostic MCP server.",
     "objectives": [
@@ -41,7 +41,7 @@
       "Configuration file + env overrides to support multi-tenant hosting",
       "Server-side middleware enforces manifest rate limits and emits audit logs"
     ],
-    "progress_percentage": 50,
+    "progress_percentage": 51,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -60,7 +60,7 @@
         "phase-6"
       ],
       "total_tasks": 58,
-      "completed_tasks": 30,
+      "completed_tasks": 31,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1156,7 +1156,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 9,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Implement spec creation, lifecycle management, and markdown rendering",
         "risk_level": "low",
@@ -1186,7 +1186,7 @@
         "task-4-5"
       ],
       "total_tasks": 6,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1231,7 +1231,7 @@
     "task-4-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/lifecycle.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [
         "task-4-2-1",
@@ -1245,7 +1245,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/core/lifecycle.py",
         "task_category": "implementation",
@@ -1275,13 +1275,16 @@
     "task-4-2-2": {
       "type": "subtask",
       "title": "Implement complete_spec and archive_spec",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Mark spec complete with timestamp, archive completed specs"
+        "details": "Mark spec complete with timestamp, archive completed specs",
+        "completed_at": "2025-11-25T23:09:47.720537Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-25T23:09:47.723285Z"
       }
     },
     "task-4-3": {
@@ -2474,6 +2477,15 @@
       "content": "Implemented move_spec() function with folder transition validation (FOLDER_TRANSITIONS defines allowed moves), target folder validation, conflict detection, shutil.move for atomic moves, optional status update.",
       "metadata": {},
       "task_id": "task-4-2-1"
+    },
+    {
+      "timestamp": "2025-11-25T23:09:47.723280Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement complete_spec and archive_spec",
+      "author": "claude-code",
+      "content": "Implemented complete_spec() with force option and progress validation (checks can_complete from get_lifecycle_state), archive_spec() for moving to archived folder. Also implemented get_lifecycle_state() returning LifecycleState dataclass with progress_percentage, can_complete, can_archive.",
+      "metadata": {},
+      "task_id": "task-4-2-2"
     }
   ]
 }
