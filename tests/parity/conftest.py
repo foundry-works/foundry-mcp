@@ -24,8 +24,9 @@ def fixture_manager(test_dir):
 
 @pytest.fixture
 def simple_spec_dir(fixture_manager):
-    """Setup simple spec fixture and return project root."""
+    """Setup core spec fixtures (active + completed) and return project root."""
     fixture_manager.setup("simple_spec", status="active")
+    fixture_manager.setup("completed_spec", status="completed")
     return fixture_manager.specs_dir.parent
 
 

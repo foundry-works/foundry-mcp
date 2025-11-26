@@ -4,6 +4,7 @@ Foundry-MCP adapter for parity testing.
 Calls foundry-mcp core functions directly for comparison with sdd-toolkit CLI.
 """
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -39,6 +40,7 @@ from foundry_mcp.core.validation import (
     validate_spec as core_validate,
     apply_fixes,
     calculate_stats,
+    get_fix_actions,
 )
 from foundry_mcp.core.lifecycle import (
     move_spec as core_move_spec,
@@ -73,6 +75,29 @@ class FoundryMcpAdapter(SpecToolAdapter):
             if spec_path.exists():
                 return status
         return None
+
+    def _diagnostic_to_dict(self, diagnostic: Any) -> Dict[str, Any]:
+        """Convert Validation Diagnostic dataclasses to plain dicts."""
+        if hasattr(diagnostic, "__dataclass_fields__"):
+            return asdict(diagnostic)
+        return diagnostic
+
+    def _journal_entry_to_dict(self, entry: Any) -> Any:
+        """Convert JournalEntry dataclasses to dicts for serialization."""
+        if hasattr(entry, "__dataclass_fields__"):
+            return asdict(entry)
+        return entry
+
+    def _fix_action_summary(self, action: Any) -> Dict[str, Any]:
+        """Return a simplified view of FixAction dataclasses."""
+        if hasattr(action, "__dataclass_fields__"):
+            data = asdict(action)
+            return {
+                "id": data.get("id"),
+                "description": data.get("description"),
+                "category": data.get("category"),
+            }
+        return action
 
     # =========================================================================
     # Spec Operations
@@ -283,7 +308,7 @@ class FoundryMcpAdapter(SpecToolAdapter):
 
             return {
                 "success": True,
-                "entry": entry,
+                "entry": self._journal_entry_to_dict(entry),
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -298,10 +323,11 @@ class FoundryMcpAdapter(SpecToolAdapter):
                 return {"success": False, "error": f"Spec not found: {spec_id}"}
 
             entries = get_journal_entries(spec_data, entry_type=entry_type)
+            entry_dicts = [self._journal_entry_to_dict(entry) for entry in entries]
             return {
                 "success": True,
-                "entries": entries,
-                "count": len(entries),
+                "entries": entry_dicts,
+                "count": len(entry_dicts),
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -381,14 +407,21 @@ class FoundryMcpAdapter(SpecToolAdapter):
                 return {"success": False, "error": f"Spec not found: {spec_id}"}
 
             result = core_validate(spec_data)
-            # ValidationResult is a dataclass, access attributes directly
-            errors = [d for d in result.diagnostics if d.severity == "error"]
-            warnings = [d for d in result.diagnostics if d.severity == "warning"]
+            errors = [
+                self._diagnostic_to_dict(d)
+                for d in result.diagnostics
+                if d.severity == "error"
+            ]
+            warnings = [
+                self._diagnostic_to_dict(d)
+                for d in result.diagnostics
+                if d.severity == "warning"
+            ]
             return {
                 "success": True,
                 "is_valid": result.is_valid,
-                "errors": [{"message": e.message, "path": e.path} for e in errors],
-                "warnings": [{"message": w.message, "path": w.path} for w in warnings],
+                "errors": errors,
+                "warnings": warnings,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -396,21 +429,47 @@ class FoundryMcpAdapter(SpecToolAdapter):
     def fix_spec(self, spec_id: str) -> Dict[str, Any]:
         """Auto-fix spec issues."""
         try:
+            spec_path = find_spec_file(spec_id, self.specs_dir)
+            if not spec_path:
+                return {"success": False, "error": f"Spec not found: {spec_id}"}
+
             spec_data = load_spec(spec_id, self.specs_dir)
             if spec_data is None:
                 return {"success": False, "error": f"Spec not found: {spec_id}"}
 
-            result = apply_fixes(spec_data)
+            validation = core_validate(spec_data)
+            actions = get_fix_actions(validation, spec_data)
 
-            # Save the fixed spec
-            spec_status = self._find_spec_status(spec_id)
-            if spec_status:
-                save_spec(spec_data, self.specs_dir / spec_status / f"{spec_id}.json")
+            if not actions:
+                return {
+                    "success": True,
+                    "spec_id": spec_id,
+                    "applied_count": 0,
+                    "skipped_count": 0,
+                    "message": "No auto-fixable issues found",
+                }
+
+            report = apply_fixes(
+                actions,
+                str(spec_path),
+                dry_run=False,
+                create_backup=False,
+            )
 
             return {
                 "success": True,
-                "fixes_applied": result.get("fixes_applied", []),
-                "remaining_issues": result.get("remaining_issues", []),
+                "spec_id": spec_id,
+                "applied_count": len(report.applied_actions),
+                "skipped_count": len(report.skipped_actions),
+                "applied_actions": [
+                    self._fix_action_summary(action)
+                    for action in report.applied_actions
+                ],
+                "skipped_actions": [
+                    self._fix_action_summary(action)
+                    for action in report.skipped_actions
+                ],
+                "backup_path": report.backup_path,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}

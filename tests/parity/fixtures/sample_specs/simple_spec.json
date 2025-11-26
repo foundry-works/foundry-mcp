@@ -12,9 +12,13 @@
       "type": "spec",
       "title": "Simple Test Spec",
       "status": "in_progress",
+      "parent": null,
       "children": [
         "phase-1"
-      ]
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 1,
+      "metadata": {}
     },
     "phase-1": {
       "type": "phase",
@@ -25,7 +29,10 @@
         "task-1-1",
         "task-1-2",
         "task-1-3"
-      ]
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 1,
+      "metadata": {}
     },
     "task-1-1": {
       "type": "task",
@@ -34,8 +41,11 @@
       "status": "completed",
       "parent": "phase-1",
       "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
       "metadata": {
-        "completed_at": "2025-01-02T10:00:00Z"
+        "completed_at": "2025-01-02T10:00:00Z",
+        "file_path": "tasks/task-1-1.py"
       }
     },
     "task-1-2": {
@@ -45,8 +55,11 @@
       "status": "in_progress",
       "parent": "phase-1",
       "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
       "metadata": {
-        "started_at": "2025-01-02T11:00:00Z"
+        "started_at": "2025-01-02T11:00:00Z",
+        "file_path": "tasks/task-1-2.py"
       }
     },
     "task-1-3": {
@@ -55,7 +68,12 @@
       "description": "The third task, still pending",
       "status": "pending",
       "parent": "phase-1",
-      "children": []
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tasks/task-1-3.py"
+      }
     }
   },
   "journal": [],
