@@ -172,62 +172,69 @@ class TestToolOutputSchemas:
     """Tests for tool output format validation."""
 
     def test_list_specs_returns_dict(self, mcp_server):
-        """Test that list_specs returns a dict."""
+        """Test that list_specs returns a dict with v2 response format."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_list_specs")
-        data = tool.fn(status="all")
-        assert isinstance(data, dict)
-        assert "specs" in data
-        assert "count" in data
+        result = tool.fn(status="all")
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        assert "specs" in result["data"]
+        assert "count" in result["data"]
 
     def test_list_specs_with_active_filter(self, mcp_server):
         """Test list_specs with active status filter."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_list_specs")
-        data = tool.fn(status="active")
-        assert "specs" in data
-        assert isinstance(data["specs"], list)
+        result = tool.fn(status="active")
+        assert result["success"] is True
+        assert "specs" in result["data"]
+        assert isinstance(result["data"]["specs"], list)
 
     def test_get_spec_returns_progress(self, mcp_server):
         """Test that get_spec returns progress information."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_get_spec")
-        data = tool.fn(spec_id="test-spec-001")
-        assert "total_tasks" in data
-        assert "completed_tasks" in data
-        assert "progress_percentage" in data
+        result = tool.fn(spec_id="test-spec-001")
+        assert result["success"] is True
+        assert "total_tasks" in result["data"]
+        assert "completed_tasks" in result["data"]
+        assert "progress_percentage" in result["data"]
 
     def test_get_spec_not_found_error(self, mcp_server):
         """Test that get_spec returns error for non-existent spec."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_get_spec")
-        data = tool.fn(spec_id="nonexistent-spec")
-        assert "error" in data
+        result = tool.fn(spec_id="nonexistent-spec")
+        assert result["success"] is False
+        assert result["error"] is not None
 
     def test_get_task_returns_task_data(self, mcp_server):
         """Test that get_task returns task data."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_get_task")
-        data = tool.fn(spec_id="test-spec-001", task_id="task-1-1")
-        assert "task" in data
-        assert data["task"]["title"] == "First task"
-        assert data["task"]["status"] == "completed"
+        result = tool.fn(spec_id="test-spec-001", task_id="task-1-1")
+        assert result["success"] is True
+        assert "task" in result["data"]
+        assert result["data"]["task"]["title"] == "First task"
+        assert result["data"]["task"]["status"] == "completed"
 
     def test_get_task_not_found_error(self, mcp_server):
         """Test that get_task returns error for non-existent task."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_get_task")
-        data = tool.fn(spec_id="test-spec-001", task_id="nonexistent-task")
-        assert "error" in data
+        result = tool.fn(spec_id="test-spec-001", task_id="nonexistent-task")
+        assert result["success"] is False
+        assert result["error"] is not None
 
     def test_get_spec_hierarchy_returns_hierarchy(self, mcp_server):
         """Test that get_spec_hierarchy returns hierarchy data."""
         tools = mcp_server._tool_manager._tools
         tool = tools.get("tool_get_spec_hierarchy")
-        data = tool.fn(spec_id="test-spec-001")
-        assert "hierarchy" in data
-        assert "spec-root" in data["hierarchy"]
-        assert "phase-1" in data["hierarchy"]
+        result = tool.fn(spec_id="test-spec-001")
+        assert result["success"] is True
+        assert "hierarchy" in result["data"]
+        assert "spec-root" in result["data"]["hierarchy"]
+        assert "phase-1" in result["data"]["hierarchy"]
 
 
 class TestResourceAccess:
@@ -463,27 +470,31 @@ class TestToolInteraction:
         """Test listing specs then getting one."""
         tools = mcp_server._tool_manager._tools
 
-        # List specs (returns dict directly)
+        # List specs (returns v2 response format)
         list_result = tools["tool_list_specs"].fn(status="active")
-        assert "specs" in list_result
+        assert list_result["success"] is True
+        assert "specs" in list_result["data"]
 
         # Get specific spec
-        if list_result["specs"]:
-            spec_id = list_result["specs"][0]["spec_id"]
+        if list_result["data"]["specs"]:
+            spec_id = list_result["data"]["specs"][0]["spec_id"]
             get_result = tools["tool_get_spec"].fn(spec_id=spec_id)
-            assert get_result["spec_id"] == spec_id
+            assert get_result["success"] is True
+            assert get_result["data"]["spec_id"] == spec_id
 
     def test_get_spec_then_task_workflow(self, mcp_server):
         """Test getting spec then getting task."""
         tools = mcp_server._tool_manager._tools
 
-        # Get spec hierarchy (returns dict directly)
+        # Get spec hierarchy (returns v2 response format)
         hierarchy_result = tools["tool_get_spec_hierarchy"].fn(spec_id="test-spec-001")
-        assert "hierarchy" in hierarchy_result
+        assert hierarchy_result["success"] is True
+        assert "hierarchy" in hierarchy_result["data"]
 
-        # Get specific task (returns dict directly)
+        # Get specific task (returns v2 response format)
         task_result = tools["tool_get_task"].fn(spec_id="test-spec-001", task_id="task-1-1")
-        assert "task" in task_result
+        assert task_result["success"] is True
+        assert "task" in task_result["data"]
 
 
 class TestResourceIntegrity:
