@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-26T19:29:58.357947Z",
-    "generated_at_commit": "8cf8f96916df51fa4c5d246d761130c33a37d3b7",
+    "generated_at": "2025-11-26T19:30:50.976427Z",
+    "generated_at_commit": "0e5af07e06966cb45c5e5e023d82d0e98ccb90ff",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 30,
-    "total_lines": 11788,
+    "total_lines": 11805,
     "total_classes": 42,
-    "total_functions": 134,
-    "avg_complexity": 7.3,
+    "total_functions": 135,
+    "avg_complexity": 7.25,
     "max_complexity": 59,
     "high_complexity_functions": [
       "register_task_tools (59)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 30,
-        "lines": 11788,
+        "lines": 11805,
         "classes": 42,
-        "functions": 134,
-        "avg_complexity": 7.3
+        "functions": 135,
+        "avg_complexity": 7.25
       }
     }
   },
@@ -430,7 +430,9 @@
       "classes": [
         "ToolResponse"
       ],
-      "functions": [],
+      "functions": [
+        "success_response"
+      ],
       "imports": [
         "dataclasses.dataclass",
         "dataclasses.field",
@@ -440,7 +442,7 @@
         "typing.Optional"
       ],
       "exports": [],
-      "lines": 25
+      "lines": 42
     },
     {
       "name": "spec",
@@ -2358,8 +2360,18 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "success_response",
+          "file": "src/foundry_mcp/core/responses.py",
+          "line": 42,
+          "context": [
+            "success_response"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "TestResult",
@@ -4826,7 +4838,7 @@
         },
         {
           "name": "read",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -4838,7 +4850,7 @@
         },
         {
           "name": "write",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 535,
           "call_type": "method_call"
         },
@@ -8403,6 +8415,29 @@
         }
       ],
       "call_count": 1
+    },
+    {
+      "name": "success_response",
+      "file": "src/foundry_mcp/core/responses.py",
+      "line": 28,
+      "language": "python",
+      "docstring": "Create a successful response with the given data.\n\nArgs:\n    **data: Keyword arguments to include in the response data\n\nReturns:\n    ToolResponse with success=True and provided data\n\nExample:\n    >>> success_response(spec_id=\"my-spec\", count=5)\n    ToolResponse(success=True, data={'spec_id': 'my-spec', 'count': 5}, error=None)",
+      "parameters": [],
+      "return_type": "ToolResponse",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "dict",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 42,
+          "call_type": "function_call"
+        }
+      ]
     },
     {
       "name": "find_git_root",

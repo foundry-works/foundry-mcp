@@ -40,3 +40,20 @@ def success_response(**data: Any) -> ToolResponse:
         ToolResponse(success=True, data={'spec_id': 'my-spec', 'count': 5}, error=None)
     """
     return ToolResponse(success=True, data=dict(data), error=None)
+
+
+def error_response(message: str) -> ToolResponse:
+    """
+    Create an error response with the given message.
+
+    Args:
+        message: Error message describing what went wrong
+
+    Returns:
+        ToolResponse with success=False and error message
+
+    Example:
+        >>> error_response("Spec not found")
+        ToolResponse(success=False, data={}, error='Spec not found')
+    """
+    return ToolResponse(success=False, data={}, error=message)
