@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 29,
+    "progress_percentage": 35,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -236,7 +236,7 @@
         "task-2-2",
         "task-2-3"
       ],
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "total_tasks": 3,
       "metadata": {},
       "dependencies": {
@@ -284,7 +284,7 @@
       "type": "task",
       "title": "Implement FieldMapper",
       "description": "Map equivalent field names between systems (e.g., progress_percentage vs percentage)",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2",
       "children": [],
       "dependencies": {
@@ -302,9 +302,15 @@
           "total_tasks": "total",
           "completed_tasks": "completed"
         },
-        "task_category": "investigation"
+        "task_category": "investigation",
+        "started_at": "2025-11-26T18:09:42.151791Z",
+        "status_note": "Implementing FieldMapper",
+        "completed_at": "2025-11-26T18:09:59.263519Z",
+        "needs_journaling": false,
+        "actual_hours": 0.005,
+        "journaled_at": "2025-11-26T18:09:59.265969Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "task-2-3": {
@@ -737,8 +743,17 @@
       "content": "OutputNormalizer already fully implemented at tests/parity/harness/normalizers.py. The class includes: TIMESTAMP_FIELDS set for 8 timestamp field names (timestamp, created_at, updated_at, completed_at, started_at, executed_at, marked_at, unblocked_at, blocked_at), PATH_FIELDS set for 7 path field names, FOUNDRY_ONLY_FIELDS (author) and SDD_ONLY_FIELDS (_exit_code, _stdout, _stderr, dry_run) for system-specific field removal. Main normalize() classmethod recursively handles dicts, lists, and primitives. _normalize_dict() applies field filtering and normalization. _normalize_path() converts absolute paths to relative from specs/. _is_timestamp_string() uses ISO 8601 regex pattern. All normalizations specified in task metadata implemented: timestamps -> <TIMESTAMP>, absolute paths -> relative, foundry-only and sdd-only field removal. No changes needed.",
       "metadata": {},
       "task_id": "task-2-1"
+    },
+    {
+      "timestamp": "2025-11-26T18:09:59.265964Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement FieldMapper",
+      "author": "claude-code",
+      "content": "FieldMapper already fully implemented at tests/parity/harness/normalizers.py (lines 121-185). The class includes: FIELD_MAPPINGS dict with mappings for progress fields (percentage -> progress_percentage, total -> total_tasks, completed -> completed_tasks, pending -> pending_tasks, in_progress -> in_progress_tasks), task fields (task_count -> total_tasks), and validation fields (valid -> is_valid). INVERSE_MAPPINGS auto-generated from FIELD_MAPPINGS. map_to_canonical() classmethod applies FIELD_MAPPINGS to sdd output to match foundry naming. _apply_mappings() helper recursively processes dicts and lists. All mappings specified in task metadata implemented. The file also includes normalize_for_comparison() convenience function that combines OutputNormalizer and FieldMapper. No changes needed.",
+      "metadata": {},
+      "task_id": "task-2-2"
     }
   ],
-  "last_updated": "2025-11-26T18:09:20.710757Z",
+  "last_updated": "2025-11-26T18:09:59.266852Z",
   "generated": "2025-01-26T00:00:00Z"
 }
