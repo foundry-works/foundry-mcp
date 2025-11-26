@@ -5,7 +5,6 @@ Provides MCP tools for spec validation, auto-fix, and statistics.
 """
 
 import logging
-from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
@@ -70,6 +69,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not specs_dir:
                 return {
                     "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
@@ -77,6 +77,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Spec not found: {spec_id}"
                 }
 
@@ -97,18 +98,22 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             return {
                 "success": True,
-                "spec_id": result.spec_id,
-                "is_valid": result.is_valid,
-                "error_count": result.error_count,
-                "warning_count": result.warning_count,
-                "info_count": result.info_count,
-                "diagnostics": diagnostics,
+                "data": {
+                    "spec_id": result.spec_id,
+                    "is_valid": result.is_valid,
+                    "error_count": result.error_count,
+                    "warning_count": result.warning_count,
+                    "info_count": result.info_count,
+                    "diagnostics": diagnostics,
+                },
+                "error": None
             }
 
         except Exception as e:
             logger.error(f"Error validating spec: {e}")
             return {
                 "success": False,
+                "data": {},
                 "error": str(e)
             }
 
@@ -148,6 +153,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not specs_dir:
                 return {
                     "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
@@ -155,6 +161,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_path:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Spec not found: {spec_id}"
                 }
 
@@ -162,6 +169,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Failed to load spec: {spec_id}"
                 }
 
@@ -174,10 +182,13 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not actions:
                 return {
                     "success": True,
-                    "spec_id": spec_id,
-                    "applied_count": 0,
-                    "skipped_count": 0,
-                    "message": "No auto-fixable issues found"
+                    "data": {
+                        "spec_id": spec_id,
+                        "applied_count": 0,
+                        "skipped_count": 0,
+                        "message": "No auto-fixable issues found"
+                    },
+                    "error": None
                 }
 
             # Apply fixes
@@ -208,19 +219,23 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             return {
                 "success": True,
-                "spec_id": spec_id,
-                "dry_run": dry_run,
-                "applied_count": len(report.applied_actions),
-                "skipped_count": len(report.skipped_actions),
-                "applied_actions": applied_actions,
-                "skipped_actions": skipped_actions,
-                "backup_path": report.backup_path,
+                "data": {
+                    "spec_id": spec_id,
+                    "dry_run": dry_run,
+                    "applied_count": len(report.applied_actions),
+                    "skipped_count": len(report.skipped_actions),
+                    "applied_actions": applied_actions,
+                    "skipped_actions": skipped_actions,
+                    "backup_path": report.backup_path,
+                },
+                "error": None
             }
 
         except Exception as e:
             logger.error(f"Error fixing spec: {e}")
             return {
                 "success": False,
+                "data": {},
                 "error": str(e)
             }
 
@@ -256,6 +271,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not specs_dir:
                 return {
                     "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
@@ -263,6 +279,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_path:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Spec not found: {spec_id}"
                 }
 
@@ -270,6 +287,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Failed to load spec: {spec_id}"
                 }
 
@@ -277,23 +295,27 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             return {
                 "success": True,
-                "spec_id": stats.spec_id,
-                "title": stats.title,
-                "version": stats.version,
-                "status": stats.status,
-                "totals": stats.totals,
-                "status_counts": stats.status_counts,
-                "max_depth": stats.max_depth,
-                "avg_tasks_per_phase": stats.avg_tasks_per_phase,
-                "verification_coverage": stats.verification_coverage,
-                "progress": stats.progress,
-                "file_size_kb": stats.file_size_kb,
+                "data": {
+                    "spec_id": stats.spec_id,
+                    "title": stats.title,
+                    "version": stats.version,
+                    "status": stats.status,
+                    "totals": stats.totals,
+                    "status_counts": stats.status_counts,
+                    "max_depth": stats.max_depth,
+                    "avg_tasks_per_phase": stats.avg_tasks_per_phase,
+                    "verification_coverage": stats.verification_coverage,
+                    "progress": stats.progress,
+                    "file_size_kb": stats.file_size_kb,
+                },
+                "error": None
             }
 
         except Exception as e:
             logger.error(f"Error getting spec stats: {e}")
             return {
                 "success": False,
+                "data": {},
                 "error": str(e)
             }
 
@@ -326,6 +348,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not specs_dir:
                 return {
                     "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
@@ -333,6 +356,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_path:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Spec not found: {spec_id}"
                 }
 
@@ -340,14 +364,14 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return {
                     "success": False,
+                    "data": {},
                     "error": f"Failed to load spec: {spec_id}"
                 }
 
             # Initial validation
             result = validate_spec(spec_data)
 
-            response = {
-                "success": True,
+            response_data = {
                 "spec_id": result.spec_id,
                 "is_valid": result.is_valid,
                 "error_count": result.error_count,
@@ -366,20 +390,20 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         create_backup=True,
                     )
 
-                    response["fixes_applied"] = len(report.applied_actions)
-                    response["backup_path"] = report.backup_path
+                    response_data["fixes_applied"] = len(report.applied_actions)
+                    response_data["backup_path"] = report.backup_path
 
                     # Re-validate after fixes
                     spec_data = load_spec(spec_id, specs_dir)
                     if spec_data:
                         post_result = validate_spec(spec_data)
-                        response["post_fix_is_valid"] = post_result.is_valid
-                        response["post_fix_error_count"] = post_result.error_count
+                        response_data["post_fix_is_valid"] = post_result.is_valid
+                        response_data["post_fix_error_count"] = post_result.error_count
                 else:
-                    response["fixes_applied"] = 0
-                    response["message"] = "No auto-fixable issues found"
+                    response_data["fixes_applied"] = 0
+                    response_data["message"] = "No auto-fixable issues found"
             else:
-                response["fixes_applied"] = 0
+                response_data["fixes_applied"] = 0
 
             # Convert diagnostics
             diagnostics = []
@@ -393,14 +417,19 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "auto_fixable": diag.auto_fixable,
                 })
 
-            response["diagnostics"] = diagnostics
+            response_data["diagnostics"] = diagnostics
 
-            return response
+            return {
+                "success": True,
+                "data": response_data,
+                "error": None
+            }
 
         except Exception as e:
             logger.error(f"Error in validate_and_fix: {e}")
             return {
                 "success": False,
+                "data": {},
                 "error": str(e)
             }
 
