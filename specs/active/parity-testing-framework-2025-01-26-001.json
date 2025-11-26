@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 47,
+    "progress_percentage": 52,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -357,15 +357,19 @@
       "type": "phase",
       "title": "Test Fixtures",
       "description": "Create sample specs and fixture management",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "task-3-1",
         "task-3-2"
       ],
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "total_tasks": 2,
-      "metadata": {},
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-26T18:14:42.187444Z",
+        "journaled_at": "2025-11-26T18:14:42.191736Z"
+      },
       "dependencies": {
         "blocks": [],
         "blocked_by": [],
@@ -409,7 +413,7 @@
       "type": "task",
       "title": "Implement FixtureManager",
       "description": "Create utility for setting up and cleaning test fixtures",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3",
       "children": [],
       "dependencies": {
@@ -428,9 +432,15 @@
           "Create proper folder structure"
         ],
         "file_path": "task-3-2.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:14:14.209272Z",
+        "status_note": "Implementing FixtureManager",
+        "completed_at": "2025-11-26T18:14:42.187303Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-26T18:14:42.189786Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "phase-4": {
@@ -795,8 +805,26 @@
       "content": "Sample spec fixtures completed. Four fixtures already existed (simple_spec.json, with_dependencies.json, with_blockers.json, completed_spec.json). Created missing multi_phase_spec.json with 3 phases, 7 tasks across different statuses, and sample journal entries. Fixed all existing fixtures to add required 'generated' and 'last_updated' fields for spec validation compliance. All 5 fixtures now pass validation: simple_spec.json (3 tasks, single phase), multi_phase_spec.json (7 tasks, 3 phases), with_dependencies.json (tasks with dependency relationships), with_blockers.json (blocked task scenarios), completed_spec.json (fully completed spec). Fixtures located at tests/parity/fixtures/sample_specs/.",
       "metadata": {},
       "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2025-11-26T18:14:42.189781Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement FixtureManager",
+      "author": "claude-code",
+      "content": "FixtureManager already fully implemented at tests/parity/harness/fixture_manager.py (94 lines). All features specified in task metadata: setup() method copies fixture to test dir, creates proper folder structure (pending/active/completed/archived), reads spec_id from fixture for proper naming; cleanup() method removes test directory using shutil.rmtree(); Creates proper folder structure with mkdir(parents=True, exist_ok=True). Additional helper methods: setup_multiple() for batch fixture setup, get_spec_path() for path lookup, read_spec() and write_spec() for convenient spec manipulation. FIXTURE_DIR class constant points to fixtures/sample_specs/. No changes needed.",
+      "metadata": {},
+      "task_id": "task-3-2"
+    },
+    {
+      "timestamp": "2025-11-26T18:14:42.191732Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Test Fixtures",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-3 have been completed.",
+      "metadata": {},
+      "task_id": "phase-3"
     }
   ],
-  "last_updated": "2025-11-26T18:13:47.486108Z",
+  "last_updated": "2025-11-26T18:14:42.191753Z",
   "generated": "2025-01-26T00:00:00Z"
 }
