@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-26T19:30:50.976427Z",
-    "generated_at_commit": "0e5af07e06966cb45c5e5e023d82d0e98ccb90ff",
+    "generated_at": "2025-11-26T19:31:41.512927Z",
+    "generated_at_commit": "cc3d2827c241c9638027543065128f77db50cb20",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 30,
-    "total_lines": 11805,
+    "total_lines": 11822,
     "total_classes": 42,
-    "total_functions": 135,
-    "avg_complexity": 7.25,
+    "total_functions": 136,
+    "avg_complexity": 7.21,
     "max_complexity": 59,
     "high_complexity_functions": [
       "register_task_tools (59)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 30,
-        "lines": 11805,
+        "lines": 11822,
         "classes": 42,
-        "functions": 135,
-        "avg_complexity": 7.25
+        "functions": 136,
+        "avg_complexity": 7.21
       }
     }
   },
@@ -431,7 +431,8 @@
         "ToolResponse"
       ],
       "functions": [
-        "success_response"
+        "success_response",
+        "error_response"
       ],
       "imports": [
         "dataclasses.dataclass",
@@ -442,7 +443,7 @@
         "typing.Optional"
       ],
       "exports": [],
-      "lines": 42
+      "lines": 59
     },
     {
       "name": "spec",
@@ -2368,10 +2369,18 @@
           "context": [
             "success_response"
           ]
+        },
+        {
+          "instantiator": "error_response",
+          "file": "src/foundry_mcp/core/responses.py",
+          "line": 59,
+          "context": [
+            "error_response"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 2
     },
     {
       "name": "TestResult",
@@ -4838,7 +4847,7 @@
         },
         {
           "name": "read",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 533,
           "call_type": "method_call"
         },
@@ -8438,6 +8447,28 @@
           "call_type": "function_call"
         }
       ]
+    },
+    {
+      "name": "error_response",
+      "file": "src/foundry_mcp/core/responses.py",
+      "line": 45,
+      "language": "python",
+      "docstring": "Create an error response with the given message.\n\nArgs:\n    message: Error message describing what went wrong\n\nReturns:\n    ToolResponse with success=False and error message\n\nExample:\n    >>> error_response(\"Spec not found\")\n    ToolResponse(success=False, data={}, error='Spec not found')",
+      "parameters": [
+        {
+          "name": "message",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "return_type": "ToolResponse",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
     },
     {
       "name": "find_git_root",

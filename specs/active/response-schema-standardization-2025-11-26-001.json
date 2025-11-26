@@ -2,7 +2,7 @@
   "spec_id": "response-schema-standardization-2025-11-26-001",
   "title": "MCP Tool Response Schema Standardization",
   "generated": "2025-11-26T12:00:00Z",
-  "last_updated": "2025-11-26T19:31:17.405404Z",
+  "last_updated": "2025-11-26T19:32:15.987098Z",
   "metadata": {
     "description": "Standardize all MCP tool response schemas across six tool modules plus new core helpers so every client sees the same predictable envelope.",
     "objectives": [
@@ -44,7 +44,7 @@
       "Response wrapper utility will be added to core module",
       "Clients advertise response_contract version via MCP capability negotiation"
     ],
-    "progress_percentage": 10,
+    "progress_percentage": 13,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -61,7 +61,7 @@
         "phase-4"
       ],
       "total_tasks": 30,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {}
     },
     "phase-1": {
@@ -74,7 +74,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 8,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Create the canonical response schema and helper utilities",
         "risk_level": "low",
@@ -99,7 +99,7 @@
         "task-1-3"
       ],
       "total_tasks": 6,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -112,7 +112,7 @@
     "task-1-1": {
       "type": "task",
       "title": "src/foundry_mcp/core/responses.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [
         "task-1-1-1",
@@ -121,7 +121,7 @@
         "task-1-1-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "file_path": "src/foundry_mcp/core/responses.py",
         "task_category": "implementation",
@@ -194,13 +194,19 @@
     "task-1-1-4": {
       "type": "subtask",
       "title": "Document meta/warnings contract",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Describe optional meta payload (version, pagination, warnings) and how multi-payload tools map fields into data/meta."
+        "details": "Describe optional meta payload (version, pagination, warnings) and how multi-payload tools map fields into data/meta.",
+        "started_at": "2025-11-26T19:31:46.317876Z",
+        "status_note": "Documenting meta/warnings contract in responses.py",
+        "completed_at": "2025-11-26T19:32:15.983273Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-26T19:32:15.986006Z"
       }
     },
     "task-1-2": {
@@ -879,6 +885,15 @@
       "content": "Added error_response(message) helper function that creates ToolResponse with success=False and the provided error message. Includes docstring with example usage.",
       "metadata": {},
       "task_id": "task-1-1-3"
+    },
+    {
+      "timestamp": "2025-11-26T19:32:15.986001Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Document meta/warnings contract",
+      "author": "claude-code",
+      "content": "Added comprehensive module docstring documenting: (1) base response schema contract (success/data/error), (2) meta payload convention with _meta reserved key for version, pagination, and timing, (3) _warnings reserved key for non-fatal issues, (4) multi-payload tools convention for nesting multiple payloads under named keys.",
+      "metadata": {},
+      "task_id": "task-1-1-4"
     }
   ]
 }
