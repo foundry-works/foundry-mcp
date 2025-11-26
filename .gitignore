@@ -59,3 +59,6 @@ specs/.fidelity-reviews/
 
 .doc-cache/
 .agents/
+.mcp.json
+uv.lock
+.venv

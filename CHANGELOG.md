@@ -153,9 +153,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `get_node` / `update_node` - Hierarchy node operations
 - Package structure following Python best practices
 - FastMCP and MCP dependencies for server implementation
-
-### Technical Decisions
-- Extracted core spec operations from claude-sdd-toolkit as standalone module
-- Removed external dependencies for portability
-- Atomic file writes with `.tmp` extension for data safety
-- Automatic backup creation in `.backups/` directory before saves

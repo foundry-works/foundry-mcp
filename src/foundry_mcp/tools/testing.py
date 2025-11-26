@@ -4,7 +4,6 @@ Testing tools for foundry-mcp.
 Provides MCP tools for running and discovering tests.
 """
 
-import json
 import logging
 from typing import Optional
 
@@ -46,7 +45,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
         fail_fast: bool = False,
         markers: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Run tests using pytest.
 
@@ -76,7 +75,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 markers=markers,
             )
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "execution_id": result.execution_id,
@@ -101,15 +100,15 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "duration": result.duration,
                 "error": result.error,
                 "metadata": result.metadata,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error running tests: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_discover_tests")
@@ -117,7 +116,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
         target: Optional[str] = None,
         pattern: str = "test_*.py",
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Discover tests without running them.
 
@@ -135,7 +134,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             runner = _get_runner(workspace)
             result = runner.discover_tests(target=target, pattern=pattern)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "timestamp": result.timestamp,
@@ -152,19 +151,19 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ],
                 "error": result.error,
                 "metadata": result.metadata,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error discovering tests: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_test_presets")
-    def foundry_test_presets() -> str:
+    def foundry_test_presets() -> dict:
         """
         Get available test presets.
 
@@ -176,27 +175,27 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             presets = get_presets()
 
-            return json.dumps({
+            return {
                 "success": True,
                 "schema_version": SCHEMA_VERSION,
                 "presets": presets,
                 "available": list(presets.keys()),
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error getting presets: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_run_quick_tests")
     def foundry_run_quick_tests(
         target: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Run quick tests (preset: quick).
 
@@ -213,7 +212,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             runner = _get_runner(workspace)
             result = runner.run_tests(target=target, preset="quick")
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "execution_id": result.execution_id,
@@ -224,22 +223,22 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "skipped": result.skipped,
                 },
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error running quick tests: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_run_unit_tests")
     def foundry_run_unit_tests(
         target: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Run unit tests (preset: unit).
 
@@ -256,7 +255,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             runner = _get_runner(workspace)
             result = runner.run_tests(target=target, preset="unit")
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "execution_id": result.execution_id,
@@ -267,15 +266,15 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "skipped": result.skipped,
                 },
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error running unit tests: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     logger.debug("Registered testing tools: foundry_run_tests, foundry_discover_tests, "
                  "foundry_test_presets, foundry_run_quick_tests, foundry_run_unit_tests")

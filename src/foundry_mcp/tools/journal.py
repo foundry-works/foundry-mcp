@@ -4,7 +4,6 @@ Journal tools for foundry-mcp.
 Provides MCP tools for journal entries and blocker management.
 """
 
-import json
 import logging
 from typing import Optional
 
@@ -49,7 +48,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         entry_type: str = "note",
         task_id: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Add a journal entry to a specification.
 
@@ -68,10 +67,10 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         """
         valid_types = ["status_change", "deviation", "blocker", "decision", "note"]
         if entry_type not in valid_types:
-            return json.dumps({
+            return {
                 "success": False,
                 "error": f"Invalid entry_type: {entry_type}. Must be one of: {valid_types}"
-            })
+            }
 
         try:
             if workspace:
@@ -80,17 +79,17 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             # Add journal entry
             entry = add_journal_entry(
@@ -104,12 +103,12 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             # Save spec
             if not save_spec(spec_id, spec_data, specs_dir):
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "Failed to save spec"
-                })
+                }
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "entry": {
@@ -118,14 +117,14 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "title": entry.title,
                     "task_id": entry.task_id,
                 }
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error adding journal entry: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_get_journal")
@@ -135,7 +134,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         entry_type: Optional[str] = None,
         limit: int = 10,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get journal entries from a specification.
 
@@ -156,17 +155,17 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             entries = get_journal_entries(
                 spec_data,
@@ -175,7 +174,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 limit=limit,
             )
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "count": len(entries),
@@ -190,14 +189,14 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     }
                     for e in entries
                 ]
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error getting journal entries: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_mark_blocked")
@@ -208,7 +207,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         blocker_type: str = "dependency",
         ticket: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Mark a task as blocked.
 
@@ -227,10 +226,10 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         """
         valid_types = ["dependency", "technical", "resource", "decision"]
         if blocker_type not in valid_types:
-            return json.dumps({
+            return {
                 "success": False,
                 "error": f"Invalid blocker_type: {blocker_type}. Must be one of: {valid_types}"
-            })
+            }
 
         try:
             if workspace:
@@ -239,24 +238,24 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             # Mark task as blocked
             if not mark_blocked(spec_data, task_id, reason, blocker_type, ticket):
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Task not found: {task_id}"
-                })
+                }
 
             # Add journal entry for blocker
             add_journal_entry(
@@ -270,26 +269,26 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             # Save spec
             if not save_spec(spec_id, spec_data, specs_dir):
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "Failed to save spec"
-                })
+                }
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "task_id": task_id,
                 "blocker_type": blocker_type,
                 "reason": reason,
                 "ticket": ticket,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error marking task blocked: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_unblock")
@@ -298,7 +297,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         task_id: str,
         resolution: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Unblock a task.
 
@@ -320,32 +319,32 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             # Get blocker info before unblocking
             blocker = get_blocker_info(spec_data, task_id)
             if not blocker:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Task {task_id} is not blocked"
-                })
+                }
 
             # Unblock the task
             if not unblock(spec_data, task_id, resolution):
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Failed to unblock task: {task_id}"
-                })
+                }
 
             # Add journal entry for resolution
             add_journal_entry(
@@ -359,12 +358,12 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             # Save spec
             if not save_spec(spec_id, spec_data, specs_dir):
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "Failed to save spec"
-                })
+                }
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "task_id": task_id,
@@ -374,21 +373,21 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 },
                 "resolution": resolution or "Blocker resolved",
                 "new_status": "pending",
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error unblocking task: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_list_blocked")
     def foundry_list_blocked(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         List all blocked tasks in a specification.
 
@@ -406,40 +405,40 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             blocked = list_blocked_tasks(spec_data)
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "count": len(blocked),
                 "blocked_tasks": blocked,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error listing blocked tasks: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_unjournaled_tasks")
     def foundry_unjournaled_tasks(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Find completed tasks that need journal entries.
 
@@ -457,33 +456,33 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             unjournaled = find_unjournaled_tasks(spec_data)
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "count": len(unjournaled),
                 "unjournaled_tasks": unjournaled,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error finding unjournaled tasks: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     logger.debug("Registered journal tools: foundry_add_journal, foundry_get_journal, "
                  "foundry_mark_blocked, foundry_unblock, foundry_list_blocked, "

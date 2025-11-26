@@ -4,7 +4,6 @@ Documentation tools for foundry-mcp.
 Provides MCP tools for querying codebase documentation.
 """
 
-import json
 import logging
 from dataclasses import asdict
 from typing import Optional
@@ -42,7 +41,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         name: str,
         exact: bool = True,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Find a class by name in codebase documentation.
 
@@ -60,15 +59,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.find_class(name, exact)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "query_type": result.query_type,
@@ -83,15 +82,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     for r in result.results
                 ],
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error finding class: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_find_function")
@@ -99,7 +98,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         name: str,
         exact: bool = True,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Find a function by name in codebase documentation.
 
@@ -117,15 +116,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.find_function(name, exact)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "query_type": result.query_type,
@@ -140,15 +139,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     for r in result.results
                 ],
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error finding function: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_trace_calls")
@@ -157,7 +156,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         direction: str = "both",
         max_depth: int = 3,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Trace function calls in the call graph.
 
@@ -175,15 +174,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.trace_calls(function_name, direction, max_depth)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "query_type": result.query_type,
@@ -199,15 +198,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ],
                 "metadata": result.metadata,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error tracing calls: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_impact_analysis")
@@ -216,7 +215,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         target_type: str = "auto",
         max_depth: int = 3,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Analyze impact of changing a class or function.
 
@@ -235,17 +234,17 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.impact_analysis(target, target_type, max_depth)
 
             if result.success and result.results:
                 impact = result.results[0]
-                return json.dumps({
+                return {
                     "success": True,
                     "schema_version": result.schema_version,
                     "query_type": result.query_type,
@@ -256,28 +255,28 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "indirect_impacts": impact.indirect_impacts,
                     "affected_files": impact.affected_files,
                     "metadata": result.metadata,
-                })
+                }
             else:
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": result.schema_version,
                     "error": result.error or "No impact analysis available",
-                })
+                }
 
         except Exception as e:
             logger.error(f"Error analyzing impact: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_get_callers")
     def foundry_get_callers(
         function_name: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get functions that call the specified function.
 
@@ -291,15 +290,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.get_callers(function_name)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "query_type": result.query_type,
@@ -314,22 +313,22 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ],
                 "metadata": result.metadata,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error getting callers: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_get_callees")
     def foundry_get_callees(
         function_name: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get functions called by the specified function.
 
@@ -343,15 +342,15 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.get_callees(function_name)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "schema_version": result.schema_version,
                 "query_type": result.query_type,
@@ -366,21 +365,21 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ],
                 "metadata": result.metadata,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error getting callees: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_docs_stats")
     def foundry_docs_stats(
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get documentation statistics.
 
@@ -396,35 +395,35 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                })
+                }
 
             result = query.get_stats()
 
             if result.success and result.results:
                 stats = result.results[0]
-                return json.dumps({
+                return {
                     "success": True,
                     "schema_version": result.schema_version,
                     "stats": stats,
-                })
+                }
             else:
-                return json.dumps({
+                return {
                     "success": False,
                     "schema_version": result.schema_version,
                     "error": result.error or "No stats available",
-                })
+                }
 
         except Exception as e:
             logger.error(f"Error getting docs stats: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": str(e),
-            })
+            }
 
     logger.debug("Registered docs tools: foundry_find_class, foundry_find_function, "
                  "foundry_trace_calls, foundry_impact_analysis, foundry_get_callers, "

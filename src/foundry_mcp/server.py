@@ -81,7 +81,7 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
     @mcp.tool()
     @mcp_tool(tool_name="list_specs")
-    def tool_list_specs(status: str = "all") -> str:
+    def tool_list_specs(status: str = "all") -> dict:
         """
         List all specification files with optional filtering.
 
@@ -89,22 +89,20 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             status: Filter by status (active, pending, completed, archived, or all)
 
         Returns:
-            JSON string with list of specs and their progress
+            Dict with list of specs and their progress
         """
-        import json
-
         specs_dir = config.specs_dir or find_specs_directory()
         if not specs_dir:
-            return json.dumps({"error": "No specs directory found"})
+            return {"error": "No specs directory found"}
 
         filter_status = None if status == "all" else status
         specs = list_specs(specs_dir=specs_dir, status=filter_status)
 
-        return json.dumps({"specs": specs, "count": len(specs)})
+        return {"specs": specs, "count": len(specs)}
 
     @mcp.tool()
     @mcp_tool(tool_name="get_spec")
-    def tool_get_spec(spec_id: str) -> str:
+    def tool_get_spec(spec_id: str) -> dict:
         """
         Get a specification by ID.
 
@@ -112,15 +110,13 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             spec_id: Specification ID to retrieve
 
         Returns:
-            JSON string with spec data or error
+            Dict with spec data or error
         """
-        import json
-
         specs_dir = config.specs_dir or find_specs_directory()
         spec_data = load_spec(spec_id, specs_dir)
 
         if spec_data is None:
-            return json.dumps({"error": f"Spec not found: {spec_id}"})
+            return {"error": f"Spec not found: {spec_id}"}
 
         # Return summary for large specs
         hierarchy = spec_data.get("hierarchy", {})
@@ -130,17 +126,17 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if task.get("status") == "completed"
         )
 
-        return json.dumps({
+        return {
             "spec_id": spec_data.get("spec_id", spec_id),
             "title": spec_data.get("metadata", {}).get("title", spec_data.get("title", "Untitled")),
             "total_tasks": total_tasks,
             "completed_tasks": completed_tasks,
             "progress_percentage": int((completed_tasks / total_tasks * 100)) if total_tasks > 0 else 0,
-        })
+        }
 
     @mcp.tool()
     @mcp_tool(tool_name="get_spec_hierarchy")
-    def tool_get_spec_hierarchy(spec_id: str) -> str:
+    def tool_get_spec_hierarchy(spec_id: str) -> dict:
         """
         Get the full hierarchy of a specification.
 
@@ -148,24 +144,22 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             spec_id: Specification ID
 
         Returns:
-            JSON string with hierarchy data
+            Dict with hierarchy data
         """
-        import json
-
         specs_dir = config.specs_dir or find_specs_directory()
         spec_data = load_spec(spec_id, specs_dir)
 
         if spec_data is None:
-            return json.dumps({"error": f"Spec not found: {spec_id}"})
+            return {"error": f"Spec not found: {spec_id}"}
 
-        return json.dumps({
+        return {
             "spec_id": spec_id,
             "hierarchy": spec_data.get("hierarchy", {}),
-        })
+        }
 
     @mcp.tool()
     @mcp_tool(tool_name="get_task")
-    def tool_get_task(spec_id: str, task_id: str) -> str:
+    def tool_get_task(spec_id: str, task_id: str) -> dict:
         """
         Get a specific task from a specification.
 
@@ -174,27 +168,25 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             task_id: Task ID within the specification
 
         Returns:
-            JSON string with task data
+            Dict with task data
         """
-        import json
-
         specs_dir = config.specs_dir or find_specs_directory()
         spec_data = load_spec(spec_id, specs_dir)
 
         if spec_data is None:
-            return json.dumps({"error": f"Spec not found: {spec_id}"})
+            return {"error": f"Spec not found: {spec_id}"}
 
         hierarchy = spec_data.get("hierarchy", {})
         task = hierarchy.get(task_id)
 
         if task is None:
-            return json.dumps({"error": f"Task not found: {task_id}"})
+            return {"error": f"Task not found: {task_id}"}
 
-        return json.dumps({
+        return {
             "spec_id": spec_id,
             "task_id": task_id,
             "task": task,
-        })
+        }
 
     logger.debug("Registered tools: list_specs, get_spec, get_spec_hierarchy, get_task")
 

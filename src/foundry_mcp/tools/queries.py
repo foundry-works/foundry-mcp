@@ -4,7 +4,6 @@ Query tools for foundry-mcp.
 Provides MCP tools for finding and listing SDD specifications.
 """
 
-import json
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -109,7 +108,7 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
     def foundry_find_specs(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Find a specification file by ID.
 
@@ -131,11 +130,11 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "found": False,
                     "spec_id": spec_id,
                     "error": "No specs directory found"
-                })
+                }
 
             # Find the spec file
             spec_file = find_spec_file(spec_id, specs_dir)
@@ -144,26 +143,26 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 # Determine status folder from path
                 status_folder = spec_file.parent.name
 
-                return json.dumps({
+                return {
                     "found": True,
                     "spec_id": spec_id,
                     "path": str(spec_file),
                     "status_folder": status_folder
-                })
+                }
             else:
-                return json.dumps({
+                return {
                     "found": False,
                     "spec_id": spec_id,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
         except Exception as e:
             logger.error(f"Error finding spec {spec_id}: {e}")
-            return json.dumps({
+            return {
                 "found": False,
                 "spec_id": spec_id,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_list_specs")
@@ -171,7 +170,7 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
         status: str = "all",
         workspace: Optional[str] = None,
         include_progress: bool = True
-    ) -> str:
+    ) -> dict:
         """
         List all specifications with optional filtering.
 
@@ -194,11 +193,11 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "specs": [],
                     "count": 0,
                     "error": "No specs directory found"
-                })
+                }
 
             # List specs
             filter_status = None if status == "all" else status
@@ -215,18 +214,18 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     for s in specs
                 ]
 
-            return json.dumps({
+            return {
                 "specs": specs,
                 "count": len(specs)
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error listing specs: {e}")
-            return json.dumps({
+            return {
                 "specs": [],
                 "count": 0,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_query_tasks")
@@ -235,7 +234,7 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
         status: Optional[str] = None,
         parent: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Query tasks within a specification.
 
@@ -260,11 +259,11 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
             spec_data = load_spec(spec_id, specs_dir)
 
             if not spec_data:
-                return json.dumps({
+                return {
                     "tasks": [],
                     "count": 0,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             hierarchy = spec_data.get("hierarchy", {})
 
@@ -287,18 +286,18 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "parent": task_data.get("parent"),
                 })
 
-            return json.dumps({
+            return {
                 "spec_id": spec_id,
                 "tasks": tasks,
                 "count": len(tasks)
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error querying tasks in {spec_id}: {e}")
-            return json.dumps({
+            return {
                 "tasks": [],
                 "count": 0,
                 "error": str(e)
-            })
+            }
 
     logger.debug("Registered query tools: foundry_find_specs, foundry_list_specs, foundry_query_tasks")

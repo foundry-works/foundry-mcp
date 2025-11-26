@@ -4,7 +4,6 @@ Lifecycle tools for foundry-mcp.
 Provides MCP tools for spec lifecycle management.
 """
 
-import json
 import logging
 from typing import Optional
 
@@ -42,7 +41,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         to_folder: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Move a specification between status folders.
 
@@ -64,14 +63,14 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             result = move_spec(spec_id, to_folder, specs_dir)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "spec_id": result.spec_id,
                 "from_folder": result.from_folder,
@@ -79,21 +78,21 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "old_path": result.old_path,
                 "new_path": result.new_path,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error moving spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_activate_spec")
     def foundry_activate_spec(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Activate a specification (move from pending to active).
 
@@ -111,28 +110,28 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             result = activate_spec(spec_id, specs_dir)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "spec_id": result.spec_id,
                 "from_folder": result.from_folder,
                 "to_folder": result.to_folder,
                 "new_path": result.new_path,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error activating spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_complete_spec")
@@ -140,7 +139,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         force: bool = False,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Mark a specification as completed.
 
@@ -162,35 +161,35 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             result = complete_spec(spec_id, specs_dir, force=force)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "spec_id": result.spec_id,
                 "from_folder": result.from_folder,
                 "to_folder": result.to_folder,
                 "new_path": result.new_path,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error completing spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_archive_spec")
     def foundry_archive_spec(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Archive a specification.
 
@@ -210,35 +209,35 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             result = archive_spec(spec_id, specs_dir)
 
-            return json.dumps({
+            return {
                 "success": result.success,
                 "spec_id": result.spec_id,
                 "from_folder": result.from_folder,
                 "to_folder": result.to_folder,
                 "new_path": result.new_path,
                 "error": result.error,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error archiving spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_lifecycle_state")
     def foundry_lifecycle_state(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get the current lifecycle state of a specification.
 
@@ -258,20 +257,20 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             state = get_lifecycle_state(spec_id, specs_dir)
 
             if not state:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": state.spec_id,
                 "folder": state.folder,
@@ -281,21 +280,21 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "completed_tasks": state.completed_tasks,
                 "can_complete": state.can_complete,
                 "can_archive": state.can_archive,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error getting lifecycle state: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_list_specs_by_folder")
     def foundry_list_specs_by_folder(
         folder: Optional[str] = None,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         List specifications organized by folder.
 
@@ -313,34 +312,34 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             if folder and folder not in VALID_FOLDERS:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Invalid folder: {folder}. Must be one of: {list(VALID_FOLDERS)}"
-                })
+                }
 
             result = list_specs_by_folder(specs_dir, folder)
 
             # Calculate totals
             total_specs = sum(len(specs) for specs in result.values())
 
-            return json.dumps({
+            return {
                 "success": True,
                 "total_specs": total_specs,
                 "folders": result,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error listing specs by folder: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     logger.debug("Registered lifecycle tools: foundry_move_spec, foundry_activate_spec, "
                  "foundry_complete_spec, foundry_archive_spec, foundry_lifecycle_state, "

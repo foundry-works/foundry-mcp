@@ -4,7 +4,6 @@ Rendering tools for foundry-mcp.
 Provides MCP tools for spec rendering and visualization.
 """
 
-import json
 import logging
 from typing import Optional
 
@@ -44,7 +43,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
         include_journal: bool = False,
         max_depth: int = 0,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Render a specification to human-readable markdown.
 
@@ -68,17 +67,17 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             options = RenderOptions(
                 mode=mode,
@@ -91,7 +90,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             result = render_spec_to_markdown(spec_data, options)
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": result.spec_id,
                 "title": result.title,
@@ -103,14 +102,14 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     result.completed_tasks / result.total_tasks * 100
                     if result.total_tasks > 0 else 0
                 ),
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error rendering spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_render_progress")
@@ -118,7 +117,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         bar_width: int = 20,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get a visual progress summary for a specification.
 
@@ -139,17 +138,17 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             hierarchy = spec_data.get("hierarchy", {})
             root = hierarchy.get("spec-root", {})
@@ -182,7 +181,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "total": phase_total,
                 })
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "title": metadata.get("title") or root.get("title", "Untitled"),
@@ -194,14 +193,14 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "total": total_tasks,
                 },
                 "phases": phases,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error rendering progress: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_list_tasks")
@@ -210,7 +209,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
         status_filter: Optional[str] = None,
         include_completed: bool = True,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get a flat list of all tasks in a specification.
 
@@ -230,17 +229,17 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             # Generate task list markdown
             task_list_md = render_task_list(spec_data, status_filter, include_completed)
@@ -272,20 +271,20 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "parent": node.get("parent"),
                 })
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "count": len(tasks),
                 "tasks": tasks,
                 "markdown": task_list_md,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error listing tasks: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     logger.debug("Registered rendering tools: foundry_render_spec, foundry_render_progress, "
                  "foundry_list_tasks")

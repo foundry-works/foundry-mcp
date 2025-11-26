@@ -4,7 +4,6 @@ Validation tools for foundry-mcp.
 Provides MCP tools for spec validation, auto-fix, and statistics.
 """
 
-import json
 import logging
 from dataclasses import asdict
 from pathlib import Path
@@ -44,7 +43,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
     def foundry_validate_spec(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Validate a specification file and return diagnostics.
 
@@ -69,17 +68,17 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             result = validate_spec(spec_data)
 
@@ -96,7 +95,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "auto_fixable": diag.auto_fixable,
                 })
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": result.spec_id,
                 "is_valid": result.is_valid,
@@ -104,14 +103,14 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "warning_count": result.warning_count,
                 "info_count": result.info_count,
                 "diagnostics": diagnostics,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error validating spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_fix_spec")
@@ -120,7 +119,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
         dry_run: bool = False,
         create_backup: bool = True,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Apply auto-fixes to a specification file.
 
@@ -147,24 +146,24 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_path = find_spec_file(spec_id, specs_dir)
             if not spec_path:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Failed to load spec: {spec_id}"
-                })
+                }
 
             # Validate to get diagnostics
             result = validate_spec(spec_data)
@@ -173,13 +172,13 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             actions = get_fix_actions(result, spec_data)
 
             if not actions:
-                return json.dumps({
+                return {
                     "success": True,
                     "spec_id": spec_id,
                     "applied_count": 0,
                     "skipped_count": 0,
                     "message": "No auto-fixable issues found"
-                })
+                }
 
             # Apply fixes
             report = apply_fixes(
@@ -207,7 +206,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 for a in report.skipped_actions
             ]
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": spec_id,
                 "dry_run": dry_run,
@@ -216,21 +215,21 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "applied_actions": applied_actions,
                 "skipped_actions": skipped_actions,
                 "backup_path": report.backup_path,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error fixing spec: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_spec_stats")
     def foundry_spec_stats(
         spec_id: str,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Get statistics for a specification file.
 
@@ -255,28 +254,28 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_path = find_spec_file(spec_id, specs_dir)
             if not spec_path:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Failed to load spec: {spec_id}"
-                })
+                }
 
             stats = calculate_stats(spec_data, str(spec_path))
 
-            return json.dumps({
+            return {
                 "success": True,
                 "spec_id": stats.spec_id,
                 "title": stats.title,
@@ -289,14 +288,14 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "verification_coverage": stats.verification_coverage,
                 "progress": stats.progress,
                 "file_size_kb": stats.file_size_kb,
-            })
+            }
 
         except Exception as e:
             logger.error(f"Error getting spec stats: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_validate_and_fix")
@@ -304,7 +303,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         auto_fix: bool = True,
         workspace: Optional[str] = None
-    ) -> str:
+    ) -> dict:
         """
         Validate a spec and optionally apply auto-fixes in one operation.
 
@@ -325,24 +324,24 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": "No specs directory found"
-                })
+                }
 
             spec_path = find_spec_file(spec_id, specs_dir)
             if not spec_path:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Spec not found: {spec_id}"
-                })
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return json.dumps({
+                return {
                     "success": False,
                     "error": f"Failed to load spec: {spec_id}"
-                })
+                }
 
             # Initial validation
             result = validate_spec(spec_data)
@@ -396,14 +395,14 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             response["diagnostics"] = diagnostics
 
-            return json.dumps(response)
+            return response
 
         except Exception as e:
             logger.error(f"Error in validate_and_fix: {e}")
-            return json.dumps({
+            return {
                 "success": False,
                 "error": str(e)
-            })
+            }
 
     logger.debug("Registered validation tools: foundry_validate_spec, foundry_fix_spec, "
                  "foundry_spec_stats, foundry_validate_and_fix")
