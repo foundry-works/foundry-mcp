@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 17,
+    "progress_percentage": 23,
     "current_phase": "phase-1"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -44,7 +44,7 @@
       "type": "phase",
       "title": "Foundation Infrastructure",
       "description": "Create directory structure and base adapter pattern",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "task-1-1",
@@ -52,9 +52,13 @@
         "task-1-3",
         "task-1-4"
       ],
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "total_tasks": 4,
-      "metadata": {},
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-26T18:08:23.333648Z",
+        "journaled_at": "2025-11-26T18:08:23.338179Z"
+      },
       "dependencies": {
         "blocks": [],
         "blocked_by": [],
@@ -179,7 +183,7 @@
       "type": "task",
       "title": "Implement SddToolkitAdapter",
       "description": "Create adapter that invokes sdd CLI via subprocess with --json output",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "dependencies": {
@@ -210,9 +214,15 @@
           "sdd move-spec"
         ],
         "file_path": "task-1-4.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:07:55.698271Z",
+        "status_note": "Implementing SddToolkitAdapter",
+        "completed_at": "2025-11-26T18:08:23.333521Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-26T18:08:23.336126Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "phase-2": {
@@ -694,8 +704,26 @@
       "content": "FoundryMcpAdapter already fully implemented at tests/parity/harness/foundry_adapter.py (486 lines). The adapter imports and calls foundry-mcp core modules directly (spec, task, progress, journal, validation, lifecycle). All 22 operations from the base interface are implemented: list_specs, get_spec, get_task, next_task, prepare_task, check_dependencies, update_status, complete_task, start_task, progress, add_journal, get_journal, mark_blocked, unblock, list_blocked, validate_spec, fix_spec, spec_stats, activate_spec, complete_spec, archive_spec, move_spec. Includes helper _find_spec_status() for locating specs across status folders. Proper error handling with try/except blocks returning success/error dicts. No changes needed.",
       "metadata": {},
       "task_id": "task-1-3"
+    },
+    {
+      "timestamp": "2025-11-26T18:08:23.336121Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement SddToolkitAdapter",
+      "author": "claude-code",
+      "content": "SddToolkitAdapter already fully implemented at tests/parity/harness/sdd_adapter.py (240 lines). The adapter uses subprocess to invoke sdd CLI commands with --json output flag. Includes robust _run_sdd() helper with timeout handling (30s default), JSON parsing, and comprehensive error handling for timeout, missing sdd command, and general exceptions. All 22 operations from the base interface implemented using appropriate sdd CLI commands: list-specs, progress, task-info, next-task, prepare-task, check-deps, update-status, complete-task, add-journal, get-journal, mark-blocked, unblock-task, list-blockers, validate, stats, activate-spec, complete-spec, move-spec. No changes needed.",
+      "metadata": {},
+      "task_id": "task-1-4"
+    },
+    {
+      "timestamp": "2025-11-26T18:08:23.338154Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Foundation Infrastructure",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-1 have been completed.",
+      "metadata": {},
+      "task_id": "phase-1"
     }
   ],
-  "last_updated": "2025-11-26T18:07:28.999906Z",
+  "last_updated": "2025-11-26T18:08:23.338211Z",
   "generated": "2025-01-26T00:00:00Z"
 }
