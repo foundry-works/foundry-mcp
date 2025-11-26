@@ -2,7 +2,7 @@
   "spec_id": "response-schema-standardization-2025-11-26-001",
   "title": "MCP Tool Response Schema Standardization",
   "generated": "2025-11-26T12:00:00Z",
-  "last_updated": "2025-11-26T19:36:39.575892Z",
+  "last_updated": "2025-11-26T19:37:40.985246Z",
   "metadata": {
     "description": "Standardize all MCP tool response schemas across six tool modules plus new core helpers so every client sees the same predictable envelope.",
     "objectives": [
@@ -44,7 +44,7 @@
       "Response wrapper utility will be added to core module",
       "Clients advertise response_contract version via MCP capability negotiation"
     ],
-    "progress_percentage": 30,
+    "progress_percentage": 33,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -61,7 +61,7 @@
         "phase-4"
       ],
       "total_tasks": 30,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {}
     },
     "phase-1": {
@@ -356,7 +356,7 @@
         ]
       },
       "total_tasks": 11,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Address the most broken modules first - tasks.py and queries.py have the worst inconsistencies",
         "risk_level": "medium",
@@ -373,7 +373,7 @@
         "task-2-2"
       ],
       "total_tasks": 9,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -397,7 +397,7 @@
         "task-2-1-6"
       ],
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/tasks.py",
         "task_category": "refactoring",
@@ -427,13 +427,19 @@
     "task-2-1-2": {
       "type": "subtask",
       "title": "Fix foundry_task_info: add success field wrapper",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap response in success_response(), use error_response() for errors"
+        "details": "Wrap response in success_response(), use error_response() for errors",
+        "started_at": "2025-11-26T19:37:11.631746Z",
+        "status_note": "Updating foundry_task_info to use standard response format",
+        "completed_at": "2025-11-26T19:37:40.981528Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-26T19:37:40.984257Z"
       }
     },
     "task-2-1-3": {
@@ -1007,6 +1013,15 @@
       "content": "Updated foundry_next_task in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The 'found' field is now nested inside data for successful operations. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-1-1"
+    },
+    {
+      "timestamp": "2025-11-26T19:37:40.984249Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Fix foundry_task_info: add success field wrapper",
+      "author": "claude-code",
+      "content": "Updated foundry_task_info in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Error cases return success=False with empty data dict. Success case wraps all task data inside data field.",
+      "metadata": {},
+      "task_id": "task-2-1-2"
     }
   ]
 }

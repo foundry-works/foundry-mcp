@@ -209,33 +209,53 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {"error": "No specs directory found"}
+                return {
+                    "success": False,
+                    "data": {},
+                    "error": "No specs directory found"
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {"error": f"Spec not found: {spec_id}"}
+                return {
+                    "success": False,
+                    "data": {},
+                    "error": f"Spec not found: {spec_id}"
+                }
 
             task_data = get_node(spec_data, task_id)
             if not task_data:
-                return {"error": f"Task not found: {task_id}"}
+                return {
+                    "success": False,
+                    "data": {},
+                    "error": f"Task not found: {task_id}"
+                }
 
             return {
-                "spec_id": spec_id,
-                "task_id": task_id,
-                "title": task_data.get("title", ""),
-                "type": task_data.get("type", "task"),
-                "status": task_data.get("status", "pending"),
-                "parent": task_data.get("parent"),
-                "children": task_data.get("children", []),
-                "metadata": task_data.get("metadata", {}),
-                "dependencies": task_data.get("dependencies", {}),
-                "completed_tasks": task_data.get("completed_tasks", 0),
-                "total_tasks": task_data.get("total_tasks", 0)
+                "success": True,
+                "data": {
+                    "spec_id": spec_id,
+                    "task_id": task_id,
+                    "title": task_data.get("title", ""),
+                    "type": task_data.get("type", "task"),
+                    "status": task_data.get("status", "pending"),
+                    "parent": task_data.get("parent"),
+                    "children": task_data.get("children", []),
+                    "metadata": task_data.get("metadata", {}),
+                    "dependencies": task_data.get("dependencies", {}),
+                    "completed_tasks": task_data.get("completed_tasks", 0),
+                    "total_tasks": task_data.get("total_tasks", 0)
+                },
+                "error": None
             }
 
         except Exception as e:
             logger.error(f"Error getting task info: {e}")
-            return {"error": str(e)}
+            return {
+                "success": False,
+                "data": {},
+                "error": str(e)
+            }
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_check_deps")
