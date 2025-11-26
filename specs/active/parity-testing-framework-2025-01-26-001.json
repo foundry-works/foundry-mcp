@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 58,
+    "progress_percentage": 64,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -456,7 +456,7 @@
         "task-4-4",
         "task-4-5"
       ],
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "total_tasks": 5,
       "metadata": {},
       "dependencies": {
@@ -508,7 +508,7 @@
       "type": "task",
       "title": "Implement task operation tests",
       "description": "Tests for next_task, update_status, complete_task, check_deps",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4",
       "children": [],
       "dependencies": {
@@ -529,9 +529,15 @@
           "test_start_task_parity"
         ],
         "file_path": "task-4-2.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:16:06.725182Z",
+        "status_note": "Implementing task operation tests",
+        "completed_at": "2025-11-26T18:16:54.111568Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-26T18:16:54.114156Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "task-4-3": {
@@ -838,8 +844,17 @@
       "content": "Spec operation tests already fully implemented at tests/parity/test_spec_operations.py (148 lines). All tests from task metadata present: test_list_all_specs_parity, test_list_active_specs_parity, test_get_spec_parity, test_get_spec_not_found_parity, test_get_task_parity. Additional tests: test_list_pending_specs_parity, test_get_task_not_found_parity. Tests organized in classes: TestListSpecs (3 tests), TestGetSpec (2 tests), TestGetTask (2 tests). Also includes TestFoundryAdapterStandalone class with 5 standalone tests for foundry adapter when sdd CLI unavailable. All tests use @pytest.mark.parity decorator and leverage both_adapters fixture, ResultComparator.assert_success, assert_both_error, and assert_key_match helpers. No changes needed.",
       "metadata": {},
       "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2025-11-26T18:16:54.114150Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement task operation tests",
+      "author": "claude-code",
+      "content": "Created tests/parity/test_task_operations.py (159 lines) with all tests specified in task metadata: test_next_task_parity, test_check_deps_parity, test_update_status_parity, test_complete_task_parity, test_start_task_parity. Additional tests: test_next_task_no_actionable_parity, test_check_deps_with_blockers_parity, test_complete_task_without_journal_parity. Tests organized in classes: TestNextTask (2 tests), TestCheckDependencies (2 tests), TestUpdateStatus (2 tests), TestCompleteTask (2 tests), TestFoundryTaskOperations (3 standalone tests). Uses isolated_adapters fixture for mutating tests, both_adapters for read-only comparisons. All tests use @pytest.mark.parity decorator and ResultComparator helpers.",
+      "metadata": {},
+      "task_id": "task-4-2"
     }
   ],
-  "last_updated": "2025-11-26T18:15:39.140508Z",
+  "last_updated": "2025-11-26T18:16:54.115115Z",
   "generated": "2025-01-26T00:00:00Z"
 }
