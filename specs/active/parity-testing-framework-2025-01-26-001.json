@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 70,
+    "progress_percentage": 76,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 12,
+      "completed_tasks": 13,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -456,7 +456,7 @@
         "task-4-4",
         "task-4-5"
       ],
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "total_tasks": 5,
       "metadata": {},
       "dependencies": {
@@ -581,7 +581,7 @@
       "type": "task",
       "title": "Implement validation tests",
       "description": "Tests for validate_spec, fix_spec, spec_stats",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4",
       "children": [],
       "dependencies": {
@@ -600,9 +600,15 @@
           "test_spec_stats_parity"
         ],
         "file_path": "task-4-4.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:18:48.782746Z",
+        "status_note": "Implementing validation tests",
+        "completed_at": "2025-11-26T18:19:27.434106Z",
+        "needs_journaling": false,
+        "actual_hours": 0.011,
+        "journaled_at": "2025-11-26T18:19:27.440354Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "task-4-5": {
@@ -868,8 +874,17 @@
       "content": "Created tests/parity/test_progress_tracking.py (197 lines) with all tests specified in task metadata: test_progress_parity, test_add_journal_parity, test_get_journal_parity, test_mark_blocked_parity, test_unblock_parity, test_list_blocked_parity. Additional tests: test_progress_multi_phase_parity, test_add_journal_with_task_parity, test_get_journal_by_type_parity, test_list_blocked_empty_parity. Tests organized in classes: TestProgress (2 tests), TestJournal (4 tests), TestBlockedTasks (4 tests), TestFoundryProgressOperations (5 standalone tests). Uses isolated_adapters fixture for mutating tests, both_adapters for read-only comparisons. All tests use @pytest.mark.parity decorator.",
       "metadata": {},
       "task_id": "task-4-3"
+    },
+    {
+      "timestamp": "2025-11-26T18:19:27.440338Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement validation tests",
+      "author": "claude-code",
+      "content": "Created tests/parity/test_validation.py (130 lines) with all tests specified in task metadata: test_validate_spec_parity, test_fix_spec_parity, test_spec_stats_parity. Additional tests: test_validate_spec_valid_parity, test_validate_nonexistent_spec_parity, test_fix_spec_already_valid_parity, test_spec_stats_multi_phase_parity. Tests organized in classes: TestValidateSpec (3 tests), TestFixSpec (2 tests), TestSpecStats (2 tests), TestFoundryValidationOperations (3 standalone tests). Uses isolated_adapters fixture for mutating tests (fix_spec), both_adapters for read-only comparisons. All tests use @pytest.mark.parity decorator.",
+      "metadata": {},
+      "task_id": "task-4-4"
     }
   ],
-  "last_updated": "2025-11-26T18:18:16.061952Z",
+  "last_updated": "2025-11-26T18:19:27.442030Z",
   "generated": "2025-01-26T00:00:00Z"
 }
