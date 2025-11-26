@@ -202,7 +202,7 @@ class FoundryMcpAdapter(SpecToolAdapter):
             # Find the spec file and save
             spec_status = self._find_spec_status(spec_id)
             if spec_status:
-                save_spec(spec_data, self.specs_dir / spec_status / f"{spec_id}.json")
+                save_spec(spec_id, spec_data, self.specs_dir)
 
             return {
                 "success": True,
@@ -279,7 +279,7 @@ class FoundryMcpAdapter(SpecToolAdapter):
             # Save the spec
             spec_status = self._find_spec_status(spec_id)
             if spec_status:
-                save_spec(spec_data, self.specs_dir / spec_status / f"{spec_id}.json")
+                save_spec(spec_id, spec_data, self.specs_dir)
 
             return {
                 "success": True,
@@ -320,7 +320,7 @@ class FoundryMcpAdapter(SpecToolAdapter):
             # Save the spec
             spec_status = self._find_spec_status(spec_id)
             if spec_status:
-                save_spec(spec_data, self.specs_dir / spec_status / f"{spec_id}.json")
+                save_spec(spec_id, spec_data, self.specs_dir)
 
             return {
                 "success": True,
@@ -343,7 +343,7 @@ class FoundryMcpAdapter(SpecToolAdapter):
             # Save the spec
             spec_status = self._find_spec_status(spec_id)
             if spec_status:
-                save_spec(spec_data, self.specs_dir / spec_status / f"{spec_id}.json")
+                save_spec(spec_id, spec_data, self.specs_dir)
 
             return {
                 "success": True,
@@ -381,11 +381,14 @@ class FoundryMcpAdapter(SpecToolAdapter):
                 return {"success": False, "error": f"Spec not found: {spec_id}"}
 
             result = core_validate(spec_data)
+            # ValidationResult is a dataclass, access attributes directly
+            errors = [d for d in result.diagnostics if d.severity == "error"]
+            warnings = [d for d in result.diagnostics if d.severity == "warning"]
             return {
                 "success": True,
-                "is_valid": result.get("is_valid", False),
-                "errors": result.get("errors", []),
-                "warnings": result.get("warnings", []),
+                "is_valid": result.is_valid,
+                "errors": [{"message": e.message, "path": e.path} for e in errors],
+                "warnings": [{"message": w.message, "path": w.path} for w in warnings],
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -420,10 +423,19 @@ class FoundryMcpAdapter(SpecToolAdapter):
                 return {"success": False, "error": f"Spec not found: {spec_id}"}
 
             stats = calculate_stats(spec_data)
+            # SpecStats is a dataclass, convert to dict
             return {
                 "success": True,
-                "spec_id": spec_id,
-                **stats,
+                "spec_id": stats.spec_id,
+                "title": stats.title,
+                "version": stats.version,
+                "status": stats.status,
+                "totals": stats.totals,
+                "status_counts": stats.status_counts,
+                "max_depth": stats.max_depth,
+                "avg_tasks_per_phase": stats.avg_tasks_per_phase,
+                "verification_coverage": stats.verification_coverage,
+                "progress": stats.progress,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
