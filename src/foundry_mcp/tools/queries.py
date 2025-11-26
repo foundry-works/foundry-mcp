@@ -131,8 +131,8 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if not specs_dir:
                 return {
-                    "found": False,
-                    "spec_id": spec_id,
+                    "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
@@ -144,23 +144,30 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 status_folder = spec_file.parent.name
 
                 return {
-                    "found": True,
-                    "spec_id": spec_id,
-                    "path": str(spec_file),
-                    "status_folder": status_folder
+                    "success": True,
+                    "data": {
+                        "found": True,
+                        "spec_id": spec_id,
+                        "path": str(spec_file),
+                        "status_folder": status_folder
+                    },
+                    "error": None
                 }
             else:
                 return {
-                    "found": False,
-                    "spec_id": spec_id,
-                    "error": f"Spec not found: {spec_id}"
+                    "success": True,
+                    "data": {
+                        "found": False,
+                        "spec_id": spec_id
+                    },
+                    "error": None
                 }
 
         except Exception as e:
             logger.error(f"Error finding spec {spec_id}: {e}")
             return {
-                "found": False,
-                "spec_id": spec_id,
+                "success": False,
+                "data": {},
                 "error": str(e)
             }
 

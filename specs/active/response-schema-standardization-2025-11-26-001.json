@@ -2,7 +2,7 @@
   "spec_id": "response-schema-standardization-2025-11-26-001",
   "title": "MCP Tool Response Schema Standardization",
   "generated": "2025-11-26T12:00:00Z",
-  "last_updated": "2025-11-26T19:42:12.935438Z",
+  "last_updated": "2025-11-26T19:43:20.450843Z",
   "metadata": {
     "description": "Standardize all MCP tool response schemas across six tool modules plus new core helpers so every client sees the same predictable envelope.",
     "objectives": [
@@ -44,7 +44,7 @@
       "Response wrapper utility will be added to core module",
       "Clients advertise response_contract version via MCP capability negotiation"
     ],
-    "progress_percentage": 46,
+    "progress_percentage": 50,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -61,7 +61,7 @@
         "phase-4"
       ],
       "total_tasks": 30,
-      "completed_tasks": 14,
+      "completed_tasks": 15,
       "metadata": {}
     },
     "phase-1": {
@@ -356,7 +356,7 @@
         ]
       },
       "total_tasks": 11,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Address the most broken modules first - tasks.py and queries.py have the worst inconsistencies",
         "risk_level": "medium",
@@ -373,7 +373,7 @@
         "task-2-2"
       ],
       "total_tasks": 9,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -517,7 +517,7 @@
     "task-2-2": {
       "type": "task",
       "title": "src/foundry_mcp/tools/queries.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-2-files",
       "children": [
         "task-2-2-1",
@@ -525,7 +525,7 @@
         "task-2-2-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/queries.py",
         "task_category": "refactoring",
@@ -537,13 +537,19 @@
     "task-2-2-1": {
       "type": "subtask",
       "title": "Fix foundry_find_specs: replace 'found' with 'success'",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Change from {found: bool, ...} to success_response({found: bool, ...})"
+        "details": "Change from {found: bool, ...} to success_response({found: bool, ...})",
+        "started_at": "2025-11-26T19:42:50.737202Z",
+        "status_note": "Updating foundry_find_specs to use standard response format",
+        "completed_at": "2025-11-26T19:43:20.447198Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-26T19:43:20.449839Z"
       }
     },
     "task-2-2-2": {
@@ -1082,6 +1088,15 @@
       "content": "Added comprehensive \"Edge Cases & Partial Payloads\" documentation section to responses.py module docstring. Covers: (1) Empty Results with success=True, (2) Not Found errors with success=False, (3) Blocked/Conditional states with success=True and state info in data, (4) Partial Success with _warnings. Documents key principle that success=True means operation executed (even if empty result), success=False means operation failed.",
       "metadata": {},
       "task_id": "task-2-1-6"
+    },
+    {
+      "timestamp": "2025-11-26T19:43:20.449834Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Fix foundry_find_specs: replace 'found' with 'success'",
+      "author": "claude-code",
+      "content": "Updated foundry_find_specs in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Spec found returns success=True with found=True in data. Spec not found returns success=True with found=False in data (successful query with no result). Error cases return success=False with empty data dict.",
+      "metadata": {},
+      "task_id": "task-2-2-1"
     }
   ]
 }
