@@ -5,6 +5,7 @@ Provides MCP tools for running and discovering tests.
 """
 
 import logging
+from dataclasses import asdict
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -12,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.core.testing import TestRunner, get_presets
+from foundry_mcp.core.responses import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -72,47 +74,35 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "execution_id": result.execution_id,
-                    "timestamp": result.timestamp,
-                    "summary": {
-                        "total": result.total,
-                        "passed": result.passed,
-                        "failed": result.failed,
-                        "skipped": result.skipped,
-                        "errors": result.errors,
-                    },
-                    "tests": [
-                        {
-                            "name": t.name,
-                            "outcome": t.outcome,
-                            "duration": t.duration,
-                            "message": t.message,
-                        }
-                        for t in result.tests
-                    ],
-                    "command": result.command,
-                    "duration": result.duration,
-                    "metadata": result.metadata,
+            return asdict(success_response(
+                execution_id=result.execution_id,
+                timestamp=result.timestamp,
+                summary={
+                    "total": result.total,
+                    "passed": result.passed,
+                    "failed": result.failed,
+                    "skipped": result.skipped,
+                    "errors": result.errors,
                 },
-                "error": None,
-            }
+                tests=[
+                    {
+                        "name": t.name,
+                        "outcome": t.outcome,
+                        "duration": t.duration,
+                        "message": t.message,
+                    }
+                    for t in result.tests
+                ],
+                command=result.command,
+                duration=result.duration,
+                metadata=result.metadata
+            ))
 
         except Exception as e:
             logger.error(f"Error running tests: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_discover_tests")
@@ -139,39 +129,27 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             result = runner.discover_tests(target=target, pattern=pattern)
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "timestamp": result.timestamp,
-                    "total": result.total,
-                    "test_files": result.test_files,
-                    "tests": [
-                        {
-                            "name": t.name,
-                            "file_path": t.file_path,
-                            "line_number": t.line_number,
-                            "markers": t.markers,
-                        }
-                        for t in result.tests
-                    ],
-                    "metadata": result.metadata,
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                timestamp=result.timestamp,
+                total=result.total,
+                test_files=result.test_files,
+                tests=[
+                    {
+                        "name": t.name,
+                        "file_path": t.file_path,
+                        "line_number": t.line_number,
+                        "markers": t.markers,
+                    }
+                    for t in result.tests
+                ],
+                metadata=result.metadata
+            ))
 
         except Exception as e:
             logger.error(f"Error discovering tests: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_test_presets")
@@ -187,22 +165,14 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             presets = get_presets()
 
-            return {
-                "success": True,
-                "data": {
-                    "presets": presets,
-                    "available": list(presets.keys()),
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                presets=presets,
+                available=list(presets.keys())
+            ))
 
         except Exception as e:
             logger.error(f"Error getting presets: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_run_quick_tests")
@@ -227,33 +197,21 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             result = runner.run_tests(target=target, preset="quick")
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "execution_id": result.execution_id,
-                    "summary": {
-                        "total": result.total,
-                        "passed": result.passed,
-                        "failed": result.failed,
-                        "skipped": result.skipped,
-                    },
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                execution_id=result.execution_id,
+                summary={
+                    "total": result.total,
+                    "passed": result.passed,
+                    "failed": result.failed,
+                    "skipped": result.skipped,
+                }
+            ))
 
         except Exception as e:
             logger.error(f"Error running quick tests: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_run_unit_tests")
@@ -278,33 +236,21 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             result = runner.run_tests(target=target, preset="unit")
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "execution_id": result.execution_id,
-                    "summary": {
-                        "total": result.total,
-                        "passed": result.passed,
-                        "failed": result.failed,
-                        "skipped": result.skipped,
-                    },
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                execution_id=result.execution_id,
+                summary={
+                    "total": result.total,
+                    "passed": result.passed,
+                    "failed": result.failed,
+                    "skipped": result.skipped,
+                }
+            ))
 
         except Exception as e:
             logger.error(f"Error running unit tests: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     logger.debug("Registered testing tools: foundry_run_tests, foundry_discover_tests, "
                  "foundry_test_presets, foundry_run_quick_tests, foundry_run_unit_tests")

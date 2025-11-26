@@ -5,6 +5,7 @@ Provides MCP tools for spec validation, auto-fix, and statistics.
 """
 
 import logging
+from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
@@ -24,6 +25,7 @@ from foundry_mcp.core.validation import (
     apply_fixes,
     calculate_stats,
 )
+from foundry_mcp.core.responses import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -67,19 +69,11 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             result = validate_spec(spec_data)
 
@@ -96,26 +90,18 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "auto_fixable": diag.auto_fixable,
                 })
 
-            return {
-                "success": True,
-                "data": {
-                    "spec_id": result.spec_id,
-                    "is_valid": result.is_valid,
-                    "error_count": result.error_count,
-                    "warning_count": result.warning_count,
-                    "info_count": result.info_count,
-                    "diagnostics": diagnostics,
-                },
-                "error": None
-            }
+            return asdict(success_response(
+                spec_id=result.spec_id,
+                is_valid=result.is_valid,
+                error_count=result.error_count,
+                warning_count=result.warning_count,
+                info_count=result.info_count,
+                diagnostics=diagnostics
+            ))
 
         except Exception as e:
             logger.error(f"Error validating spec: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_fix_spec")
@@ -151,27 +137,15 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_path = find_spec_file(spec_id, specs_dir)
             if not spec_path:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Failed to load spec: {spec_id}"
-                }
+                return asdict(error_response(f"Failed to load spec: {spec_id}"))
 
             # Validate to get diagnostics
             result = validate_spec(spec_data)
@@ -180,16 +154,12 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             actions = get_fix_actions(result, spec_data)
 
             if not actions:
-                return {
-                    "success": True,
-                    "data": {
-                        "spec_id": spec_id,
-                        "applied_count": 0,
-                        "skipped_count": 0,
-                        "message": "No auto-fixable issues found"
-                    },
-                    "error": None
-                }
+                return asdict(success_response(
+                    spec_id=spec_id,
+                    applied_count=0,
+                    skipped_count=0,
+                    message="No auto-fixable issues found"
+                ))
 
             # Apply fixes
             report = apply_fixes(
@@ -217,27 +187,19 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 for a in report.skipped_actions
             ]
 
-            return {
-                "success": True,
-                "data": {
-                    "spec_id": spec_id,
-                    "dry_run": dry_run,
-                    "applied_count": len(report.applied_actions),
-                    "skipped_count": len(report.skipped_actions),
-                    "applied_actions": applied_actions,
-                    "skipped_actions": skipped_actions,
-                    "backup_path": report.backup_path,
-                },
-                "error": None
-            }
+            return asdict(success_response(
+                spec_id=spec_id,
+                dry_run=dry_run,
+                applied_count=len(report.applied_actions),
+                skipped_count=len(report.skipped_actions),
+                applied_actions=applied_actions,
+                skipped_actions=skipped_actions,
+                backup_path=report.backup_path
+            ))
 
         except Exception as e:
             logger.error(f"Error fixing spec: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_spec_stats")
@@ -269,55 +231,35 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_path = find_spec_file(spec_id, specs_dir)
             if not spec_path:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Failed to load spec: {spec_id}"
-                }
+                return asdict(error_response(f"Failed to load spec: {spec_id}"))
 
             stats = calculate_stats(spec_data, str(spec_path))
 
-            return {
-                "success": True,
-                "data": {
-                    "spec_id": stats.spec_id,
-                    "title": stats.title,
-                    "version": stats.version,
-                    "status": stats.status,
-                    "totals": stats.totals,
-                    "status_counts": stats.status_counts,
-                    "max_depth": stats.max_depth,
-                    "avg_tasks_per_phase": stats.avg_tasks_per_phase,
-                    "verification_coverage": stats.verification_coverage,
-                    "progress": stats.progress,
-                    "file_size_kb": stats.file_size_kb,
-                },
-                "error": None
-            }
+            return asdict(success_response(
+                spec_id=stats.spec_id,
+                title=stats.title,
+                version=stats.version,
+                status=stats.status,
+                totals=stats.totals,
+                status_counts=stats.status_counts,
+                max_depth=stats.max_depth,
+                avg_tasks_per_phase=stats.avg_tasks_per_phase,
+                verification_coverage=stats.verification_coverage,
+                progress=stats.progress,
+                file_size_kb=stats.file_size_kb
+            ))
 
         except Exception as e:
             logger.error(f"Error getting spec stats: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_validate_and_fix")
@@ -346,27 +288,15 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_path = find_spec_file(spec_id, specs_dir)
             if not spec_path:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": f"Failed to load spec: {spec_id}"
-                }
+                return asdict(error_response(f"Failed to load spec: {spec_id}"))
 
             # Initial validation
             result = validate_spec(spec_data)
@@ -419,19 +349,11 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             response_data["diagnostics"] = diagnostics
 
-            return {
-                "success": True,
-                "data": response_data,
-                "error": None
-            }
+            return asdict(success_response(**response_data))
 
         except Exception as e:
             logger.error(f"Error in validate_and_fix: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     logger.debug("Registered validation tools: foundry_validate_spec, foundry_fix_spec, "
                  "foundry_spec_stats, foundry_validate_and_fix")

@@ -5,6 +5,7 @@ Provides MCP tools for querying codebase documentation.
 """
 
 import logging
+from dataclasses import asdict
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -12,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.core.docs import DocsQuery
+from foundry_mcp.core.responses import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -55,46 +57,30 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.find_class(name, exact)
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "query_type": result.query_type,
-                    "count": result.count,
-                    "results": [
-                        {
-                            "name": r.name,
-                            "file_path": r.file_path,
-                            "line_number": r.line_number,
-                            "data": r.data,
-                        }
-                        for r in result.results
-                    ],
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                query_type=result.query_type,
+                count=result.count,
+                results=[
+                    {
+                        "name": r.name,
+                        "file_path": r.file_path,
+                        "line_number": r.line_number,
+                        "data": r.data,
+                    }
+                    for r in result.results
+                ]
+            ))
 
         except Exception as e:
             logger.error(f"Error finding class: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_find_function")
@@ -120,46 +106,30 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.find_function(name, exact)
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "query_type": result.query_type,
-                    "count": result.count,
-                    "results": [
-                        {
-                            "name": r.name,
-                            "file_path": r.file_path,
-                            "line_number": r.line_number,
-                            "data": r.data,
-                        }
-                        for r in result.results
-                    ],
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                query_type=result.query_type,
+                count=result.count,
+                results=[
+                    {
+                        "name": r.name,
+                        "file_path": r.file_path,
+                        "line_number": r.line_number,
+                        "data": r.data,
+                    }
+                    for r in result.results
+                ]
+            ))
 
         except Exception as e:
             logger.error(f"Error finding function: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_trace_calls")
@@ -186,47 +156,31 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.trace_calls(function_name, direction, max_depth)
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "query_type": result.query_type,
-                    "count": result.count,
-                    "results": [
-                        {
-                            "caller": entry.caller,
-                            "callee": entry.callee,
-                            "caller_file": entry.caller_file,
-                            "callee_file": entry.callee_file,
-                        }
-                        for entry in result.results
-                    ],
-                    "metadata": result.metadata,
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                query_type=result.query_type,
+                count=result.count,
+                results=[
+                    {
+                        "caller": entry.caller,
+                        "callee": entry.callee,
+                        "caller_file": entry.caller_file,
+                        "callee_file": entry.callee_file,
+                    }
+                    for entry in result.results
+                ],
+                metadata=result.metadata
+            ))
 
         except Exception as e:
             logger.error(f"Error tracing calls: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_impact_analysis")
@@ -254,44 +208,28 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.impact_analysis(target, target_type, max_depth)
 
             if result.success and result.results:
                 impact = result.results[0]
-                return {
-                    "success": True,
-                    "data": {
-                        "query_type": result.query_type,
-                        "target": impact.target,
-                        "target_type": impact.target_type,
-                        "impact_score": impact.impact_score,
-                        "direct_impacts": impact.direct_impacts,
-                        "indirect_impacts": impact.indirect_impacts,
-                        "affected_files": impact.affected_files,
-                        "metadata": result.metadata,
-                    },
-                    "error": None,
-                }
+                return asdict(success_response(
+                    query_type=result.query_type,
+                    target=impact.target,
+                    target_type=impact.target_type,
+                    impact_score=impact.impact_score,
+                    direct_impacts=impact.direct_impacts,
+                    indirect_impacts=impact.indirect_impacts,
+                    affected_files=impact.affected_files,
+                    metadata=result.metadata
+                ))
             else:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error or "No impact analysis available",
-                }
+                return asdict(error_response(result.error or "No impact analysis available"))
 
         except Exception as e:
             logger.error(f"Error analyzing impact: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_get_callers")
@@ -312,46 +250,30 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.get_callers(function_name)
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "query_type": result.query_type,
-                    "count": result.count,
-                    "callers": [r.name for r in result.results],
-                    "results": [
-                        {
-                            "name": r.name,
-                            "file_path": r.file_path,
-                        }
-                        for r in result.results
-                    ],
-                    "metadata": result.metadata,
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                query_type=result.query_type,
+                count=result.count,
+                callers=[r.name for r in result.results],
+                results=[
+                    {
+                        "name": r.name,
+                        "file_path": r.file_path,
+                    }
+                    for r in result.results
+                ],
+                metadata=result.metadata
+            ))
 
         except Exception as e:
             logger.error(f"Error getting callers: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_get_callees")
@@ -372,46 +294,30 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.get_callees(function_name)
 
             if not result.success:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error,
-                }
+                return asdict(error_response(result.error))
 
-            return {
-                "success": True,
-                "data": {
-                    "query_type": result.query_type,
-                    "count": result.count,
-                    "callees": [r.name for r in result.results],
-                    "results": [
-                        {
-                            "name": r.name,
-                            "file_path": r.file_path,
-                        }
-                        for r in result.results
-                    ],
-                    "metadata": result.metadata,
-                },
-                "error": None,
-            }
+            return asdict(success_response(
+                query_type=result.query_type,
+                count=result.count,
+                callees=[r.name for r in result.results],
+                results=[
+                    {
+                        "name": r.name,
+                        "file_path": r.file_path,
+                    }
+                    for r in result.results
+                ],
+                metadata=result.metadata
+            ))
 
         except Exception as e:
             logger.error(f"Error getting callees: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_docs_stats")
@@ -433,37 +339,19 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             query = _get_query(workspace)
             if not query.load():
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "Documentation not loaded. Run 'sdd doc generate' first.",
-                }
+                return asdict(error_response("Documentation not loaded. Run 'sdd doc generate' first."))
 
             result = query.get_stats()
 
             if result.success and result.results:
                 stats = result.results[0]
-                return {
-                    "success": True,
-                    "data": {
-                        "stats": stats,
-                    },
-                    "error": None,
-                }
+                return asdict(success_response(stats=stats))
             else:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": result.error or "No stats available",
-                }
+                return asdict(error_response(result.error or "No stats available"))
 
         except Exception as e:
             logger.error(f"Error getting docs stats: {e}")
-            return {
-                "success": False,
-                "data": {},
-                "error": str(e),
-            }
+            return asdict(error_response(str(e)))
 
     logger.debug("Registered docs tools: foundry_find_class, foundry_find_function, "
                  "foundry_trace_calls, foundry_impact_analysis, foundry_get_callers, "

@@ -3,10 +3,12 @@ Task discovery and dependency operations for SDD workflows.
 Provides finding next tasks, dependency checking, and task preparation.
 """
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
 from foundry_mcp.core.spec import load_spec, find_spec_file, get_node
+from foundry_mcp.core.responses import success_response, error_response
 
 
 def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, Any]) -> bool:
@@ -541,19 +543,11 @@ def prepare_task(
     # Find and load spec
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
-        return {
-            "success": False,
-            "data": {},
-            "error": f"Spec file not found for {spec_id}"
-        }
+        return asdict(error_response(f"Spec file not found for {spec_id}"))
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return {
-            "success": False,
-            "data": {},
-            "error": "Failed to load spec"
-        }
+        return asdict(error_response("Failed to load spec"))
 
     # Get task ID if not provided
     if not task_id:
@@ -569,31 +563,19 @@ def prepare_task(
             pending = sum(1 for t in all_tasks if t.get("status") == "pending")
 
             if pending == 0 and completed > 0:
-                return {
-                    "success": True,
-                    "data": {
-                        "task_id": None,
-                        "spec_complete": True
-                    },
-                    "error": None
-                }
+                return asdict(success_response(
+                    task_id=None,
+                    spec_complete=True
+                ))
             else:
-                return {
-                    "success": False,
-                    "data": {},
-                    "error": "No actionable tasks found"
-                }
+                return asdict(error_response("No actionable tasks found"))
 
         task_id, _ = next_task
 
     # Get task info
     task_data = get_node(spec_data, task_id)
     if not task_data:
-        return {
-            "success": False,
-            "data": {},
-            "error": f"Task {task_id} not found"
-        }
+        return asdict(error_response(f"Task {task_id} not found"))
 
     # Check dependencies
     deps = check_dependencies(spec_data, task_id)
@@ -606,14 +588,10 @@ def prepare_task(
         "task_journal": get_task_journal_summary(spec_data, task_id),
     }
 
-    return {
-        "success": True,
-        "data": {
-            "task_id": task_id,
-            "task_data": task_data,
-            "dependencies": deps,
-            "spec_complete": False,
-            "context": context
-        },
-        "error": None
-    }
+    return asdict(success_response(
+        task_id=task_id,
+        task_data=task_data,
+        dependencies=deps,
+        spec_complete=False,
+        context=context
+    ))
