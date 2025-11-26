@@ -1,0 +1,124 @@
+{
+  "spec_id": "parity-test-multi-phase",
+  "title": "Multi-Phase Test Spec",
+  "generated": "2025-01-01T00:00:00Z",
+  "last_updated": "2025-01-03T00:00:00Z",
+  "metadata": {
+    "title": "Multi-Phase Test Spec",
+    "description": "A spec with multiple phases for parity testing",
+    "created_at": "2025-01-01T00:00:00Z",
+    "version": "1.0.0"
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Multi-Phase Test Spec",
+      "status": "in_progress",
+      "parent": null,
+      "children": ["phase-1", "phase-2", "phase-3"]
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Foundation Phase",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": ["task-1-1", "task-1-2"]
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Setup environment",
+      "description": "Initialize project structure",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "metadata": {
+        "completed_at": "2025-01-01T10:00:00Z"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Configure dependencies",
+      "description": "Install required packages",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "metadata": {
+        "completed_at": "2025-01-01T12:00:00Z"
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Implementation Phase",
+      "status": "in_progress",
+      "parent": "spec-root",
+      "children": ["task-2-1", "task-2-2", "task-2-3"]
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Implement core module",
+      "description": "Build the core functionality",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "metadata": {
+        "completed_at": "2025-01-02T10:00:00Z"
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Add API endpoints",
+      "description": "Create REST API layer",
+      "status": "in_progress",
+      "parent": "phase-2",
+      "children": [],
+      "metadata": {
+        "started_at": "2025-01-02T14:00:00Z"
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Write integration tests",
+      "description": "Test API functionality",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": []
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Verification Phase",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": ["task-3-1", "task-3-2"]
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Run full test suite",
+      "description": "Execute all tests",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": []
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Document changes",
+      "description": "Update documentation",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": []
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2025-01-01T10:00:00Z",
+      "entry_type": "status_change",
+      "title": "Phase 1 started",
+      "content": "Beginning foundation work"
+    },
+    {
+      "timestamp": "2025-01-01T12:00:00Z",
+      "entry_type": "status_change",
+      "title": "Phase 1 completed",
+      "content": "Foundation phase finished successfully"
+    }
+  ]
+}

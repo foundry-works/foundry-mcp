@@ -12,14 +12,20 @@
       "type": "spec",
       "title": "Simple Test Spec",
       "status": "in_progress",
-      "children": ["phase-1"]
+      "children": [
+        "phase-1"
+      ]
     },
     "phase-1": {
       "type": "phase",
       "title": "Implementation Phase",
       "status": "in_progress",
       "parent": "spec-root",
-      "children": ["task-1-1", "task-1-2", "task-1-3"]
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3"
+      ]
     },
     "task-1-1": {
       "type": "task",
@@ -52,5 +58,7 @@
       "children": []
     }
   },
-  "journal": []
+  "journal": [],
+  "generated": "2025-01-01T00:00:00Z",
+  "last_updated": "2025-01-01T00:00:00Z"
 }

@@ -13,14 +13,19 @@
       "type": "spec",
       "title": "Completed Spec",
       "status": "completed",
-      "children": ["phase-1"]
+      "children": [
+        "phase-1"
+      ]
     },
     "phase-1": {
       "type": "phase",
       "title": "Implementation Phase",
       "status": "completed",
       "parent": "spec-root",
-      "children": ["task-1-1", "task-1-2"]
+      "children": [
+        "task-1-1",
+        "task-1-2"
+      ]
     },
     "task-1-1": {
       "type": "task",
@@ -53,5 +58,7 @@
       "title": "Spec completed",
       "content": "All tasks completed successfully"
     }
-  ]
+  ],
+  "generated": "2025-01-01T00:00:00Z",
+  "last_updated": "2025-01-01T00:00:00Z"
 }

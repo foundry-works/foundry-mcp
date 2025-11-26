@@ -15,8 +15,8 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 41,
-    "current_phase": "phase-2"
+    "progress_percentage": 47,
+    "current_phase": "phase-3"
   },
   "hierarchy": {
     "spec-root": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -357,13 +357,13 @@
       "type": "phase",
       "title": "Test Fixtures",
       "description": "Create sample specs and fixture management",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "task-3-1",
         "task-3-2"
       ],
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 2,
       "metadata": {},
       "dependencies": {
@@ -376,7 +376,7 @@
       "type": "task",
       "title": "Create sample spec fixtures",
       "description": "Create JSON spec fixtures for various test scenarios",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3",
       "children": [],
       "dependencies": {
@@ -394,9 +394,15 @@
           "tests/parity/fixtures/sample_specs/completed_spec.json"
         ],
         "file_path": "task-3-1.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:11:16.381833Z",
+        "status_note": "Creating sample spec fixtures",
+        "completed_at": "2025-11-26T18:13:47.481599Z",
+        "needs_journaling": false,
+        "actual_hours": 0.042,
+        "journaled_at": "2025-11-26T18:13:47.484816Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "task-3-2": {
@@ -780,8 +786,17 @@
       "content": "All child tasks in phase phase-2 have been completed.",
       "metadata": {},
       "task_id": "phase-2"
+    },
+    {
+      "timestamp": "2025-11-26T18:13:47.484808Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create sample spec fixtures",
+      "author": "claude-code",
+      "content": "Sample spec fixtures completed. Four fixtures already existed (simple_spec.json, with_dependencies.json, with_blockers.json, completed_spec.json). Created missing multi_phase_spec.json with 3 phases, 7 tasks across different statuses, and sample journal entries. Fixed all existing fixtures to add required 'generated' and 'last_updated' fields for spec validation compliance. All 5 fixtures now pass validation: simple_spec.json (3 tasks, single phase), multi_phase_spec.json (7 tasks, 3 phases), with_dependencies.json (tasks with dependency relationships), with_blockers.json (blocked task scenarios), completed_spec.json (fully completed spec). Fixtures located at tests/parity/fixtures/sample_specs/.",
+      "metadata": {},
+      "task_id": "task-3-1"
     }
   ],
-  "last_updated": "2025-11-26T18:10:49.613907Z",
+  "last_updated": "2025-11-26T18:13:47.486108Z",
   "generated": "2025-01-26T00:00:00Z"
 }
