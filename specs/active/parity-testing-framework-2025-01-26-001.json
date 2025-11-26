@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 35,
+    "progress_percentage": 41,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -229,16 +229,20 @@
       "type": "phase",
       "title": "Normalization and Comparison",
       "description": "Implement output normalization and comparison utilities",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "task-2-1",
         "task-2-2",
         "task-2-3"
       ],
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "total_tasks": 3,
-      "metadata": {},
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-26T18:10:49.609581Z",
+        "journaled_at": "2025-11-26T18:10:49.613866Z"
+      },
       "dependencies": {
         "blocks": [],
         "blocked_by": [],
@@ -317,7 +321,7 @@
       "type": "task",
       "title": "Implement ResultComparator",
       "description": "Create comparator with detailed unified diff output on mismatch",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2",
       "children": [],
       "dependencies": {
@@ -338,9 +342,15 @@
           "assert_parity() helper"
         ],
         "file_path": "task-2-3.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:10:25.341389Z",
+        "status_note": "Implementing ResultComparator",
+        "completed_at": "2025-11-26T18:10:49.609438Z",
+        "needs_journaling": false,
+        "actual_hours": 0.007,
+        "journaled_at": "2025-11-26T18:10:49.611975Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "phase-3": {
@@ -752,8 +762,26 @@
       "content": "FieldMapper already fully implemented at tests/parity/harness/normalizers.py (lines 121-185). The class includes: FIELD_MAPPINGS dict with mappings for progress fields (percentage -> progress_percentage, total -> total_tasks, completed -> completed_tasks, pending -> pending_tasks, in_progress -> in_progress_tasks), task fields (task_count -> total_tasks), and validation fields (valid -> is_valid). INVERSE_MAPPINGS auto-generated from FIELD_MAPPINGS. map_to_canonical() classmethod applies FIELD_MAPPINGS to sdd output to match foundry naming. _apply_mappings() helper recursively processes dicts and lists. All mappings specified in task metadata implemented. The file also includes normalize_for_comparison() convenience function that combines OutputNormalizer and FieldMapper. No changes needed.",
       "metadata": {},
       "task_id": "task-2-2"
+    },
+    {
+      "timestamp": "2025-11-26T18:10:49.611970Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement ResultComparator",
+      "author": "claude-code",
+      "content": "ResultComparator already fully implemented at tests/parity/harness/comparators.py (205 lines). All features specified in task metadata are present: Deep JSON comparison via compare() method that recursively filters ignored fields and compares structures; Ignorable fields support via ignore_fields parameter and _filter_fields() helper; Unified diff generation using difflib.unified_diff() with fromfile=\"foundry-mcp\" and tofile=\"sdd-toolkit\"; assert_parity() helper that raises AssertionError with formatted diff on mismatch. Additional helper methods: assert_key_match() for single key comparison, assert_success() to verify both operations succeeded, assert_both_error() to verify error parity. No changes needed.",
+      "metadata": {},
+      "task_id": "task-2-3"
+    },
+    {
+      "timestamp": "2025-11-26T18:10:49.613857Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Normalization and Comparison",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-2 have been completed.",
+      "metadata": {},
+      "task_id": "phase-2"
     }
   ],
-  "last_updated": "2025-11-26T18:09:59.266852Z",
+  "last_updated": "2025-11-26T18:10:49.613907Z",
   "generated": "2025-01-26T00:00:00Z"
 }
