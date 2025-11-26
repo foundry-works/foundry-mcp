@@ -318,7 +318,10 @@ class TestGetTaskJournalSummary:
 
 
 class TestPrepareTask:
-    """Tests for prepare_task function."""
+    """Tests for prepare_task function.
+
+    Uses standard response format: {success, data, error}
+    """
 
     def test_prepares_next_task(self, temp_specs_dir, sample_spec):
         """Should prepare next actionable task."""
@@ -328,10 +331,11 @@ class TestPrepareTask:
 
         result = prepare_task("test-spec-001", temp_specs_dir)
         assert result["success"] is True
-        assert result["task_id"] == "task-1-2"
-        assert result["task_data"] is not None
-        assert result["dependencies"] is not None
-        assert result["context"] is not None
+        data = result["data"]
+        assert data["task_id"] == "task-1-2"
+        assert data["task_data"] is not None
+        assert data["dependencies"] is not None
+        assert data["context"] is not None
 
     def test_prepares_specific_task(self, temp_specs_dir, sample_spec):
         """Should prepare specified task."""
@@ -340,13 +344,13 @@ class TestPrepareTask:
 
         result = prepare_task("test-spec-001", temp_specs_dir, task_id="task-1-1")
         assert result["success"] is True
-        assert result["task_id"] == "task-1-1"
+        assert result["data"]["task_id"] == "task-1-1"
 
     def test_spec_not_found(self, temp_specs_dir):
         """Should return error for nonexistent spec."""
         result = prepare_task("nonexistent", temp_specs_dir)
         assert result["success"] is False
-        assert "error" in result
+        assert result["error"] is not None
 
     def test_includes_context(self, temp_specs_dir, sample_spec):
         """Should include context information."""
@@ -354,9 +358,10 @@ class TestPrepareTask:
         spec_file.write_text(json.dumps(sample_spec))
 
         result = prepare_task("test-spec-001", temp_specs_dir, task_id="task-1-2")
-        assert result["context"]["previous_sibling"] is not None
-        assert result["context"]["parent_task"] is not None
-        assert result["context"]["phase"] is not None
+        context = result["data"]["context"]
+        assert context["previous_sibling"] is not None
+        assert context["parent_task"] is not None
+        assert context["phase"] is not None
 
     def test_spec_complete(self, temp_specs_dir, sample_spec):
         """Should detect when spec is complete."""
@@ -372,4 +377,4 @@ class TestPrepareTask:
 
         result = prepare_task("test-spec-001", temp_specs_dir)
         assert result["success"] is True
-        assert result["spec_complete"] is True
+        assert result["data"]["spec_complete"] is True
