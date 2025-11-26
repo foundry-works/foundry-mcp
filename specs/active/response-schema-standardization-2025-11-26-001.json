@@ -2,7 +2,7 @@
   "spec_id": "response-schema-standardization-2025-11-26-001",
   "title": "MCP Tool Response Schema Standardization",
   "generated": "2025-11-26T12:00:00Z",
-  "last_updated": "2025-11-26T20:03:42.632836Z",
+  "last_updated": "2025-11-26T20:05:48.243044Z",
   "metadata": {
     "description": "Standardize all MCP tool response schemas across six tool modules plus new core helpers so every client sees the same predictable envelope.",
     "objectives": [
@@ -44,7 +44,7 @@
       "Response wrapper utility will be added to core module",
       "Clients advertise response_contract version via MCP capability negotiation"
     ],
-    "progress_percentage": 73,
+    "progress_percentage": 76,
     "status": "active",
     "current_phase": "phase-3"
   },
@@ -61,7 +61,7 @@
         "phase-4"
       ],
       "total_tasks": 30,
-      "completed_tasks": 22,
+      "completed_tasks": 23,
       "metadata": {}
     },
     "phase-1": {
@@ -680,7 +680,7 @@
         ]
       },
       "total_tasks": 7,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Update tools that are mostly consistent but need alignment - remove schema_version, align response structures",
         "risk_level": "low",
@@ -700,7 +700,7 @@
         "task-3-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -776,16 +776,22 @@
     "task-3-4": {
       "type": "task",
       "title": "src/foundry_mcp/tools/validation.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/validation.py",
         "task_category": "refactoring",
         "estimated_hours": 0.5,
-        "changes": "Minor alignment - already consistent, switch to using imported helpers"
+        "changes": "Minor alignment - already consistent, switch to using imported helpers",
+        "started_at": "2025-11-26T20:04:07.762127Z",
+        "status_note": "Starting validation.py standardization",
+        "completed_at": "2025-11-26T20:05:48.238936Z",
+        "needs_journaling": false,
+        "actual_hours": 0.028,
+        "journaled_at": "2025-11-26T20:05:48.241920Z"
       }
     },
     "task-3-5": {
@@ -1240,6 +1246,15 @@
       "content": "Standardized all 6 journal tools in journal.py to use the success/data/error response format. Changes: added data wrapper to all tools (add_journal, get_journal, mark_blocked, unblock, list_blocked, unjournaled_tasks). All error responses now include data: {}. All success responses wrap data with error: None. Module imports successfully.",
       "metadata": {},
       "task_id": "task-3-3"
+    },
+    {
+      "timestamp": "2025-11-26T20:05:48.241915Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/tools/validation.py",
+      "author": "claude-code",
+      "content": "Standardized all 4 validation tools in validation.py to use the success/data/error response format. Changes: added data wrapper to all tools (validate_spec, fix_spec, spec_stats, validate_and_fix). All error responses now include data: {}. All success responses wrap data with error: None. Removed unused asdict import. Module imports successfully.",
+      "metadata": {},
+      "task_id": "task-3-4"
     }
   ]
 }
