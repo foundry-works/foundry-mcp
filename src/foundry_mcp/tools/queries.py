@@ -201,8 +201,8 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if not specs_dir:
                 return {
-                    "specs": [],
-                    "count": 0,
+                    "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
@@ -222,15 +222,19 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ]
 
             return {
-                "specs": specs,
-                "count": len(specs)
+                "success": True,
+                "data": {
+                    "specs": specs,
+                    "count": len(specs)
+                },
+                "error": None
             }
 
         except Exception as e:
             logger.error(f"Error listing specs: {e}")
             return {
-                "specs": [],
-                "count": 0,
+                "success": False,
+                "data": {},
                 "error": str(e)
             }
 

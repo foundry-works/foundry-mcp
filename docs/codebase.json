@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-26T19:42:43.224617Z",
-    "generated_at_commit": "93009be503c0562aee85d04a498c61264cc3e326",
+    "generated_at": "2025-11-26T19:43:50.060369Z",
+    "generated_at_commit": "c5a7b99075f68cba22968ef51625cb11f58ca882",
     "languages": [
       "python"
     ],
@@ -11,7 +11,7 @@
   },
   "statistics": {
     "total_files": 30,
-    "total_lines": 12022,
+    "total_lines": 12029,
     "total_classes": 42,
     "total_functions": 136,
     "avg_complexity": 7.21,
@@ -26,7 +26,7 @@
     "by_language": {
       "python": {
         "files": 30,
-        "lines": 12022,
+        "lines": 12029,
         "classes": 42,
         "functions": 136,
         "avg_complexity": 7.21
@@ -853,7 +853,7 @@
         "foundry_mcp.core.spec.load_spec"
       ],
       "exports": [],
-      "lines": 303
+      "lines": 310
     },
     {
       "name": "rendering",
@@ -6040,13 +6040,13 @@
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 168,
+          "line": 175,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 231,
+          "line": 238,
           "call_type": "function_call"
         },
         {
@@ -8761,25 +8761,25 @@
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 191,
+          "line": 198,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 193,
+          "line": 200,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 255,
+          "line": 262,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 257,
+          "line": 264,
           "call_type": "function_call"
         },
         {
@@ -9367,7 +9367,7 @@
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 259,
+          "line": 266,
           "call_type": "function_call"
         },
         {
@@ -9809,7 +9809,7 @@
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 204,
+          "line": 211,
           "call_type": "function_call"
         }
       ],
@@ -14679,7 +14679,7 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 303,
+          "line": 310,
           "call_type": "method_call"
         }
       ],

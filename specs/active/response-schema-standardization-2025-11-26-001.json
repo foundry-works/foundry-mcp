@@ -2,7 +2,7 @@
   "spec_id": "response-schema-standardization-2025-11-26-001",
   "title": "MCP Tool Response Schema Standardization",
   "generated": "2025-11-26T12:00:00Z",
-  "last_updated": "2025-11-26T19:43:20.450843Z",
+  "last_updated": "2025-11-26T19:44:18.216057Z",
   "metadata": {
     "description": "Standardize all MCP tool response schemas across six tool modules plus new core helpers so every client sees the same predictable envelope.",
     "objectives": [
@@ -44,7 +44,7 @@
       "Response wrapper utility will be added to core module",
       "Clients advertise response_contract version via MCP capability negotiation"
     ],
-    "progress_percentage": 50,
+    "progress_percentage": 53,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -61,7 +61,7 @@
         "phase-4"
       ],
       "total_tasks": 30,
-      "completed_tasks": 15,
+      "completed_tasks": 16,
       "metadata": {}
     },
     "phase-1": {
@@ -356,7 +356,7 @@
         ]
       },
       "total_tasks": 11,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Address the most broken modules first - tasks.py and queries.py have the worst inconsistencies",
         "risk_level": "medium",
@@ -373,7 +373,7 @@
         "task-2-2"
       ],
       "total_tasks": 9,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -525,7 +525,7 @@
         "task-2-2-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/queries.py",
         "task_category": "refactoring",
@@ -555,13 +555,19 @@
     "task-2-2-2": {
       "type": "subtask",
       "title": "Fix foundry_list_specs: add success field",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap {specs: [...], count: int} in success_response()"
+        "details": "Wrap {specs: [...], count: int} in success_response()",
+        "started_at": "2025-11-26T19:43:55.379504Z",
+        "status_note": "Updating foundry_list_specs to use standard response format",
+        "completed_at": "2025-11-26T19:44:18.211816Z",
+        "needs_journaling": false,
+        "actual_hours": 0.006,
+        "journaled_at": "2025-11-26T19:44:18.214871Z"
       }
     },
     "task-2-2-3": {
@@ -1097,6 +1103,15 @@
       "content": "Updated foundry_find_specs in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Spec found returns success=True with found=True in data. Spec not found returns success=True with found=False in data (successful query with no result). Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-2-1"
+    },
+    {
+      "timestamp": "2025-11-26T19:44:18.214864Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Fix foundry_list_specs: add success field",
+      "author": "claude-code",
+      "content": "Updated foundry_list_specs in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps specs array and count inside data field. Error cases return success=False with empty data dict.",
+      "metadata": {},
+      "task_id": "task-2-2-2"
     }
   ]
 }
