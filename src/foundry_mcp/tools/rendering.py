@@ -5,12 +5,14 @@ Provides MCP tools for spec rendering and visualization.
 """
 
 import logging
+from dataclasses import asdict
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.observability import mcp_tool
+from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.spec import (
     find_specs_directory,
     load_spec,
@@ -67,17 +69,11 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             options = RenderOptions(
                 mode=mode,
@@ -90,26 +86,22 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             result = render_spec_to_markdown(spec_data, options)
 
-            return {
-                "success": True,
-                "spec_id": result.spec_id,
-                "title": result.title,
-                "markdown": result.markdown,
-                "total_sections": result.total_sections,
-                "total_tasks": result.total_tasks,
-                "completed_tasks": result.completed_tasks,
-                "progress_percentage": (
+            return asdict(success_response(
+                spec_id=result.spec_id,
+                title=result.title,
+                markdown=result.markdown,
+                total_sections=result.total_sections,
+                total_tasks=result.total_tasks,
+                completed_tasks=result.completed_tasks,
+                progress_percentage=(
                     result.completed_tasks / result.total_tasks * 100
                     if result.total_tasks > 0 else 0
                 ),
-            }
+            ))
 
         except Exception as e:
             logger.error(f"Error rendering spec: {e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_render_progress")
@@ -138,17 +130,11 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             hierarchy = spec_data.get("hierarchy", {})
             root = hierarchy.get("spec-root", {})
@@ -181,26 +167,22 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "total": phase_total,
                 })
 
-            return {
-                "success": True,
-                "spec_id": spec_id,
-                "title": metadata.get("title") or root.get("title", "Untitled"),
-                "overall": {
+            return asdict(success_response(
+                spec_id=spec_id,
+                title=metadata.get("title") or root.get("title", "Untitled"),
+                overall={
                     "status": root.get("status", "pending"),
                     "icon": overall_icon,
                     "progress_bar": overall_bar,
                     "completed": completed_tasks,
                     "total": total_tasks,
                 },
-                "phases": phases,
-            }
+                phases=phases,
+            ))
 
         except Exception as e:
             logger.error(f"Error rendering progress: {e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     @mcp.tool()
     @mcp_tool(tool_name="foundry_list_tasks")
@@ -229,17 +211,11 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {
-                    "success": False,
-                    "error": "No specs directory found"
-                }
+                return asdict(error_response("No specs directory found"))
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {
-                    "success": False,
-                    "error": f"Spec not found: {spec_id}"
-                }
+                return asdict(error_response(f"Spec not found: {spec_id}"))
 
             # Generate task list markdown
             task_list_md = render_task_list(spec_data, status_filter, include_completed)
@@ -271,20 +247,16 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "parent": node.get("parent"),
                 })
 
-            return {
-                "success": True,
-                "spec_id": spec_id,
-                "count": len(tasks),
-                "tasks": tasks,
-                "markdown": task_list_md,
-            }
+            return asdict(success_response(
+                spec_id=spec_id,
+                count=len(tasks),
+                tasks=tasks,
+                markdown=task_list_md,
+            ))
 
         except Exception as e:
             logger.error(f"Error listing tasks: {e}")
-            return {
-                "success": False,
-                "error": str(e)
-            }
+            return asdict(error_response(str(e)))
 
     logger.debug("Registered rendering tools: foundry_render_spec, foundry_render_progress, "
                  "foundry_list_tasks")
