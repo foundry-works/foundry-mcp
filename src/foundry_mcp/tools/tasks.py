@@ -113,14 +113,16 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if not specs_dir:
                 return {
-                    "found": False,
+                    "success": False,
+                    "data": {},
                     "error": "No specs directory found"
                 }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
                 return {
-                    "found": False,
+                    "success": False,
+                    "data": {},
                     "error": f"Spec not found: {spec_id}"
                 }
 
@@ -129,13 +131,17 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if next_task:
                 task_id, task_data = next_task
                 return {
-                    "found": True,
-                    "spec_id": spec_id,
-                    "task_id": task_id,
-                    "title": task_data.get("title", ""),
-                    "type": task_data.get("type", "task"),
-                    "status": task_data.get("status", "pending"),
-                    "metadata": task_data.get("metadata", {})
+                    "success": True,
+                    "data": {
+                        "found": True,
+                        "spec_id": spec_id,
+                        "task_id": task_id,
+                        "title": task_data.get("title", ""),
+                        "type": task_data.get("type", "task"),
+                        "status": task_data.get("status", "pending"),
+                        "metadata": task_data.get("metadata", {})
+                    },
+                    "error": None
                 }
             else:
                 # Check if spec is complete
@@ -149,23 +155,32 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
                 if pending == 0 and completed > 0:
                     return {
-                        "found": False,
-                        "spec_id": spec_id,
-                        "spec_complete": True,
-                        "message": "All tasks completed"
+                        "success": True,
+                        "data": {
+                            "found": False,
+                            "spec_id": spec_id,
+                            "spec_complete": True,
+                            "message": "All tasks completed"
+                        },
+                        "error": None
                     }
                 else:
                     return {
-                        "found": False,
-                        "spec_id": spec_id,
-                        "spec_complete": False,
-                        "message": "No actionable tasks (tasks may be blocked)"
+                        "success": True,
+                        "data": {
+                            "found": False,
+                            "spec_id": spec_id,
+                            "spec_complete": False,
+                            "message": "No actionable tasks (tasks may be blocked)"
+                        },
+                        "error": None
                     }
 
         except Exception as e:
             logger.error(f"Error finding next task: {e}")
             return {
-                "found": False,
+                "success": False,
+                "data": {},
                 "error": str(e)
             }
 
