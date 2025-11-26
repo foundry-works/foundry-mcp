@@ -2,7 +2,7 @@
   "spec_id": "response-schema-standardization-2025-11-26-001",
   "title": "MCP Tool Response Schema Standardization",
   "generated": "2025-11-26T12:00:00Z",
-  "last_updated": "2025-11-26T19:44:18.216057Z",
+  "last_updated": "2025-11-26T19:45:07.705949Z",
   "metadata": {
     "description": "Standardize all MCP tool response schemas across six tool modules plus new core helpers so every client sees the same predictable envelope.",
     "objectives": [
@@ -44,7 +44,7 @@
       "Response wrapper utility will be added to core module",
       "Clients advertise response_contract version via MCP capability negotiation"
     ],
-    "progress_percentage": 53,
+    "progress_percentage": 56,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -61,7 +61,7 @@
         "phase-4"
       ],
       "total_tasks": 30,
-      "completed_tasks": 16,
+      "completed_tasks": 17,
       "metadata": {}
     },
     "phase-1": {
@@ -356,7 +356,7 @@
         ]
       },
       "total_tasks": 11,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {
         "purpose": "Address the most broken modules first - tasks.py and queries.py have the worst inconsistencies",
         "risk_level": "medium",
@@ -366,15 +366,19 @@
     "phase-2-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2",
       "children": [
         "task-2-1",
         "task-2-2"
       ],
       "total_tasks": 9,
-      "completed_tasks": 8,
-      "metadata": {},
+      "completed_tasks": 9,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-26T19:45:07.700282Z",
+        "journaled_at": "2025-11-26T19:45:07.705926Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-2-verify"
@@ -517,7 +521,7 @@
     "task-2-2": {
       "type": "task",
       "title": "src/foundry_mcp/tools/queries.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [
         "task-2-2-1",
@@ -525,7 +529,7 @@
         "task-2-2-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/queries.py",
         "task_category": "refactoring",
@@ -573,13 +577,19 @@
     "task-2-2-3": {
       "type": "subtask",
       "title": "Fix foundry_query_tasks: add success field",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap {spec_id: str, tasks: [...], count: int} in success_response()"
+        "details": "Wrap {spec_id: str, tasks: [...], count: int} in success_response()",
+        "started_at": "2025-11-26T19:44:47.285823Z",
+        "status_note": "Updating foundry_query_tasks to use standard response format",
+        "completed_at": "2025-11-26T19:45:07.700129Z",
+        "needs_journaling": false,
+        "actual_hours": 0.006,
+        "journaled_at": "2025-11-26T19:45:07.703318Z"
       }
     },
     "phase-2-verify": {
@@ -1112,6 +1122,24 @@
       "content": "Updated foundry_list_specs in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps specs array and count inside data field. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-2-2"
+    },
+    {
+      "timestamp": "2025-11-26T19:45:07.703309Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Fix foundry_query_tasks: add success field",
+      "author": "claude-code",
+      "content": "Updated foundry_query_tasks in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps spec_id, tasks array, and count inside data field. Error cases return success=False with empty data dict.",
+      "metadata": {},
+      "task_id": "task-2-2-3"
+    },
+    {
+      "timestamp": "2025-11-26T19:45:07.705918Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-2-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-2-files"
     }
   ]
 }

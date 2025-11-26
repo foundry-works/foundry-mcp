@@ -271,8 +271,8 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if not spec_data:
                 return {
-                    "tasks": [],
-                    "count": 0,
+                    "success": False,
+                    "data": {},
                     "error": f"Spec not found: {spec_id}"
                 }
 
@@ -298,16 +298,20 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 })
 
             return {
-                "spec_id": spec_id,
-                "tasks": tasks,
-                "count": len(tasks)
+                "success": True,
+                "data": {
+                    "spec_id": spec_id,
+                    "tasks": tasks,
+                    "count": len(tasks)
+                },
+                "error": None
             }
 
         except Exception as e:
             logger.error(f"Error querying tasks in {spec_id}: {e}")
             return {
-                "tasks": [],
-                "count": 0,
+                "success": False,
+                "data": {},
                 "error": str(e)
             }
 
