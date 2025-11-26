@@ -656,22 +656,38 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 specs_dir = config.specs_dir or find_specs_directory()
 
             if not specs_dir:
-                return {"error": "No specs directory found"}
+                return {
+                    "success": False,
+                    "data": {},
+                    "error": "No specs directory found"
+                }
 
             spec_data = load_spec(spec_id, specs_dir)
             if not spec_data:
-                return {"error": f"Spec not found: {spec_id}"}
+                return {
+                    "success": False,
+                    "data": {},
+                    "error": f"Spec not found: {spec_id}"
+                }
 
             progress = get_progress_summary(spec_data, node_id)
 
             if include_phases:
                 progress["phases"] = list_phases(spec_data)
 
-            return progress
+            return {
+                "success": True,
+                "data": progress,
+                "error": None
+            }
 
         except Exception as e:
             logger.error(f"Error getting progress: {e}")
-            return {"error": str(e)}
+            return {
+                "success": False,
+                "data": {},
+                "error": str(e)
+            }
 
     logger.debug("Registered task tools: foundry_prepare_task, foundry_next_task, "
                  "foundry_task_info, foundry_check_deps, foundry_update_status, "
