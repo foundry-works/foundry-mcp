@@ -15,7 +15,7 @@
     ],
     "generated": "2025-01-26T00:00:00Z",
     "last_updated": "2025-01-26T00:00:00Z",
-    "progress_percentage": 64,
+    "progress_percentage": 70,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -30,7 +30,7 @@
         "phase-4",
         "phase-5"
       ],
-      "completed_tasks": 11,
+      "completed_tasks": 12,
       "total_tasks": 17,
       "metadata": {},
       "parent": null,
@@ -456,7 +456,7 @@
         "task-4-4",
         "task-4-5"
       ],
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "total_tasks": 5,
       "metadata": {},
       "dependencies": {
@@ -544,7 +544,7 @@
       "type": "task",
       "title": "Implement progress tracking tests",
       "description": "Tests for progress, journal, blocked task operations",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4",
       "children": [],
       "dependencies": {
@@ -566,9 +566,15 @@
           "test_list_blocked_parity"
         ],
         "file_path": "task-4-3.md",
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2025-11-26T18:17:28.269980Z",
+        "status_note": "Implementing progress tracking tests",
+        "completed_at": "2025-11-26T18:18:16.058382Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-26T18:18:16.060977Z"
       },
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "total_tasks": 1
     },
     "task-4-4": {
@@ -853,8 +859,17 @@
       "content": "Created tests/parity/test_task_operations.py (159 lines) with all tests specified in task metadata: test_next_task_parity, test_check_deps_parity, test_update_status_parity, test_complete_task_parity, test_start_task_parity. Additional tests: test_next_task_no_actionable_parity, test_check_deps_with_blockers_parity, test_complete_task_without_journal_parity. Tests organized in classes: TestNextTask (2 tests), TestCheckDependencies (2 tests), TestUpdateStatus (2 tests), TestCompleteTask (2 tests), TestFoundryTaskOperations (3 standalone tests). Uses isolated_adapters fixture for mutating tests, both_adapters for read-only comparisons. All tests use @pytest.mark.parity decorator and ResultComparator helpers.",
       "metadata": {},
       "task_id": "task-4-2"
+    },
+    {
+      "timestamp": "2025-11-26T18:18:16.060973Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement progress tracking tests",
+      "author": "claude-code",
+      "content": "Created tests/parity/test_progress_tracking.py (197 lines) with all tests specified in task metadata: test_progress_parity, test_add_journal_parity, test_get_journal_parity, test_mark_blocked_parity, test_unblock_parity, test_list_blocked_parity. Additional tests: test_progress_multi_phase_parity, test_add_journal_with_task_parity, test_get_journal_by_type_parity, test_list_blocked_empty_parity. Tests organized in classes: TestProgress (2 tests), TestJournal (4 tests), TestBlockedTasks (4 tests), TestFoundryProgressOperations (5 standalone tests). Uses isolated_adapters fixture for mutating tests, both_adapters for read-only comparisons. All tests use @pytest.mark.parity decorator.",
+      "metadata": {},
+      "task_id": "task-4-3"
     }
   ],
-  "last_updated": "2025-11-26T18:16:54.115115Z",
+  "last_updated": "2025-11-26T18:18:16.061952Z",
   "generated": "2025-01-26T00:00:00Z"
 }
