@@ -360,10 +360,12 @@ class CircuitBreaker:
 
         In HALF_OPEN state, successful calls contribute to recovery.
         Once enough calls succeed, circuit closes.
+        Note: half_open_calls is already incremented in can_execute().
         """
         with self._lock:
             if self.state == CircuitState.HALF_OPEN:
-                self.half_open_calls += 1
+                # Check if enough successful calls for recovery
+                # (counter already incremented in can_execute)
                 if self.half_open_calls >= self.half_open_max_calls:
                     # Recovery successful
                     self.state = CircuitState.CLOSED

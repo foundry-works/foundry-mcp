@@ -437,21 +437,27 @@ class TestCircuitBreaker:
         cb = CircuitBreaker(
             name="test",
             failure_threshold=2,
-            recovery_timeout=0.01,
+            recovery_timeout=100.0,  # Long timeout to prevent re-transition
             half_open_max_calls=2,
         )
 
         # Open circuit
         cb.record_failure()
         cb.record_failure()
+        assert cb.state == CircuitState.OPEN
 
-        # Wait and transition to half-open
-        time.sleep(0.02)
-        cb.can_execute()
+        # Manually transition to HALF_OPEN for controlled testing
+        cb.state = CircuitState.HALF_OPEN
+        cb.half_open_calls = 0
 
-        # Record successes
-        cb.record_success()
-        cb.record_success()
+        # Simulate first call
+        cb.can_execute()  # increments half_open_calls to 1
+        cb.record_success()  # Won't close yet (need 2 calls)
+        assert cb.state == CircuitState.HALF_OPEN
+
+        # Simulate second call
+        cb.can_execute()  # increments half_open_calls to 2
+        cb.record_success()  # Now closes circuit
 
         assert cb.state == CircuitState.CLOSED
         assert cb.failure_count == 0

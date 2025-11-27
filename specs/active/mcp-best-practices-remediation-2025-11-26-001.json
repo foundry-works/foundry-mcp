@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:47:34.484946Z",
+  "last_updated": "2025-11-27T13:52:20.547087Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 48,
+    "progress_percentage": 49,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 49,
+      "completed_tasks": 50,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1133,7 +1133,7 @@
     "phase-4": {
       "type": "phase",
       "title": "Resilience Infrastructure",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "phase-4-files",
@@ -1150,14 +1150,17 @@
         "depends": []
       },
       "total_tasks": 12,
-      "completed_tasks": 11,
+      "completed_tasks": 12,
       "metadata": {
         "purpose": "Prevent hung operations and handle external dependency failures gracefully",
         "risk_level": "medium",
         "doc_references": [
           "docs/mcp_best_practices/05-observability-telemetry.md#L12-L333",
           "docs/mcp_best_practices/12-timeout-resilience.md#L12-L398"
-        ]
+        ],
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T13:52:20.528157Z",
+        "journaled_at": "2025-11-27T13:52:20.547045Z"
       }
     },
     "phase-4-files": {
@@ -1372,7 +1375,7 @@
     "phase-4-verify": {
       "type": "group",
       "title": "Verification",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "verify-4-1",
@@ -1387,8 +1390,12 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
-      "metadata": {}
+      "completed_tasks": 2,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T13:52:20.528154Z",
+        "journaled_at": "2025-11-27T13:52:20.543640Z"
+      }
     },
     "verify-4-1": {
       "type": "verify",
@@ -1418,17 +1425,23 @@
     "verify-4-2": {
       "type": "verify",
       "title": "Phase 4 fidelity review",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "fidelity",
         "skill": "sdd-fidelity-review",
         "scope": "phase",
         "target": "phase-4",
-        "agent": "sdd-fidelity-review"
+        "agent": "sdd-fidelity-review",
+        "started_at": "2025-11-27T13:47:52.132922Z",
+        "status_note": "Running Phase 4 fidelity review",
+        "completed_at": "2025-11-27T13:52:20.527969Z",
+        "needs_journaling": false,
+        "actual_hours": 0.075,
+        "journaled_at": "2025-11-27T13:52:20.536054Z"
       },
       "dependencies": {
         "blocks": [],
@@ -4062,6 +4075,33 @@
       "content": "Verification passed. Ran pytest tests/unit/test_core/test_resilience.py -v. Results: 51 tests passed in 1.82s. Coverage includes: TimeoutConstants (5 tests), WithTimeout (6 tests), TimeoutException (2 tests), RetryWithBackoff (7 tests), RetryableDecorator (3 tests), CircuitState (1 test), CircuitBreaker (12 tests), CircuitBreakerError (1 test), WithCircuitBreakerDecorator (4 tests), HealthStatus (2 tests), HealthCheck (5 tests), CheckDependencies (4 tests).",
       "metadata": {},
       "task_id": "verify-4-1"
+    },
+    {
+      "timestamp": "2025-11-27T13:52:20.536049Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Phase 4 fidelity review",
+      "author": "claude-code",
+      "content": "Phase 4 fidelity review completed. Issues addressed: (1) Circuit breaker half_open_calls double-increment bug fixed - removed duplicate increment from record_success(), count now only incremented in can_execute(). (2) Exception-based approach for decorators accepted as valid architectural design over spec's mention of error helpers. Tests updated and all 51 tests pass. Implementation verified against docs/mcp_best_practices/12-timeout-resilience.md patterns.",
+      "metadata": {},
+      "task_id": "verify-4-2"
+    },
+    {
+      "timestamp": "2025-11-27T13:52:20.543636Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Verification",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-verify have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-verify"
+    },
+    {
+      "timestamp": "2025-11-27T13:52:20.547038Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Resilience Infrastructure",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-4 have been completed.",
+      "metadata": {},
+      "task_id": "phase-4"
     }
   ]
 }
