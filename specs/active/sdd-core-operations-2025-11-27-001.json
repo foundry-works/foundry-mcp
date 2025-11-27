@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T22:49:27.595694Z",
+  "last_updated": "2025-11-27T22:50:48.962433Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 75,
+    "progress_percentage": 76,
     "status": "active",
     "current_phase": "phase-5"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 67,
+      "completed_tasks": 68,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1914,7 +1914,7 @@
         ]
       },
       "total_tasks": 14,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Plan formatting, phase management, and state reconciliation",
         "risk_level": "medium"
@@ -1931,7 +1931,7 @@
         "task-5-3"
       ],
       "total_tasks": 11,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1957,7 +1957,7 @@
         "task-5-1-8"
       ],
       "total_tasks": 8,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/planning.py",
         "task_category": "implementation",
@@ -2048,13 +2048,19 @@
     "task-5-1-5": {
       "type": "subtask",
       "title": "Implement spec-reconcile-state - compare filesystem vs spec state for drift",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd reconcile-state, detect file changes not reflected in spec"
+        "details": "Wrap sdd reconcile-state, detect file changes not reflected in spec",
+        "started_at": "2025-11-27T22:49:56.353717Z",
+        "status_note": "Starting implementation of spec-reconcile-state tool",
+        "completed_at": "2025-11-27T22:50:48.952896Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T22:50:48.959253Z"
       }
     },
     "task-5-1-6": {
@@ -3330,6 +3336,15 @@
       "content": "Added phase-report-time tool to planning.py. Wraps sdd phase-time CLI command with spec_id and phase_id required params. Calculates variance (hours and percent) between estimated and actual time. Returns full metrics including task_count, completed_count, and optional phase_title. Same resilience pattern (circuit breaker, timing metrics, audit logging). Module import verified.",
       "metadata": {},
       "task_id": "task-5-1-4"
+    },
+    {
+      "timestamp": "2025-11-27T22:50:48.959239Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-reconcile-state - compare filesystem vs spec state for drift",
+      "author": "claude-code",
+      "content": "Added spec-reconcile-state tool to planning.py. Wraps sdd reconcile-state CLI command with spec_id required and dry_run optional (defaults to True for safety). Detects drift by comparing filesystem state vs spec state, returning modified_files, new_files, missing_files arrays with has_drift flag and drift_count. Same resilience pattern (circuit breaker, timing metrics, audit logging). Module import verified.",
+      "metadata": {},
+      "task_id": "task-5-1-5"
     }
   ]
 }

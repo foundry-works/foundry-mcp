@@ -759,3 +759,169 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-reconcile-state",
+    )
+    def spec_reconcile_state(
+        spec_id: str,
+        dry_run: bool = True,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Compare filesystem state against spec state to detect drift.
+
+        Wraps the SDD CLI reconcile-state command to detect file changes
+        that are not reflected in the specification, helping identify
+        when implementations have drifted from the planned work.
+
+        WHEN TO USE:
+        - Before resuming work on a spec after a break
+        - After manual file edits outside the SDD workflow
+        - Verifying spec accurately reflects current codebase state
+        - Detecting untracked changes before marking tasks complete
+
+        Args:
+            spec_id: Specification ID to reconcile
+            dry_run: If True (default), only report drift without making changes
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with reconciliation results:
+            - has_drift: Boolean indicating if drift was detected
+            - modified_files: Files changed since spec last updated
+            - new_files: Files created but not in spec
+            - missing_files: Files in spec but not on filesystem
+            - recommendations: Suggested actions to resolve drift
+        """
+        tool_name = "spec_reconcile_state"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            # Build command
+            cmd = ["sdd", "reconcile-state", spec_id, "--json"]
+
+            if dry_run:
+                cmd.append("--dry-run")
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="spec-reconcile-state",
+                action="reconcile_state",
+                spec_id=spec_id,
+                dry_run=dry_run,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                modified = output_data.get("modified_files", [])
+                new_files = output_data.get("new_files", [])
+                missing = output_data.get("missing_files", [])
+                has_drift = bool(modified or new_files or missing)
+
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "has_drift": has_drift,
+                    "dry_run": dry_run,
+                    "modified_files": modified,
+                    "new_files": new_files,
+                    "missing_files": missing,
+                    "drift_count": len(modified) + len(new_files) + len(missing),
+                }
+
+                # Include recommendations if available
+                if "recommendations" in output_data:
+                    data["recommendations"] = output_data["recommendations"]
+
+                # Track metrics
+                _metrics.counter(f"planning.{tool_name}", labels={
+                    "status": "success",
+                    "has_drift": str(has_drift).lower(),
+                })
+
+                # Craft appropriate message
+                if has_drift:
+                    message = f"Drift detected: {data['drift_count']} file(s) out of sync"
+                else:
+                    message = "No drift detected - spec is in sync with filesystem"
+
+                return asdict(success_response(
+                    data=data,
+                    message=message,
+                ))
+            else:
+                # Handle specific error cases
+                stderr = result.stderr.strip()
+
+                if "not found" in stderr.lower():
+                    error_code = "NOT_FOUND"
+                    remediation = "Ensure the spec_id exists"
+                else:
+                    error_code = "RECONCILE_FAILED"
+                    remediation = "Check the spec_id and try again"
+
+                _metrics.counter(f"planning.{tool_name}", labels={"status": "error", "code": error_code})
+
+                return asdict(error_response(
+                    stderr or "Failed to reconcile state",
+                    error_code=error_code,
+                    error_type="planning",
+                    remediation=remediation,
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="resilience",
+                remediation="Wait for circuit breaker recovery, then retry",
+            ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"State reconciliation timed out after {CLI_TIMEOUT}s",
+                error_code="TIMEOUT",
+                error_type="timeout",
+                remediation="Try again or check system resources",
+            ))
+
+        except FileNotFoundError:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found. Ensure 'sdd' is installed and in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="configuration",
+                remediation="Install SDD toolkit: pip install claude-sdd-toolkit",
+            ))
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in {tool_name}")
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
