@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T21:33:23.077963Z",
-    "generated_at_commit": "58106545007325626e444c615099f05c95be884f",
+    "generated_at": "2025-11-27T21:34:42.148898Z",
+    "generated_at_commit": "aedcfbcdb4a859b61c93ce24d62fedfdb1561a7a",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 43,
-    "total_lines": 20285,
+    "total_lines": 20423,
     "total_classes": 72,
     "total_functions": 209,
-    "avg_complexity": 7.43,
+    "avg_complexity": 7.49,
     "max_complexity": 135,
     "high_complexity_functions": [
       "register_authoring_tools (135)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 43,
-        "lines": 20285,
+        "lines": 20423,
         "classes": 72,
         "functions": 209,
-        "avg_complexity": 7.43
+        "avg_complexity": 7.49
       }
     }
   },
@@ -1112,7 +1112,7 @@
         "foundry_mcp.core.resilience.MEDIUM_TIMEOUT"
       ],
       "exports": [],
-      "lines": 241
+      "lines": 379
     },
     {
       "name": "authoring",
@@ -5384,7 +5384,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 771,
           "call_type": "method_call"
         },
@@ -5402,7 +5402,7 @@
         },
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 785,
           "call_type": "method_call"
         },
@@ -5444,7 +5444,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -9129,6 +9129,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 243,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_create",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 120,
@@ -9508,7 +9514,7 @@
         }
       ],
       "calls": [],
-      "call_count": 69
+      "call_count": 70
     },
     {
       "name": "redact_sensitive_data",
@@ -9793,6 +9799,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 298,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_create",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 186,
@@ -9879,7 +9891,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 18
+      "call_count": 19
     },
     {
       "name": "mcp_tool",
@@ -13062,6 +13074,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 318,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_create",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 228,
@@ -13478,7 +13496,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 74
+      "call_count": 75
     },
     {
       "name": "error_response",
@@ -13648,6 +13666,42 @@
           "name": "spec_analyze",
           "file": "src/foundry_mcp/tools/analysis.py",
           "line": 236,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 281,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 338,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 346,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 355,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 364,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 374,
           "call_type": "function_call"
         },
         {
@@ -15201,7 +15255,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 279
+      "call_count": 285
     },
     {
       "name": "validation_error",
@@ -22163,6 +22217,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 306,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_create",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 196,
@@ -22309,7 +22369,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 13
+      "call_count": 14
     },
     {
       "name": "register_analysis_tools",
@@ -22330,7 +22390,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 12,
+      "complexity": 24,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -22380,6 +22440,12 @@
           "name": "spec_analyze",
           "file": "src/foundry_mcp/tools/analysis.py",
           "line": 171,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 306,
           "call_type": "function_call"
         },
         {
@@ -22529,7 +22595,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 13
+      "call_count": 14
     },
     {
       "name": "register_authoring_tools",
@@ -22883,6 +22949,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 306,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_create",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 196,
@@ -23029,7 +23101,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 13
+      "call_count": 14
     },
     {
       "name": "register_spec_helper_tools",

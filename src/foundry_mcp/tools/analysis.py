@@ -242,6 +242,154 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
     @canonical_tool(
         mcp,
+        canonical_name="review-parse-feedback",
+    )
+    def review_parse_feedback(
+        spec_id: str,
+        review_path: str,
+        output_path: Optional[str] = None,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Transform review feedback into structured modification actions.
+
+        Wraps the SDD CLI parse-review command to convert review markdown
+        or JSON into a structured suggestions file that can be applied
+        to modify the specification.
+
+        WHEN TO USE:
+        - Processing AI-generated review feedback
+        - Converting review notes into actionable changes
+        - Preparing review feedback for automated application
+        - Transforming unstructured feedback into spec modifications
+
+        Args:
+            spec_id: Specification ID being reviewed
+            review_path: Path to review report file (.md or .json)
+            output_path: Output path for suggestions JSON (default: <review>.suggestions.json)
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with parsing results:
+            - suggestions_count: Number of suggestions extracted
+            - output_file: Path to generated suggestions file
+            - categories: Breakdown of suggestion types
+        """
+        tool_name = "review_parse_feedback"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            if not review_path:
+                return asdict(error_response(
+                    "review_path is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a path to the review file (.md or .json)",
+                ))
+
+            # Build command
+            cmd = ["sdd", "parse-review", spec_id, "--review", review_path, "--json"]
+
+            if output_path:
+                cmd.extend(["--output", output_path])
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="review-parse-feedback",
+                action="parse_review",
+                spec_id=spec_id,
+                review_path=review_path,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {"raw_output": result.stdout}
+
+                # Track metrics
+                _metrics.counter(f"analysis.{tool_name}", labels={"status": "success"})
+
+                return asdict(success_response(
+                    data=output_data,
+                    message="Review feedback parsed successfully",
+                ))
+            else:
+                # Handle specific error cases
+                stderr = result.stderr.strip()
+
+                if "not found" in stderr.lower():
+                    error_code = "NOT_FOUND"
+                    remediation = "Ensure the review file and spec exist"
+                elif "invalid" in stderr.lower() or "parse" in stderr.lower():
+                    error_code = "PARSE_ERROR"
+                    remediation = "Check the review file format (.md or .json)"
+                else:
+                    error_code = "PARSE_FAILED"
+                    remediation = "Check the review file and spec_id"
+
+                _metrics.counter(f"analysis.{tool_name}", labels={"status": "error", "code": error_code})
+
+                return asdict(error_response(
+                    stderr or "Review parsing failed",
+                    error_code=error_code,
+                    error_type="analysis",
+                    remediation=remediation,
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="resilience",
+                remediation="Wait for circuit breaker recovery, then retry",
+            ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"analysis.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Review parsing timed out after {CLI_TIMEOUT}s",
+                error_code="TIMEOUT",
+                error_type="timeout",
+                remediation="Try with a smaller review file",
+            ))
+
+        except FileNotFoundError:
+            _metrics.counter(f"analysis.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found. Ensure 'sdd' is installed and in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="configuration",
+                remediation="Install SDD toolkit: pip install claude-sdd-toolkit",
+            ))
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in {tool_name}")
+            _metrics.counter(f"analysis.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
+
+    @canonical_tool(
+        mcp,
         canonical_name="spec-analyze-deps",
     )
     def spec_analyze_deps(
