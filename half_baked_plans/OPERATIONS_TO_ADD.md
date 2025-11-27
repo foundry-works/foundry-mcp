@@ -18,6 +18,19 @@ These operations are **out of scope** for foundry-mcp because they assume the Cl
 
 **Note**: Some functionality can be adapted via MCP configuration (see "Feature Adaptations" section below).
 
+## Recently Covered via MCP Best Practices Remediation
+
+`specs/completed/mcp-best-practices-remediation-2025-11-26-001.json` shipped the missing MCP guardrails. The following SDD operations now have working adapters and should not be treated as backlog items:
+
+- **Spec discovery and pagination** (`find-specs`, `list-specs`, `query-tasks`) via `src/foundry_mcp/tools/queries.py` with the new pagination helpers.
+- **Test discovery** (`find-tests`) via `foundry_discover_tests` in `src/foundry_mcp/tools/testing.py`.
+- **Spec validation and stats** (`validate-spec`, `stats`) via `src/foundry_mcp/tools/validation.py` (`foundry_validate_spec`, `foundry_spec_stats`, `foundry_validate_and_fix`).
+- **Task prep & status reporting** (`prepare-task`, `status-report`) via `src/foundry_mcp/tools/tasks.py` (`foundry_prepare_task`, `foundry_progress`).
+- **Journaling hygiene** (`check-journaling`) via `foundry_unjournaled_tasks` in `src/foundry_mcp/tools/journal.py`.
+- **Rendering/export** (`render`) via `src/foundry_mcp/tools/rendering.py` (`foundry_render_spec`, `foundry_render_progress`).
+
+Use these references when evaluating what actually remains to be wrapped.
+
 ---
 
 ## In-Scope Operations
@@ -29,12 +42,9 @@ These operations are **out of scope** for foundry-mcp because they assume the Cl
 - `check-environment` – validate required OS packages, runtimes, and credentials.
 
 ### Spec Discovery & Validation Helpers
-- `find-specs` – glob discovery of spec files by pattern.
 - `find-related-files` – locate files referenced by a spec node.
 - `find-pattern` – search specs for structural/code patterns.
-- `find-tests` – map specs to likely test files.
 - `find-circular-deps` – detect cyclic task dependencies.
-- `validate-spec` – legacy validator variant with schema-centric output.
 - `validate-paths` – ensure file references exist on disk.
 
 ### Authoring, Editing & Metadata
@@ -56,26 +66,19 @@ These operations are **out of scope** for foundry-mcp because they assume the Cl
 - `bulk-journal` – add multiple journal entries in one shot.
 
 ### Task Planning & Execution Utilities
-- `prepare-task` – build execution context, dependencies, and notes for a task.
 - `format-plan` – pretty-print task plans for sharing.
-- `query-tasks` – advanced filtering/query over task sets.
 - `list-phases` – enumerate phases in a spec.
 - `check-complete` – verify completion readiness for a phase/spec.
 - `phase-time` – summarize timelines per phase.
 - `reconcile-state` – compare file system vs. spec state for drift.
-- `check-journaling` – ensure required journaling steps occurred.
 - `time-report` – summarize time tracking metrics.
-- `status-report` – build structured progress summaries.
 - `audit-spec` – run higher-level audits beyond basic validation.
 
 ### Lifecycle & Dependency Extras
-- `add-assumption`, `list-assumptions`, `add-revision`, `add-verification`, `update-estimate` – richer lifecycle hooks not surfaced in adapters today.
-- `add-task` / `remove-task` – lifecycle ops for tasks (distinct from status changes we already support).
+Lifecycle mutation commands (assumption CRUD, revisions, verifications, estimate updates, task creation/deletion) remain unimplemented even after the remediation work. They rely on the same primitives listed in the Authoring section but need dedicated adapters because they affect dependency graphs and journaling requirements.
 
 ### Validation, Reporting & Analytics
-- `report` – produce human-readable validation/analysis reports.
-- `stats` – aggregate analytics beyond `spec-stats` (e.g., repo-wide metrics).
-- `analyze` / `analyze-deps` – deeper data science style insights (if not covered above).
+- `report` – produce human-readable validation/analysis reports (stat collection now covered via `foundry_spec_stats`, but higher-level reporting still missing).
 
 ### Collaboration, Review & PR Workflow (LLM-Powered)
 These operations require LLM integration - users configure their provider via MCP config:
@@ -87,7 +90,6 @@ These operations require LLM integration - users configure their provider via MC
 
 ### Documentation, Rendering & Skills (LLM-Powered)
 - `doc` – generate human-facing documentation bundles.
-- `render` – produce rendered artifacts (markdown, with optional AI insights).
 - `llm-doc-gen` – LLM-powered doc generation suite.
 - `fidelity-review` – specialized documentation fidelity checks (code-to-spec comparison).
 
@@ -154,6 +156,15 @@ To avoid another retrofit cycle, every new MCP operation or adapter should:
 5. **Note deviations in specs**: if an operation legitimately streams multiple payloads, capture the exception rationale in its spec so future refactors don’t “fix” it.
 
 Helper-level enforcement lives in `tests/test_responses.py`; adapter-level coverage should extend the relevant suites (typically `tests/integration/test_mcp_tools.py`) whenever you claim a new operation from this backlog.
+
+### MCP Best Practices Remediation Guardrails
+Reference: `specs/completed/mcp-best-practices-remediation-2025-11-26-001.json`. Any new adapter work must reuse the infrastructure that spec delivered:
+
+1. **Input hygiene & prompt shielding** – use `foundry_mcp/core/security.py` (`MAX_INPUT_SIZE`, `validate_input_size`, `detect_prompt_injection`) and redact via `foundry_mcp/core/observability.py` before emitting logs.
+2. **Feature gating & telemetry** – register new operations with `foundry_mcp/core/feature_flags.py` and expose readiness through the discovery endpoints so MCP clients can negotiate safely.
+3. **Resilience & concurrency** – wrap outbound or long-running work with `foundry_mcp/core/resilience.py` (`with_timeout`, `retry_with_backoff`, `CircuitBreaker`) and `foundry_mcp/core/concurrency.py` to enforce rate limits/cancellation.
+4. **Pagination & discovery helpers** – all list-style responses must use `foundry_mcp/core/pagination.py` + `paginated_response`, and expose metadata through `foundry_mcp/core/discovery.py`/`src/foundry_mcp/tools/discovery.py`.
+5. **LLM-friendly output** – honor `foundry_mcp/core/llm_patterns.py` (`progressive_disclosure`, `batch_operation`) when shaping verbose responses so they degrade gracefully for LLM consumers.
 
 ### LLM-Powered Features
 For operations requiring AI (review, llm-doc-gen, create-pr, fidelity-review, render with insights):
