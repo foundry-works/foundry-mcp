@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:59:35.848494Z",
+  "last_updated": "2025-11-27T21:00:53.009484Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 35,
+    "progress_percentage": 37,
     "status": "active",
     "current_phase": "phase-3"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 32,
+      "completed_tasks": 33,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -880,7 +880,7 @@
         ]
       },
       "total_tasks": 17,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Basic spec and task creation/modification operations",
         "risk_level": "medium"
@@ -898,7 +898,7 @@
         "task-3-4"
       ],
       "total_tasks": 13,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -925,7 +925,7 @@
         "task-3-1-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/authoring.py",
         "task_category": "implementation",
@@ -1052,13 +1052,19 @@
     "task-3-1-7": {
       "type": "subtask",
       "title": "Implement revision-add - append revision history entry",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd add-revision, add to revision_history array"
+        "details": "Wrap sdd add-revision, add to revision_history array",
+        "started_at": "2025-11-27T21:00:06.957074Z",
+        "status_note": "Implementing revision-add tool",
+        "completed_at": "2025-11-27T21:00:52.997598Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-27T21:00:53.006841Z"
       }
     },
     "task-3-1-8": {
@@ -2711,6 +2717,15 @@
       "content": "Implemented assumption-list tool in src/foundry_mcp/tools/authoring.py. The tool wraps `sdd list-assumptions` CLI to retrieve assumptions from a spec. Supports spec_id, assumption_type filter (constraint/requirement), and path. Returns assumptions array with total_count. Circuit breaker, timeout, metrics included. Handles SPEC_NOT_FOUND error. Import verified.",
       "metadata": {},
       "task_id": "task-3-1-6"
+    },
+    {
+      "timestamp": "2025-11-27T21:00:53.006834Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement revision-add - append revision history entry",
+      "author": "claude-code",
+      "content": "Implemented revision-add tool in src/foundry_mcp/tools/authoring.py. The tool wraps `sdd add-revision` CLI to append revision history entries. Supports spec_id, version, changes, author, dry_run, and path. Validation for required fields. Circuit breaker, timeout, metrics. Handles SPEC_NOT_FOUND. Import verified.",
+      "metadata": {},
+      "task_id": "task-3-1-7"
     }
   ]
 }

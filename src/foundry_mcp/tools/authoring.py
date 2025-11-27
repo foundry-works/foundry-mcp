@@ -1143,3 +1143,161 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="revision-add",
+    )
+    def revision_add(
+        spec_id: str,
+        version: str,
+        changes: str,
+        author: Optional[str] = None,
+        dry_run: bool = False,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Append a revision history entry to an SDD specification.
+
+        Wraps the SDD CLI add-revision command to add revision entries
+        to the spec's revision_history array.
+
+        WHEN TO USE:
+        - Recording spec version changes
+        - Documenting significant spec modifications
+        - Tracking spec evolution over time
+        - Adding changelog entries
+
+        Args:
+            spec_id: Specification ID
+            version: Revision version (e.g., 1.1, 2.0)
+            changes: Summary of changes
+            author: Revision author
+            dry_run: Preview revision without saving
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with revision results:
+            - spec_id: The specification ID
+            - version: The revision version
+            - changes: Changes summary
+            - author: Author if provided
+            - dry_run: Whether this was a dry run
+        """
+        tool_name = "revision_add"
+        try:
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            if not version:
+                return asdict(error_response(
+                    "version is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a version parameter (e.g., 1.1, 2.0)",
+                ))
+
+            if not changes:
+                return asdict(error_response(
+                    "changes is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a changes summary",
+                ))
+
+            cmd = ["sdd", "add-revision", spec_id, version, changes, "--json"]
+
+            if author:
+                cmd.extend(["--author", author])
+
+            if dry_run:
+                cmd.append("--dry-run")
+
+            if path:
+                cmd.extend(["--path", path])
+
+            audit_log(
+                "tool_invocation",
+                tool="revision-add",
+                action="add_revision",
+                spec_id=spec_id,
+                version=version,
+                dry_run=dry_run,
+            )
+
+            result = _run_sdd_command(cmd, tool_name)
+
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "version": version,
+                    "changes": changes,
+                    "dry_run": dry_run,
+                }
+
+                if author:
+                    data["author"] = author
+
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "success"})
+                return asdict(success_response(data))
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+
+                if "not found" in error_msg.lower():
+                    return asdict(error_response(
+                        f"Specification '{spec_id}' not found",
+                        error_code="SPEC_NOT_FOUND",
+                        error_type="not_found",
+                        remediation="Verify the spec ID exists using spec-list",
+                    ))
+
+                return asdict(error_response(
+                    f"Failed to add revision: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that the spec exists",
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try again or check system resources",
+            ))
+        except FileNotFoundError:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in revision-add")
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
