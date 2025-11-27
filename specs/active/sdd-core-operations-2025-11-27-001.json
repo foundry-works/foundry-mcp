@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T22:02:03.678646Z",
+  "last_updated": "2025-11-27T22:26:41.382426Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 67,
+    "progress_percentage": 68,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 60,
+      "completed_tasks": 61,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1364,7 +1364,7 @@
         ]
       },
       "total_tasks": 20,
-      "completed_tasks": 17,
+      "completed_tasks": 18,
       "metadata": {
         "purpose": "Analysis, bulk operations, and specialized mutations",
         "risk_level": "medium"
@@ -1803,7 +1803,7 @@
     "phase-4-verify": {
       "type": "group",
       "title": "Verification",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-4",
       "children": [
         "verify-4-1",
@@ -1818,22 +1818,28 @@
         "blocks": []
       },
       "total_tasks": 3,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {}
     },
     "verify-4-1": {
       "type": "verify",
       "title": "Unit tests pass for advanced authoring modules",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "auto",
         "agent": "run-tests",
         "command": "pytest tests/unit/test_mutations.py -v",
-        "expected": "All tests pass"
+        "expected": "All tests pass",
+        "started_at": "2025-11-27T22:26:21.996552Z",
+        "status_note": "Starting automated verification",
+        "completed_at": "2025-11-27T22:26:41.372894Z",
+        "needs_journaling": false,
+        "actual_hours": 0.005,
+        "journaled_at": "2025-11-27T22:26:41.378922Z"
       }
     },
     "verify-4-2": {
@@ -3200,6 +3206,15 @@
       "content": "All child tasks in group phase-4-files have been completed.",
       "metadata": {},
       "task_id": "phase-4-files"
+    },
+    {
+      "timestamp": "2025-11-27T22:26:41.378910Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Unit tests pass for advanced authoring modules",
+      "author": "claude-code",
+      "content": "All 25 unit tests for mutations passed (test_mutations.py). Tests cover: run_sdd_command execution/circuit breaker, spec_apply_plan, verification_add, verification_execute, task_update_estimate, task_update_metadata, spec_sync_metadata, git_integration commands, task_create_commit, journal_bulk_add, tool registration, and error handling (circuit breaker, timeout, CLI not found).",
+      "metadata": {},
+      "task_id": "verify-4-1"
     }
   ]
 }
