@@ -1301,3 +1301,187 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-update-frontmatter",
+    )
+    def spec_update_frontmatter(
+        spec_id: str,
+        key: str,
+        value: str,
+        dry_run: bool = False,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Mutate top-level metadata blocks in an SDD specification.
+
+        Wraps the SDD CLI update-frontmatter command to update frontmatter
+        fields like title, status, version, category, or any top-level
+        metadata key in the specification.
+
+        WHEN TO USE:
+        - Updating spec title or description
+        - Changing spec status (draft, active, completed)
+        - Updating version numbers
+        - Modifying spec category or priority
+        - Setting custom frontmatter fields
+
+        Args:
+            spec_id: Specification ID to update
+            key: Frontmatter key to update (e.g., title, status, version)
+            value: New value for the key
+            dry_run: Preview changes without saving
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with update results:
+            - spec_id: The specification ID
+            - key: The updated key
+            - value: The new value
+            - previous_value: Previous value if available
+            - dry_run: Whether this was a dry run
+        """
+        tool_name = "spec_update_frontmatter"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            if not key:
+                return asdict(error_response(
+                    "key is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a frontmatter key (e.g., title, status, version)",
+                ))
+
+            if value is None:
+                return asdict(error_response(
+                    "value is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a value for the frontmatter key",
+                ))
+
+            # Build command
+            cmd = ["sdd", "update-frontmatter", spec_id, key, value, "--json"]
+
+            if dry_run:
+                cmd.append("--dry-run")
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="spec-update-frontmatter",
+                action="update_frontmatter",
+                spec_id=spec_id,
+                key=key,
+                dry_run=dry_run,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "key": key,
+                    "value": value,
+                    "dry_run": dry_run,
+                }
+
+                # Include previous value if available
+                if "previous_value" in output_data:
+                    data["previous_value"] = output_data["previous_value"]
+                elif "old_value" in output_data:
+                    data["previous_value"] = output_data["old_value"]
+
+                # Track metrics
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "success"})
+
+                return asdict(success_response(data))
+            else:
+                # Command failed
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+
+                # Check for common errors
+                if "not found" in error_msg.lower():
+                    if "spec" in error_msg.lower():
+                        return asdict(error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        ))
+                    elif "key" in error_msg.lower():
+                        return asdict(error_response(
+                            f"Frontmatter key '{key}' not found or invalid",
+                            error_code="INVALID_KEY",
+                            error_type="validation",
+                            remediation="Use a valid frontmatter key (e.g., title, status, version)",
+                        ))
+
+                if "invalid" in error_msg.lower() and "value" in error_msg.lower():
+                    return asdict(error_response(
+                        f"Invalid value '{value}' for key '{key}'",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation="Check the expected format for this frontmatter key",
+                    ))
+
+                return asdict(error_response(
+                    f"Failed to update frontmatter: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that the spec exists and key/value are valid",
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try again or check system resources",
+            ))
+        except FileNotFoundError:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in spec-update-frontmatter")
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
