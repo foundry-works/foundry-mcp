@@ -23,11 +23,11 @@ These operations are **out of scope** for foundry-mcp because they assume the Cl
 `specs/completed/mcp-best-practices-remediation-2025-11-26-001.json` shipped the missing MCP guardrails. The following SDD operations now have working adapters and should not be treated as backlog items:
 
 - **Spec discovery and pagination** (`find-specs`, `list-specs`, `query-tasks`) via `src/foundry_mcp/tools/queries.py` with the new pagination helpers.
-- **Test discovery** (`find-tests`) via `foundry_discover_tests` in `src/foundry_mcp/tools/testing.py`.
-- **Spec validation and stats** (`validate-spec`, `stats`) via `src/foundry_mcp/tools/validation.py` (`foundry_validate_spec`, `foundry_spec_stats`, `foundry_validate_and_fix`).
-- **Task prep & status reporting** (`prepare-task`, `status-report`) via `src/foundry_mcp/tools/tasks.py` (`foundry_prepare_task`, `foundry_progress`).
-- **Journaling hygiene** (`check-journaling`) via `foundry_unjournaled_tasks` in `src/foundry_mcp/tools/journal.py`.
-- **Rendering/export** (`render`) via `src/foundry_mcp/tools/rendering.py` (`foundry_render_spec`, `foundry_render_progress`).
+- **Test discovery** (`find-tests`) via `test_discover` in `src/foundry_mcp/tools/testing.py`.
+- **Spec validation and stats** (`validate-spec`, `stats`) via `src/foundry_mcp/tools/validation.py` (`spec_validate`, `spec_stats`, `spec_validate_fix`).
+- **Task prep & status reporting** (`prepare-task`, `status-report`) via `src/foundry_mcp/tools/tasks.py` (`task_prepare`, `task_progress`).
+- **Journaling hygiene** (`check-journaling`) via `journal_list_unjournaled` in `src/foundry_mcp/tools/journal.py`.
+- **Rendering/export** (`render`) via `src/foundry_mcp/tools/rendering.py` (`spec_render`, `spec_render_progress`).
 
 Use these references when evaluating what actually remains to be wrapped.
 
@@ -36,66 +36,66 @@ Use these references when evaluating what actually remains to be wrapped.
 ## In-Scope Operations
 
 ### Environment & Project Setup
-- `verify-tools` – sanity-check local CLI/toolchain availability.
-- `init-env` – bootstrap the working directory for SDD workflows.
-- `detect-project` – auto-detect repository layout for specs/docs.
-- `check-environment` – validate required OS packages, runtimes, and credentials.
+- `sdd-verify-toolchain` (was `verify-tools`) – sanity-check local CLI/toolchain availability.
+- `sdd-init-workspace` (was `init-env`) – bootstrap the working directory for SDD workflows.
+- `spec-detect-topology` (was `detect-project`) – auto-detect repository layout for specs/docs.
+- `sdd-verify-environment` (was `check-environment`) – validate required OS packages, runtimes, and credentials.
 
 ### Spec Discovery & Validation Helpers
-- `find-related-files` – locate files referenced by a spec node.
-- `find-pattern` – search specs for structural/code patterns.
-- `find-circular-deps` – detect cyclic task dependencies.
-- `validate-paths` – ensure file references exist on disk.
+- `spec-find-related-files` (was `find-related-files`) – locate files referenced by a spec node.
+- `spec-find-patterns` (was `find-pattern`) – search specs for structural/code patterns.
+- `spec-detect-cycles` (was `find-circular-deps`) – detect cyclic task dependencies.
+- `spec-validate-paths` (was `validate-paths`) – ensure file references exist on disk.
 
 ### Authoring, Editing & Metadata
-- `create` – scaffold a brand-new spec from scratch.
-- `template` – emit opinionated templates/snippets for spec sections.
-- `analyze` – perform deep heuristics on an existing spec.
-- `analyze-deps` – inspect dependency graph health.
-- `apply-modifications` – apply bulk structural edits from a diff/plan.
-- `parse-review` – transform review feedback into structured actions.
-- `update-frontmatter` – mutate top-level metadata blocks.
-- `add-task` / `remove-task` – CRUD operations for tasks within specs.
-- `add-assumption` / `list-assumptions` – manage assumption blocks.
-- `add-revision` – append revision history entries.
-- `add-verification` / `execute-verify` / `format-verification-summary` – manage verification artifacts attached to tasks/specs.
-- `update-estimate` – tweak effort/time estimates per task.
-- `sync-metadata` – push/pull spec metadata across stores.
-- `update-task-metadata` – mutate per-task metadata payloads.
-- `create-task-commit` – generate Git commits for task-scoped changes.
-- `bulk-journal` – add multiple journal entries in one shot.
+- `spec-create` (was `create`) – scaffold a brand-new spec from scratch.
+- `spec-template` (was `template`) – emit opinionated templates/snippets for spec sections.
+- `spec-analyze` (was `analyze`) – perform deep heuristics on an existing spec.
+- `spec-analyze-deps` (was `analyze-deps`) – inspect dependency graph health.
+- `spec-apply-plan` (was `apply-modifications`) – apply bulk structural edits from a diff/plan.
+- `review-parse-feedback` (was `parse-review`) – transform review feedback into structured actions.
+- `spec-update-frontmatter` (was `update-frontmatter`) – mutate top-level metadata blocks.
+- `task-add` / `task-remove` (were `add-task` / `remove-task`) – CRUD operations for tasks within specs.
+- `assumption-add` / `assumption-list` (were `add-assumption` / `list-assumptions`) – manage assumption blocks.
+- `revision-add` (was `add-revision`) – append revision history entries.
+- `verification-add` / `verification-execute` / `verification-format-summary` (were `add-verification` / `execute-verify` / `format-verification-summary`) – manage verification artifacts attached to tasks/specs.
+- `task-update-estimate` (was `update-estimate`) – tweak effort/time estimates per task.
+- `spec-sync-metadata` (was `sync-metadata`) – push/pull spec metadata across stores.
+- `task-update-metadata` (was `update-task-metadata`) – mutate per-task metadata payloads.
+- `task-create-commit` (was `create-task-commit`) – generate Git commits for task-scoped changes.
+- `journal-bulk-add` (was `bulk-journal`) – add multiple journal entries in one shot.
 
 ### Task Planning & Execution Utilities
-- `format-plan` – pretty-print task plans for sharing.
-- `list-phases` – enumerate phases in a spec.
-- `check-complete` – verify completion readiness for a phase/spec.
-- `phase-time` – summarize timelines per phase.
-- `reconcile-state` – compare file system vs. spec state for drift.
-- `time-report` – summarize time tracking metrics.
-- `audit-spec` – run higher-level audits beyond basic validation.
+- `plan-format` (was `format-plan`) – pretty-print task plans for sharing.
+- `phase-list` (was `list-phases`) – enumerate phases in a spec.
+- `phase-check-complete` (was `check-complete`) – verify completion readiness for a phase/spec.
+- `phase-report-time` (was `phase-time`) – summarize timelines per phase.
+- `spec-reconcile-state` (was `reconcile-state`) – compare file system vs. spec state for drift.
+- `plan-report-time` (was `time-report`) – summarize time tracking metrics.
+- `spec-audit` (was `audit-spec`) – run higher-level audits beyond basic validation.
 
 ### Lifecycle & Dependency Extras
 Lifecycle mutation commands (assumption CRUD, revisions, verifications, estimate updates, task creation/deletion) remain unimplemented even after the remediation work. They rely on the same primitives listed in the Authoring section but need dedicated adapters because they affect dependency graphs and journaling requirements.
 
 ### Validation, Reporting & Analytics
-- `report` – produce human-readable validation/analysis reports (stat collection now covered via `foundry_spec_stats`, but higher-level reporting still missing).
+- `spec-report` (was `report`) – produce human-readable validation/analysis reports (stat collection now covered via `spec_stats`, but higher-level reporting still missing).
 
 ### Collaboration, Review & PR Workflow (LLM-Powered)
 These operations require LLM integration - users configure their provider via MCP config:
 
-- `review` – interactive or automated spec review sessions.
-- `list-plan-review-tools` – enumerate review toolchains.
-- `list-review-tools` – list available review pipelines (non-plan-focused).
-- `create-pr` – scaffold GitHub pull requests with SDD context (AI-enhanced descriptions).
+- `spec-review` (was `review`) – interactive or automated spec review sessions.
+- `review-list-plan-tools` (was `list-plan-review-tools`) – enumerate review toolchains.
+- `review-list-tools` (was `list-review-tools`) – list available review pipelines (non-plan-focused).
+- `pr-create-with-spec` (was `create-pr`) – scaffold GitHub pull requests with SDD context (AI-enhanced descriptions).
 
 ### Documentation, Rendering & Skills (LLM-Powered)
-- `doc` – generate human-facing documentation bundles.
-- `llm-doc-gen` – LLM-powered doc generation suite.
-- `fidelity-review` – specialized documentation fidelity checks (code-to-spec comparison).
+- `spec-doc` (was `doc`) – generate human-facing documentation bundles.
+- `spec-doc-llm` (was `llm-doc-gen`) – LLM-powered doc generation suite.
+- `spec-review-fidelity` (was `fidelity-review`) – specialized documentation fidelity checks (code-to-spec comparison).
 
 ### Miscellaneous Tooling
-- `cache` – manage SDD CLI cache entries.
-- `schema` – emit JSON schemas for specs/tasks.
+- `sdd-cache-manage` (was `cache`) – manage SDD CLI cache entries.
+- `spec-schema-export` (was `schema`) – emit JSON schemas for specs/tasks.
 
 ---
 

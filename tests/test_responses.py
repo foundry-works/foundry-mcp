@@ -451,9 +451,9 @@ class TestNotFoundError:
     def test_custom_remediation(self):
         """Test that custom remediation overrides default."""
         response = not_found_error(
-            "Spec", "x", remediation="Use foundry_list_specs() to find valid IDs."
+            "Spec", "x", remediation="Use spec-list to find valid IDs."
         )
-        assert response.data["remediation"] == "Use foundry_list_specs() to find valid IDs."
+        assert response.data["remediation"] == "Use spec-list to find valid IDs."
 
 
 class TestRateLimitError:
@@ -504,7 +504,9 @@ class TestUnauthorizedError:
     def test_default_remediation(self):
         """Test default remediation."""
         response = unauthorized_error()
-        assert response.data["remediation"] == "Provide valid authentication credentials."
+        assert (
+            response.data["remediation"] == "Provide valid authentication credentials."
+        )
 
 
 class TestForbiddenError:
@@ -528,7 +530,10 @@ class TestForbiddenError:
     def test_default_remediation(self):
         """Test default remediation."""
         response = forbidden_error("Access denied")
-        assert response.data["remediation"] == "Request appropriate permissions from the resource owner."
+        assert (
+            response.data["remediation"]
+            == "Request appropriate permissions from the resource owner."
+        )
 
 
 class TestConflictError:
@@ -552,7 +557,10 @@ class TestConflictError:
     def test_default_remediation(self):
         """Test default remediation."""
         response = conflict_error("State conflict")
-        assert response.data["remediation"] == "Check current state and retry if appropriate."
+        assert (
+            response.data["remediation"]
+            == "Check current state and retry if appropriate."
+        )
 
 
 class TestInternalError:

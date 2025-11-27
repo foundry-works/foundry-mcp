@@ -12,7 +12,6 @@ from typing import Optional, List, Dict, Any
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.core.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -28,6 +27,7 @@ from foundry_mcp.core.spec import (
     list_specs,
     load_spec,
 )
+from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +37,13 @@ logger = logging.getLogger(__name__)
 FIND_SPECS_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "spec_id": {
-            "type": "string",
-            "description": "Specification ID to find"
-        },
+        "spec_id": {"type": "string", "description": "Specification ID to find"},
         "workspace": {
             "type": "string",
-            "description": "Optional workspace path to search in"
-        }
+            "description": "Optional workspace path to search in",
+        },
     },
-    "required": ["spec_id"]
+    "required": ["spec_id"],
 }
 
 FIND_SPECS_OUTPUT_SCHEMA = {
@@ -56,8 +53,8 @@ FIND_SPECS_OUTPUT_SCHEMA = {
         "spec_id": {"type": "string"},
         "path": {"type": "string"},
         "status_folder": {"type": "string"},
-        "error": {"type": "string"}
-    }
+        "error": {"type": "string"},
+    },
 }
 
 LIST_SPECS_INPUT_SCHEMA = {
@@ -67,18 +64,15 @@ LIST_SPECS_INPUT_SCHEMA = {
             "type": "string",
             "enum": ["active", "pending", "completed", "archived", "all"],
             "description": "Filter by status folder",
-            "default": "all"
+            "default": "all",
         },
-        "workspace": {
-            "type": "string",
-            "description": "Optional workspace path"
-        },
+        "workspace": {"type": "string", "description": "Optional workspace path"},
         "include_progress": {
             "type": "boolean",
             "description": "Include task progress information",
-            "default": True
-        }
-    }
+            "default": True,
+        },
+    },
 }
 
 LIST_SPECS_OUTPUT_SCHEMA = {
@@ -94,13 +88,13 @@ LIST_SPECS_OUTPUT_SCHEMA = {
                     "status": {"type": "string"},
                     "total_tasks": {"type": "integer"},
                     "completed_tasks": {"type": "integer"},
-                    "progress_percentage": {"type": "integer"}
-                }
-            }
+                    "progress_percentage": {"type": "integer"},
+                },
+            },
         },
         "count": {"type": "integer"},
-        "error": {"type": "string"}
-    }
+        "error": {"type": "string"},
+    },
 }
 
 
@@ -113,11 +107,13 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
         config: Server configuration
     """
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_find_specs")
-    def foundry_find_specs(
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-find",
+    )
+    def spec_find(
         spec_id: str,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Find a specification file by ID.
@@ -149,25 +145,26 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 # Determine status folder from path
                 status_folder = spec_file.parent.name
 
-                return asdict(success_response(
-                    found=True,
-                    spec_id=spec_id,
-                    path=str(spec_file),
-                    status_folder=status_folder
-                ))
+                return asdict(
+                    success_response(
+                        found=True,
+                        spec_id=spec_id,
+                        path=str(spec_file),
+                        status_folder=status_folder,
+                    )
+                )
             else:
-                return asdict(success_response(
-                    found=False,
-                    spec_id=spec_id
-                ))
+                return asdict(success_response(found=False, spec_id=spec_id))
 
         except Exception as e:
             logger.error(f"Error finding spec {spec_id}: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_list_specs")
-    def foundry_list_specs(
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-list",
+    )
+    def spec_list(
         status: str = "all",
         workspace: Optional[str] = None,
         include_progress: bool = True,
@@ -241,7 +238,7 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     {
                         "spec_id": s["spec_id"],
                         "title": s["title"],
-                        "status": s["status"]
+                        "status": s["status"],
                     }
                     for s in specs
                 ]
@@ -251,22 +248,26 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if has_more and specs:
                 next_cursor = encode_cursor({"last_id": specs[-1]["spec_id"]})
 
-            return asdict(success_response(
-                data={"specs": specs, "count": len(specs)},
-                pagination={
-                    "cursor": next_cursor,
-                    "has_more": has_more,
-                    "page_size": page_size,
-                }
-            ))
+            return asdict(
+                success_response(
+                    data={"specs": specs, "count": len(specs)},
+                    pagination={
+                        "cursor": next_cursor,
+                        "has_more": has_more,
+                        "page_size": page_size,
+                    },
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error listing specs: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_query_tasks")
-    def foundry_query_tasks(
+    @canonical_tool(
+        mcp,
+        canonical_name="task-query",
+    )
+    def task_query(
         spec_id: str,
         status: Optional[str] = None,
         parent: Optional[str] = None,
@@ -327,13 +328,15 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 if parent and task_data.get("parent") != parent:
                     continue
 
-                tasks.append({
-                    "task_id": task_id,
-                    "title": task_data.get("title", task_id),
-                    "status": task_data.get("status", "unknown"),
-                    "type": task_data.get("type", "task"),
-                    "parent": task_data.get("parent"),
-                })
+                tasks.append(
+                    {
+                        "task_id": task_id,
+                        "title": task_data.get("title", task_id),
+                        "status": task_data.get("status", "unknown"),
+                        "type": task_data.get("type", "task"),
+                        "parent": task_data.get("parent"),
+                    }
+                )
 
             # Sort by task_id for consistent pagination
             tasks.sort(key=lambda t: t["task_id"])
@@ -359,17 +362,23 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if has_more and page_tasks:
                 next_cursor = encode_cursor({"last_id": page_tasks[-1]["task_id"]})
 
-            return asdict(success_response(
-                data={"spec_id": spec_id, "tasks": page_tasks, "count": len(page_tasks)},
-                pagination={
-                    "cursor": next_cursor,
-                    "has_more": has_more,
-                    "page_size": page_size,
-                }
-            ))
+            return asdict(
+                success_response(
+                    data={
+                        "spec_id": spec_id,
+                        "tasks": page_tasks,
+                        "count": len(page_tasks),
+                    },
+                    pagination={
+                        "cursor": next_cursor,
+                        "has_more": has_more,
+                        "page_size": page_size,
+                    },
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error querying tasks in {spec_id}: {e}")
             return asdict(error_response(str(e)))
 
-    logger.debug("Registered query tools: foundry_find_specs, foundry_list_specs, foundry_query_tasks")
+    logger.debug("Registered query tools: spec-find/spec-list/task-query")

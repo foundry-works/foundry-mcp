@@ -12,10 +12,11 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import get_config, ServerConfig
-from foundry_mcp.core.observability import mcp_tool, audit_log, get_metrics
+from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.discovery import get_capabilities, get_tool_registry
 from foundry_mcp.core.feature_flags import get_flag_service
+from foundry_mcp.core.naming import canonical_tool
 
 # Response contract version flag
 # v2 uses standardized {success, data, error} format
@@ -95,9 +96,11 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
 def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
     """Register all MCP tools with the server."""
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_server_capabilities")
-    def foundry_server_capabilities() -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="sdd-server-capabilities",
+    )
+    def sdd_server_capabilities() -> dict:
         """
         Get server capabilities, feature flags, and contract version.
 
@@ -113,7 +116,7 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with server capabilities, feature flags, and tool stats
         """
         metrics = get_metrics()
-        metrics.counter("response.v2", labels={"tool": "foundry_server_capabilities"})
+        metrics.counter("response.v2", labels={"tool": "sdd-server-capabilities"})
 
         # Get discovery capabilities
         discovery_caps = get_capabilities()
@@ -125,26 +128,32 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         # Get active feature flags summary
         flag_service = get_flag_service()
         flags_summary = {
-            "enabled_count": len([f for f in flag_service.list_flags() if flag_service.is_enabled(f)]),
+            "enabled_count": len(
+                [f for f in flag_service.list_flags() if flag_service.is_enabled(f)]
+            ),
             "total_count": len(flag_service.list_flags()),
         }
 
-        return asdict(success_response(
-            server_name=config.server_name,
-            server_version=config.server_version,
-            capabilities={
-                **SERVER_CAPABILITIES,
-                **discovery_caps.get("capabilities", {}),
-            },
-            feature_flags=flags_summary,
-            tools=tool_stats,
-            schema_version=discovery_caps.get("schema_version", "1.0.0"),
-            api_version=discovery_caps.get("api_version", "2024-11-01"),
-        ))
+        return asdict(
+            success_response(
+                server_name=config.server_name,
+                server_version=config.server_version,
+                capabilities={
+                    **SERVER_CAPABILITIES,
+                    **discovery_caps.get("capabilities", {}),
+                },
+                feature_flags=flags_summary,
+                tools=tool_stats,
+                schema_version=discovery_caps.get("schema_version", "1.0.0"),
+                api_version=discovery_caps.get("api_version", "2024-11-01"),
+            )
+        )
 
-    @mcp.tool()
-    @mcp_tool(tool_name="list_specs")
-    def tool_list_specs(status: str = "all") -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-list-basic",
+    )
+    def spec_list_basic(status: str = "all") -> dict:
         """
         List all specification files with optional filtering.
 
@@ -161,14 +170,13 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         filter_status = None if status == "all" else status
         specs = list_specs(specs_dir=specs_dir, status=filter_status)
 
-        return asdict(success_response(
-            specs=specs,
-            count=len(specs)
-        ))
+        return asdict(success_response(specs=specs, count=len(specs)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="get_spec")
-    def tool_get_spec(spec_id: str) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-get",
+    )
+    def spec_get(spec_id: str) -> dict:
         """
         Get a specification by ID.
 
@@ -188,21 +196,28 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         hierarchy = spec_data.get("hierarchy", {})
         total_tasks = len(hierarchy)
         completed_tasks = sum(
-            1 for task in hierarchy.values()
-            if task.get("status") == "completed"
+            1 for task in hierarchy.values() if task.get("status") == "completed"
         )
 
-        return asdict(success_response(
-            spec_id=spec_data.get("spec_id", spec_id),
-            title=spec_data.get("metadata", {}).get("title", spec_data.get("title", "Untitled")),
-            total_tasks=total_tasks,
-            completed_tasks=completed_tasks,
-            progress_percentage=int((completed_tasks / total_tasks * 100)) if total_tasks > 0 else 0,
-        ))
+        return asdict(
+            success_response(
+                spec_id=spec_data.get("spec_id", spec_id),
+                title=spec_data.get("metadata", {}).get(
+                    "title", spec_data.get("title", "Untitled")
+                ),
+                total_tasks=total_tasks,
+                completed_tasks=completed_tasks,
+                progress_percentage=int((completed_tasks / total_tasks * 100))
+                if total_tasks > 0
+                else 0,
+            )
+        )
 
-    @mcp.tool()
-    @mcp_tool(tool_name="get_spec_hierarchy")
-    def tool_get_spec_hierarchy(spec_id: str) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-get-hierarchy",
+    )
+    def spec_get_hierarchy(spec_id: str) -> dict:
         """
         Get the full hierarchy of a specification.
 
@@ -218,14 +233,18 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         if spec_data is None:
             return asdict(error_response(f"Spec not found: {spec_id}"))
 
-        return asdict(success_response(
-            spec_id=spec_id,
-            hierarchy=spec_data.get("hierarchy", {}),
-        ))
+        return asdict(
+            success_response(
+                spec_id=spec_id,
+                hierarchy=spec_data.get("hierarchy", {}),
+            )
+        )
 
-    @mcp.tool()
-    @mcp_tool(tool_name="get_task")
-    def tool_get_task(spec_id: str, task_id: str) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="task-get",
+    )
+    def task_get(spec_id: str, task_id: str) -> dict:
         """
         Get a specific task from a specification.
 
@@ -248,13 +267,17 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         if task is None:
             return asdict(error_response(f"Task not found: {task_id}"))
 
-        return asdict(success_response(
-            spec_id=spec_id,
-            task_id=task_id,
-            task=task,
-        ))
+        return asdict(
+            success_response(
+                spec_id=spec_id,
+                task_id=task_id,
+                task=task,
+            )
+        )
 
-    logger.debug("Registered tools: foundry_server_capabilities, list_specs, get_spec, get_spec_hierarchy, get_task")
+    logger.debug(
+        "Registered tools: sdd-server-capabilities, spec-list-basic, spec-get, spec-get-hierarchy, task-get"
+    )
 
 
 def _register_resources(mcp: FastMCP, config: ServerConfig) -> None:

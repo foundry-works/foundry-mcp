@@ -43,9 +43,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
 
     @mcp.prompt()
     def start_feature(
-        feature_name: str,
-        description: Optional[str] = None,
-        template: str = "feature"
+        feature_name: str, description: Optional[str] = None, template: str = "feature"
     ) -> str:
         """
         Start a new feature implementation.
@@ -67,6 +65,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         existing_specs = []
         if specs_dir:
             from pathlib import Path
+
             specs = list_specs(specs_dir=Path(specs_dir), status="active")
             existing_specs = [s["spec_id"] for s in specs[:5]]
 
@@ -80,67 +79,81 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         if description:
             prompt_parts.append(f"Description: {description}")
 
-        prompt_parts.extend([
-            f"Template: {template}",
-            "",
-            "## Instructions",
-            "",
-            "Please help me set up a new SDD specification for this feature.",
-            "",
-            "### Step 1: Create the Spec",
-            f"Use the `{template}` template to create a new spec file.",
-            "The spec should be placed in `specs/pending/` initially.",
-            "",
-            "### Step 2: Define Phases",
-            "Based on the feature requirements, define appropriate phases:",
-        ])
+        prompt_parts.extend(
+            [
+                f"Template: {template}",
+                "",
+                "## Instructions",
+                "",
+                "Please help me set up a new SDD specification for this feature.",
+                "",
+                "### Step 1: Create the Spec",
+                f"Use the `{template}` template to create a new spec file.",
+                "The spec should be placed in `specs/pending/` initially.",
+                "",
+                "### Step 2: Define Phases",
+                "Based on the feature requirements, define appropriate phases:",
+            ]
+        )
 
         if template == "feature":
-            prompt_parts.extend([
-                "1. **Design Phase**: Architecture decisions, API design, data models",
-                "2. **Implementation Phase**: Core functionality, tests, documentation",
-                "3. **Verification Phase**: Integration tests, manual QA, sign-off",
-            ])
+            prompt_parts.extend(
+                [
+                    "1. **Design Phase**: Architecture decisions, API design, data models",
+                    "2. **Implementation Phase**: Core functionality, tests, documentation",
+                    "3. **Verification Phase**: Integration tests, manual QA, sign-off",
+                ]
+            )
         elif template == "bugfix":
-            prompt_parts.extend([
-                "1. **Investigation Phase**: Reproduce bug, identify root cause",
-                "2. **Fix & Verify Phase**: Implement fix, verify resolution",
-            ])
+            prompt_parts.extend(
+                [
+                    "1. **Investigation Phase**: Reproduce bug, identify root cause",
+                    "2. **Fix & Verify Phase**: Implement fix, verify resolution",
+                ]
+            )
         else:
-            prompt_parts.extend([
-                "1. **Implementation Phase**: Core tasks for the feature",
-            ])
+            prompt_parts.extend(
+                [
+                    "1. **Implementation Phase**: Core tasks for the feature",
+                ]
+            )
 
-        prompt_parts.extend([
-            "",
-            "### Step 3: Break Down Tasks",
-            "For each phase, create specific, actionable tasks with:",
-            "- Clear acceptance criteria",
-            "- Estimated effort (in hours)",
-            "- Dependencies between tasks",
-            "",
-            "### Step 4: Activate When Ready",
-            "Once the spec is reviewed and approved, move it to `specs/active/`.",
-            "",
-        ])
+        prompt_parts.extend(
+            [
+                "",
+                "### Step 3: Break Down Tasks",
+                "For each phase, create specific, actionable tasks with:",
+                "- Clear acceptance criteria",
+                "- Estimated effort (in hours)",
+                "- Dependencies between tasks",
+                "",
+                "### Step 4: Activate When Ready",
+                "Once the spec is reviewed and approved, move it to `specs/active/`.",
+                "",
+            ]
+        )
 
         if existing_specs:
-            prompt_parts.extend([
-                "## Active Specs",
-                "Note: The following specs are currently active:",
-                *[f"- {spec}" for spec in existing_specs],
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "## Active Specs",
+                    "Note: The following specs are currently active:",
+                    *[f"- {spec}" for spec in existing_specs],
+                    "",
+                ]
+            )
 
-        prompt_parts.extend([
-            "## Available Tools",
-            "Use these MCP tools to manage the spec:",
-            "- `foundry_validate_spec`: Validate spec structure",
-            "- `foundry_activate_spec`: Move spec to active",
-            "- `foundry_prepare_task`: Get next task to work on",
-            "",
-            "Ready to begin? Please provide more details about the feature requirements.",
-        ])
+        prompt_parts.extend(
+            [
+                "## Available Tools",
+                "Use these MCP tools to manage the spec:",
+                "- `spec-validate`: Validate spec structure",
+                "- `spec-lifecycle-activate`: Move spec to active",
+                "- `task-prepare`: Get next task to work on",
+                "",
+                "Ready to begin? Please provide more details about the feature requirements.",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
@@ -148,7 +161,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
     def debug_test(
         test_name: Optional[str] = None,
         error_message: Optional[str] = None,
-        spec_id: Optional[str] = None
+        spec_id: Optional[str] = None,
     ) -> str:
         """
         Debug a failing test.
@@ -176,78 +189,83 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
             prompt_parts.append("**Test Name:** Not specified")
 
         if error_message:
-            prompt_parts.extend([
-                "",
-                "**Error Message:**",
-                "```",
-                error_message[:500] if len(error_message) > 500 else error_message,
-                "```" if error_message else "",
-            ])
+            prompt_parts.extend(
+                [
+                    "",
+                    "**Error Message:**",
+                    "```",
+                    error_message[:500] if len(error_message) > 500 else error_message,
+                    "```" if error_message else "",
+                ]
+            )
 
         if spec_id:
             prompt_parts.append(f"**Related Spec:** {spec_id}")
 
-        prompt_parts.extend([
-            "",
-            "## Debugging Workflow",
-            "",
-            "### Step 1: Understand the Failure",
-            "- What is the test trying to verify?",
-            "- What was the expected behavior?",
-            "- What actually happened?",
-            "",
-            "### Step 2: Reproduce Locally",
-            "Run the test in isolation:",
-            "```bash",
-            f"pytest {test_name or 'path/to/test.py'} -v --tb=long",
-            "```",
-            "",
-            "### Step 3: Identify Root Cause",
-            "Common causes to check:",
-            "- [ ] Missing or incorrect test fixtures",
-            "- [ ] State from previous tests",
-            "- [ ] Environment differences",
-            "- [ ] Race conditions or timing issues",
-            "- [ ] Incorrect assertions",
-            "- [ ] Changed API or implementation",
-            "",
-            "### Step 4: Implement Fix",
-            "Based on the root cause:",
-            "- If test is wrong: Update the test",
-            "- If code is wrong: Fix the implementation",
-            "- If both: Fix both and add regression tests",
-            "",
-            "### Step 5: Verify",
-            "- Run the fixed test",
-            "- Run related tests",
-            "- Run full test suite if changes are significant",
-            "",
-            "## Available Tools",
-            "Use these MCP tools to help debug:",
-            "- `foundry_run_tests`: Run tests with various options",
-            "- `foundry_discover_tests`: Find related tests",
-            "- `foundry_trace_calls`: Trace function call graph",
-            "- `foundry_impact_analysis`: See what else might be affected",
-            "",
-        ])
+        prompt_parts.extend(
+            [
+                "",
+                "## Debugging Workflow",
+                "",
+                "### Step 1: Understand the Failure",
+                "- What is the test trying to verify?",
+                "- What was the expected behavior?",
+                "- What actually happened?",
+                "",
+                "### Step 2: Reproduce Locally",
+                "Run the test in isolation:",
+                "```bash",
+                f"pytest {test_name or 'path/to/test.py'} -v --tb=long",
+                "```",
+                "",
+                "### Step 3: Identify Root Cause",
+                "Common causes to check:",
+                "- [ ] Missing or incorrect test fixtures",
+                "- [ ] State from previous tests",
+                "- [ ] Environment differences",
+                "- [ ] Race conditions or timing issues",
+                "- [ ] Incorrect assertions",
+                "- [ ] Changed API or implementation",
+                "",
+                "### Step 4: Implement Fix",
+                "Based on the root cause:",
+                "- If test is wrong: Update the test",
+                "- If code is wrong: Fix the implementation",
+                "- If both: Fix both and add regression tests",
+                "",
+                "### Step 5: Verify",
+                "- Run the fixed test",
+                "- Run related tests",
+                "- Run full test suite if changes are significant",
+                "",
+                "## Available Tools",
+                "Use these MCP tools to help debug:",
+                "- `test-run`: Run tests with various options",
+                "- `test-discover`: Find related tests",
+                "- `code-trace-calls`: Trace function call graph",
+                "- `code-impact-analysis`: See what else might be affected",
+                "",
+            ]
+        )
 
         if spec_id:
-            prompt_parts.extend([
-                f"## Spec Context",
-                f"This test is related to spec `{spec_id}`.",
-                "After fixing, remember to update the task status.",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    f"## Spec Context",
+                    f"This test is related to spec `{spec_id}`.",
+                    "After fixing, remember to update the task status.",
+                    "",
+                ]
+            )
 
-        prompt_parts.append("Please provide the test output or more details about the failure.")
+        prompt_parts.append(
+            "Please provide the test output or more details about the failure."
+        )
 
         return "\n".join(prompt_parts)
 
     @mcp.prompt()
-    def complete_phase(
-        spec_id: str,
-        phase_id: Optional[str] = None
-    ) -> str:
+    def complete_phase(spec_id: str, phase_id: Optional[str] = None) -> str:
         """
         Complete a phase in a specification.
 
@@ -275,6 +293,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
 
         if specs_dir:
             from pathlib import Path
+
             spec_data = load_spec(spec_id, Path(specs_dir))
 
             if spec_data:
@@ -285,77 +304,89 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                     phase_info = next((p for p in phases if p["id"] == phase_id), None)
                 else:
                     # Find current in-progress phase
-                    phase_info = next((p for p in phases if p["status"] == "in_progress"), None)
+                    phase_info = next(
+                        (p for p in phases if p["status"] == "in_progress"), None
+                    )
                     if not phase_info:
                         # Find first pending phase
-                        phase_info = next((p for p in phases if p["status"] == "pending"), None)
+                        phase_info = next(
+                            (p for p in phases if p["status"] == "pending"), None
+                        )
 
         if spec_data and progress_info:
-            prompt_parts.extend([
-                "## Current Progress",
-                f"- **Overall:** {progress_info['percentage']}% complete",
-                f"- **Tasks:** {progress_info['completed_tasks']}/{progress_info['total_tasks']} done",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "## Current Progress",
+                    f"- **Overall:** {progress_info['percentage']}% complete",
+                    f"- **Tasks:** {progress_info['completed_tasks']}/{progress_info['total_tasks']} done",
+                    "",
+                ]
+            )
 
         if phase_info:
-            prompt_parts.extend([
-                "## Phase Details",
-                f"- **Phase:** {phase_info.get('title', phase_info.get('id', 'Unknown'))}",
-                f"- **Status:** {phase_info.get('status', 'unknown')}",
-                f"- **Progress:** {phase_info.get('completed_tasks', 0)}/{phase_info.get('total_tasks', 0)} tasks",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "## Phase Details",
+                    f"- **Phase:** {phase_info.get('title', phase_info.get('id', 'Unknown'))}",
+                    f"- **Status:** {phase_info.get('status', 'unknown')}",
+                    f"- **Progress:** {phase_info.get('completed_tasks', 0)}/{phase_info.get('total_tasks', 0)} tasks",
+                    "",
+                ]
+            )
         elif phase_id:
-            prompt_parts.extend([
-                f"## Phase: {phase_id}",
-                "(Phase details not available)",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    f"## Phase: {phase_id}",
+                    "(Phase details not available)",
+                    "",
+                ]
+            )
 
-        prompt_parts.extend([
-            "## Completion Checklist",
-            "",
-            "### Step 1: Review Remaining Tasks",
-            "List all pending/in-progress tasks in this phase:",
-            "```bash",
-            f"# Use foundry_progress to check status",
-            "```",
-            "",
-            "### Step 2: Complete Each Task",
-            "For each remaining task:",
-            "1. Start the task (`foundry_start_task`)",
-            "2. Implement the required changes",
-            "3. Verify the implementation",
-            "4. Complete the task with journal entry (`foundry_complete_task`)",
-            "",
-            "### Step 3: Run Verification",
-            "Before marking the phase complete:",
-            "- [ ] All tasks show status: completed",
-            "- [ ] All verification tasks pass",
-            "- [ ] No blockers remain",
-            "- [ ] Tests pass for this phase's changes",
-            "",
-            "### Step 4: Phase Wrap-up",
-            "Once all tasks are done:",
-            "1. Review the phase journal entries",
-            "2. Update any documentation",
-            "3. The phase will auto-complete when all children are done",
-            "",
-            "### Step 5: Prepare for Next Phase",
-            "After this phase completes:",
-            "1. Review the next phase requirements",
-            "2. Use `foundry_prepare_task` to get the first task",
-            "3. Continue the workflow",
-            "",
-            "## Available Tools",
-            "- `foundry_progress`: Check spec/phase progress",
-            "- `foundry_prepare_task`: Get next task with context",
-            "- `foundry_complete_task`: Mark task done with journal",
-            "- `foundry_run_tests`: Run verification tests",
-            "",
-            "Ready to proceed? Let's review the remaining tasks.",
-        ])
+        prompt_parts.extend(
+            [
+                "## Completion Checklist",
+                "",
+                "### Step 1: Review Remaining Tasks",
+                "List all pending/in-progress tasks in this phase:",
+                "```bash",
+                f"# Use task-progress to check status",
+                "```",
+                "",
+                "### Step 2: Complete Each Task",
+                "For each remaining task:",
+                "1. Start the task (`task-start`)",
+                "2. Implement the required changes",
+                "3. Verify the implementation",
+                "4. Complete the task with journal entry (`task-complete`)",
+                "",
+                "### Step 3: Run Verification",
+                "Before marking the phase complete:",
+                "- [ ] All tasks show status: completed",
+                "- [ ] All verification tasks pass",
+                "- [ ] No blockers remain",
+                "- [ ] Tests pass for this phase's changes",
+                "",
+                "### Step 4: Phase Wrap-up",
+                "Once all tasks are done:",
+                "1. Review the phase journal entries",
+                "2. Update any documentation",
+                "3. The phase will auto-complete when all children are done",
+                "",
+                "### Step 5: Prepare for Next Phase",
+                "After this phase completes:",
+                "1. Review the next phase requirements",
+                "2. Use `task-prepare` to get the first task",
+                "3. Continue the workflow",
+                "",
+                "## Available Tools",
+                "- `task-progress`: Check spec/phase progress",
+                "- `task-prepare`: Get next task with context",
+                "- `task-complete`: Mark task done with journal",
+                "- `test-run`: Run verification tests",
+                "",
+                "Ready to proceed? Let's review the remaining tasks.",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
@@ -383,50 +414,61 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         spec_data = None
         if specs_dir:
             from pathlib import Path
+
             spec_data = load_spec(spec_id, Path(specs_dir))
 
         if not spec_data:
-            prompt_parts.extend([
-                "**Error:** Spec not found or could not be loaded.",
-                "",
-                f"Please verify the spec ID `{spec_id}` is correct.",
-                "Use `foundry_list_specs` to see available specs.",
-            ])
+            prompt_parts.extend(
+                [
+                    "**Error:** Spec not found or could not be loaded.",
+                    "",
+                    f"Please verify the spec ID `{spec_id}` is correct.",
+                    "Use `spec-list` to see available specs.",
+                ]
+            )
             return "\n".join(prompt_parts)
 
         # Get metadata
         metadata = spec_data.get("metadata", {})
         title = metadata.get("title", spec_data.get("title", "Untitled"))
 
-        prompt_parts.extend([
-            f"## {title}",
-            "",
-        ])
+        prompt_parts.extend(
+            [
+                f"## {title}",
+                "",
+            ]
+        )
 
         if metadata.get("description"):
-            prompt_parts.extend([
-                "### Description",
-                metadata["description"],
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "### Description",
+                    metadata["description"],
+                    "",
+                ]
+            )
 
         # Get progress
         progress_info = get_progress_summary(spec_data)
-        prompt_parts.extend([
-            "### Progress Overview",
-            f"- **Completion:** {progress_info['percentage']}%",
-            f"- **Tasks:** {progress_info['completed_tasks']}/{progress_info['total_tasks']}",
-            f"- **Remaining:** {progress_info.get('remaining_tasks', 0)}",
-            "",
-        ])
+        prompt_parts.extend(
+            [
+                "### Progress Overview",
+                f"- **Completion:** {progress_info['percentage']}%",
+                f"- **Tasks:** {progress_info['completed_tasks']}/{progress_info['total_tasks']}",
+                f"- **Remaining:** {progress_info.get('remaining_tasks', 0)}",
+                "",
+            ]
+        )
 
         # Get phases
         phases = list_phases(spec_data)
         if phases:
-            prompt_parts.extend([
-                "### Phases",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "### Phases",
+                    "",
+                ]
+            )
             for phase in phases:
                 status_icon = {
                     "completed": "✅",
@@ -446,27 +488,33 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         journal = spec_data.get("journal", [])
         if journal:
             recent = journal[-5:]  # Last 5 entries
-            prompt_parts.extend([
-                "### Recent Journal Entries",
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "### Recent Journal Entries",
+                    "",
+                ]
+            )
             for entry in reversed(recent):
                 entry_type = entry.get("entry_type", "note")
                 title = entry.get("title", "Untitled")
                 prompt_parts.append(f"- [{entry_type}] {title}")
             prompt_parts.append("")
 
-        prompt_parts.extend([
-            "### Actions",
-            "",
-            "What would you like to do?",
-            "1. Continue with next task (`foundry_prepare_task`)",
-            "2. View specific phase details",
-            "3. Check blocked tasks",
-            "4. Review journal entries",
-            "5. Run verification tests",
-        ])
+        prompt_parts.extend(
+            [
+                "### Actions",
+                "",
+                "What would you like to do?",
+                "1. Continue with next task (`task-prepare`)",
+                "2. View specific phase details",
+                "3. Check blocked tasks",
+                "4. Review journal entries",
+                "5. Run verification tests",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
-    logger.debug("Registered workflow prompts: start_feature, debug_test, complete_phase, review_spec")
+    logger.debug(
+        "Registered workflow prompts: start_feature, debug_test, complete_phase, review_spec"
+    )

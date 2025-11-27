@@ -21,6 +21,7 @@ MCP's power comes from dynamic tool discovery. Clients need to understand what t
 - **Group related tools** - by category or domain
 - **Document rate limits** - per-tool constraints
 - **Provide input validation schemas** - JSON Schema format
+- **Follow canonical naming** - apply the prefixes in [Tool Naming Conventions](../codebase_standards/naming-conventions.md) so registries stay predictable
 
 ### MAY
 

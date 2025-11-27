@@ -75,6 +75,8 @@ Or if installed via pip:
 
 ## Tools Reference
 
+Tool names follow the [Tool Naming Conventions](docs/codebase_standards/naming-conventions.md); consult that guide before adding or renaming MCP operations.
+
 ### Spec Management
 
 | Tool | Description |
@@ -88,81 +90,81 @@ Or if installed via pip:
 
 | Tool | Description |
 |------|-------------|
-| `foundry_query_tasks` | Query tasks by status, type, or parent |
+| `task_query` | Query tasks by status, type, or parent |
 
 ### Task Operations
 
 | Tool | Description |
 |------|-------------|
-| `foundry_prepare_task` | Prepare task with full context (dependencies, sibling info, phase) |
-| `foundry_next_task` | Find next actionable task based on status and dependencies |
-| `foundry_task_info` | Get detailed task information |
-| `foundry_check_deps` | Check dependency status for a task |
-| `foundry_update_status` | Update task status (pending, in_progress, completed, blocked) |
-| `foundry_complete_task` | Mark task complete with journal entry |
-| `foundry_start_task` | Start working on a task |
-| `foundry_progress` | Get spec/phase progress summary |
+| `task_prepare` | Prepare task with full context (dependencies, sibling info, phase) |
+| `task_next` | Find next actionable task based on status and dependencies |
+| `task_info` | Get detailed task information |
+| `task_check_deps` | Check dependency status for a task |
+| `task_update_status` | Update task status (pending, in_progress, completed, blocked) |
+| `task_complete` | Mark task complete with journal entry |
+| `task_start` | Start working on a task |
+| `task_progress` | Get spec/phase progress summary |
 
 ### Validation Tools
 
 | Tool | Description |
 |------|-------------|
-| `foundry_validate_spec` | Validate spec and return structured diagnostics |
-| `foundry_fix_spec` | Apply auto-fixes with dry-run support |
-| `foundry_spec_stats` | Get comprehensive spec statistics |
-| `foundry_validate_and_fix` | Combined validation and fix in one operation |
+| `spec_validate` | Validate spec and return structured diagnostics |
+| `spec_fix` | Apply auto-fixes with dry-run support |
+| `spec_stats` | Get comprehensive spec statistics |
+| `spec_validate_fix` | Combined validation and fix in one operation |
 
 ### Journal Tools
 
 | Tool | Description |
 |------|-------------|
-| `foundry_add_journal` | Add journal entries with optional task association |
-| `foundry_get_journal` | Retrieve journal entries with filtering |
-| `foundry_mark_blocked` | Mark tasks as blocked with metadata |
-| `foundry_unblock` | Unblock tasks and track resolution |
-| `foundry_list_blocked` | List all blocked tasks |
-| `foundry_unjournaled_tasks` | Find tasks needing journal entries |
+| `journal_add` | Add journal entries with optional task association |
+| `journal_list` | Retrieve journal entries with filtering |
+| `task_block` | Mark tasks as blocked with metadata |
+| `task_unblock` | Unblock tasks and track resolution |
+| `task_list_blocked` | List all blocked tasks |
+| `journal_list_unjournaled` | Find tasks needing journal entries |
 
 ### Rendering Tools
 
 | Tool | Description |
 |------|-------------|
-| `foundry_render_spec` | Render spec to markdown with mode options |
-| `foundry_render_progress` | ASCII progress bars for spec and phases |
-| `foundry_list_tasks` | Flat task list with filtering |
+| `spec_render` | Render spec to markdown with mode options |
+| `spec_render_progress` | ASCII progress bars for spec and phases |
+| `task_list` | Flat task list with filtering |
 
 ### Lifecycle Tools
 
 | Tool | Description |
 |------|-------------|
-| `foundry_move_spec` | Move spec between folders |
-| `foundry_activate_spec` | Activate pending spec (pending → active) |
-| `foundry_complete_spec` | Mark spec completed (active → completed) |
-| `foundry_archive_spec` | Archive spec (completed → archived) |
-| `foundry_lifecycle_state` | Get lifecycle state and transition eligibility |
-| `foundry_list_specs_by_folder` | List specs organized by folder |
+| `spec_lifecycle_move` | Move spec between folders |
+| `spec_lifecycle_activate` | Activate pending spec (pending → active) |
+| `spec_lifecycle_complete` | Mark spec completed (active → completed) |
+| `spec_lifecycle_archive` | Archive spec (completed → archived) |
+| `spec_lifecycle_state` | Get lifecycle state and transition eligibility |
+| `spec_list_by_folder` | List specs organized by folder |
 
 ### Documentation Tools
 
 | Tool | Description |
 |------|-------------|
-| `foundry_find_class` | Find class in codebase documentation |
-| `foundry_find_function` | Find function in documentation |
-| `foundry_trace_calls` | Trace call graph (callers/callees) with depth |
-| `foundry_impact_analysis` | Analyze change impact across codebase |
-| `foundry_get_callers` | Get caller functions |
-| `foundry_get_callees` | Get callee functions |
-| `foundry_docs_stats` | Get documentation statistics |
+| `code_find_class` | Find class in codebase documentation |
+| `code_find_function` | Find function in documentation |
+| `code_trace_calls` | Trace call graph (callers/callees) with depth |
+| `code_impact_analysis` | Analyze change impact across codebase |
+| `code_get_callers` | Get caller functions |
+| `code_get_callees` | Get callee functions |
+| `doc_stats` | Get documentation statistics |
 
 ### Testing Tools
 
 | Tool | Description |
 |------|-------------|
-| `foundry_run_tests` | Full-featured test execution with presets |
-| `foundry_discover_tests` | Test discovery without execution |
-| `foundry_test_presets` | List available test presets |
-| `foundry_run_quick_tests` | Quick test preset (60s timeout, fail-fast) |
-| `foundry_run_unit_tests` | Unit test preset |
+| `test_run` | Full-featured test execution with presets |
+| `test_discover` | Test discovery without execution |
+| `test_presets` | List available test presets |
+| `test_run_quick` | Quick test preset (60s timeout, fail-fast) |
+| `test_run_unit` | Unit test preset |
 
 ## Resources
 

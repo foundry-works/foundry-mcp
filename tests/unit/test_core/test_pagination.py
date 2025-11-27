@@ -29,11 +29,13 @@ class TestCursorEncoding:
 
     def test_encode_cursor_with_complex_data(self):
         """Should encode complex cursor data."""
-        cursor = encode_cursor({
-            "last_id": "item_456",
-            "timestamp": "2025-01-15T10:30:00Z",
-            "offset": 100,
-        })
+        cursor = encode_cursor(
+            {
+                "last_id": "item_456",
+                "timestamp": "2025-01-15T10:30:00Z",
+                "offset": 100,
+            }
+        )
         assert cursor is not None
         assert isinstance(cursor, str)
 
@@ -101,6 +103,7 @@ class TestCursorDecodeErrors:
     def test_decode_invalid_json(self):
         """Should raise CursorError for invalid JSON after decoding."""
         import base64
+
         invalid_json = base64.urlsafe_b64encode(b"not json").decode()
         with pytest.raises(CursorError) as exc_info:
             decode_cursor(invalid_json)
@@ -109,6 +112,7 @@ class TestCursorDecodeErrors:
     def test_decode_non_dict_json(self):
         """Should raise CursorError for non-dict JSON."""
         import base64
+
         list_json = base64.urlsafe_b64encode(b'["item"]').decode()
         with pytest.raises(CursorError) as exc_info:
             decode_cursor(list_json)
@@ -303,7 +307,7 @@ class TestPaginatedListToolIntegration:
     """Integration tests for paginated list tools pattern.
 
     These tests validate the common pagination pattern used across
-    list tools (foundry_list_specs, foundry_query_tasks, etc.).
+    list tools (spec-list, task-query, etc.).
     """
 
     def test_pagination_pattern_first_page(self):

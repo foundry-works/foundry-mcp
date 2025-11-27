@@ -12,8 +12,8 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -40,9 +40,11 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
         config: Server configuration
     """
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_list_tools")
-    def foundry_list_tools(
+    @canonical_tool(
+        mcp,
+        canonical_name="tool-list",
+    )
+    def tool_list(
         category: Optional[str] = None,
         tag: Optional[str] = None,
         include_deprecated: bool = False,
@@ -89,11 +91,13 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     cursor_data = decode_cursor(cursor)
                     start_idx = cursor_data.get("offset", 0)
                 except CursorError as e:
-                    return asdict(error_response(
-                        f"Invalid cursor: {e}",
-                        error_code="INVALID_CURSOR",
-                        error_type="validation",
-                    ))
+                    return asdict(
+                        error_response(
+                            f"Invalid cursor: {e}",
+                            error_code="INVALID_CURSOR",
+                            error_type="validation",
+                        )
+                    )
 
             # Paginate results
             end_idx = start_idx + limit
@@ -128,9 +132,11 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error listing tools")
             return asdict(error_response(f"Failed to list tools: {e}"))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_get_tool_schema")
-    def foundry_get_tool_schema(tool_name: str) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="tool-get-schema",
+    )
+    def tool_get_schema(tool_name: str) -> dict:
         """
         Get detailed schema for a specific tool.
 
@@ -151,23 +157,27 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
         """
         try:
             if not tool_name:
-                return asdict(error_response(
-                    "tool_name is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a tool name to get its schema",
-                ))
+                return asdict(
+                    error_response(
+                        "tool_name is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a tool name to get its schema",
+                    )
+                )
 
             registry = get_tool_registry()
             schema = registry.get_tool_schema(tool_name)
 
             if schema is None:
-                return asdict(error_response(
-                    f"Tool '{tool_name}' not found",
-                    error_code="NOT_FOUND",
-                    error_type="not_found",
-                    remediation="Use foundry_list_tools to see available tools",
-                ))
+                return asdict(
+                    error_response(
+                        f"Tool '{tool_name}' not found",
+                        error_code="NOT_FOUND",
+                        error_type="not_found",
+                        remediation="Use tool-list to see available tools",
+                    )
+                )
 
             return asdict(success_response(data=schema))
 
@@ -175,9 +185,11 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Error getting tool schema for {tool_name}")
             return asdict(error_response(f"Failed to get tool schema: {e}"))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_get_capabilities")
-    def foundry_get_capabilities() -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="capability-get",
+    )
+    def capability_get() -> dict:
         """
         Get server capabilities for client negotiation.
 
@@ -201,9 +213,11 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error getting capabilities")
             return asdict(error_response(f"Failed to get capabilities: {e}"))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_negotiate_capabilities")
-    def foundry_negotiate_capabilities(
+    @canonical_tool(
+        mcp,
+        canonical_name="capability-negotiate",
+    )
+    def capability_negotiate(
         requested_version: Optional[str] = None,
         requested_features: Optional[str] = None,
     ) -> dict:
@@ -239,9 +253,11 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error negotiating capabilities")
             return asdict(error_response(f"Failed to negotiate capabilities: {e}"))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_list_categories")
-    def foundry_list_categories() -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="tool-list-categories",
+    )
+    def tool_list_categories() -> dict:
         """
         List tool categories with tool counts.
 
@@ -261,12 +277,14 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             categories = registry.list_categories()
             stats = registry.get_stats()
 
-            return asdict(success_response(
-                data={
-                    "categories": categories,
-                    "stats": stats,
-                }
-            ))
+            return asdict(
+                success_response(
+                    data={
+                        "categories": categories,
+                        "stats": stats,
+                    }
+                )
+            )
 
         except Exception as e:
             logger.exception("Error listing categories")

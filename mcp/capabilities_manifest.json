@@ -34,7 +34,7 @@
     ],
     "query_tools": [
       {
-        "name": "foundry_query_tasks",
+        "name": "task_query",
         "description": "Query tasks with filtering by status, type, parent",
         "auth_required": false,
         "rate_limit": null
@@ -42,49 +42,49 @@
     ],
     "task_tools": [
       {
-        "name": "foundry_prepare_task",
+        "name": "task_prepare",
         "description": "Prepare task with full context for implementation",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_next_task",
+        "name": "task_next",
         "description": "Find next actionable task",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_task_info",
+        "name": "task_info",
         "description": "Get detailed task information",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_check_deps",
+        "name": "task_check_deps",
         "description": "Check dependency status for a task",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_update_status",
+        "name": "task_update_status",
         "description": "Update task status",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_complete_task",
+        "name": "task_complete",
         "description": "Mark task complete with journal entry",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_start_task",
+        "name": "task_start",
         "description": "Start working on a task",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_progress",
+        "name": "task_progress",
         "description": "Get spec/phase progress summary",
         "auth_required": false,
         "rate_limit": null
@@ -92,25 +92,25 @@
     ],
     "validation_tools": [
       {
-        "name": "foundry_validate_spec",
+        "name": "spec_validate",
         "description": "Validate spec and return structured diagnostics",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_fix_spec",
+        "name": "spec_fix",
         "description": "Apply auto-fixes with dry-run support",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_spec_stats",
+        "name": "spec_stats",
         "description": "Get comprehensive spec statistics",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_validate_and_fix",
+        "name": "spec_validate_fix",
         "description": "Combined validation and fix in one operation",
         "auth_required": false,
         "rate_limit": null
@@ -118,37 +118,37 @@
     ],
     "journal_tools": [
       {
-        "name": "foundry_add_journal",
+        "name": "journal_add",
         "description": "Add journal entries with optional task association",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_get_journal",
+        "name": "journal_list",
         "description": "Retrieve journal entries with filtering",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_mark_blocked",
+        "name": "task_block",
         "description": "Mark tasks as blocked with metadata",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_unblock",
+        "name": "task_unblock",
         "description": "Unblock tasks and track resolution",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_list_blocked",
+        "name": "task_list_blocked",
         "description": "List all blocked tasks",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_unjournaled_tasks",
+        "name": "journal_list_unjournaled",
         "description": "Find tasks needing journal entries",
         "auth_required": false,
         "rate_limit": null
@@ -156,19 +156,19 @@
     ],
     "rendering_tools": [
       {
-        "name": "foundry_render_spec",
+        "name": "spec_render",
         "description": "Render spec to markdown with mode options",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_render_progress",
+        "name": "spec_render_progress",
         "description": "ASCII progress bars for spec and phases",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_list_tasks",
+        "name": "task_list",
         "description": "Flat task list with filtering",
         "auth_required": false,
         "rate_limit": null
@@ -176,37 +176,37 @@
     ],
     "lifecycle_tools": [
       {
-        "name": "foundry_move_spec",
+        "name": "spec_lifecycle_move",
         "description": "Move spec between folders",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_activate_spec",
+        "name": "spec_lifecycle_activate",
         "description": "Activate pending spec",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_complete_spec",
+        "name": "spec_lifecycle_complete",
         "description": "Mark spec completed",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_archive_spec",
+        "name": "spec_lifecycle_archive",
         "description": "Archive spec",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_lifecycle_state",
+        "name": "spec_lifecycle_state",
         "description": "Get lifecycle state and transition eligibility",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_list_specs_by_folder",
+        "name": "spec_list_by_folder",
         "description": "List specs by folder",
         "auth_required": false,
         "rate_limit": null
@@ -214,43 +214,43 @@
     ],
     "docs_tools": [
       {
-        "name": "foundry_find_class",
+        "name": "code_find_class",
         "description": "Find class in documentation",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_find_function",
+        "name": "code_find_function",
         "description": "Find function in documentation",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_trace_calls",
+        "name": "code_trace_calls",
         "description": "Trace call graph with direction and depth",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_impact_analysis",
+        "name": "code_impact_analysis",
         "description": "Analyze change impact",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_get_callers",
+        "name": "code_get_callers",
         "description": "Get caller functions",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_get_callees",
+        "name": "code_get_callees",
         "description": "Get callee functions",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_docs_stats",
+        "name": "doc_stats",
         "description": "Get documentation statistics",
         "auth_required": false,
         "rate_limit": null
@@ -258,7 +258,7 @@
     ],
     "testing_tools": [
       {
-        "name": "foundry_run_tests",
+        "name": "test_run",
         "description": "Full-featured test execution with presets",
         "auth_required": false,
         "rate_limit": {
@@ -267,19 +267,19 @@
         }
       },
       {
-        "name": "foundry_discover_tests",
+        "name": "test_discover",
         "description": "Test discovery without execution",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_test_presets",
+        "name": "test_presets",
         "description": "List available test presets",
         "auth_required": false,
         "rate_limit": null
       },
       {
-        "name": "foundry_run_quick_tests",
+        "name": "test_run_quick",
         "description": "Quick test preset shortcut",
         "auth_required": false,
         "rate_limit": {
@@ -288,7 +288,7 @@
         }
       },
       {
-        "name": "foundry_run_unit_tests",
+        "name": "test_run_unit",
         "description": "Unit test preset shortcut",
         "auth_required": false,
         "rate_limit": {
@@ -299,7 +299,7 @@
     ],
     "discovery_tools": [
       {
-        "name": "foundry_list_tools",
+        "name": "tool_list",
         "description": "List available tools with filtering by category, tag, and deprecation status. Returns paginated results.",
         "auth_required": false,
         "rate_limit": null,
@@ -312,7 +312,7 @@
         ]
       },
       {
-        "name": "foundry_get_tool_schema",
+        "name": "tool_get_schema",
         "description": "Get detailed JSON Schema for a specific tool, including examples, rate limits, and related tools.",
         "auth_required": false,
         "rate_limit": null,
@@ -321,14 +321,14 @@
         ]
       },
       {
-        "name": "foundry_get_capabilities",
+        "name": "capability_get",
         "description": "Get server capabilities for client negotiation including response version, streaming, batch operations, and feature flags.",
         "auth_required": false,
         "rate_limit": null,
         "parameters": []
       },
       {
-        "name": "foundry_negotiate_capabilities",
+        "name": "capability_negotiate",
         "description": "Negotiate capabilities with the server, requesting specific response versions and features.",
         "auth_required": false,
         "rate_limit": null,
@@ -338,7 +338,7 @@
         ]
       },
       {
-        "name": "foundry_list_categories",
+        "name": "tool_list_categories",
         "description": "List tool categories with tool counts for browsing available functionality.",
         "auth_required": false,
         "rate_limit": null,
@@ -502,7 +502,7 @@
     }
   },
   "server_capabilities": {
-    "_documentation": "Server capabilities returned by foundry_get_capabilities for client negotiation",
+    "_documentation": "Server capabilities returned by capability_get for client negotiation",
     "response_version": {
       "current": "response-v2",
       "supported": ["response-v2"],

@@ -288,13 +288,13 @@
         "task_category": "implementation",
         "estimated_hours": 1.5,
         "details": [
-          "Implement foundry_find_specs MCP tool",
-          "Implement foundry_list_specs MCP tool",
+          "Implement spec_find MCP tool",
+          "Implement spec_list MCP tool",
           "Add proper JSON schema for inputs/outputs",
           "Register tools with FastMCP server"
         ],
         "started_at": "2025-11-25T21:28:24.703590Z",
-        "status_note": "Creating tools/queries.py with foundry_find_specs and foundry_list_specs tools",
+        "status_note": "Creating tools/queries.py with spec_find and spec_list tools",
         "completed_at": "2025-11-25T21:29:35.453341Z",
         "needs_journaling": false,
         "actual_hours": 0.02,
@@ -717,14 +717,14 @@
         "task_category": "implementation",
         "estimated_hours": 3,
         "details": [
-          "Implement foundry_prepare_task MCP tool",
-          "Implement foundry_next_task MCP tool",
-          "Implement foundry_task_info MCP tool",
-          "Implement foundry_check_deps MCP tool",
-          "Implement foundry_update_status MCP tool",
-          "Implement foundry_complete_task MCP tool",
-          "Implement foundry_start_task MCP tool",
-          "Implement foundry_progress MCP tool"
+          "Implement task_prepare MCP tool",
+          "Implement task_next MCP tool",
+          "Implement task_info MCP tool",
+          "Implement task_check_deps MCP tool",
+          "Implement task_update_status MCP tool",
+          "Implement task_complete MCP tool",
+          "Implement task_start MCP tool",
+          "Implement task_progress MCP tool"
         ],
         "started_at": "2025-11-25T21:42:41.461024Z",
         "status_note": "Starting MCP tools implementation for task operations",
@@ -1008,8 +1008,8 @@
         "task_category": "implementation",
         "estimated_hours": 1.5,
         "details": [
-          "Implement foundry_validate_spec MCP tool",
-          "Implement foundry_fix_spec MCP tool",
+          "Implement spec_validate MCP tool",
+          "Implement spec_fix MCP tool",
           "Implement foundry_stats MCP tool",
           "Return structured diagnostics + stats payload compatible with Phase 6 resources"
         ],
@@ -1041,9 +1041,9 @@
         "task_category": "implementation",
         "estimated_hours": 1,
         "details": [
-          "Implement foundry_add_journal MCP tool",
-          "Implement foundry_mark_blocked MCP tool",
-          "Implement foundry_unblock MCP tool"
+          "Implement journal_add MCP tool",
+          "Implement task_block MCP tool",
+          "Implement task_unblock MCP tool"
         ],
         "started_at": "2025-11-25T22:51:32.347346Z",
         "status_note": "Starting journal MCP tools implementation",
@@ -1317,7 +1317,7 @@
         "file_path": "src/foundry_mcp/tools/rendering.py",
         "task_category": "implementation",
         "estimated_hours": 0.5,
-        "details": "Implement foundry_render_spec MCP tool",
+        "details": "Implement spec_render MCP tool",
         "started_at": "2025-11-25T23:10:16.950966Z",
         "status_note": "Creating rendering MCP tools",
         "completed_at": "2025-11-25T23:11:04.755061Z",
@@ -1346,9 +1346,9 @@
         "task_category": "implementation",
         "estimated_hours": 1,
         "details": [
-          "Implement foundry_move_spec MCP tool",
-          "Implement foundry_complete_spec MCP tool",
-          "Implement foundry_archive_spec MCP tool",
+          "Implement spec_lifecycle_move MCP tool",
+          "Implement spec_lifecycle_complete MCP tool",
+          "Implement spec_lifecycle_archive MCP tool",
           "Implement foundry_create_spec MCP tool",
           "Implement foundry_list_templates MCP tool"
         ],
@@ -1468,7 +1468,7 @@
         "expected": "FastMCP server registers rendering/lifecycle tools without schema errors",
         "runbook": [
           "Run after rendering + lifecycle tools are wired",
-          "Test ensures foundry_render_spec and lifecycle tools appear via FastMCP client registry"
+          "Test ensures spec_render and lifecycle tools appear via FastMCP client registry"
         ],
         "started_at": "2025-11-25T23:20:03.314324Z",
         "status_note": "Starting automated verification for MCP registration smoke test",
@@ -1624,10 +1624,10 @@
         "task_category": "implementation",
         "estimated_hours": 1.5,
         "details": [
-          "Implement foundry_find_class MCP tool",
-          "Implement foundry_find_function MCP tool",
-          "Implement foundry_trace_calls MCP tool",
-          "Implement foundry_impact_analysis MCP tool",
+          "Implement code_find_class MCP tool",
+          "Implement code_find_function MCP tool",
+          "Implement code_trace_calls MCP tool",
+          "Implement code_impact_analysis MCP tool",
           "Surface schema_version + auth requirement tags in tool metadata"
         ],
         "started_at": "2025-11-25T23:25:53.469982Z",
@@ -1658,8 +1658,8 @@
         "task_category": "implementation",
         "estimated_hours": 1,
         "details": [
-          "Implement foundry_run_tests MCP tool",
-          "Implement foundry_discover_tests MCP tool",
+          "Implement test_run MCP tool",
+          "Implement test_discover MCP tool",
           "Add progress reporting for long-running tests",
           "Expose schema_version + auth scopes via MCP tool registry"
         ],
@@ -1738,7 +1738,7 @@
         "command": "",
         "runbook": [
           "Start server with `uv run foundry-mcp --inspect` and open MCP Inspector",
-          "Invoke foundry_find_class against src/foundry_mcp/core/spec.py",
+          "Invoke code_find_class against src/foundry_mcp/core/spec.py",
           "Confirm response lists symbols + file paths for sample repo and for alternate repo override"
         ],
         "started_at": "2025-11-25T23:32:52.851154Z",
@@ -1764,10 +1764,10 @@
       "completed_tasks": 1,
       "metadata": {
         "verification_type": "manual",
-        "expected": "foundry_run_tests executes pytest and returns results",
+        "expected": "test_run executes pytest and returns results",
         "command": "",
         "runbook": [
-          "Invoke foundry_run_tests via MCP Inspector with preset=unit",
+          "Invoke test_run via MCP Inspector with preset=unit",
           "Verify streaming progress events + final summary payload",
           "Re-run with `repo_root` override pointing to sample fixture repo"
         ],
@@ -2365,7 +2365,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/queries.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/queries.py with: foundry_find_specs tool (locate spec by ID across status folders), foundry_list_specs tool (list specs with filtering), foundry_query_tasks tool (query tasks by status/parent), JSON schema definitions for inputs/outputs, register_query_tools function for FastMCP registration. Updated server.py to import and call register_query_tools. Created tools/__init__.py with exports.",
+      "content": "Created src/foundry_mcp/tools/queries.py with: spec_find tool (locate spec by ID across status folders), spec_list tool (list specs with filtering), task_query tool (query tasks by status/parent), JSON schema definitions for inputs/outputs, register_query_tools function for FastMCP registration. Updated server.py to import and call register_query_tools. Created tools/__init__.py with exports.",
       "metadata": {},
       "task_id": "task-1-5"
     },
@@ -2374,7 +2374,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: README.md",
       "author": "claude-code",
-      "content": "Created README.md with: project overview and tagline, installation instructions (pip, uvx, from source), Claude Desktop configuration examples (uvx and pip variants), usage documentation for all available tools (list_specs, get_spec, get_spec_hierarchy, get_task, foundry_find_specs, foundry_list_specs, foundry_query_tasks) and resources (specs://list, specs://{spec_id}), configuration section covering environment variables and TOML config file, development instructions.",
+      "content": "Created README.md with: project overview and tagline, installation instructions (pip, uvx, from source), Claude Desktop configuration examples (uvx and pip variants), usage documentation for all available tools (list_specs, get_spec, get_spec_hierarchy, get_task, spec_find, spec_list, task_query) and resources (specs://list, specs://{spec_id}), configuration section covering environment variables and TOML config file, development instructions.",
       "metadata": {},
       "task_id": "task-1-6"
     },
@@ -2473,7 +2473,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/tasks.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/tasks.py with 8 MCP tools: foundry_prepare_task, foundry_next_task, foundry_task_info, foundry_check_deps, foundry_update_status, foundry_complete_task, foundry_start_task, foundry_progress. Updated server.py to register task tools. Updated tools/__init__.py exports. All imports verified.",
+      "content": "Created src/foundry_mcp/tools/tasks.py with 8 MCP tools: task_prepare, task_next, task_info, task_check_deps, task_update_status, task_complete, task_start, task_progress. Updated server.py to register task tools. Updated tools/__init__.py exports. All imports verified.",
       "metadata": {},
       "task_id": "task-2-3"
     },
@@ -2518,7 +2518,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: MCP tools are registered and callable",
       "author": "claude-code",
-      "content": "Verification passed. Server creates successfully and all MCP tools are registered. Fixed FastMCP initialization (removed unsupported 'version' parameter). Server reports: name=foundry-mcp, version=0.1.0. Task tools registered: foundry_prepare_task, foundry_next_task, foundry_task_info, foundry_check_deps, foundry_update_status, foundry_complete_task, foundry_start_task, foundry_progress.",
+      "content": "Verification passed. Server creates successfully and all MCP tools are registered. Fixed FastMCP initialization (removed unsupported 'version' parameter). Server reports: name=foundry-mcp, version=0.1.0. Task tools registered: task_prepare, task_next, task_info, task_check_deps, task_update_status, task_complete, task_start, task_progress.",
       "metadata": {},
       "task_id": "verify-2-2"
     },
@@ -2563,7 +2563,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/validation.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/validation.py with MCP tools:\n- foundry_validate_spec: Validates spec file and returns structured diagnostics (code, message, severity, category, location, suggested_fix, auto_fixable)\n- foundry_fix_spec: Applies auto-fixes for fixable issues with backup support and dry-run mode\n- foundry_spec_stats: Returns comprehensive statistics (totals, status counts, max depth, verification coverage, progress)\n- foundry_validate_and_fix: Combined validation + auto-fix in one operation with pre/post validation comparison\n- All tools return JSON payloads compatible with Phase 6 resources\n- Updated tools/__init__.py to export register_validation_tools\n- Verified imports work correctly",
+      "content": "Created src/foundry_mcp/tools/validation.py with MCP tools:\n- spec_validate: Validates spec file and returns structured diagnostics (code, message, severity, category, location, suggested_fix, auto_fixable)\n- spec_fix: Applies auto-fixes for fixable issues with backup support and dry-run mode\n- spec_stats: Returns comprehensive statistics (totals, status counts, max depth, verification coverage, progress)\n- spec_validate_fix: Combined validation + auto-fix in one operation with pre/post validation comparison\n- All tools return JSON payloads compatible with Phase 6 resources\n- Updated tools/__init__.py to export register_validation_tools\n- Verified imports work correctly",
       "metadata": {},
       "task_id": "task-3-3"
     },
@@ -2572,7 +2572,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/journal.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/journal.py with MCP tools:\n- foundry_add_journal: Adds journal entries with entry_type (status_change, deviation, blocker, decision, note) and optional task_id\n- foundry_get_journal: Retrieves journal entries with filtering by task_id, entry_type, and limit\n- foundry_mark_blocked: Marks tasks as blocked with blocker metadata (type, description, ticket)\n- foundry_unblock: Unblocks tasks, moves blocker info to resolved_blockers, adds journal entry\n- foundry_list_blocked: Lists all blocked tasks in a spec\n- foundry_unjournaled_tasks: Finds completed tasks needing journal entries\n- Updated tools/__init__.py to export register_journal_tools\n- Verified imports work correctly",
+      "content": "Created src/foundry_mcp/tools/journal.py with MCP tools:\n- journal_add: Adds journal entries with entry_type (status_change, deviation, blocker, decision, note) and optional task_id\n- journal_list: Retrieves journal entries with filtering by task_id, entry_type, and limit\n- task_block: Marks tasks as blocked with blocker metadata (type, description, ticket)\n- task_unblock: Unblocks tasks, moves blocker info to resolved_blockers, adds journal entry\n- task_list_blocked: Lists all blocked tasks in a spec\n- journal_list_unjournaled: Finds completed tasks needing journal entries\n- Updated tools/__init__.py to export register_journal_tools\n- Verified imports work correctly",
       "metadata": {},
       "task_id": "task-3-4"
     },
@@ -2581,7 +2581,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: CHANGELOG.md (Phase 3)",
       "author": "claude-code",
-      "content": "Updated CHANGELOG.md with Phase 3 features including validation module (Diagnostic schema, validate_spec, get_fix_actions, apply_fixes, calculate_stats), journal module (add_journal_entry, get_journal_entries, mark_blocked, unblock, list_blocked_tasks, find_unjournaled_tasks), and their MCP tool wrappers (foundry_validate_spec, foundry_fix_spec, foundry_spec_stats, foundry_validate_and_fix, foundry_add_journal, foundry_get_journal, foundry_mark_blocked, foundry_unblock, foundry_list_blocked, foundry_unjournaled_tasks). Committed as 7e28188.",
+      "content": "Updated CHANGELOG.md with Phase 3 features including validation module (Diagnostic schema, validate_spec, get_fix_actions, apply_fixes, calculate_stats), journal module (add_journal_entry, get_journal_entries, mark_blocked, unblock, list_blocked_tasks, find_unjournaled_tasks), and their MCP tool wrappers (spec_validate, spec_fix, spec_stats, spec_validate_fix, journal_add, journal_list, task_block, task_unblock, task_list_blocked, journal_list_unjournaled). Committed as 7e28188.",
       "metadata": {},
       "task_id": "task-3-5"
     },
@@ -2671,7 +2671,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/rendering.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/rendering.py with MCP tools: foundry_render_spec (renders spec to markdown with mode options basic/enhanced, include_journal, max_depth), foundry_render_progress (ASCII progress bars for overall spec and each phase), foundry_list_tasks (flat task list with status_filter, include_completed, returns both raw data and markdown). Committed as b85d646.",
+      "content": "Created src/foundry_mcp/tools/rendering.py with MCP tools: spec_render (renders spec to markdown with mode options basic/enhanced, include_journal, max_depth), spec_render_progress (ASCII progress bars for overall spec and each phase), task_list (flat task list with status_filter, include_completed, returns both raw data and markdown). Committed as b85d646.",
       "metadata": {},
       "task_id": "task-4-3"
     },
@@ -2680,7 +2680,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/lifecycle.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/lifecycle.py with MCP tools: foundry_move_spec (moves spec between folders with transition validation), foundry_activate_spec (pending -> active), foundry_complete_spec (to completed with force option), foundry_archive_spec (to archived), foundry_lifecycle_state (returns folder, status, progress_percentage, can_complete, can_archive), foundry_list_specs_by_folder (lists specs organized by folder with totals). Committed as b207a02.",
+      "content": "Created src/foundry_mcp/tools/lifecycle.py with MCP tools: spec_lifecycle_move (moves spec between folders with transition validation), spec_lifecycle_activate (pending -> active), spec_lifecycle_complete (to completed with force option), spec_lifecycle_archive (to archived), spec_lifecycle_state (returns folder, status, progress_percentage, can_complete, can_archive), spec_list_by_folder (lists specs organized by folder with totals). Committed as b207a02.",
       "metadata": {},
       "task_id": "task-4-4"
     },
@@ -2689,7 +2689,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: CHANGELOG.md (Phase 4)",
       "author": "claude-code",
-      "content": "Updated CHANGELOG.md with Phase 4 features: rendering module (render_spec_to_markdown with RenderOptions, render_progress_bar, render_task_list, get_status_icon), lifecycle module (move_spec, activate_spec, complete_spec, archive_spec, get_lifecycle_state, list_specs_by_folder, MoveResult/LifecycleState dataclasses), MCP rendering tools (foundry_render_spec, foundry_render_progress, foundry_list_tasks), MCP lifecycle tools (foundry_move_spec, foundry_activate_spec, foundry_complete_spec, foundry_archive_spec, foundry_lifecycle_state, foundry_list_specs_by_folder). Committed as 04fece2.",
+      "content": "Updated CHANGELOG.md with Phase 4 features: rendering module (render_spec_to_markdown with RenderOptions, render_progress_bar, render_task_list, get_status_icon), lifecycle module (move_spec, activate_spec, complete_spec, archive_spec, get_lifecycle_state, list_specs_by_folder, MoveResult/LifecycleState dataclasses), MCP rendering tools (spec_render, spec_render_progress, task_list), MCP lifecycle tools (spec_lifecycle_move, spec_lifecycle_activate, spec_lifecycle_complete, spec_lifecycle_archive, spec_lifecycle_state, spec_list_by_folder). Committed as 04fece2.",
       "metadata": {},
       "task_id": "task-4-5"
     },
@@ -2725,7 +2725,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: MCP registration smoke test",
       "author": "claude-code",
-      "content": "Created integration test file tests/integration/test_mcp_smoke.py with 25 tests verifying FastMCP server tool registration. All tests pass. Updated server.py to register rendering and lifecycle tools (register_rendering_tools, register_lifecycle_tools). Tests verify all rendering tools (foundry_render_spec, foundry_render_progress, foundry_list_tasks), lifecycle tools (foundry_move_spec, foundry_activate_spec, foundry_complete_spec, foundry_archive_spec, foundry_lifecycle_state, foundry_list_specs_by_folder), core tools, validation tools, journal tools, query tools, and task tools are registered correctly without schema errors.",
+      "content": "Created integration test file tests/integration/test_mcp_smoke.py with 25 tests verifying FastMCP server tool registration. All tests pass. Updated server.py to register rendering and lifecycle tools (register_rendering_tools, register_lifecycle_tools). Tests verify all rendering tools (spec_render, spec_render_progress, task_list), lifecycle tools (spec_lifecycle_move, spec_lifecycle_activate, spec_lifecycle_complete, spec_lifecycle_archive, spec_lifecycle_state, spec_list_by_folder), core tools, validation tools, journal tools, query tools, and task tools are registered correctly without schema errors.",
       "metadata": {},
       "task_id": "verify-4-3"
     },
@@ -2770,7 +2770,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/docs.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/docs.py with MCP tools for documentation queries. Implemented register_docs_tools function exposing: foundry_find_class, foundry_find_function, foundry_trace_calls, foundry_impact_analysis, foundry_get_callers, foundry_get_callees, foundry_docs_stats. All tools include schema_version in responses and support workspace parameter for arbitrary repository roots. Module imports verified working.",
+      "content": "Created src/foundry_mcp/tools/docs.py with MCP tools for documentation queries. Implemented register_docs_tools function exposing: code_find_class, code_find_function, code_trace_calls, code_impact_analysis, code_get_callers, code_get_callees, doc_stats. All tools include schema_version in responses and support workspace parameter for arbitrary repository roots. Module imports verified working.",
       "metadata": {},
       "task_id": "task-5-3"
     },
@@ -2779,7 +2779,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: src/foundry_mcp/tools/testing.py",
       "author": "claude-code",
-      "content": "Created src/foundry_mcp/tools/testing.py with MCP tools for test execution. Implemented register_testing_tools function exposing: foundry_run_tests (full options), foundry_discover_tests, foundry_test_presets, foundry_run_quick_tests, foundry_run_unit_tests. All tools include schema_version and execution_id in responses. Supports workspace parameter for arbitrary repository roots. Module imports verified working.",
+      "content": "Created src/foundry_mcp/tools/testing.py with MCP tools for test execution. Implemented register_testing_tools function exposing: test_run (full options), test_discover, test_presets, test_run_quick, test_run_unit. All tools include schema_version and execution_id in responses. Supports workspace parameter for arbitrary repository roots. Module imports verified working.",
       "metadata": {},
       "task_id": "task-5-4"
     },
@@ -2788,7 +2788,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: CHANGELOG.md (Phase 5)",
       "author": "claude-code",
-      "content": "Updated CHANGELOG.md to document Phase 5 additions. Added documentation query module (DocsQuery class with find_class, find_function, trace_calls, impact_analysis, get_callers/callees, get_dependencies, get_stats), testing module (TestRunner with presets, run_tests, discover_tests), MCP docs tools (7 tools: foundry_find_class, foundry_find_function, foundry_trace_calls, foundry_impact_analysis, foundry_get_callers, foundry_get_callees, foundry_docs_stats), and MCP testing tools (5 tools: foundry_run_tests, foundry_discover_tests, foundry_test_presets, foundry_run_quick_tests, foundry_run_unit_tests). All schema versions and presets documented.",
+      "content": "Updated CHANGELOG.md to document Phase 5 additions. Added documentation query module (DocsQuery class with find_class, find_function, trace_calls, impact_analysis, get_callers/callees, get_dependencies, get_stats), testing module (TestRunner with presets, run_tests, discover_tests), MCP docs tools (7 tools: code_find_class, code_find_function, code_trace_calls, code_impact_analysis, code_get_callers, code_get_callees, doc_stats), and MCP testing tools (5 tools: test_run, test_discover, test_presets, test_run_quick, test_run_unit). All schema versions and presets documented.",
       "metadata": {},
       "task_id": "task-5-5"
     },
@@ -2941,7 +2941,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Claude Desktop integration works",
       "author": "claude-code",
-      "content": "Claude Code integration verified successfully. Created .mcp.json config file in project root with foundry-mcp server entry (command: python -m foundry_mcp.server). After restart, MCP server connected and tools are functional. Tested foundry_list_specs (returned 1 spec with 91% progress) and foundry_progress (returned full phase breakdown). All MCP tools visible and callable through Claude Code.",
+      "content": "Claude Code integration verified successfully. Created .mcp.json config file in project root with foundry-mcp server entry (command: python -m foundry_mcp.server). After restart, MCP server connected and tools are functional. Tested spec_list (returned 1 spec with 91% progress) and task_progress (returned full phase breakdown). All MCP tools visible and callable through Claude Code.",
       "metadata": {},
       "task_id": "verify-6-2"
     }

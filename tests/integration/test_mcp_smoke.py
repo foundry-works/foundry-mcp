@@ -50,109 +50,109 @@ class TestMCPServerCreation:
 class TestRenderingToolsRegistration:
     """Tests for rendering tools registration."""
 
-    def test_foundry_render_spec_registered(self, mcp_server):
-        """Test that foundry_render_spec tool is registered."""
+    def test_spec_render_registered(self, mcp_server):
+        """Test that spec_render tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_render_spec" in tools
+        assert "spec-render" in tools
 
-    def test_foundry_render_progress_registered(self, mcp_server):
-        """Test that foundry_render_progress tool is registered."""
+    def test_spec_render_progress_registered(self, mcp_server):
+        """Test that spec_render_progress tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_render_progress" in tools
+        assert "spec-render-progress" in tools
 
-    def test_foundry_list_tasks_registered(self, mcp_server):
-        """Test that foundry_list_tasks tool is registered."""
+    def test_task_list_registered(self, mcp_server):
+        """Test that task_list tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_list_tasks" in tools
+        assert "task-list" in tools
 
 
 class TestLifecycleToolsRegistration:
     """Tests for lifecycle tools registration."""
 
-    def test_foundry_move_spec_registered(self, mcp_server):
-        """Test that foundry_move_spec tool is registered."""
+    def test_spec_lifecycle_move_registered(self, mcp_server):
+        """Test that spec_lifecycle_move tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_move_spec" in tools
+        assert "spec-lifecycle-move" in tools
 
-    def test_foundry_activate_spec_registered(self, mcp_server):
-        """Test that foundry_activate_spec tool is registered."""
+    def test_spec_lifecycle_activate_registered(self, mcp_server):
+        """Test that spec_lifecycle_activate tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_activate_spec" in tools
+        assert "spec-lifecycle-activate" in tools
 
-    def test_foundry_complete_spec_registered(self, mcp_server):
-        """Test that foundry_complete_spec tool is registered."""
+    def test_spec_lifecycle_complete_registered(self, mcp_server):
+        """Test that spec_lifecycle_complete tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_complete_spec" in tools
+        assert "spec-lifecycle-complete" in tools
 
-    def test_foundry_archive_spec_registered(self, mcp_server):
-        """Test that foundry_archive_spec tool is registered."""
+    def test_spec_lifecycle_archive_registered(self, mcp_server):
+        """Test that spec_lifecycle_archive tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_archive_spec" in tools
+        assert "spec-lifecycle-archive" in tools
 
-    def test_foundry_lifecycle_state_registered(self, mcp_server):
-        """Test that foundry_lifecycle_state tool is registered."""
+    def test_spec_lifecycle_state_registered(self, mcp_server):
+        """Test that spec_lifecycle_state tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_lifecycle_state" in tools
+        assert "spec-lifecycle-state" in tools
 
-    def test_foundry_list_specs_by_folder_registered(self, mcp_server):
-        """Test that foundry_list_specs_by_folder tool is registered."""
+    def test_spec_list_by_folder_registered(self, mcp_server):
+        """Test that spec_list_by_folder tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_list_specs_by_folder" in tools
+        assert "spec-list-by-folder" in tools
 
 
 class TestCoreToolsRegistration:
     """Tests for core tools registration."""
 
-    def test_list_specs_registered(self, mcp_server):
-        """Test that tool_list_specs tool is registered."""
+    def test_spec_list_basic_registered(self, mcp_server):
+        """Test that spec-list-basic tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "tool_list_specs" in tools
+        assert "spec-list-basic" in tools
 
-    def test_get_spec_registered(self, mcp_server):
-        """Test that tool_get_spec tool is registered."""
+    def test_spec_get_registered(self, mcp_server):
+        """Test that spec-get tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "tool_get_spec" in tools
+        assert "spec-get" in tools
 
-    def test_get_task_registered(self, mcp_server):
-        """Test that tool_get_task tool is registered."""
+    def test_task_get_registered(self, mcp_server):
+        """Test that task-get tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "tool_get_task" in tools
+        assert "task-get" in tools
 
 
 class TestValidationToolsRegistration:
     """Tests for validation tools registration."""
 
-    def test_foundry_validate_spec_registered(self, mcp_server):
-        """Test that foundry_validate_spec tool is registered."""
+    def test_spec_validate_registered(self, mcp_server):
+        """Test that spec_validate tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_validate_spec" in tools
+        assert "spec-validate" in tools
 
 
 class TestJournalToolsRegistration:
     """Tests for journal tools registration."""
 
-    def test_foundry_get_journal_registered(self, mcp_server):
-        """Test that foundry_get_journal tool is registered."""
+    def test_journal_list_registered(self, mcp_server):
+        """Test that journal_list tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_get_journal" in tools
+        assert "journal-list" in tools
 
 
 class TestQueryToolsRegistration:
     """Tests for query tools registration."""
 
-    def test_foundry_query_tasks_registered(self, mcp_server):
-        """Test that foundry_query_tasks tool is registered."""
+    def test_task_query_registered(self, mcp_server):
+        """Test that task_query tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_query_tasks" in tools
+        assert "task-query" in tools
 
 
 class TestTaskToolsRegistration:
     """Tests for task tools registration."""
 
-    def test_foundry_update_status_registered(self, mcp_server):
-        """Test that foundry_update_status tool is registered."""
+    def test_task_update_status_registered(self, mcp_server):
+        """Test that task_update_status tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_update_status" in tools
+        assert "task-update-status" in tools
 
 
 class TestToolSchemas:
@@ -168,7 +168,11 @@ class TestToolSchemas:
     def test_rendering_tools_callable(self, mcp_server):
         """Test that rendering tools are callable without errors."""
         tools = mcp_server._tool_manager._tools
-        rendering_tools = ["foundry_render_spec", "foundry_render_progress", "foundry_list_tasks"]
+        rendering_tools = [
+            "spec-render",
+            "spec-render-progress",
+            "task-list",
+        ]
 
         for tool_name in rendering_tools:
             assert tool_name in tools, f"Tool {tool_name} should be registered"
@@ -178,12 +182,12 @@ class TestToolSchemas:
         """Test that lifecycle tools are callable without errors."""
         tools = mcp_server._tool_manager._tools
         lifecycle_tools = [
-            "foundry_move_spec",
-            "foundry_activate_spec",
-            "foundry_complete_spec",
-            "foundry_archive_spec",
-            "foundry_lifecycle_state",
-            "foundry_list_specs_by_folder",
+            "spec-lifecycle-move",
+            "spec-lifecycle-activate",
+            "spec-lifecycle-complete",
+            "spec-lifecycle-archive",
+            "spec-lifecycle-state",
+            "spec-list-by-folder",
         ]
 
         for tool_name in lifecycle_tools:
@@ -193,6 +197,75 @@ class TestToolSchemas:
 
 class TestResourcesRegistration:
     """Tests for MCP resources registration."""
+
+    def test_specs_list_resource_registered(self, mcp_server):
+        """Test that specs://list resource is registered."""
+        resources = mcp_server._resource_manager._resources
+        # Check for resource template pattern
+        assert any("specs://" in str(resource) for resource in resources)
+
+
+class TestCanonicalToolNames:
+    """Ensure canonical tool names are registered alongside legacy aliases."""
+
+    def test_canonical_tools_registered(self, mcp_server):
+        tools = mcp_server._tool_manager._tools
+        expected = {
+            "sdd-server-capabilities",
+            "spec-list-basic",
+            "spec-get",
+            "spec-get-hierarchy",
+            "task-get",
+            "spec-render",
+            "spec-render-progress",
+            "task-list",
+            "tool-list",
+            "tool-get-schema",
+            "capability-get",
+            "capability-negotiate",
+            "tool-list-categories",
+            "spec-find",
+            "spec-list",
+            "task-query",
+            "spec-validate",
+            "spec-fix",
+            "spec-stats",
+            "spec-validate-fix",
+            "journal-add",
+            "journal-list",
+            "task-block",
+            "task-unblock",
+            "task-list-blocked",
+            "journal-list-unjournaled",
+            "spec-lifecycle-move",
+            "spec-lifecycle-activate",
+            "spec-lifecycle-complete",
+            "spec-lifecycle-archive",
+            "spec-lifecycle-state",
+            "spec-list-by-folder",
+            "task-prepare",
+            "task-next",
+            "task-info",
+            "task-check-deps",
+            "task-update-status",
+            "task-complete",
+            "task-start",
+            "task-progress",
+            "code-find-class",
+            "code-find-function",
+            "code-trace-calls",
+            "code-impact-analysis",
+            "code-get-callers",
+            "code-get-callees",
+            "doc-stats",
+            "test-run",
+            "test-discover",
+            "test-presets",
+            "test-run-quick",
+            "test-run-unit",
+        }
+        missing = sorted(name for name in expected if name not in tools)
+        assert not missing, f"Missing canonical tools: {missing}"
 
     def test_specs_list_resource_registered(self, mcp_server):
         """Test that specs://list resource is registered."""
@@ -215,11 +288,15 @@ class TestToolCounts:
         tools = mcp_server._tool_manager._tools
         # We expect at least: 4 core + 3 rendering + 6 lifecycle + validation + journal + query + task
         min_expected = 15
-        assert len(tools) >= min_expected, f"Expected at least {min_expected} tools, got {len(tools)}"
+        assert len(tools) >= min_expected, (
+            f"Expected at least {min_expected} tools, got {len(tools)}"
+        )
 
     def test_tool_names_are_strings(self, mcp_server):
         """Test that all tool names are valid strings."""
         tools = mcp_server._tool_manager._tools
         for tool_name in tools.keys():
-            assert isinstance(tool_name, str), f"Tool name should be string: {tool_name}"
+            assert isinstance(tool_name, str), (
+                f"Tool name should be string: {tool_name}"
+            )
             assert len(tool_name) > 0, "Tool name should not be empty"

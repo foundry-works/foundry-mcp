@@ -416,7 +416,7 @@
     },
     "task-2-1-1": {
       "type": "subtask",
-      "title": "Fix foundry_next_task: replace 'found' with 'success'",
+      "title": "Fix task_next: replace 'found' with 'success'",
       "status": "completed",
       "parent": "task-2-1",
       "children": [],
@@ -425,7 +425,7 @@
       "metadata": {
         "details": "Change response from {found: bool, ...} to success_response({found: bool, ...})",
         "started_at": "2025-11-26T19:36:04.260991Z",
-        "status_note": "Updating foundry_next_task to use standard response format",
+        "status_note": "Updating task_next to use standard response format",
         "completed_at": "2025-11-26T19:36:39.571688Z",
         "needs_journaling": false,
         "actual_hours": 0.01,
@@ -434,7 +434,7 @@
     },
     "task-2-1-2": {
       "type": "subtask",
-      "title": "Fix foundry_task_info: add success field wrapper",
+      "title": "Fix task_info: add success field wrapper",
       "status": "completed",
       "parent": "task-2-1",
       "children": [],
@@ -443,7 +443,7 @@
       "metadata": {
         "details": "Wrap response in success_response(), use error_response() for errors",
         "started_at": "2025-11-26T19:37:11.631746Z",
-        "status_note": "Updating foundry_task_info to use standard response format",
+        "status_note": "Updating task_info to use standard response format",
         "completed_at": "2025-11-26T19:37:40.981528Z",
         "needs_journaling": false,
         "actual_hours": 0.008,
@@ -452,7 +452,7 @@
     },
     "task-2-1-3": {
       "type": "subtask",
-      "title": "Fix foundry_check_deps: add success field wrapper",
+      "title": "Fix task_check_deps: add success field wrapper",
       "status": "completed",
       "parent": "task-2-1",
       "children": [],
@@ -461,7 +461,7 @@
       "metadata": {
         "details": "Wrap response in success_response(), use error_response() for errors",
         "started_at": "2025-11-26T19:38:12.717431Z",
-        "status_note": "Updating foundry_check_deps to use standard response format",
+        "status_note": "Updating task_check_deps to use standard response format",
         "completed_at": "2025-11-26T19:38:37.279102Z",
         "needs_journaling": false,
         "actual_hours": 0.007,
@@ -470,7 +470,7 @@
     },
     "task-2-1-4": {
       "type": "subtask",
-      "title": "Fix foundry_progress: add success field wrapper",
+      "title": "Fix task_progress: add success field wrapper",
       "status": "completed",
       "parent": "task-2-1",
       "children": [],
@@ -479,7 +479,7 @@
       "metadata": {
         "details": "Wrap response in success_response(), use error_response() for errors",
         "started_at": "2025-11-26T19:39:08.756697Z",
-        "status_note": "Updating foundry_progress to use standard response format",
+        "status_note": "Updating task_progress to use standard response format",
         "completed_at": "2025-11-26T19:39:35.266665Z",
         "needs_journaling": false,
         "actual_hours": 0.007,
@@ -488,7 +488,7 @@
     },
     "task-2-1-5": {
       "type": "subtask",
-      "title": "Fix foundry_prepare_task: standardize variable return",
+      "title": "Fix task_prepare: standardize variable return",
       "status": "completed",
       "parent": "task-2-1",
       "children": [],
@@ -497,7 +497,7 @@
       "metadata": {
         "details": "Ensure core_prepare_task returns standard format or wrap its return",
         "started_at": "2025-11-26T19:40:12.967229Z",
-        "status_note": "Checking foundry_prepare_task and core_prepare_task return format",
+        "status_note": "Checking task_prepare and core_prepare_task return format",
         "completed_at": "2025-11-26T19:41:02.962888Z",
         "needs_journaling": false,
         "actual_hours": 0.014,
@@ -544,7 +544,7 @@
     },
     "task-2-2-1": {
       "type": "subtask",
-      "title": "Fix foundry_find_specs: replace 'found' with 'success'",
+      "title": "Fix spec_find: replace 'found' with 'success'",
       "status": "completed",
       "parent": "task-2-2",
       "children": [],
@@ -553,7 +553,7 @@
       "metadata": {
         "details": "Change from {found: bool, ...} to success_response({found: bool, ...})",
         "started_at": "2025-11-26T19:42:50.737202Z",
-        "status_note": "Updating foundry_find_specs to use standard response format",
+        "status_note": "Updating spec_find to use standard response format",
         "completed_at": "2025-11-26T19:43:20.447198Z",
         "needs_journaling": false,
         "actual_hours": 0.008,
@@ -562,7 +562,7 @@
     },
     "task-2-2-2": {
       "type": "subtask",
-      "title": "Fix foundry_list_specs: add success field",
+      "title": "Fix spec_list: add success field",
       "status": "completed",
       "parent": "task-2-2",
       "children": [],
@@ -571,7 +571,7 @@
       "metadata": {
         "details": "Wrap {specs: [...], count: int} in success_response()",
         "started_at": "2025-11-26T19:43:55.379504Z",
-        "status_note": "Updating foundry_list_specs to use standard response format",
+        "status_note": "Updating spec_list to use standard response format",
         "completed_at": "2025-11-26T19:44:18.211816Z",
         "needs_journaling": false,
         "actual_hours": 0.006,
@@ -580,7 +580,7 @@
     },
     "task-2-2-3": {
       "type": "subtask",
-      "title": "Fix foundry_query_tasks: add success field",
+      "title": "Fix task_query: add success field",
       "status": "completed",
       "parent": "task-2-2",
       "children": [],
@@ -589,7 +589,7 @@
       "metadata": {
         "details": "Wrap {spec_id: str, tasks: [...], count: int} in success_response()",
         "started_at": "2025-11-26T19:44:47.285823Z",
-        "status_note": "Updating foundry_query_tasks to use standard response format",
+        "status_note": "Updating task_query to use standard response format",
         "completed_at": "2025-11-26T19:45:07.700129Z",
         "needs_journaling": false,
         "actual_hours": 0.006,
@@ -631,7 +631,7 @@
       "metadata": {
         "verification_type": "auto",
         "agent": "run-tests",
-        "command": "pytest tests/integration/test_mcp_tools.py -k 'foundry_prepare_task or foundry_next_task or foundry_task_info or foundry_progress' -v",
+        "command": "pytest tests/integration/test_mcp_tools.py -k 'task_prepare or task_next or task_info or task_progress' -v",
         "expected": "Task tool responses expose success/data/error/meta envelope",
         "started_at": "2025-11-26T19:45:41.793159Z",
         "status_note": "Running verification tests for task tools",
@@ -652,7 +652,7 @@
       "metadata": {
         "verification_type": "auto",
         "agent": "run-tests",
-        "command": "pytest tests/integration/test_mcp_tools.py -k 'foundry_find_specs or foundry_list_specs or foundry_query_tasks' -v",
+        "command": "pytest tests/integration/test_mcp_tools.py -k 'spec_find or spec_list or task_query' -v",
         "expected": "Query tools return success/data/error/meta per contract",
         "started_at": "2025-11-26T19:46:56.911198Z",
         "status_note": "Running verification for query tools",
@@ -1151,7 +1151,7 @@
     "task-5-3": {
       "type": "task",
       "title": "Fix format violations in foundry tools",
-      "description": "Fix format violations in foundry_update_status, foundry_complete_task, and foundry_start_task. Change from flat structure to properly wrapped response structure with meta.version field.",
+      "description": "Fix format violations in task_update_status, task_complete, and task_start. Change from flat structure to properly wrapped response structure with meta.version field.",
       "status": "completed",
       "parent": "phase-5",
       "children": [],
@@ -1400,45 +1400,45 @@
     {
       "timestamp": "2025-11-26T19:36:39.574749Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_next_task: replace 'found' with 'success'",
+      "title": "Task Completed: Fix task_next: replace 'found' with 'success'",
       "author": "claude-code",
-      "content": "Updated foundry_next_task in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The 'found' field is now nested inside data for successful operations. Error cases return success=False with empty data dict.",
+      "content": "Updated task_next in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The 'found' field is now nested inside data for successful operations. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-1-1"
     },
     {
       "timestamp": "2025-11-26T19:37:40.984249Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_task_info: add success field wrapper",
+      "title": "Task Completed: Fix task_info: add success field wrapper",
       "author": "claude-code",
-      "content": "Updated foundry_task_info in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Error cases return success=False with empty data dict. Success case wraps all task data inside data field.",
+      "content": "Updated task_info in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Error cases return success=False with empty data dict. Success case wraps all task data inside data field.",
       "metadata": {},
       "task_id": "task-2-1-2"
     },
     {
       "timestamp": "2025-11-26T19:38:37.287789Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_check_deps: add success field wrapper",
+      "title": "Task Completed: Fix task_check_deps: add success field wrapper",
       "author": "claude-code",
-      "content": "Updated foundry_check_deps in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The deps object from check_dependencies is now wrapped inside data field. Error cases return success=False with empty data dict.",
+      "content": "Updated task_check_deps in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The deps object from check_dependencies is now wrapped inside data field. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-1-3"
     },
     {
       "timestamp": "2025-11-26T19:39:35.271303Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_progress: add success field wrapper",
+      "title": "Task Completed: Fix task_progress: add success field wrapper",
       "author": "claude-code",
-      "content": "Updated foundry_progress in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The progress object from get_progress_summary is now wrapped inside data field. Error cases return success=False with empty data dict.",
+      "content": "Updated task_progress in tasks.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. The progress object from get_progress_summary is now wrapped inside data field. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-1-4"
     },
     {
       "timestamp": "2025-11-26T19:41:02.966800Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_prepare_task: standardize variable return",
+      "title": "Task Completed: Fix task_prepare: standardize variable return",
       "author": "claude-code",
-      "content": "Updated both core_prepare_task in core/task.py and foundry_prepare_task in tools/tasks.py to use standard response schema. core_prepare_task now returns {success: bool, data: {...}, error: str|null} with all task data nested inside data field. Error cases return success=False with empty data dict. The wrapper function error cases also updated to include data: {} field.",
+      "content": "Updated both core_prepare_task in core/task.py and task_prepare in tools/tasks.py to use standard response schema. core_prepare_task now returns {success: bool, data: {...}, error: str|null} with all task data nested inside data field. Error cases return success=False with empty data dict. The wrapper function error cases also updated to include data: {} field.",
       "metadata": {},
       "task_id": "task-2-1-5"
     },
@@ -1454,27 +1454,27 @@
     {
       "timestamp": "2025-11-26T19:43:20.449834Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_find_specs: replace 'found' with 'success'",
+      "title": "Task Completed: Fix spec_find: replace 'found' with 'success'",
       "author": "claude-code",
-      "content": "Updated foundry_find_specs in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Spec found returns success=True with found=True in data. Spec not found returns success=True with found=False in data (successful query with no result). Error cases return success=False with empty data dict.",
+      "content": "Updated spec_find in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Spec found returns success=True with found=True in data. Spec not found returns success=True with found=False in data (successful query with no result). Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-2-1"
     },
     {
       "timestamp": "2025-11-26T19:44:18.214864Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_list_specs: add success field",
+      "title": "Task Completed: Fix spec_list: add success field",
       "author": "claude-code",
-      "content": "Updated foundry_list_specs in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps specs array and count inside data field. Error cases return success=False with empty data dict.",
+      "content": "Updated spec_list in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps specs array and count inside data field. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-2-2"
     },
     {
       "timestamp": "2025-11-26T19:45:07.703309Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Fix foundry_query_tasks: add success field",
+      "title": "Task Completed: Fix task_query: add success field",
       "author": "claude-code",
-      "content": "Updated foundry_query_tasks in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps spec_id, tasks array, and count inside data field. Error cases return success=False with empty data dict.",
+      "content": "Updated task_query in queries.py to use standard response schema. All returns now follow {success: bool, data: {...}, error: str|null} format. Success case wraps spec_id, tasks array, and count inside data field. Error cases return success=False with empty data dict.",
       "metadata": {},
       "task_id": "task-2-2-3"
     },
@@ -1501,7 +1501,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Query tools return standard format",
       "author": "claude-code",
-      "content": "Query tools verification passed. The 3 list_specs-related tests all passed. All 45 integration tests from verify-2-1 already passed, which covers query tools. Query tools (foundry_find_specs, foundry_list_specs, foundry_query_tasks) now return standard {success, data, error} format.",
+      "content": "Query tools verification passed. The 3 list_specs-related tests all passed. All 45 integration tests from verify-2-1 already passed, which covers query tools. Query tools (spec_find, spec_list, task_query) now return standard {success, data, error} format.",
       "metadata": {},
       "task_id": "verify-2-2"
     },
@@ -1564,7 +1564,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Client compatibility + telemetry rollout",
       "author": "claude-code",
-      "content": "Added client compatibility and telemetry for v2 response format. Changes: (1) Added RESPONSE_CONTRACT_V2 flag and SERVER_CAPABILITIES constant, (2) Added foundry_server_capabilities tool to expose server capabilities, (3) Standardized all server.py tools (list_specs, get_spec, get_spec_hierarchy, get_task) to use success/data/error format, (4) Added telemetry counter for v2 response tracking. Module imports successfully.",
+      "content": "Added client compatibility and telemetry for v2 response format. Changes: (1) Added RESPONSE_CONTRACT_V2 flag and SERVER_CAPABILITIES constant, (2) Added sdd_server_capabilities tool to expose server capabilities, (3) Standardized all server.py tools (list_specs, get_spec, get_spec_hierarchy, get_task) to use success/data/error format, (4) Added telemetry counter for v2 response tracking. Module imports successfully.",
       "metadata": {},
       "task_id": "task-3-5"
     },
@@ -1582,7 +1582,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Docs and testing tools return standard format",
       "author": "claude-code",
-      "content": "Verification passed - ran pytest tests/integration/test_mcp_tools.py -k 'docs or testing'. All 3 tests passed: test_foundry_discover_tests_registered, test_foundry_run_tests_registered, test_foundry_impact_analysis_registered. Docs and testing tools emit response-v2 envelope correctly.",
+      "content": "Verification passed - ran pytest tests/integration/test_mcp_tools.py -k 'docs or testing'. All 3 tests passed: test_test_discover_registered, test_test_run_registered, test_code_impact_analysis_registered. Docs and testing tools emit response-v2 envelope correctly.",
       "metadata": {},
       "task_id": "verify-3-1"
     },
@@ -1654,7 +1654,7 @@
       "entry_type": "note",
       "title": "Fidelity Review Findings: Critical Issues Identified",
       "author": "claude-code",
-      "content": "Fidelity review completed with overall fidelity: 50-60%\n\nCritical Issue 1: Missing meta.version='response-v2' field\n- ToolResponse dataclass missing meta field\n- Helper functions (success_response/error_response) don't include meta.version\n- Required for response standardization compliance\n\nCritical Issue 2: Helper Functions Defined But Unused\n- success_response and error_response helpers created in phase 2\n- No tools currently use these helpers\n- All tools directly create ToolResponse instances\n- Defeats purpose of helper functions\n\nCritical Issue 3: Format Violations in Foundry Tools\n- foundry_update_status: Uses flat structure instead of wrapped response\n- foundry_complete_task: Uses flat structure instead of wrapped response\n- foundry_start_task: Uses flat structure instead of wrapped response\n- Inconsistent with other tool response formats\n\nUser Decision: Proceed with remediation phase to fix all issues before final verification. Fidelity review reports saved in specs/.fidelity-reviews/",
+      "content": "Fidelity review completed with overall fidelity: 50-60%\n\nCritical Issue 1: Missing meta.version='response-v2' field\n- ToolResponse dataclass missing meta field\n- Helper functions (success_response/error_response) don't include meta.version\n- Required for response standardization compliance\n\nCritical Issue 2: Helper Functions Defined But Unused\n- success_response and error_response helpers created in phase 2\n- No tools currently use these helpers\n- All tools directly create ToolResponse instances\n- Defeats purpose of helper functions\n\nCritical Issue 3: Format Violations in Foundry Tools\n- task_update_status: Uses flat structure instead of wrapped response\n- task_complete: Uses flat structure instead of wrapped response\n- task_start: Uses flat structure instead of wrapped response\n- Inconsistent with other tool response formats\n\nUser Decision: Proceed with remediation phase to fix all issues before final verification. Fidelity review reports saved in specs/.fidelity-reviews/",
       "metadata": {},
       "task_id": "verify-4-2"
     },
@@ -1672,7 +1672,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Refactor Phase 2 tools to use helper functions",
       "author": "claude-code",
-      "content": "Refactored tasks.py and queries.py to use success_response() and error_response() helpers. Added imports for asdict and response helpers. Updated all 8 tools in tasks.py (foundry_prepare_task, foundry_next_task, foundry_task_info, foundry_check_deps, foundry_update_status, foundry_complete_task, foundry_start_task, foundry_progress) and all 3 tools in queries.py (foundry_find_specs, foundry_list_specs, foundry_query_tasks). All tools now return asdict(success_response(...)) or asdict(error_response(...)) instead of manually constructing dicts. This also fixes the format violations in foundry_update_status, foundry_complete_task, foundry_start_task which previously returned flat structures. 139 task-related tests passed. Files modified: src/foundry_mcp/tools/tasks.py, src/foundry_mcp/tools/queries.py",
+      "content": "Refactored tasks.py and queries.py to use success_response() and error_response() helpers. Added imports for asdict and response helpers. Updated all 8 tools in tasks.py (task_prepare, task_next, task_info, task_check_deps, task_update_status, task_complete, task_start, task_progress) and all 3 tools in queries.py (spec_find, spec_list, task_query). All tools now return asdict(success_response(...)) or asdict(error_response(...)) instead of manually constructing dicts. This also fixes the format violations in task_update_status, task_complete, task_start which previously returned flat structures. 139 task-related tests passed. Files modified: src/foundry_mcp/tools/tasks.py, src/foundry_mcp/tools/queries.py",
       "metadata": {},
       "task_id": "task-5-2"
     },
@@ -1681,7 +1681,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Fix format violations in foundry tools",
       "author": "claude-code",
-      "content": "The format violations in foundry_update_status, foundry_complete_task, and foundry_start_task were already fixed as part of task-5-2. The task description had wrong file path (foundry.py) - these tools are actually in tasks.py. Verified that all three now use asdict(success_response(...)) which properly wraps the payload in data field and includes meta.version. No additional changes needed.",
+      "content": "The format violations in task_update_status, task_complete, and task_start were already fixed as part of task-5-2. The task description had wrong file path (foundry.py) - these tools are actually in tasks.py. Verified that all three now use asdict(success_response(...)) which properly wraps the payload in data field and includes meta.version. No additional changes needed.",
       "metadata": {},
       "task_id": "task-5-3"
     },
@@ -1717,7 +1717,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Refactor Phase 3 tools to use helper functions",
       "author": "claude-code",
-      "content": "Refactored server.py tools to use success_response and error_response helper functions.\n\nFiles analyzed for Phase 3:\n- docs.py - Already using helpers correctly (no changes needed)\n- testing.py - Already using helpers correctly (no changes needed)\n- journal.py - Already using helpers correctly (no changes needed)\n- validation.py - Already using helpers correctly (no changes needed)\n- server.py - Updated 5 tools to use helpers:\n  1. foundry_server_capabilities - now uses asdict(success_response(...))\n  2. tool_list_specs - now uses asdict(error_response(...)) and asdict(success_response(...))\n  3. tool_get_spec - now uses asdict(error_response(...)) and asdict(success_response(...))\n  4. tool_get_spec_hierarchy - now uses asdict(error_response(...)) and asdict(success_response(...))\n  5. tool_get_task - now uses asdict(error_response(...)) and asdict(success_response(...))\n\nAdded import for asdict from dataclasses and imported success_response, error_response from foundry_mcp.core.responses.\n\nTest results: 941 passed, 12 failed (failures are pre-existing CLI integration test issues related to missing spec file, not related to this task's changes).",
+      "content": "Refactored server.py tools to use success_response and error_response helper functions.\n\nFiles analyzed for Phase 3:\n- docs.py - Already using helpers correctly (no changes needed)\n- testing.py - Already using helpers correctly (no changes needed)\n- journal.py - Already using helpers correctly (no changes needed)\n- validation.py - Already using helpers correctly (no changes needed)\n- server.py - Updated 5 tools to use helpers:\n  1. sdd_server_capabilities - now uses asdict(success_response(...))\n  2. spec_list_basic - now uses asdict(error_response(...)) and asdict(success_response(...))\n  3. spec_get - now uses asdict(error_response(...)) and asdict(success_response(...))\n  4. spec_get_hierarchy - now uses asdict(error_response(...)) and asdict(success_response(...))\n  5. task_get - now uses asdict(error_response(...)) and asdict(success_response(...))\n\nAdded import for asdict from dataclasses and imported success_response, error_response from foundry_mcp.core.responses.\n\nTest results: 941 passed, 12 failed (failures are pre-existing CLI integration test issues related to missing spec file, not related to this task's changes).",
       "metadata": {},
       "task_id": "task-5-4"
     },

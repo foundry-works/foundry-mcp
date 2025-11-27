@@ -127,7 +127,7 @@ from dataclasses import asdict
 from foundry_mcp.core.responses import success_response, error_response
 
 @mcp.tool()
-def foundry_example(...) -> dict:
+def tool_example(...) -> dict:
     payload = compute_payload(...)
     return asdict(success_response(
         data={"result": payload},
@@ -174,7 +174,7 @@ return asdict(error_response(
     message=f"Spec '{spec_id}' not found",
     error_code="SPEC_NOT_FOUND",
     error_type="not_found",
-    remediation="Verify the spec ID exists using foundry_list_specs()",
+    remediation="Verify the spec ID exists using spec-list",
     request_id=context.request_id,
 ))
 ```

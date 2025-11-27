@@ -11,7 +11,6 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.core.pagination import (
     encode_cursor,
     decode_cursor,
@@ -34,6 +33,7 @@ from foundry_mcp.core.journal import (
     find_unjournaled_tasks,
 )
 from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +47,17 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         config: Server configuration
     """
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_add_journal")
-    def foundry_add_journal(
+    @canonical_tool(
+        mcp,
+        canonical_name="journal-add",
+    )
+    def journal_add(
         spec_id: str,
         title: str,
         content: str,
         entry_type: str = "note",
         task_id: Optional[str] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Add a journal entry to a specification.
@@ -75,7 +77,11 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         """
         valid_types = ["status_change", "deviation", "blocker", "decision", "note"]
         if entry_type not in valid_types:
-            return asdict(error_response(f"Invalid entry_type: {entry_type}. Must be one of: {valid_types}"))
+            return asdict(
+                error_response(
+                    f"Invalid entry_type: {entry_type}. Must be one of: {valid_types}"
+                )
+            )
 
         try:
             if workspace:
@@ -104,29 +110,33 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not save_spec(spec_id, spec_data, specs_dir):
                 return asdict(error_response("Failed to save spec"))
 
-            return asdict(success_response(
-                spec_id=spec_id,
-                entry={
-                    "timestamp": entry.timestamp,
-                    "entry_type": entry.entry_type,
-                    "title": entry.title,
-                    "task_id": entry.task_id,
-                }
-            ))
+            return asdict(
+                success_response(
+                    spec_id=spec_id,
+                    entry={
+                        "timestamp": entry.timestamp,
+                        "entry_type": entry.entry_type,
+                        "title": entry.title,
+                        "task_id": entry.task_id,
+                    },
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error adding journal entry: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_get_journal")
-    def foundry_get_journal(
+    @canonical_tool(
+        mcp,
+        canonical_name="journal-list",
+    )
+    def journal_list(
         spec_id: str,
         task_id: Optional[str] = None,
         entry_type: Optional[str] = None,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Get journal entries from a specification with optional pagination.
@@ -198,42 +208,46 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if has_more and page_entries:
                 next_cursor = encode_cursor({"last_ts": page_entries[-1].timestamp})
 
-            return asdict(success_response(
-                data={
-                    "spec_id": spec_id,
-                    "count": len(page_entries),
-                    "entries": [
-                        {
-                            "timestamp": e.timestamp,
-                            "entry_type": e.entry_type,
-                            "title": e.title,
-                            "content": e.content,
-                            "author": e.author,
-                            "task_id": e.task_id,
-                        }
-                        for e in page_entries
-                    ]
-                },
-                pagination={
-                    "cursor": next_cursor,
-                    "has_more": has_more,
-                    "page_size": page_size,
-                }
-            ))
+            return asdict(
+                success_response(
+                    data={
+                        "spec_id": spec_id,
+                        "count": len(page_entries),
+                        "entries": [
+                            {
+                                "timestamp": e.timestamp,
+                                "entry_type": e.entry_type,
+                                "title": e.title,
+                                "content": e.content,
+                                "author": e.author,
+                                "task_id": e.task_id,
+                            }
+                            for e in page_entries
+                        ],
+                    },
+                    pagination={
+                        "cursor": next_cursor,
+                        "has_more": has_more,
+                        "page_size": page_size,
+                    },
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error getting journal entries: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_mark_blocked")
-    def foundry_mark_blocked(
+    @canonical_tool(
+        mcp,
+        canonical_name="task-block",
+    )
+    def task_block(
         spec_id: str,
         task_id: str,
         reason: str,
         blocker_type: str = "dependency",
         ticket: Optional[str] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Mark a task as blocked.
@@ -253,7 +267,11 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         """
         valid_types = ["dependency", "technical", "resource", "decision"]
         if blocker_type not in valid_types:
-            return asdict(error_response(f"Invalid blocker_type: {blocker_type}. Must be one of: {valid_types}"))
+            return asdict(
+                error_response(
+                    f"Invalid blocker_type: {blocker_type}. Must be one of: {valid_types}"
+                )
+            )
 
         try:
             if workspace:
@@ -276,7 +294,8 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             add_journal_entry(
                 spec_data,
                 title=f"Task Blocked: {task_id}",
-                content=f"Blocker ({blocker_type}): {reason}" + (f" [Ticket: {ticket}]" if ticket else ""),
+                content=f"Blocker ({blocker_type}): {reason}"
+                + (f" [Ticket: {ticket}]" if ticket else ""),
                 entry_type="blocker",
                 task_id=task_id,
                 author="foundry-mcp",
@@ -286,25 +305,29 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not save_spec(spec_id, spec_data, specs_dir):
                 return asdict(error_response("Failed to save spec"))
 
-            return asdict(success_response(
-                spec_id=spec_id,
-                task_id=task_id,
-                blocker_type=blocker_type,
-                reason=reason,
-                ticket=ticket
-            ))
+            return asdict(
+                success_response(
+                    spec_id=spec_id,
+                    task_id=task_id,
+                    blocker_type=blocker_type,
+                    reason=reason,
+                    ticket=ticket,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error marking task blocked: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_unblock")
-    def foundry_unblock(
+    @canonical_tool(
+        mcp,
+        canonical_name="task-unblock",
+    )
+    def task_unblock(
         spec_id: str,
         task_id: str,
         resolution: Optional[str] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Unblock a task.
@@ -356,28 +379,32 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not save_spec(spec_id, spec_data, specs_dir):
                 return asdict(error_response("Failed to save spec"))
 
-            return asdict(success_response(
-                spec_id=spec_id,
-                task_id=task_id,
-                previous_blocker={
-                    "type": blocker.blocker_type,
-                    "description": blocker.description,
-                },
-                resolution=resolution or "Blocker resolved",
-                new_status="pending"
-            ))
+            return asdict(
+                success_response(
+                    spec_id=spec_id,
+                    task_id=task_id,
+                    previous_blocker={
+                        "type": blocker.blocker_type,
+                        "description": blocker.description,
+                    },
+                    resolution=resolution or "Blocker resolved",
+                    new_status="pending",
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error unblocking task: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_list_blocked")
-    def foundry_list_blocked(
+    @canonical_tool(
+        mcp,
+        canonical_name="task-list-blocked",
+    )
+    def task_list_blocked(
         spec_id: str,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         List all blocked tasks in a specification with optional pagination.
@@ -441,30 +468,34 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if has_more and page_tasks:
                 next_cursor = encode_cursor({"last_id": page_tasks[-1].get("task_id")})
 
-            return asdict(success_response(
-                data={
-                    "spec_id": spec_id,
-                    "count": len(page_tasks),
-                    "blocked_tasks": page_tasks
-                },
-                pagination={
-                    "cursor": next_cursor,
-                    "has_more": has_more,
-                    "page_size": page_size,
-                }
-            ))
+            return asdict(
+                success_response(
+                    data={
+                        "spec_id": spec_id,
+                        "count": len(page_tasks),
+                        "blocked_tasks": page_tasks,
+                    },
+                    pagination={
+                        "cursor": next_cursor,
+                        "has_more": has_more,
+                        "page_size": page_size,
+                    },
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error listing blocked tasks: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_unjournaled_tasks")
-    def foundry_unjournaled_tasks(
+    @canonical_tool(
+        mcp,
+        canonical_name="journal-list-unjournaled",
+    )
+    def journal_list_unjournaled(
         spec_id: str,
         cursor: Optional[str] = None,
         limit: Optional[int] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Find completed tasks that need journal entries with optional pagination.
@@ -528,23 +559,25 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if has_more and page_tasks:
                 next_cursor = encode_cursor({"last_id": page_tasks[-1].get("task_id")})
 
-            return asdict(success_response(
-                data={
-                    "spec_id": spec_id,
-                    "count": len(page_tasks),
-                    "unjournaled_tasks": page_tasks
-                },
-                pagination={
-                    "cursor": next_cursor,
-                    "has_more": has_more,
-                    "page_size": page_size,
-                }
-            ))
+            return asdict(
+                success_response(
+                    data={
+                        "spec_id": spec_id,
+                        "count": len(page_tasks),
+                        "unjournaled_tasks": page_tasks,
+                    },
+                    pagination={
+                        "cursor": next_cursor,
+                        "has_more": has_more,
+                        "page_size": page_size,
+                    },
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error finding unjournaled tasks: {e}")
             return asdict(error_response(str(e)))
 
-    logger.debug("Registered journal tools: foundry_add_journal, foundry_get_journal, "
-                 "foundry_mark_blocked, foundry_unblock, foundry_list_blocked, "
-                 "foundry_unjournaled_tasks")
+    logger.debug(
+        "Registered journal tools: journal-add/journal-list/task-block/task-unblock/task-list-blocked/journal-list-unjournaled"
+    )

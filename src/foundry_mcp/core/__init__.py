@@ -68,6 +68,7 @@ from foundry_mcp.core.responses import (
     success_response,
     error_response,
 )
+from foundry_mcp.core.naming import canonical_tool
 
 __all__ = [
     "find_specs_directory",
@@ -121,4 +122,5 @@ __all__ = [
     "ToolResponse",
     "success_response",
     "error_response",
+    "canonical_tool",
 ]

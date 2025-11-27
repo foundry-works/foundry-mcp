@@ -1669,7 +1669,7 @@
     },
     "task-5-3-1": {
       "type": "subtask",
-      "title": "Add pagination to foundry_list_specs",
+      "title": "Add pagination to spec_list",
       "status": "completed",
       "parent": "task-5-3",
       "children": [],
@@ -1678,7 +1678,7 @@
       "metadata": {
         "details": "Add cursor and page_size parameters, return paginated response",
         "started_at": "2025-11-27T13:58:43.527161Z",
-        "status_note": "Adding pagination to foundry_list_specs",
+        "status_note": "Adding pagination to spec_list",
         "completed_at": "2025-11-27T13:59:51.014119Z",
         "needs_journaling": false,
         "actual_hours": 0.019,
@@ -1687,7 +1687,7 @@
     },
     "task-5-3-2": {
       "type": "subtask",
-      "title": "Add pagination to foundry_list_tasks",
+      "title": "Add pagination to task_list",
       "status": "completed",
       "parent": "task-5-3",
       "children": [],
@@ -2047,7 +2047,7 @@
     },
     "task-6-2-1": {
       "type": "subtask",
-      "title": "Implement foundry_list_tools endpoint",
+      "title": "Implement tool_list endpoint",
       "status": "completed",
       "parent": "task-6-2",
       "children": [],
@@ -2056,7 +2056,7 @@
       "metadata": {
         "details": "Parameters: category, tag, include_deprecated. Returns paginated tool list",
         "started_at": "2025-11-27T14:30:19.973976Z",
-        "status_note": "Creating foundry_list_tools MCP tool endpoint",
+        "status_note": "Creating tool_list MCP tool endpoint",
         "completed_at": "2025-11-27T14:31:20.624892Z",
         "needs_journaling": false,
         "actual_hours": 0.017,
@@ -2065,7 +2065,7 @@
     },
     "task-6-2-2": {
       "type": "subtask",
-      "title": "Implement foundry_get_tool_schema endpoint",
+      "title": "Implement tool_get_schema endpoint",
       "status": "completed",
       "parent": "task-6-2",
       "children": [],
@@ -2080,7 +2080,7 @@
     },
     "task-6-2-3": {
       "type": "subtask",
-      "title": "Implement foundry_get_capabilities endpoint",
+      "title": "Implement capability_get endpoint",
       "status": "completed",
       "parent": "task-6-2",
       "children": [],
@@ -4549,18 +4549,18 @@
     {
       "timestamp": "2025-11-27T13:59:51.021516Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Add pagination to foundry_list_specs",
+      "title": "Task Completed: Add pagination to spec_list",
       "author": "claude-code",
-      "content": "Added pagination to foundry_list_specs in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns specs sorted by spec_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
+      "content": "Added pagination to spec_list in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns specs sorted by spec_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-5-3-1"
     },
     {
       "timestamp": "2025-11-27T14:04:56.305771Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Add pagination to foundry_list_tasks",
+      "title": "Task Completed: Add pagination to task_list",
       "author": "claude-code",
-      "content": "Added pagination to foundry_query_tasks in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns tasks sorted by task_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
+      "content": "Added pagination to task_query in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns tasks sorted by task_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-5-3-2"
     },
@@ -4569,7 +4569,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Add cursor pagination to doc, progress, and journal listing tools.",
       "author": "claude-code",
-      "content": "Added cursor-based pagination to doc, journal, and listing tools. Updated tools: foundry_get_journal, foundry_list_blocked, foundry_unjournaled_tasks (in journal.py), foundry_find_class, foundry_find_function (in docs.py). All tools now accept cursor and limit parameters, return pagination metadata (cursor, has_more, page_size) in meta.pagination, and use the shared pagination helpers. Verified imports work correctly.",
+      "content": "Added cursor-based pagination to doc, journal, and listing tools. Updated tools: journal_list, task_list_blocked, journal_list_unjournaled (in journal.py), code_find_class, code_find_function (in docs.py). All tools now accept cursor and limit parameters, return pagination metadata (cursor, has_more, page_size) in meta.pagination, and use the shared pagination helpers. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-5-3-3"
     },
@@ -4623,7 +4623,7 @@
       "entry_type": "status_change",
       "title": "Fidelity Review Completed: Phase 5 Pagination Implementation",
       "author": "claude-code",
-      "content": "Fidelity review completed for Phase 5. Overall status: PASS with minor deviation noted.\n\nKey findings:\n(1) task-5-1 pagination module - Exact match: encode_cursor(), decode_cursor(), and paginated_response() all implemented as specified in src/foundry_mcp/core/pagination.py\n\n(2) task-5-2 integration - Exact match: Integrated paginated_response() helper into success_response() in src/foundry_mcp/core/responses.py per specification\n\n(3) task-5-3 query tools pagination - Mostly complete with ACCEPTED deviation: Implementation correctly added pagination to foundry_query_tasks in queries.py (the actual function in scope). Task title references 'foundry_list_tasks' but the implementation is on the correct function. This is acceptable as the implementation followed the actual scope requirements.\n\n(4) task-5-4 tests - Exact match: 43 comprehensive pagination tests covering cursor encoding/decoding, pagination flow, edge cases, and integration scenarios in tests/test_pagination.py\n\nDeviation note: Task-5-3-2 title says 'foundry_list_tasks' but implementation was correctly done on 'foundry_query_tasks' which is the proper function in the queries.py scope. This deviation is ACCEPTED because the implementation correctly addressed the actual task requirements.",
+      "content": "Fidelity review completed for Phase 5. Overall status: PASS with minor deviation noted.\n\nKey findings:\n(1) task-5-1 pagination module - Exact match: encode_cursor(), decode_cursor(), and paginated_response() all implemented as specified in src/foundry_mcp/core/pagination.py\n\n(2) task-5-2 integration - Exact match: Integrated paginated_response() helper into success_response() in src/foundry_mcp/core/responses.py per specification\n\n(3) task-5-3 query tools pagination - Mostly complete with ACCEPTED deviation: Implementation correctly added pagination to task_query in queries.py (the actual function in scope). Task title references 'task_list' but the implementation is on the correct function. This is acceptable as the implementation followed the actual scope requirements.\n\n(4) task-5-4 tests - Exact match: 43 comprehensive pagination tests covering cursor encoding/decoding, pagination flow, edge cases, and integration scenarios in tests/test_pagination.py\n\nDeviation note: Task-5-3-2 title says 'task_list' but implementation was correctly done on 'task_query' which is the proper function in the queries.py scope. This deviation is ACCEPTED because the implementation correctly addressed the actual task requirements.",
       "metadata": {},
       "task_id": "verify-5-2"
     },
@@ -4711,27 +4711,27 @@
     {
       "timestamp": "2025-11-27T14:31:20.632832Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Implement foundry_list_tools endpoint",
+      "title": "Task Completed: Implement tool_list endpoint",
       "author": "claude-code",
-      "content": "Created foundry_list_tools MCP endpoint in src/foundry_mcp/tools/discovery.py with parameters: category, tag, include_deprecated, cursor, limit. Returns paginated tool list with pagination metadata (cursor, has_more, page_size, total_count). Uses encode_cursor/decode_cursor for offset-based pagination. Also includes filters_applied in response and categories list. Added register_discovery_tools() function following existing patterns.",
+      "content": "Created tool_list MCP endpoint in src/foundry_mcp/tools/discovery.py with parameters: category, tag, include_deprecated, cursor, limit. Returns paginated tool list with pagination metadata (cursor, has_more, page_size, total_count). Uses encode_cursor/decode_cursor for offset-based pagination. Also includes filters_applied in response and categories list. Added register_discovery_tools() function following existing patterns.",
       "metadata": {},
       "task_id": "task-6-2-1"
     },
     {
       "timestamp": "2025-11-27T14:32:01.693358Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Implement foundry_get_tool_schema endpoint",
+      "title": "Task Completed: Implement tool_get_schema endpoint",
       "author": "claude-code",
-      "content": "foundry_get_tool_schema endpoint was already implemented in src/foundry_mcp/tools/discovery.py as part of task-6-2-1. The endpoint accepts tool_name parameter, calls registry.get_tool_schema(), and returns full JSON Schema with examples, rate limits, related tools, and deprecation info. Returns NOT_FOUND error with remediation for unknown tools.",
+      "content": "tool_get_schema endpoint was already implemented in src/foundry_mcp/tools/discovery.py as part of task-6-2-1. The endpoint accepts tool_name parameter, calls registry.get_tool_schema(), and returns full JSON Schema with examples, rate limits, related tools, and deprecation info. Returns NOT_FOUND error with remediation for unknown tools.",
       "metadata": {},
       "task_id": "task-6-2-2"
     },
     {
       "timestamp": "2025-11-27T14:32:35.897152Z",
       "entry_type": "status_change",
-      "title": "Task Completed: Implement foundry_get_capabilities endpoint",
+      "title": "Task Completed: Implement capability_get endpoint",
       "author": "claude-code",
-      "content": "foundry_get_capabilities and foundry_negotiate_capabilities endpoints were already implemented in src/foundry_mcp/tools/discovery.py as part of task-6-2-1. foundry_get_capabilities returns server capabilities including response_version, streaming, batch_operations, pagination, max_batch_size, rate_limit_headers, formats, feature_flags. foundry_negotiate_capabilities allows clients to request specific versions and features with warnings for unsupported requests. Also added foundry_list_categories endpoint.",
+      "content": "capability_get and capability_negotiate endpoints were already implemented in src/foundry_mcp/tools/discovery.py as part of task-6-2-1. capability_get returns server capabilities including response_version, streaming, batch_operations, pagination, max_batch_size, rate_limit_headers, formats, feature_flags. capability_negotiate allows clients to request specific versions and features with warnings for unsupported requests. Also added tool_list_categories endpoint.",
       "metadata": {},
       "task_id": "task-6-2-3"
     },
@@ -4767,7 +4767,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Thread feature flag and capability metadata into server responses.",
       "author": "claude-code",
-      "content": "Enhanced foundry_server_capabilities tool in server.py to integrate feature flag and capability metadata. Added imports for get_capabilities, get_tool_registry from discovery module and get_flag_service from feature_flags. Updated foundry_server_capabilities to return: merged capabilities from SERVER_CAPABILITIES and discovery module, feature_flags summary (enabled_count, total_count), tool_stats from registry, schema_version, and api_version. Added LLM-friendly WHEN TO USE documentation.",
+      "content": "Enhanced sdd_server_capabilities tool in server.py to integrate feature flag and capability metadata. Added imports for get_capabilities, get_tool_registry from discovery module and get_flag_service from feature_flags. Updated sdd_server_capabilities to return: merged capabilities from SERVER_CAPABILITIES and discovery module, feature_flags summary (enabled_count, total_count), tool_stats from registry, schema_version, and api_version. Added LLM-friendly WHEN TO USE documentation.",
       "metadata": {},
       "task_id": "task-6-4-2"
     },
@@ -4776,7 +4776,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Include list/get tool schemas and capability payloads in manifest.",
       "author": "claude-code",
-      "content": "Updated mcp/capabilities_manifest.json with discovery_tools section containing 5 tools: foundry_list_tools (with category/tag/deprecated/cursor/limit params), foundry_get_tool_schema (with tool_name param), foundry_get_capabilities, foundry_negotiate_capabilities (with requested_version/requested_features params), and foundry_list_categories. Also added server_capabilities section documenting the capability negotiation payload: response_version (response-v2), features (streaming, batch_operations with max_batch_size, pagination with cursor_format, rate_limit_headers, feature_flags), and api_version.",
+      "content": "Updated mcp/capabilities_manifest.json with discovery_tools section containing 5 tools: tool_list (with category/tag/deprecated/cursor/limit params), tool_get_schema (with tool_name param), capability_get, capability_negotiate (with requested_version/requested_features params), and tool_list_categories. Also added server_capabilities section documenting the capability negotiation payload: response_version (response-v2), features (streaming, batch_operations with max_batch_size, pagination with cursor_format, rate_limit_headers, feature_flags), and api_version.",
       "metadata": {},
       "task_id": "task-6-5-1"
     },
@@ -4803,7 +4803,7 @@
       "entry_type": "status_change",
       "title": "Task Completed: Phase 6 fidelity review",
       "author": "claude-code",
-      "content": "Phase 6 fidelity review completed with PARTIAL compliance (66.7% AI consensus). Core discovery infrastructure is complete: ToolMetadata/ParameterMetadata dataclasses, ToolRegistry, 5 discovery endpoints (foundry_list_tools, foundry_get_tool_schema, foundry_get_capabilities, foundry_negotiate_capabilities, foundry_list_categories), @deprecated_tool decorator, feature flag threading, and documentation. Two critical gaps identified: (1) Missing tests/unit/test_tools/test_discovery.py - only core module tests exist at tests/unit/test_core/test_discovery.py, (2) ToolRegistry is empty at runtime - no production code registers tools. Minor gap: CHANGELOG doesn't document discovery endpoints. Full report saved to specs/.fidelity-reviews/. Recommend creating remediation tasks for the gaps before marking phase complete.",
+      "content": "Phase 6 fidelity review completed with PARTIAL compliance (66.7% AI consensus). Core discovery infrastructure is complete: ToolMetadata/ParameterMetadata dataclasses, ToolRegistry, 5 discovery endpoints (tool_list, tool_get_schema, capability_get, capability_negotiate, tool_list_categories), @deprecated_tool decorator, feature flag threading, and documentation. Two critical gaps identified: (1) Missing tests/unit/test_tools/test_discovery.py - only core module tests exist at tests/unit/test_core/test_discovery.py, (2) ToolRegistry is empty at runtime - no production code registers tools. Minor gap: CHANGELOG doesn't document discovery endpoints. Full report saved to specs/.fidelity-reviews/. Recommend creating remediation tasks for the gaps before marking phase complete.",
       "metadata": {},
       "task_id": "verify-6-2"
     },

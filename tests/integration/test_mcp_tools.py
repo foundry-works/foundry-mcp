@@ -131,39 +131,39 @@ def mcp_server(test_config):
 class TestToolInputSchemas:
     """Tests for tool input schema validation."""
 
-    def test_tool_list_specs_has_status_param(self, mcp_server):
-        """Test that tool_list_specs has status parameter."""
+    def test_spec_list_basic_has_status_param(self, mcp_server):
+        """Test that spec_list_basic has status parameter."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_list_specs")
+        tool = tools.get("spec-list-basic")
         assert tool is not None
         # Tool should accept status parameter
         assert callable(tool.fn)
 
-    def test_tool_get_spec_requires_spec_id(self, mcp_server):
-        """Test that tool_get_spec requires spec_id."""
+    def test_spec_get_requires_spec_id(self, mcp_server):
+        """Test that spec_get requires spec_id."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_spec")
+        tool = tools.get("spec-get")
         assert tool is not None
         assert callable(tool.fn)
 
-    def test_tool_get_task_requires_both_ids(self, mcp_server):
-        """Test that tool_get_task requires spec_id and task_id."""
+    def test_task_get_requires_both_ids(self, mcp_server):
+        """Test that task_get requires spec_id and task_id."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_task")
+        tool = tools.get("task-get")
         assert tool is not None
         assert callable(tool.fn)
 
-    def test_foundry_validate_spec_schema(self, mcp_server):
-        """Test foundry_validate_spec tool has correct schema."""
+    def test_spec_validate_schema(self, mcp_server):
+        """Test spec_validate tool has correct schema."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("foundry_validate_spec")
+        tool = tools.get("spec-validate")
         assert tool is not None
         assert callable(tool.fn)
 
-    def test_foundry_update_status_schema(self, mcp_server):
-        """Test foundry_update_status tool has correct schema."""
+    def test_task_update_status_schema(self, mcp_server):
+        """Test task_update_status tool has correct schema."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("foundry_update_status")
+        tool = tools.get("task-update-status")
         assert tool is not None
         assert callable(tool.fn)
 
@@ -174,7 +174,7 @@ class TestToolOutputSchemas:
     def test_list_specs_returns_dict(self, mcp_server):
         """Test that list_specs returns a dict with v2 response format."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_list_specs")
+        tool = tools.get("spec-list-basic")
         result = tool.fn(status="all")
         assert isinstance(result, dict)
         assert result["success"] is True
@@ -184,7 +184,7 @@ class TestToolOutputSchemas:
     def test_list_specs_with_active_filter(self, mcp_server):
         """Test list_specs with active status filter."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_list_specs")
+        tool = tools.get("spec-list-basic")
         result = tool.fn(status="active")
         assert result["success"] is True
         assert "specs" in result["data"]
@@ -193,7 +193,7 @@ class TestToolOutputSchemas:
     def test_get_spec_returns_progress(self, mcp_server):
         """Test that get_spec returns progress information."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_spec")
+        tool = tools.get("spec-get")
         result = tool.fn(spec_id="test-spec-001")
         assert result["success"] is True
         assert "total_tasks" in result["data"]
@@ -203,7 +203,7 @@ class TestToolOutputSchemas:
     def test_get_spec_not_found_error(self, mcp_server):
         """Test that get_spec returns error for non-existent spec."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_spec")
+        tool = tools.get("spec-get")
         result = tool.fn(spec_id="nonexistent-spec")
         assert result["success"] is False
         assert result["error"] is not None
@@ -211,7 +211,7 @@ class TestToolOutputSchemas:
     def test_get_task_returns_task_data(self, mcp_server):
         """Test that get_task returns task data."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_task")
+        tool = tools.get("task-get")
         result = tool.fn(spec_id="test-spec-001", task_id="task-1-1")
         assert result["success"] is True
         assert "task" in result["data"]
@@ -221,7 +221,7 @@ class TestToolOutputSchemas:
     def test_get_task_not_found_error(self, mcp_server):
         """Test that get_task returns error for non-existent task."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_task")
+        tool = tools.get("task-get")
         result = tool.fn(spec_id="test-spec-001", task_id="nonexistent-task")
         assert result["success"] is False
         assert result["error"] is not None
@@ -229,7 +229,7 @@ class TestToolOutputSchemas:
     def test_get_spec_hierarchy_returns_hierarchy(self, mcp_server):
         """Test that get_spec_hierarchy returns hierarchy data."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("tool_get_spec_hierarchy")
+        tool = tools.get("spec-get-hierarchy")
         result = tool.fn(spec_id="test-spec-001")
         assert result["success"] is True
         assert "hierarchy" in result["data"]
@@ -471,14 +471,14 @@ class TestToolInteraction:
         tools = mcp_server._tool_manager._tools
 
         # List specs (returns v2 response format)
-        list_result = tools["tool_list_specs"].fn(status="active")
+        list_result = tools["spec-list-basic"].fn(status="active")
         assert list_result["success"] is True
         assert "specs" in list_result["data"]
 
         # Get specific spec
         if list_result["data"]["specs"]:
             spec_id = list_result["data"]["specs"][0]["spec_id"]
-            get_result = tools["tool_get_spec"].fn(spec_id=spec_id)
+            get_result = tools["spec-get"].fn(spec_id=spec_id)
             assert get_result["success"] is True
             assert get_result["data"]["spec_id"] == spec_id
 
@@ -487,12 +487,12 @@ class TestToolInteraction:
         tools = mcp_server._tool_manager._tools
 
         # Get spec hierarchy (returns v2 response format)
-        hierarchy_result = tools["tool_get_spec_hierarchy"].fn(spec_id="test-spec-001")
+        hierarchy_result = tools["spec-get-hierarchy"].fn(spec_id="test-spec-001")
         assert hierarchy_result["success"] is True
         assert "hierarchy" in hierarchy_result["data"]
 
         # Get specific task (returns v2 response format)
-        task_result = tools["tool_get_task"].fn(spec_id="test-spec-001", task_id="task-1-1")
+        task_result = tools["task-get"].fn(spec_id="test-spec-001", task_id="task-1-1")
         assert task_result["success"] is True
         assert "task" in task_result["data"]
 
@@ -506,7 +506,7 @@ class TestResourceIntegrity:
         resources = mcp_server._resource_manager._resources
 
         # Get via tool (returns dict directly)
-        tool_result = tools["tool_get_spec"].fn(spec_id="test-spec-001")
+        tool_result = tools["spec-get"].fn(spec_id="test-spec-001")
 
         # Get via resource (resources still return JSON strings)
         for uri, resource in resources.items():
@@ -556,20 +556,20 @@ class TestResourceIntegrity:
 class TestDocsToolsRegistration:
     """Tests for documentation tools registration."""
 
-    def test_foundry_discover_tests_registered(self, mcp_server):
-        """Test that foundry_discover_tests tool is registered."""
+    def test_test_discover_registered(self, mcp_server):
+        """Test that test_discover tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_discover_tests" in tools
+        assert "test-discover" in tools
 
-    def test_foundry_run_tests_registered(self, mcp_server):
-        """Test that foundry_run_tests tool is registered."""
+    def test_test_run_registered(self, mcp_server):
+        """Test that test_run tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_run_tests" in tools
+        assert "test-run" in tools
 
-    def test_foundry_impact_analysis_registered(self, mcp_server):
-        """Test that foundry_impact_analysis tool is registered."""
+    def test_code_impact_analysis_registered(self, mcp_server):
+        """Test that code_impact_analysis tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "foundry_impact_analysis" in tools
+        assert "code_impact_analysis" in tools
 
 
 class TestToolCategories:
@@ -579,10 +579,10 @@ class TestToolCategories:
         """Test that core tools are registered."""
         tools = mcp_server._tool_manager._tools
         core_tools = [
-            "tool_list_specs",
-            "tool_get_spec",
-            "tool_get_spec_hierarchy",
-            "tool_get_task",
+            "spec-list-basic",
+            "spec-get",
+            "spec-get-hierarchy",
+            "task-get",
         ]
         for tool_name in core_tools:
             assert tool_name in tools, f"Core tool {tool_name} missing"
@@ -591,9 +591,9 @@ class TestToolCategories:
         """Test that rendering tools are registered."""
         tools = mcp_server._tool_manager._tools
         rendering_tools = [
-            "foundry_render_spec",
-            "foundry_render_progress",
-            "foundry_list_tasks",
+            "spec-render",
+            "spec-render-progress",
+            "task-list",
         ]
         for tool_name in rendering_tools:
             assert tool_name in tools, f"Rendering tool {tool_name} missing"
@@ -602,12 +602,12 @@ class TestToolCategories:
         """Test that lifecycle tools are registered."""
         tools = mcp_server._tool_manager._tools
         lifecycle_tools = [
-            "foundry_move_spec",
-            "foundry_activate_spec",
-            "foundry_complete_spec",
-            "foundry_archive_spec",
-            "foundry_lifecycle_state",
-            "foundry_list_specs_by_folder",
+            "spec-lifecycle-move",
+            "spec-lifecycle-activate",
+            "spec-lifecycle-complete",
+            "spec-lifecycle-archive",
+            "spec-lifecycle-state",
+            "spec-list-by-folder",
         ]
         for tool_name in lifecycle_tools:
             assert tool_name in tools, f"Lifecycle tool {tool_name} missing"

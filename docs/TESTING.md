@@ -542,34 +542,34 @@ uvx --from mcp dev foundry-mcp
 Once connected via Claude Desktop or MCP dev mode, test these tools:
 
 **Task Management Tools:**
-- `foundry_next_task` - Find next actionable task
-- `foundry_prepare_task` - Get task context and dependencies
-- `foundry_start_task` - Mark task as in_progress
-- `foundry_complete_task` - Mark task as completed
-- `foundry_task_info` - Get detailed task information
-- `foundry_progress` - Get spec progress summary
+- `task-next` - Find next actionable task
+- `task-prepare` - Get task context and dependencies
+- `task-start` - Mark task as in_progress
+- `task-complete` - Mark task as completed
+- `task-info` - Get detailed task information
+- `task-progress` - Get spec progress summary
 
 **Validation Tools:**
-- `foundry_validate_spec` - Validate spec structure
-- `foundry_fix_spec` - Auto-fix validation issues
-- `foundry_spec_stats` - Get spec statistics
+- `spec-validate` - Validate spec structure
+- `spec-fix` - Auto-fix validation issues
+- `spec-stats` - Get spec statistics
 
 **Lifecycle Tools:**
-- `foundry_activate_spec` - Move spec from pending to active
-- `foundry_complete_spec` - Move spec from active to completed
-- `foundry_archive_spec` - Move spec to archived
-- `foundry_lifecycle_state` - Get current lifecycle state
+- `spec-lifecycle-activate` - Move spec from pending to active
+- `spec-lifecycle-complete` - Move spec from active to completed
+- `spec-lifecycle-archive` - Move spec to archived
+- `spec-lifecycle-state` - Get current lifecycle state
 
 **Journal Tools:**
-- `foundry_add_journal` - Add journal entry
-- `foundry_get_journal` - Get journal entries
-- `foundry_mark_blocked` - Mark task as blocked
-- `foundry_unblock` - Remove blocked status
+- `journal-add` - Add journal entry
+- `journal-list` - Get journal entries
+- `task-block` - Mark task as blocked
+- `task-unblock` - Remove blocked status
 
 **Testing Tools:**
-- `foundry_run_tests` - Run tests with preset or custom config
-- `foundry_discover_tests` - Discover available tests
-- `foundry_test_presets` - List available test presets
+- `test-run` - Run tests with preset or custom config
+- `test-discover` - Discover available tests
+- `test-presets` - List available test presets
 
 ### Testing Resources
 
@@ -610,35 +610,35 @@ Test a complete SDD workflow manually:
    - Create spec file in `specs/pending/`
 
 2. **Activate spec**
-   - `foundry_activate_spec(spec_id="your-spec-id")`
+   - `spec-lifecycle-activate(spec_id="your-spec-id")`
    - Verify spec moves from `pending/` to `active/`
 
 3. **Find next task**
-   - `foundry_next_task(spec_id="your-spec-id")`
+   - `task-next(spec_id="your-spec-id")`
    - Returns first actionable task with dependencies met
 
 4. **Prepare task context**
-   - `foundry_prepare_task(spec_id="your-spec-id", task_id="1.1")`
+   - `task-prepare(spec_id="your-spec-id", task_id="1.1")`
    - Returns task details, dependencies, and context
 
 5. **Start task**
-   - `foundry_start_task(spec_id="your-spec-id", task_id="1.1")`
+   - `task-start(spec_id="your-spec-id", task_id="1.1")`
    - Task status changes to `in_progress`
 
 6. **Complete task**
-   - `foundry_complete_task(spec_id="your-spec-id", task_id="1.1")`
+   - `task-complete(spec_id="your-spec-id", task_id="1.1")`
    - Task status changes to `completed`
 
 7. **Check progress**
-   - `foundry_progress(spec_id="your-spec-id")`
+   - `task-progress(spec_id="your-spec-id")`
    - Returns completion percentage and phase summary
 
 8. **Complete spec**
-   - `foundry_complete_spec(spec_id="your-spec-id")`
+   - `spec-lifecycle-complete(spec_id="your-spec-id")`
    - Spec moves from `active/` to `completed/`
 
 9. **Archive spec**
-   - `foundry_archive_spec(spec_id="your-spec-id")`
+   - `spec-lifecycle-archive(spec_id="your-spec-id")`
    - Spec moves from `completed/` to `archived/`
 
 ### Verification Checklist
@@ -665,7 +665,7 @@ Test a complete SDD workflow manually:
 | `No specs directory found` | Missing or misconfigured specs path | Set `FOUNDRY_MCP_SPECS_DIR` |
 | `pytest not found` | pytest not installed | `pip install pytest` |
 | `Spec not found: {spec_id}` | Invalid spec ID or wrong folder | Check spec exists in status folders |
-| `Invalid spec structure` | Malformed JSON | Run `foundry_validate_spec` |
+| `Invalid spec structure` | Malformed JSON | Run `spec-validate` |
 | `Dependency not met` | Task has incomplete dependencies | Complete dependency tasks first |
 
 ### Debugging Server Issues

@@ -146,17 +146,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Entry types: status_change, deviation, blocker, decision, note
   - Blocker types: dependency, technical, resource, decision
 - MCP validation tools (`foundry_mcp.tools.validation`):
-  - `foundry_validate_spec` - Validate spec and return structured diagnostics
-  - `foundry_fix_spec` - Apply auto-fixes with dry-run support
-  - `foundry_spec_stats` - Get comprehensive spec statistics
-  - `foundry_validate_and_fix` - Combined validation and fix in one operation
+  - `spec_validate` - Validate spec and return structured diagnostics
+  - `spec_fix` - Apply auto-fixes with dry-run support
+  - `spec_stats` - Get comprehensive spec statistics
+  - `spec_validate_fix` - Combined validation and fix in one operation
 - MCP journal tools (`foundry_mcp.tools.journal`):
-  - `foundry_add_journal` - Add journal entries with optional task association
-  - `foundry_get_journal` - Retrieve journal entries with filtering
-  - `foundry_mark_blocked` - Mark tasks as blocked with metadata
-  - `foundry_unblock` - Unblock tasks and track resolution
-  - `foundry_list_blocked` - List all blocked tasks
-  - `foundry_unjournaled_tasks` - Find tasks needing journal entries
+  - `journal_add` - Add journal entries with optional task association
+  - `journal_list` - Retrieve journal entries with filtering
+  - `task_block` - Mark tasks as blocked with metadata
+  - `task_unblock` - Unblock tasks and track resolution
+  - `task_list_blocked` - List all blocked tasks
+  - `journal_list_unjournaled` - Find tasks needing journal entries
 - Rendering module (`foundry_mcp.core.rendering`):
   - `render_spec_to_markdown` - Generate formatted markdown with RenderOptions
   - `render_progress_bar` - Text-based progress visualization
@@ -172,16 +172,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `list_specs_by_folder` - Organized spec listing
   - MoveResult and LifecycleState dataclasses
 - MCP rendering tools (`foundry_mcp.tools.rendering`):
-  - `foundry_render_spec` - Render spec to markdown with mode options
-  - `foundry_render_progress` - ASCII progress bars for spec and phases
-  - `foundry_list_tasks` - Flat task list with filtering
+  - `spec_render` - Render spec to markdown with mode options
+  - `spec_render_progress` - ASCII progress bars for spec and phases
+  - `task_list` - Flat task list with filtering
 - MCP lifecycle tools (`foundry_mcp.tools.lifecycle`):
-  - `foundry_move_spec` - Move spec between folders
-  - `foundry_activate_spec` - Activate pending spec
-  - `foundry_complete_spec` - Mark spec completed
-  - `foundry_archive_spec` - Archive spec
-  - `foundry_lifecycle_state` - Get lifecycle state and transition eligibility
-  - `foundry_list_specs_by_folder` - List specs by folder
+  - `spec_lifecycle_move` - Move spec between folders
+  - `spec_lifecycle_activate` - Activate pending spec
+  - `spec_lifecycle_complete` - Mark spec completed
+  - `spec_lifecycle_archive` - Archive spec
+  - `spec_lifecycle_state` - Get lifecycle state and transition eligibility
+  - `spec_list_by_folder` - List specs by folder
 - Task operations module (`foundry_mcp.core.task`):
   - `get_next_task` - Find next actionable task based on status and dependencies
   - `check_dependencies` - Analyze blocking and soft dependencies
@@ -198,14 +198,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `list_phases` - List all phases with progress
   - `get_task_counts_by_status` - Count tasks by status
 - MCP task tools (`foundry_mcp.tools.tasks`):
-  - `foundry_prepare_task` - Prepare task with full context
-  - `foundry_next_task` - Find next actionable task
-  - `foundry_task_info` - Get detailed task information
-  - `foundry_check_deps` - Check dependency status
-  - `foundry_update_status` - Update task status
-  - `foundry_complete_task` - Mark task complete with journal
-  - `foundry_start_task` - Start working on a task
-  - `foundry_progress` - Get spec/phase progress
+  - `task_prepare` - Prepare task with full context
+  - `task_next` - Find next actionable task
+  - `task_info` - Get detailed task information
+  - `task_check_deps` - Check dependency status
+  - `task_update_status` - Update task status
+  - `task_complete` - Mark task complete with journal
+  - `task_start` - Start working on a task
+  - `task_progress` - Get spec/phase progress
 - Unit tests for task operations (30 tests)
 - Documentation query module (`foundry_mcp.core.docs`):
   - `DocsQuery` - Query interface for codebase documentation (codebase.json)
@@ -229,19 +229,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - TestResult, TestRunResult, DiscoveredTest, TestDiscoveryResult dataclasses
   - Schema versioning (1.0.0) and execution_id tracking
 - MCP documentation tools (`foundry_mcp.tools.docs`):
-  - `foundry_find_class` - Find class in documentation
-  - `foundry_find_function` - Find function in documentation
-  - `foundry_trace_calls` - Trace call graph with direction and depth
-  - `foundry_impact_analysis` - Analyze change impact
-  - `foundry_get_callers` - Get caller functions
-  - `foundry_get_callees` - Get callee functions
-  - `foundry_docs_stats` - Get documentation statistics
+  - `code_find_class` - Find class in documentation
+  - `code_find_function` - Find function in documentation
+  - `code_trace_calls` - Trace call graph with direction and depth
+  - `code_impact_analysis` - Analyze change impact
+  - `code_get_callers` - Get caller functions
+  - `code_get_callees` - Get callee functions
+  - `doc_stats` - Get documentation statistics
 - MCP testing tools (`foundry_mcp.tools.testing`):
-  - `foundry_run_tests` - Full-featured test execution
-  - `foundry_discover_tests` - Test discovery
-  - `foundry_test_presets` - List available presets
-  - `foundry_run_quick_tests` - Quick test preset shortcut
-  - `foundry_run_unit_tests` - Unit test preset shortcut
+  - `test_run` - Full-featured test execution
+  - `test_discover` - Test discovery
+  - `test_presets` - List available presets
+  - `test_run_quick` - Quick test preset shortcut
+  - `test_run_unit` - Unit test preset shortcut
   - All tools include schema_version and execution_id in responses
   - Workspace parameter support for arbitrary repository roots
 - MCP resources (`foundry_mcp.resources.specs`):

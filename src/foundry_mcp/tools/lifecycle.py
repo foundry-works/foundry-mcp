@@ -11,8 +11,8 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.observability import mcp_tool
 from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.lifecycle import (
     move_spec,
@@ -37,12 +37,12 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         config: Server configuration
     """
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_move_spec")
-    def foundry_move_spec(
-        spec_id: str,
-        to_folder: str,
-        workspace: Optional[str] = None
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-lifecycle-move",
+    )
+    def spec_lifecycle_move(
+        spec_id: str, to_folder: str, workspace: Optional[str] = None
     ) -> dict:
         """
         Move a specification between status folders.
@@ -72,24 +72,25 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error or "Failed to move spec"))
 
-            return asdict(success_response(
-                spec_id=result.spec_id,
-                from_folder=result.from_folder,
-                to_folder=result.to_folder,
-                old_path=result.old_path,
-                new_path=result.new_path,
-            ))
+            return asdict(
+                success_response(
+                    spec_id=result.spec_id,
+                    from_folder=result.from_folder,
+                    to_folder=result.to_folder,
+                    old_path=result.old_path,
+                    new_path=result.new_path,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error moving spec: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_activate_spec")
-    def foundry_activate_spec(
-        spec_id: str,
-        workspace: Optional[str] = None
-    ) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-lifecycle-activate",
+    )
+    def spec_lifecycle_activate(spec_id: str, workspace: Optional[str] = None) -> dict:
         """
         Activate a specification (move from pending to active).
 
@@ -114,23 +115,25 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error or "Failed to activate spec"))
 
-            return asdict(success_response(
-                spec_id=result.spec_id,
-                from_folder=result.from_folder,
-                to_folder=result.to_folder,
-                new_path=result.new_path,
-            ))
+            return asdict(
+                success_response(
+                    spec_id=result.spec_id,
+                    from_folder=result.from_folder,
+                    to_folder=result.to_folder,
+                    new_path=result.new_path,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error activating spec: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_complete_spec")
-    def foundry_complete_spec(
-        spec_id: str,
-        force: bool = False,
-        workspace: Optional[str] = None
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-lifecycle-complete",
+    )
+    def spec_lifecycle_complete(
+        spec_id: str, force: bool = False, workspace: Optional[str] = None
     ) -> dict:
         """
         Mark a specification as completed.
@@ -160,23 +163,24 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error or "Failed to complete spec"))
 
-            return asdict(success_response(
-                spec_id=result.spec_id,
-                from_folder=result.from_folder,
-                to_folder=result.to_folder,
-                new_path=result.new_path,
-            ))
+            return asdict(
+                success_response(
+                    spec_id=result.spec_id,
+                    from_folder=result.from_folder,
+                    to_folder=result.to_folder,
+                    new_path=result.new_path,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error completing spec: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_archive_spec")
-    def foundry_archive_spec(
-        spec_id: str,
-        workspace: Optional[str] = None
-    ) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-lifecycle-archive",
+    )
+    def spec_lifecycle_archive(spec_id: str, workspace: Optional[str] = None) -> dict:
         """
         Archive a specification.
 
@@ -203,23 +207,24 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error or "Failed to archive spec"))
 
-            return asdict(success_response(
-                spec_id=result.spec_id,
-                from_folder=result.from_folder,
-                to_folder=result.to_folder,
-                new_path=result.new_path,
-            ))
+            return asdict(
+                success_response(
+                    spec_id=result.spec_id,
+                    from_folder=result.from_folder,
+                    to_folder=result.to_folder,
+                    new_path=result.new_path,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error archiving spec: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_lifecycle_state")
-    def foundry_lifecycle_state(
-        spec_id: str,
-        workspace: Optional[str] = None
-    ) -> dict:
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-lifecycle-state",
+    )
+    def spec_lifecycle_state(spec_id: str, workspace: Optional[str] = None) -> dict:
         """
         Get the current lifecycle state of a specification.
 
@@ -246,26 +251,29 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not state:
                 return asdict(error_response(f"Spec not found: {spec_id}"))
 
-            return asdict(success_response(
-                spec_id=state.spec_id,
-                folder=state.folder,
-                status=state.status,
-                progress_percentage=state.progress_percentage,
-                total_tasks=state.total_tasks,
-                completed_tasks=state.completed_tasks,
-                can_complete=state.can_complete,
-                can_archive=state.can_archive,
-            ))
+            return asdict(
+                success_response(
+                    spec_id=state.spec_id,
+                    folder=state.folder,
+                    status=state.status,
+                    progress_percentage=state.progress_percentage,
+                    total_tasks=state.total_tasks,
+                    completed_tasks=state.completed_tasks,
+                    can_complete=state.can_complete,
+                    can_archive=state.can_archive,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error getting lifecycle state: {e}")
             return asdict(error_response(str(e)))
 
-    @mcp.tool()
-    @mcp_tool(tool_name="foundry_list_specs_by_folder")
-    def foundry_list_specs_by_folder(
-        folder: Optional[str] = None,
-        workspace: Optional[str] = None
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-list-by-folder",
+    )
+    def spec_list_by_folder(
+        folder: Optional[str] = None, workspace: Optional[str] = None
     ) -> dict:
         """
         List specifications organized by folder.
@@ -287,24 +295,30 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 return asdict(error_response("No specs directory found"))
 
             if folder and folder not in VALID_FOLDERS:
-                return asdict(error_response(
-                    f"Invalid folder: {folder}. Must be one of: {list(VALID_FOLDERS)}"
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid folder: {folder}. Must be one of: {list(VALID_FOLDERS)}"
+                    )
+                )
 
             result = list_specs_by_folder(specs_dir, folder)
 
             # Calculate totals
             total_specs = sum(len(specs) for specs in result.values())
 
-            return asdict(success_response(
-                total_specs=total_specs,
-                folders=result,
-            ))
+            return asdict(
+                success_response(
+                    total_specs=total_specs,
+                    folders=result,
+                )
+            )
 
         except Exception as e:
             logger.error(f"Error listing specs by folder: {e}")
             return asdict(error_response(str(e)))
 
-    logger.debug("Registered lifecycle tools: foundry_move_spec, foundry_activate_spec, "
-                 "foundry_complete_spec, foundry_archive_spec, foundry_lifecycle_state, "
-                 "foundry_list_specs_by_folder")
+    logger.debug(
+        "Registered lifecycle tools: spec-lifecycle-move/spec-lifecycle-activate/"
+        "spec-lifecycle-complete/spec-lifecycle-archive/spec-lifecycle-state/"
+        "spec-list-by-folder"
+    )

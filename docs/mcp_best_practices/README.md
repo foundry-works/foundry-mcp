@@ -28,6 +28,7 @@ This documentation follows [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2
 2. [Consistent Envelopes & Metadata](./02-envelopes-metadata.md) - Response structure standards
 3. [Shared Serialization Helpers](./03-serialization-helpers.md) - Centralized response creation
 4. [Validation, Typing & Input Hygiene](./04-validation-input-hygiene.md) - Input handling & security
+5. [Tool Naming Conventions](../codebase_standards/naming-conventions.md) - Domain-prefixed, LLM-friendly tool names
 
 ### Operational Excellence
 
@@ -64,6 +65,7 @@ This documentation follows [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2
 3. Implement using [Envelopes](./02-envelopes-metadata.md) and [Helpers](./03-serialization-helpers.md)
 4. Add [Validation](./04-validation-input-hygiene.md) and [Security](./08-security-trust-boundaries.md)
 5. Set up [Observability](./05-observability-telemetry.md) and [Testing](./10-testing-fixtures.md)
+6. Align verbs/prefixes with [Tool Naming Conventions](../codebase_standards/naming-conventions.md)
 
 ### For Code Review
 
