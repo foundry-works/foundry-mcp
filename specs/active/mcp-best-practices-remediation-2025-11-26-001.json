@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:14:44.505558Z",
+  "last_updated": "2025-11-27T13:16:29.567307Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,8 +31,8 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 27,
-    "current_phase": "phase-2"
+    "progress_percentage": 28,
+    "current_phase": "phase-3"
   },
   "hierarchy": {
     "spec-root": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 28,
+      "completed_tasks": 29,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -842,7 +842,7 @@
     "phase-3": {
       "type": "phase",
       "title": "Enhanced Error Handling",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-3-files",
@@ -860,7 +860,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Make errors machine-readable and actionable for clients and LLMs",
         "risk_level": "low",
@@ -2684,7 +2684,7 @@
     "phase-3-docs": {
       "type": "group",
       "title": "Documentation & Change Log",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3",
       "children": [
         "phase-3-docs-1",
@@ -2700,7 +2700,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "doc_references": [
           "docs/codebase_standards/mcp_response_schema.md",
@@ -2711,7 +2711,7 @@
     "phase-3-docs-1": {
       "type": "task",
       "title": "docs/codebase_standards/mcp_response_schema.md",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-docs",
       "children": [
         "phase-3-docs-1-1"
@@ -2722,7 +2722,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "docs/codebase_standards/mcp_response_schema.md",
         "task_category": "implementation",
@@ -2732,12 +2732,19 @@
     "phase-3-docs-1-1": {
       "type": "subtask",
       "title": "Extend response schema docs with error_code/error_type fields and helpers.",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-docs-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T13:15:12.638585Z",
+        "status_note": "Starting documentation update for error_code/error_type fields",
+        "completed_at": "2025-11-27T13:16:29.550125Z",
+        "needs_journaling": false,
+        "actual_hours": 0.021,
+        "journaled_at": "2025-11-27T13:16:29.562013Z"
+      }
     },
     "phase-3-docs-2": {
       "type": "task",
@@ -3671,6 +3678,15 @@
       "content": "All child tasks in phase phase-2 have been completed.",
       "metadata": {},
       "task_id": "phase-2"
+    },
+    {
+      "timestamp": "2025-11-27T13:16:29.561999Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Extend response schema docs with error_code/error_type fields and helpers.",
+      "author": "claude-code",
+      "content": "Extended docs/codebase_standards/mcp_response_schema.md with comprehensive error_code/error_type documentation. Added: Error Response Fields section with standard error fields table (error_code, error_type, remediation, details), Error Type Categories table (9 categories with HTTP analogs and retry guidance), Error Response Example JSON, Common Error Codes table (12 codes), and expanded Error Response Helper section with parameter table and 3 practical examples (Not Found, Feature Flag Disabled, Rate Limit Exceeded).",
+      "metadata": {},
+      "task_id": "phase-3-docs-1-1"
     }
   ]
 }
