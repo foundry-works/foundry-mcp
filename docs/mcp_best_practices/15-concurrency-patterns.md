@@ -449,6 +449,241 @@ async def main_operation(data: dict) -> dict:
         return asdict(success_response(data=result))
 ```
 
+## LLM Response Ergonomics for Concurrent Operations
+
+When tools perform concurrent operations, structure responses for optimal LLM consumption:
+
+### Progress and Status Reporting
+
+```python
+@mcp.tool()
+async def batch_process(items: List[str]) -> dict:
+    """Process items in parallel with LLM-friendly progress reporting.
+
+    WHEN TO USE:
+    - Processing multiple independent items
+    - Need progress visibility during long operations
+
+    Returns structured progress suitable for LLM status checks.
+    """
+    total = len(items)
+    limiter = ConcurrencyLimiter(max_concurrent=5)
+
+    results = await limiter.gather([process_item(item) for item in items])
+
+    succeeded = [r for r in results if r.get("success")]
+    failed = [r for r in results if not r.get("success")]
+
+    return asdict(success_response(
+        data={
+            # Summary first for quick LLM comprehension
+            "summary": f"Processed {len(succeeded)}/{total} items successfully",
+
+            # Structured counts for programmatic use
+            "counts": {
+                "total": total,
+                "succeeded": len(succeeded),
+                "failed": len(failed),
+                "concurrency_limit": 5
+            },
+
+            # Results with clear success/failure markers
+            "results": succeeded,
+
+            # Errors separate and actionable
+            "errors": [
+                {"item": r["item"], "reason": r.get("error", "Unknown")}
+                for r in failed
+            ] if failed else None
+        },
+        # Surface-level warnings for immediate LLM attention
+        warnings=[f"{len(failed)} items failed - see errors array"] if failed else None
+    ))
+```
+
+### Timeout Context for LLMs
+
+```python
+@mcp.tool()
+async def query_with_timeout(query: str, timeout_seconds: float = 30.0) -> dict:
+    """Execute query with timeout, providing context on timing.
+
+    Returns timing metadata so LLMs can adjust future timeout expectations.
+    """
+    start = time.monotonic()
+
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            result = await execute_query(query)
+            elapsed = time.monotonic() - start
+
+            return asdict(success_response(
+                data={
+                    "result": result,
+                    "timing": {
+                        "elapsed_seconds": round(elapsed, 2),
+                        "timeout_seconds": timeout_seconds,
+                        "headroom_seconds": round(timeout_seconds - elapsed, 2)
+                    }
+                },
+                # Help LLM understand if timeout is tight
+                warnings=[
+                    "Query used >80% of timeout budget"
+                ] if elapsed > timeout_seconds * 0.8 else None
+            ))
+
+    except asyncio.TimeoutError:
+        elapsed = time.monotonic() - start
+        return asdict(error_response(
+            message=f"Query timed out after {timeout_seconds}s",
+            error_code="TIMEOUT",
+            error_type="timeout",
+            data={
+                "timeout_seconds": timeout_seconds,
+                "suggestion": "Consider increasing timeout or simplifying query"
+            },
+            remediation="Retry with timeout_seconds=60 or break into smaller queries"
+        ))
+```
+
+### Cancellation Feedback
+
+```python
+@mcp.tool()
+async def cancellable_operation(
+    items: List[str],
+    max_items: int = 100
+) -> dict:
+    """Operation that can be cancelled with partial results.
+
+    Provides clear feedback on cancellation state for LLM understanding.
+    """
+    processed = []
+
+    for i, item in enumerate(items[:max_items]):
+        # Checkpoint every 10 items
+        if i % 10 == 0:
+            await asyncio.sleep(0)
+
+        try:
+            result = await process_item(item)
+            processed.append(result)
+        except asyncio.CancelledError:
+            return asdict(success_response(
+                data={
+                    "results": processed,
+                    "cancellation": {
+                        "was_cancelled": True,
+                        "processed_before_cancel": len(processed),
+                        "total_requested": len(items[:max_items]),
+                        "remaining": len(items[:max_items]) - len(processed)
+                    }
+                },
+                warnings=["Operation was cancelled - returning partial results"]
+            ))
+
+    return asdict(success_response(
+        data={
+            "results": processed,
+            "cancellation": {
+                "was_cancelled": False,
+                "processed": len(processed),
+                "total_requested": len(items[:max_items])
+            }
+        }
+    ))
+```
+
+### Concurrency State Exposure
+
+```python
+@mcp.tool()
+async def get_concurrency_status() -> dict:
+    """Get current concurrency state for system tools.
+
+    WHEN TO USE:
+    - Debugging slow operations
+    - Understanding system capacity
+    - Tuning batch sizes
+
+    Exposes concurrency limits so LLMs can make informed decisions.
+    """
+    return asdict(success_response(
+        data={
+            "limits": {
+                "http_requests": {
+                    "max_concurrent": 10,
+                    "description": "Maximum parallel HTTP requests"
+                },
+                "database_queries": {
+                    "max_concurrent": 5,
+                    "description": "Maximum parallel database connections"
+                },
+                "file_operations": {
+                    "max_concurrent": 20,
+                    "description": "Maximum parallel file I/O operations"
+                }
+            },
+            "recommendations": {
+                "small_batch": "For <10 items, concurrency overhead may exceed benefit",
+                "large_batch": "For >100 items, consider pagination to avoid timeouts",
+                "mixed_operations": "Avoid mixing slow and fast operations in same batch"
+            }
+        }
+    ))
+```
+
+### Response Chunking for Large Results
+
+```python
+@mcp.tool()
+async def process_large_dataset(
+    dataset_id: str,
+    chunk_size: int = 50
+) -> dict:
+    """Process large dataset with chunked results.
+
+    Returns paginated results to avoid overwhelming LLM context.
+    """
+    items = await load_dataset(dataset_id)
+    total = len(items)
+
+    if total > chunk_size:
+        # Process first chunk, provide continuation info
+        first_chunk = items[:chunk_size]
+        results = await process_batch(first_chunk)
+
+        return asdict(success_response(
+            data={
+                "results": results,
+                "pagination": {
+                    "returned": len(results),
+                    "total": total,
+                    "has_more": True,
+                    "next_offset": chunk_size,
+                    "chunk_size": chunk_size
+                }
+            },
+            warnings=[
+                f"Large dataset ({total} items) - only first {chunk_size} returned. "
+                f"Use offset parameter to retrieve more."
+            ]
+        ))
+
+    # Small dataset - return all
+    results = await process_batch(items)
+    return asdict(success_response(
+        data={
+            "results": results,
+            "pagination": {
+                "returned": len(results),
+                "total": total,
+                "has_more": False
+            }
+        }
+    ))
+```
+
 ## Anti-Patterns
 
 ### Don't: Block the Event Loop

@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:48:26.055258Z",
+  "last_updated": "2025-11-27T14:49:45.372710Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,8 +31,8 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 79,
-    "current_phase": "phase-6"
+    "progress_percentage": 80,
+    "current_phase": "phase-7"
   },
   "hierarchy": {
     "spec-root": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 81,
+      "completed_tasks": 82,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -2228,7 +2228,7 @@
     "phase-7": {
       "type": "phase",
       "title": "Concurrency & LLM Patterns",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-7-files",
@@ -2245,7 +2245,7 @@
         "depends": []
       },
       "total_tasks": 11,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Enable safe parallelism and LLM-optimized responses",
         "risk_level": "low",
@@ -3382,7 +3382,7 @@
     "phase-7-docs": {
       "type": "group",
       "title": "Documentation & Change Log",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-7",
       "children": [
         "phase-7-docs-1",
@@ -3398,7 +3398,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "doc_references": [
           "docs/mcp_best_practices/15-concurrency-patterns.md#L10-L420",
@@ -3409,7 +3409,7 @@
     "phase-7-docs-1": {
       "type": "task",
       "title": "docs/mcp_best_practices/15-concurrency-patterns.md",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-7-docs",
       "children": [
         "phase-7-docs-1-1"
@@ -3420,7 +3420,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "docs/mcp_best_practices/15-concurrency-patterns.md",
         "task_category": "implementation",
@@ -3430,12 +3430,19 @@
     "phase-7-docs-1-1": {
       "type": "subtask",
       "title": "Detail concurrency limits, cancellation propagation, and LLM response ergonomics.",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-7-docs-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T14:48:50.082688Z",
+        "status_note": "Creating concurrency patterns documentation",
+        "completed_at": "2025-11-27T14:49:45.360602Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T14:49:45.369412Z"
+      }
     },
     "phase-7-docs-2": {
       "type": "task",
@@ -4662,6 +4669,15 @@
       "content": "All child tasks in phase phase-6 have been completed.",
       "metadata": {},
       "task_id": "phase-6"
+    },
+    {
+      "timestamp": "2025-11-27T14:49:45.369407Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Detail concurrency limits, cancellation propagation, and LLM response ergonomics.",
+      "author": "claude-code",
+      "content": "Added comprehensive \"LLM Response Ergonomics for Concurrent Operations\" section to docs/mcp_best_practices/15-concurrency-patterns.md. New section covers: (1) Progress and Status Reporting with structured counts and summary-first responses, (2) Timeout Context for LLMs with timing metadata and headroom warnings, (3) Cancellation Feedback with clear cancellation state objects, (4) Concurrency State Exposure tool for LLMs to understand system capacity, (5) Response Chunking for Large Results with pagination warnings. Document now comprehensively covers concurrency limits (semaphore, token bucket patterns), cancellation propagation (graceful cleanup, checkpoints), and LLM response ergonomics as required.",
+      "metadata": {},
+      "task_id": "phase-7-docs-1-1"
     }
   ]
 }
