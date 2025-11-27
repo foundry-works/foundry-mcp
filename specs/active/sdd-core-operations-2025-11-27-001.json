@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T19:44:40.924671Z",
+  "last_updated": "2025-11-27T19:47:17.729577Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 5,
+    "progress_percentage": 6,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -60,7 +60,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 13,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Bootstrap tooling for workspace initialization and validation",
         "risk_level": "low"
@@ -86,7 +86,7 @@
         "task-1-5"
       ],
       "total_tasks": 10,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -219,7 +219,7 @@
     "task-1-2": {
       "type": "task",
       "title": "src/foundry_mcp/tools/server.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-1-files",
       "children": [
         "task-1-2-1",
@@ -233,7 +233,7 @@
         "blocks": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/server.py",
         "task_category": "implementation",
@@ -244,14 +244,19 @@
     "task-1-2-1": {
       "type": "subtask",
       "title": "Update mcp/capabilities_manifest for environment tools",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "mcp/capabilities_manifest.json",
-        "details": "Expose sdd-verify-toolchain/init-workspace/topology/verify-environment readiness and feature flags"
+        "details": "Expose sdd-verify-toolchain/init-workspace/topology/verify-environment readiness and feature flags",
+        "started_at": "2025-11-27T19:46:20.197637Z",
+        "completed_at": "2025-11-27T19:47:17.723060Z",
+        "needs_journaling": false,
+        "actual_hours": 0.016,
+        "journaled_at": "2025-11-27T19:47:17.727723Z"
       }
     },
     "task-1-2-2": {
@@ -2237,6 +2242,15 @@
       "content": "Wired resilience/telemetry helpers for environment adapters. The canonical_tool decorator already applies mcp_tool for automatic telemetry on all tools. Added explicit imports from core/observability.py (audit_log, get_metrics) and core/resilience.py (FAST_TIMEOUT). Added audit_log call and metrics counter for sdd-init-workspace (workspace_init event). The _metrics singleton is initialized for tracking environment operations. All 4 environment tools (sdd-verify-toolchain, sdd-init-workspace, sdd-detect-topology, sdd-verify-environment) are now properly instrumented with observability hooks via the canonical_tool pattern.",
       "metadata": {},
       "task_id": "task-1-1-5"
+    },
+    {
+      "timestamp": "2025-11-27T19:47:17.727717Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update mcp/capabilities_manifest for environment tools",
+      "author": "claude-code",
+      "content": "Updated mcp/capabilities_manifest.json to expose environment tools. Added: (1) environment_tools category with 4 tools: env_verify_toolchain, env_init_workspace, env_detect_topology, env_verify_environment - each with proper parameters and descriptions. (2) Feature flags: environment_tools (beta, 100% rollout) and env_auto_fix (experimental, 0% rollout with dependency). (3) server_capabilities.environment_readiness capability. JSON validation passed.",
+      "metadata": {},
+      "task_id": "task-1-2-1"
     }
   ]
 }

@@ -297,6 +297,49 @@
         }
       }
     ],
+    "environment_tools": [
+      {
+        "name": "env_verify_toolchain",
+        "description": "Verify local CLI/toolchain availability including git, python, node, and SDD CLI",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {"name": "tools", "type": "array", "required": false, "description": "Specific tools to check (default: all)"},
+          {"name": "verbose", "type": "boolean", "required": false, "default": false}
+        ]
+      },
+      {
+        "name": "env_init_workspace",
+        "description": "Bootstrap working directory with specs folders, config files, and git integration",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {"name": "path", "type": "string", "required": false, "description": "Target directory (default: current)"},
+          {"name": "force", "type": "boolean", "required": false, "default": false, "description": "Overwrite existing config"},
+          {"name": "git_integration", "type": "boolean", "required": false, "default": true}
+        ]
+      },
+      {
+        "name": "env_detect_topology",
+        "description": "Auto-detect repository layout for specs and documentation directories",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {"name": "path", "type": "string", "required": false, "description": "Root directory to scan (default: current)"},
+          {"name": "depth", "type": "integer", "required": false, "default": 3, "description": "Max directory depth to scan"}
+        ]
+      },
+      {
+        "name": "env_verify_environment",
+        "description": "Validate OS packages, runtime versions, and credential availability",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {"name": "checks", "type": "array", "required": false, "description": "Specific checks to run (os, runtime, credentials)"},
+          {"name": "fix", "type": "boolean", "required": false, "default": false, "description": "Attempt to fix issues"}
+        ]
+      }
+    ],
     "discovery_tools": [
       {
         "name": "tool_list",
@@ -476,6 +519,26 @@
         "dependencies": [],
         "created_at": "2025-10-01T00:00:00Z",
         "expires_at": null
+      },
+      "environment_tools": {
+        "description": "Environment setup and verification tools for SDD workflows",
+        "state": "beta",
+        "default_enabled": true,
+        "percentage_rollout": 100,
+        "owner": "platform-team",
+        "dependencies": [],
+        "created_at": "2025-11-27T00:00:00Z",
+        "expires_at": null
+      },
+      "env_auto_fix": {
+        "description": "Automatic fix capability for environment verification issues",
+        "state": "experimental",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "platform-team",
+        "dependencies": ["environment_tools"],
+        "created_at": "2025-11-27T00:00:00Z",
+        "expires_at": null
       }
     },
     "lifecycle_states": {
@@ -532,6 +595,11 @@
       "feature_flags": {
         "supported": true,
         "description": "Feature flag system for gradual rollouts"
+      },
+      "environment_readiness": {
+        "supported": true,
+        "description": "Environment verification and workspace initialization tools",
+        "tools": ["env_verify_toolchain", "env_init_workspace", "env_detect_topology", "env_verify_environment"]
       }
     },
     "api_version": "2024-11-01"

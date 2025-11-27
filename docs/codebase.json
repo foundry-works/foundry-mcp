@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T19:43:27.948202Z",
-    "generated_at_commit": "75c7d0298d93c48f51a8e71179d5bbe809907fa7",
+    "generated_at": "2025-11-27T19:46:14.487128Z",
+    "generated_at_commit": "ae56cd5232dd2405efa58a545b2bd8a666817978",
     "languages": [
       "python"
     ],
@@ -11,7 +11,7 @@
   },
   "statistics": {
     "total_files": 40,
-    "total_lines": 17600,
+    "total_lines": 17615,
     "total_classes": 71,
     "total_functions": 199,
     "avg_complexity": 6.78,
@@ -26,7 +26,7 @@
     "by_language": {
       "python": {
         "files": 40,
-        "lines": 17600,
+        "lines": 17615,
         "classes": 71,
         "functions": 199,
         "avg_complexity": 6.78
@@ -1151,10 +1151,13 @@
         "foundry_mcp.config.ServerConfig",
         "foundry_mcp.core.responses.success_response",
         "foundry_mcp.core.responses.error_response",
-        "foundry_mcp.core.naming.canonical_tool"
+        "foundry_mcp.core.naming.canonical_tool",
+        "foundry_mcp.core.observability.audit_log",
+        "foundry_mcp.core.observability.get_metrics",
+        "foundry_mcp.core.resilience.FAST_TIMEOUT"
       ],
       "exports": [],
-      "lines": 489
+      "lines": 504
     },
     {
       "name": "journal",
@@ -5120,7 +5123,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 772,
           "call_type": "method_call"
         },
@@ -5138,7 +5141,7 @@
         },
         {
           "name": "result",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 787,
           "call_type": "method_call"
         },
@@ -5174,7 +5177,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -8780,25 +8783,25 @@
         {
           "name": "sdd_verify_toolchain",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 32,
+          "line": 37,
           "call_type": "function_call"
         },
         {
           "name": "sdd_init_workspace",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 131,
+          "line": 136,
           "call_type": "function_call"
         },
         {
           "name": "sdd_detect_topology",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 228,
+          "line": 243,
           "call_type": "function_call"
         },
         {
           "name": "sdd_verify_environment",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 347,
+          "line": 362,
           "call_type": "function_call"
         },
         {
@@ -9202,10 +9205,16 @@
           "file": "src/foundry_mcp/server.py",
           "line": 120,
           "call_type": "function_call"
+        },
+        {
+          "name": "<module>",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 25,
+          "call_type": "function_call"
         }
       ],
       "calls": [],
-      "call_count": 1
+      "call_count": 2
     },
     {
       "name": "get_audit_logger",
@@ -9266,6 +9275,12 @@
           "file": "src/foundry_mcp/server.py",
           "line": 333,
           "call_type": "function_call"
+        },
+        {
+          "name": "sdd_init_workspace",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 213,
+          "call_type": "function_call"
         }
       ],
       "calls": [
@@ -9276,7 +9291,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 4
+      "call_count": 5
     },
     {
       "name": "mcp_tool",
@@ -12521,25 +12536,25 @@
         {
           "name": "sdd_verify_toolchain",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 121,
+          "line": 126,
           "call_type": "function_call"
         },
         {
           "name": "sdd_init_workspace",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 208,
+          "line": 223,
           "call_type": "function_call"
         },
         {
           "name": "sdd_detect_topology",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 337,
+          "line": 352,
           "call_type": "function_call"
         },
         {
           "name": "sdd_verify_environment",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 485,
+          "line": 500,
           "call_type": "function_call"
         },
         {
@@ -13128,43 +13143,43 @@
         {
           "name": "sdd_verify_toolchain",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 111,
+          "line": 116,
           "call_type": "function_call"
         },
         {
           "name": "sdd_verify_toolchain",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 129,
+          "line": 134,
           "call_type": "function_call"
         },
         {
           "name": "sdd_init_workspace",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 217,
+          "line": 232,
           "call_type": "function_call"
         },
         {
           "name": "sdd_init_workspace",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 226,
+          "line": 241,
           "call_type": "function_call"
         },
         {
           "name": "sdd_detect_topology",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 345,
+          "line": 360,
           "call_type": "function_call"
         },
         {
           "name": "sdd_verify_environment",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 476,
+          "line": 491,
           "call_type": "function_call"
         },
         {
           "name": "sdd_verify_environment",
           "file": "src/foundry_mcp/tools/environment.py",
-          "line": 489,
+          "line": 504,
           "call_type": "function_call"
         },
         {
@@ -20913,7 +20928,7 @@
     {
       "name": "register_environment_tools",
       "file": "src/foundry_mcp/tools/environment.py",
-      "line": 23,
+      "line": 28,
       "language": "python",
       "docstring": "Register environment tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
       "parameters": [
@@ -21722,7 +21737,10 @@
       "foundry_mcp.config.ServerConfig",
       "foundry_mcp.core.responses.success_response",
       "foundry_mcp.core.responses.error_response",
-      "foundry_mcp.core.naming.canonical_tool"
+      "foundry_mcp.core.naming.canonical_tool",
+      "foundry_mcp.core.observability.audit_log",
+      "foundry_mcp.core.observability.get_metrics",
+      "foundry_mcp.core.resilience.FAST_TIMEOUT"
     ],
     "src/foundry_mcp/tools/journal.py": [
       "logging",
