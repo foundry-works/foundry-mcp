@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T13:21:39.761587Z",
-    "generated_at_commit": "b7d22e86ca47aa70fc32c4fb95762a6fe2b38dcc",
+    "generated_at": "2025-11-27T13:22:55.039564Z",
+    "generated_at_commit": "93fd0a416ac0cee6fd56c7974182aba546893bf6",
     "languages": [
       "python"
     ],
@@ -11,7 +11,7 @@
   },
   "statistics": {
     "total_files": 32,
-    "total_lines": 13013,
+    "total_lines": 13023,
     "total_classes": 49,
     "total_functions": 149,
     "avg_complexity": 7.26,
@@ -26,7 +26,7 @@
     "by_language": {
       "python": {
         "files": 32,
-        "lines": 13013,
+        "lines": 13023,
         "classes": 49,
         "functions": 149,
         "avg_complexity": 7.26
@@ -495,10 +495,11 @@
         "typing.Dict",
         "typing.Mapping",
         "typing.Optional",
-        "typing.Sequence"
+        "typing.Sequence",
+        "typing.Union"
       ],
       "exports": [],
-      "lines": 285
+      "lines": 295
     },
     {
       "name": "security",
@@ -2589,7 +2590,7 @@
         {
           "instantiator": "error_response",
           "file": "src/foundry_mcp/core/responses.py",
-          "line": 285,
+          "line": 295,
           "context": [
             "error_response"
           ]
@@ -5295,7 +5296,7 @@
         },
         {
           "name": "read",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 533,
           "call_type": "method_call"
         },
@@ -9078,7 +9079,7 @@
         {
           "name": "error_response",
           "file": "src/foundry_mcp/core/responses.py",
-          "line": 278,
+          "line": 288,
           "call_type": "function_call"
         }
       ],
@@ -9488,7 +9489,7 @@
       "file": "src/foundry_mcp/core/responses.py",
       "line": 238,
       "language": "python",
-      "docstring": "Create a standardized error response.\n\nArgs:\n    message: Human-readable description of the failure.\n    data: Optional mapping with additional machine-readable context.\n    error_code: Canonical error code (e.g., ``VALIDATION_ERROR``).\n    error_type: Error category (validation, authorization, internal, ...).\n    remediation: User-facing guidance on how to fix the issue.\n    details: Nested structure describing validation failures or metadata.\n    request_id: Correlation identifier propagated through logs/traces.\n    rate_limit: Rate limit state to help clients back off correctly.\n    telemetry: Timing/performance metadata captured before failure.\n    meta: Arbitrary extra metadata to merge into ``meta``.",
+      "docstring": "Create a standardized error response.\n\nArgs:\n    message: Human-readable description of the failure.\n    data: Optional mapping with additional machine-readable context.\n    error_code: Canonical error code (use ``ErrorCode`` enum or string,\n        e.g., ``ErrorCode.VALIDATION_ERROR`` or ``\"VALIDATION_ERROR\"``).\n    error_type: Error category for routing (use ``ErrorType`` enum or string,\n        e.g., ``ErrorType.VALIDATION`` or ``\"validation\"``).\n    remediation: User-facing guidance on how to fix the issue.\n    details: Nested structure describing validation failures or metadata.\n    request_id: Correlation identifier propagated through logs/traces.\n    rate_limit: Rate limit state to help clients back off correctly.\n    telemetry: Timing/performance metadata captured before failure.\n    meta: Arbitrary extra metadata to merge into ``meta``.\n\nExample:\n    >>> error_response(\n    ...     \"Validation failed: spec_id is required\",\n    ...     error_code=ErrorCode.MISSING_REQUIRED,\n    ...     error_type=ErrorType.VALIDATION,\n    ...     remediation=\"Provide a non-empty spec_id parameter\",\n    ... )",
       "parameters": [
         {
           "name": "message",
@@ -10408,25 +10409,25 @@
         {
           "name": "update",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 267,
+          "line": 277,
           "call_type": "method_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 267,
+          "line": 277,
           "call_type": "function_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 276,
+          "line": 286,
           "call_type": "function_call"
         },
         {
           "name": "_build_meta",
           "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/responses.py",
-          "line": 278,
+          "line": 288,
           "call_type": "function_call"
         }
       ],
@@ -17611,7 +17612,8 @@
       "typing.Dict",
       "typing.Mapping",
       "typing.Optional",
-      "typing.Sequence"
+      "typing.Sequence",
+      "typing.Union"
     ],
     "src/foundry_mcp/core/security.py": [
       "logging",

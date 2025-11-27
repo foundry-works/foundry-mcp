@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:22:32.406385Z",
+  "last_updated": "2025-11-27T13:23:53.490825Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 32,
+    "progress_percentage": 33,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 33,
+      "completed_tasks": 34,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -860,7 +860,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Make errors machine-readable and actionable for clients and LLMs",
         "risk_level": "low",
@@ -880,7 +880,7 @@
         "task-3-2"
       ],
       "total_tasks": 6,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -894,7 +894,7 @@
     "task-3-1": {
       "type": "task",
       "title": "src/foundry_mcp/core/responses.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-3-files",
       "children": [
         "task-3-1-1",
@@ -910,7 +910,7 @@
         "depends": []
       },
       "total_tasks": 4,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "file_path": "src/foundry_mcp/core/responses.py",
         "task_category": "implementation",
@@ -973,13 +973,19 @@
     "task-3-1-4": {
       "type": "subtask",
       "title": "Create specialized error helpers",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "validation_error(), not_found_error(), rate_limit_error(), unauthorized_error(), forbidden_error(), conflict_error(), internal_error(), unavailable_error()"
+        "details": "validation_error(), not_found_error(), rate_limit_error(), unauthorized_error(), forbidden_error(), conflict_error(), internal_error(), unavailable_error()",
+        "started_at": "2025-11-27T13:23:00.908708Z",
+        "status_note": "Creating specialized error helpers",
+        "completed_at": "2025-11-27T13:23:53.482053Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T13:23:53.488283Z"
       }
     },
     "task-3-2": {
@@ -3761,6 +3767,15 @@
       "content": "Updated error_response() type hints to accept Union[ErrorCode, str] and Union[ErrorType, str] for backwards-compatible enum support. Updated docstring to document enum usage with examples. Enums serialize as strings due to str base class inheritance.",
       "metadata": {},
       "task_id": "task-3-1-3"
+    },
+    {
+      "timestamp": "2025-11-27T13:23:53.488278Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create specialized error helpers",
+      "author": "claude-code",
+      "content": "Created 8 specialized error helpers in responses.py: validation_error(), not_found_error(), rate_limit_error(), unauthorized_error(), forbidden_error(), conflict_error(), internal_error(), unavailable_error(). Each helper uses appropriate ErrorCode/ErrorType enums, provides sensible defaults for remediation messages, and includes docstrings with usage examples. All helpers import successfully.",
+      "metadata": {},
+      "task_id": "task-3-1-4"
     }
   ]
 }
