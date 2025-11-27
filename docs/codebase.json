@@ -2,19 +2,19 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T14:30:14.256521Z",
-    "generated_at_commit": "d4a686d6c8fb3c63e20c2593ca09cf867507dd3e",
+    "generated_at": "2025-11-27T14:31:45.075718Z",
+    "generated_at_commit": "4c227e4074ae8ec861ac473e6b0cd671d5aba4ec",
     "languages": [
       "python"
     ],
     "schema_version": "2.0"
   },
   "statistics": {
-    "total_files": 35,
-    "total_lines": 15072,
+    "total_files": 36,
+    "total_lines": 15345,
     "total_classes": 60,
-    "total_functions": 175,
-    "avg_complexity": 6.91,
+    "total_functions": 176,
+    "avg_complexity": 6.94,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -25,11 +25,11 @@
     ],
     "by_language": {
       "python": {
-        "files": 35,
-        "lines": 15072,
+        "files": 36,
+        "lines": 15345,
         "classes": 60,
-        "functions": 175,
-        "avg_complexity": 6.91
+        "functions": 176,
+        "avg_complexity": 6.94
       }
     }
   },
@@ -954,6 +954,37 @@
       ],
       "exports": [],
       "lines": 13
+    },
+    {
+      "name": "discovery",
+      "file": "src/foundry_mcp/tools/discovery.py",
+      "language": "python",
+      "docstring": "Discovery tools for foundry-mcp.\n\nProvides MCP tools for tool discovery, capability negotiation,\nand metadata introspection.",
+      "classes": [],
+      "functions": [
+        "register_discovery_tools"
+      ],
+      "imports": [
+        "logging",
+        "dataclasses.asdict",
+        "typing.Optional",
+        "mcp.server.fastmcp.FastMCP",
+        "foundry_mcp.config.ServerConfig",
+        "foundry_mcp.core.observability.mcp_tool",
+        "foundry_mcp.core.responses.success_response",
+        "foundry_mcp.core.responses.error_response",
+        "foundry_mcp.core.pagination.DEFAULT_PAGE_SIZE",
+        "foundry_mcp.core.pagination.MAX_PAGE_SIZE",
+        "foundry_mcp.core.pagination.encode_cursor",
+        "foundry_mcp.core.pagination.decode_cursor",
+        "foundry_mcp.core.pagination.CursorError",
+        "foundry_mcp.core.pagination.paginated_response",
+        "foundry_mcp.core.discovery.get_tool_registry",
+        "foundry_mcp.core.discovery.get_capabilities",
+        "foundry_mcp.core.discovery.negotiate_capabilities"
+      ],
+      "exports": [],
+      "lines": 273
     },
     {
       "name": "docs",
@@ -4052,8 +4083,28 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
-      "calls": []
+      "callers": [
+        {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 78,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_tool_schema",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 161,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_categories",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 260,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [],
+      "call_count": 3
     },
     {
       "name": "get_capabilities",
@@ -4068,7 +4119,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "foundry_get_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 197,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "to_dict",
@@ -4076,7 +4134,8 @@
           "line": 429,
           "call_type": "method_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "negotiate_capabilities",
@@ -4102,7 +4161,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "foundry_negotiate_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 231,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "append",
@@ -4116,7 +4182,8 @@
           "line": 483,
           "call_type": "method_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "set_capabilities",
@@ -7176,6 +7243,36 @@
           "call_type": "function_call"
         },
         {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 44,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_tool_schema",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 132,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 179,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_negotiate_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 205,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_categories",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 243,
+          "call_type": "function_call"
+        },
+        {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
           "line": 43,
@@ -7429,7 +7526,7 @@
         }
       ],
       "calls": [],
-      "call_count": 47
+      "call_count": 52
     },
     {
       "name": "mcp_resource",
@@ -7483,6 +7580,12 @@
       "is_exported": false,
       "is_public": true,
       "callers": [
+        {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 106,
+          "call_type": "function_call"
+        },
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
@@ -7552,7 +7655,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 7
+      "call_count": 8
     },
     {
       "name": "decode_cursor",
@@ -7578,6 +7681,12 @@
           "name": "validate_cursor",
           "file": "src/foundry_mcp/core/pagination.py",
           "line": 175,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 89,
           "call_type": "function_call"
         },
         {
@@ -7661,7 +7770,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 8
+      "call_count": 9
     },
     {
       "name": "validate_cursor",
@@ -7731,7 +7840,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 111,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "asdict",
@@ -7745,7 +7861,8 @@
           "line": 228,
           "call_type": "function_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "normalize_page_size",
@@ -10540,6 +10657,30 @@
           "call_type": "function_call"
         },
         {
+          "name": "foundry_get_tool_schema",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 172,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 198,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_negotiate_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 236,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_categories",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 264,
+          "call_type": "function_call"
+        },
+        {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
           "line": 112,
@@ -10836,7 +10977,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 53
+      "call_count": 57
     },
     {
       "name": "error_response",
@@ -10976,6 +11117,54 @@
           "name": "tool_get_task",
           "file": "src/foundry_mcp/server.py",
           "line": 218,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 92,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_tools",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 129,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_tool_schema",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 154,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_tool_schema",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 165,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_tool_schema",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 176,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 202,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_negotiate_capabilities",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 240,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_categories",
+          "file": "src/foundry_mcp/tools/discovery.py",
+          "line": 273,
           "call_type": "function_call"
         },
         {
@@ -11875,7 +12064,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 165
+      "call_count": 173
     },
     {
       "name": "validation_error",
@@ -18771,6 +18960,33 @@
       "call_count": 1
     },
     {
+      "name": "register_discovery_tools",
+      "file": "src/foundry_mcp/tools/discovery.py",
+      "line": 34,
+      "language": "python",
+      "docstring": "Register discovery tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
+      "parameters": [
+        {
+          "name": "mcp",
+          "type": "FastMCP",
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "ServerConfig",
+          "default": null
+        }
+      ],
+      "return_type": "None",
+      "complexity": 12,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
+    },
+    {
       "name": "register_docs_tools",
       "file": "src/foundry_mcp/tools/docs.py",
       "line": 27,
@@ -19493,6 +19709,25 @@
       "foundry_mcp.tools.tasks.register_task_tools",
       "foundry_mcp.tools.validation.register_validation_tools",
       "foundry_mcp.tools.journal.register_journal_tools"
+    ],
+    "src/foundry_mcp/tools/discovery.py": [
+      "logging",
+      "dataclasses.asdict",
+      "typing.Optional",
+      "mcp.server.fastmcp.FastMCP",
+      "foundry_mcp.config.ServerConfig",
+      "foundry_mcp.core.observability.mcp_tool",
+      "foundry_mcp.core.responses.success_response",
+      "foundry_mcp.core.responses.error_response",
+      "foundry_mcp.core.pagination.DEFAULT_PAGE_SIZE",
+      "foundry_mcp.core.pagination.MAX_PAGE_SIZE",
+      "foundry_mcp.core.pagination.encode_cursor",
+      "foundry_mcp.core.pagination.decode_cursor",
+      "foundry_mcp.core.pagination.CursorError",
+      "foundry_mcp.core.pagination.paginated_response",
+      "foundry_mcp.core.discovery.get_tool_registry",
+      "foundry_mcp.core.discovery.get_capabilities",
+      "foundry_mcp.core.discovery.negotiate_capabilities"
     ],
     "src/foundry_mcp/tools/docs.py": [
       "logging",

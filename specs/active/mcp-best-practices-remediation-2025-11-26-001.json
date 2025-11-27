@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:31:20.636466Z",
+  "last_updated": "2025-11-27T14:32:01.697456Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 70,
+    "progress_percentage": 71,
     "current_phase": "phase-6"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 72,
+      "completed_tasks": 73,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1876,7 +1876,7 @@
         "depends": []
       },
       "total_tasks": 16,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Enable clients to discover tools and negotiate capabilities",
         "risk_level": "low",
@@ -1899,7 +1899,7 @@
         "task-6-5"
       ],
       "total_tasks": 12,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2031,7 +2031,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/discovery.py",
         "task_category": "implementation",
@@ -2059,13 +2059,16 @@
     "task-6-2-2": {
       "type": "subtask",
       "title": "Implement foundry_get_tool_schema endpoint",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-6-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Returns JSON Schema for tool inputs"
+        "details": "Returns JSON Schema for tool inputs",
+        "completed_at": "2025-11-27T14:32:01.689200Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-27T14:32:01.693363Z"
       }
     },
     "task-6-2-3": {
@@ -4493,6 +4496,15 @@
       "content": "Created foundry_list_tools MCP endpoint in src/foundry_mcp/tools/discovery.py with parameters: category, tag, include_deprecated, cursor, limit. Returns paginated tool list with pagination metadata (cursor, has_more, page_size, total_count). Uses encode_cursor/decode_cursor for offset-based pagination. Also includes filters_applied in response and categories list. Added register_discovery_tools() function following existing patterns.",
       "metadata": {},
       "task_id": "task-6-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T14:32:01.693358Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement foundry_get_tool_schema endpoint",
+      "author": "claude-code",
+      "content": "foundry_get_tool_schema endpoint was already implemented in src/foundry_mcp/tools/discovery.py as part of task-6-2-1. The endpoint accepts tool_name parameter, calls registry.get_tool_schema(), and returns full JSON Schema with examples, rate limits, related tools, and deprecation info. Returns NOT_FOUND error with remediation for unknown tools.",
+      "metadata": {},
+      "task_id": "task-6-2-2"
     }
   ]
 }
