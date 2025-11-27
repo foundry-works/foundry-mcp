@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:18:22.715612Z",
+  "last_updated": "2025-11-27T20:21:32.851926Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 15,
+    "progress_percentage": 16,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 14,
+      "completed_tasks": 15,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -472,7 +472,7 @@
         ]
       },
       "total_tasks": 13,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Extend spec analysis and validation capabilities",
         "risk_level": "low"
@@ -490,7 +490,7 @@
         "task-2-4"
       ],
       "total_tasks": 9,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -513,7 +513,7 @@
         "task-2-1-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/spec_helpers.py",
         "task_category": "implementation",
@@ -550,13 +550,19 @@
     "task-2-1-2": {
       "type": "subtask",
       "title": "Implement spec-find-patterns - search specs for structural/code patterns",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd find-pattern, regex/glob search across spec contents"
+        "details": "Wrap sdd find-pattern, regex/glob search across spec contents",
+        "started_at": "2025-11-27T20:19:01.318754Z",
+        "status_note": "Starting implementation",
+        "completed_at": "2025-11-27T20:21:32.844782Z",
+        "needs_journaling": false,
+        "actual_hours": 0.042,
+        "journaled_at": "2025-11-27T20:21:32.850014Z"
       }
     },
     "task-2-1-3": {
@@ -2403,6 +2409,15 @@
       "content": "Implemented spec-find-related-files MCP tool that wraps sdd find-related-files CLI command.\n\nFiles created:\n- src/foundry_mcp/tools/spec_helpers.py (new module for spec helper tools)\n- tests/unit/test_spec_helpers.py (9 unit tests)\n\nImplementation details:\n- Uses @canonical_tool decorator with name 'spec-find-related-files'\n- Accepts file_path (required), spec_id (optional), and include_metadata (optional) parameters\n- Wraps subprocess call to sdd find-related-files --json\n- Returns response-v2 envelope with related_files, spec_references, and total_count\n- Handles timeout (30s), CLI not found, and command failure errors\n- Includes audit_log and metrics tracking\n- All 9 unit tests passing",
       "metadata": {},
       "task_id": "task-2-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T20:21:32.850007Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-find-patterns - search specs for structural/code patterns",
+      "author": "claude-code",
+      "content": "Implemented spec-find-patterns MCP tool that wraps sdd find-pattern CLI command.\n\nAdded to src/foundry_mcp/tools/spec_helpers.py:\n- spec-find-patterns tool with @canonical_tool decorator\n- Accepts pattern (required), directory (optional), include_metadata (optional)\n- Wraps subprocess call to sdd find-pattern --json\n- Returns response-v2 envelope with pattern, matches, total_count\n\nAdded 6 new tests to tests/unit/test_spec_helpers.py:\n- test_successful_find_patterns\n- test_find_patterns_empty_result\n- test_find_patterns_with_directory\n- test_find_patterns_with_metadata\n- test_find_patterns_command_failure\n- test_find_patterns_timeout\n\nAll 15 tests passing.",
+      "metadata": {},
+      "task_id": "task-2-1-2"
     }
   ]
 }

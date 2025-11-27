@@ -2,19 +2,19 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T20:15:16.566683Z",
-    "generated_at_commit": "2e1c815c9daf845a9130c2084af8eb99f5be8f7c",
+    "generated_at": "2025-11-27T20:18:53.930226Z",
+    "generated_at_commit": "247ce2488aaa9b61b8c266db72ee3f36fffadf6d",
     "languages": [
       "python"
     ],
     "schema_version": "2.0"
   },
   "statistics": {
-    "total_files": 40,
-    "total_lines": 17914,
+    "total_files": 41,
+    "total_lines": 18073,
     "total_classes": 72,
-    "total_functions": 203,
-    "avg_complexity": 6.68,
+    "total_functions": 204,
+    "avg_complexity": 6.69,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -25,11 +25,11 @@
     ],
     "by_language": {
       "python": {
-        "files": 40,
-        "lines": 17914,
+        "files": 41,
+        "lines": 18073,
         "classes": 72,
-        "functions": 203,
-        "avg_complexity": 6.68
+        "functions": 204,
+        "avg_complexity": 6.69
       }
     }
   },
@@ -1296,6 +1296,35 @@
       ],
       "exports": [],
       "lines": 278
+    },
+    {
+      "name": "spec_helpers",
+      "file": "src/foundry_mcp/tools/spec_helpers.py",
+      "language": "python",
+      "docstring": "Spec helper tools for foundry-mcp.\n\nProvides MCP tools for spec discovery, validation, and analysis.\nThese tools wrap SDD CLI commands to provide file relationship discovery,\npattern matching, dependency cycle detection, and path validation.",
+      "classes": [],
+      "functions": [
+        "register_spec_helper_tools"
+      ],
+      "imports": [
+        "json",
+        "logging",
+        "subprocess",
+        "dataclasses.asdict",
+        "typing.Any",
+        "typing.Dict",
+        "typing.List",
+        "typing.Optional",
+        "mcp.server.fastmcp.FastMCP",
+        "foundry_mcp.config.ServerConfig",
+        "foundry_mcp.core.responses.success_response",
+        "foundry_mcp.core.responses.error_response",
+        "foundry_mcp.core.naming.canonical_tool",
+        "foundry_mcp.core.observability.audit_log",
+        "foundry_mcp.core.observability.get_metrics"
+      ],
+      "exports": [],
+      "lines": 159
     },
     {
       "name": "tasks",
@@ -5240,7 +5269,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 772,
           "call_type": "method_call"
         },
@@ -7394,7 +7423,7 @@
         },
         {
           "name": "read",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -9177,6 +9206,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 37,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_prepare",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 48,
@@ -9280,7 +9315,7 @@
         }
       ],
       "calls": [],
-      "call_count": 56
+      "call_count": 57
     },
     {
       "name": "redact_sensitive_data",
@@ -9475,10 +9510,16 @@
           "file": "src/foundry_mcp/tools/environment.py",
           "line": 25,
           "call_type": "function_call"
+        },
+        {
+          "name": "<module>",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 25,
+          "call_type": "function_call"
         }
       ],
       "calls": [],
-      "call_count": 2
+      "call_count": 3
     },
     {
       "name": "get_audit_logger",
@@ -9545,6 +9586,12 @@
           "file": "src/foundry_mcp/tools/environment.py",
           "line": 213,
           "call_type": "function_call"
+        },
+        {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 79,
+          "call_type": "function_call"
         }
       ],
       "calls": [
@@ -9555,7 +9602,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 5
+      "call_count": 6
     },
     {
       "name": "mcp_tool",
@@ -12936,6 +12983,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 122,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_next",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 121,
@@ -13076,7 +13129,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 61
+      "call_count": 62
     },
     {
       "name": "error_response",
@@ -13831,6 +13884,30 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 128,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 137,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 145,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_find_related_files",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 154,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_prepare",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 76,
@@ -14205,7 +14282,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 180
+      "call_count": 184
     },
     {
       "name": "validation_error",
@@ -21393,6 +21470,33 @@
       "call_count": 1
     },
     {
+      "name": "register_spec_helper_tools",
+      "file": "src/foundry_mcp/tools/spec_helpers.py",
+      "line": 28,
+      "language": "python",
+      "docstring": "Register spec helper tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
+      "parameters": [
+        {
+          "name": "mcp",
+          "type": "FastMCP",
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "ServerConfig",
+          "default": null
+        }
+      ],
+      "return_type": "None",
+      "complexity": 8,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
+    },
+    {
       "name": "register_task_tools",
       "file": "src/foundry_mcp/tools/tasks.py",
       "line": 39,
@@ -22090,6 +22194,23 @@
       "foundry_mcp.core.rendering.render_task_list",
       "foundry_mcp.core.rendering.get_status_icon",
       "foundry_mcp.core.rendering.RenderOptions"
+    ],
+    "src/foundry_mcp/tools/spec_helpers.py": [
+      "json",
+      "logging",
+      "subprocess",
+      "dataclasses.asdict",
+      "typing.Any",
+      "typing.Dict",
+      "typing.List",
+      "typing.Optional",
+      "mcp.server.fastmcp.FastMCP",
+      "foundry_mcp.config.ServerConfig",
+      "foundry_mcp.core.responses.success_response",
+      "foundry_mcp.core.responses.error_response",
+      "foundry_mcp.core.naming.canonical_tool",
+      "foundry_mcp.core.observability.audit_log",
+      "foundry_mcp.core.observability.get_metrics"
     ],
     "src/foundry_mcp/tools/tasks.py": [
       "logging",

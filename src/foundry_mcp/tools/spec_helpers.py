@@ -157,3 +157,126 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-find-patterns",
+    )
+    def spec_find_patterns(
+        pattern: str,
+        directory: Optional[str] = None,
+        include_metadata: bool = False,
+    ) -> dict:
+        """
+        Search specs and codebase for structural or code patterns.
+
+        Wraps the SDD CLI find-pattern command to search across spec contents
+        and source files using glob patterns. Returns matching files and locations.
+
+        WHEN TO USE:
+        - Finding files matching a specific pattern (e.g., "*.spec.ts")
+        - Searching for structural patterns in the codebase
+        - Discovering test files or configuration files
+        - Auditing file organization
+
+        Args:
+            pattern: Glob pattern to search for (e.g., "*.ts", "src/**/*.spec.ts")
+            directory: Optional directory to scope the search
+            include_metadata: Include additional metadata about the search
+
+        Returns:
+            JSON object with pattern match results:
+            - pattern: The search pattern used
+            - matches: List of matching file paths
+            - total_count: Number of matches found
+        """
+        try:
+            # Build command
+            cmd = ["sdd", "find-pattern", pattern, "--json"]
+
+            if directory:
+                cmd.extend(["--directory", directory])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="spec-find-patterns",
+                action="find_patterns",
+                pattern=pattern,
+                directory=directory,
+            )
+
+            # Execute the command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                matches: List[str] = output_data.get("matches", output_data.get("files", []))
+
+                data: Dict[str, Any] = {
+                    "pattern": pattern,
+                    "matches": matches,
+                    "total_count": len(matches),
+                }
+
+                if directory:
+                    data["directory"] = directory
+
+                if include_metadata:
+                    data["metadata"] = {
+                        "command": " ".join(cmd),
+                        "exit_code": result.returncode,
+                    }
+
+                # Track metrics
+                _metrics.counter("spec_helpers.find_patterns", labels={"status": "success"})
+
+                return asdict(success_response(data))
+            else:
+                # Command failed
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter("spec_helpers.find_patterns", labels={"status": "error"})
+
+                return asdict(error_response(
+                    f"Failed to find patterns: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that the pattern is valid and SDD CLI is available",
+                ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter("spec_helpers.find_patterns", labels={"status": "timeout"})
+            return asdict(error_response(
+                "Command timed out after 30 seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try with a more specific pattern or smaller scope",
+            ))
+        except FileNotFoundError:
+            _metrics.counter("spec_helpers.find_patterns", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in spec-find-patterns")
+            _metrics.counter("spec_helpers.find_patterns", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
