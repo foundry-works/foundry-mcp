@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T19:40:39.486929Z",
-    "generated_at_commit": "d0f9fcd47cc974a67c51b425c9baa926d391a524",
+    "generated_at": "2025-11-27T19:42:01.508442Z",
+    "generated_at_commit": "59e5cbc5ad01ae4eddfe5597f23e7a44b0c17c75",
     "languages": [
       "python"
     ],
@@ -11,25 +11,25 @@
   },
   "statistics": {
     "total_files": 40,
-    "total_lines": 17337,
+    "total_lines": 17456,
     "total_classes": 71,
     "total_functions": 199,
-    "avg_complexity": 6.61,
+    "avg_complexity": 6.71,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
       "register_task_tools (59)",
       "register_docs_tools (42)",
-      "register_lifecycle_tools (36)",
-      "register_query_tools (36)"
+      "register_environment_tools (39)",
+      "register_lifecycle_tools (36)"
     ],
     "by_language": {
       "python": {
         "files": 40,
-        "lines": 17337,
+        "lines": 17456,
         "classes": 71,
         "functions": 199,
-        "avg_complexity": 6.61
+        "avg_complexity": 6.71
       }
     }
   },
@@ -1154,7 +1154,7 @@
         "foundry_mcp.core.naming.canonical_tool"
       ],
       "exports": [],
-      "lines": 226
+      "lines": 345
     },
     {
       "name": "journal",
@@ -5114,13 +5114,13 @@
       "calls": [
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 771,
           "call_type": "method_call"
         },
         {
           "name": "cancel",
-          "file": "src/foundry_mcp/core/concurrency.py",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
           "line": 772,
           "call_type": "method_call"
         },
@@ -5132,13 +5132,13 @@
         },
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 785,
           "call_type": "method_call"
         },
         {
           "name": "result",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 787,
           "call_type": "method_call"
         },
@@ -7139,7 +7139,7 @@
         },
         {
           "name": "write",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 535,
           "call_type": "method_call"
         },
@@ -8790,6 +8790,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "sdd_detect_topology",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 228,
+          "call_type": "function_call"
+        },
+        {
           "name": "journal_add",
           "file": "src/foundry_mcp/tools/journal.py",
           "line": 50,
@@ -9001,7 +9007,7 @@
         }
       ],
       "calls": [],
-      "call_count": 54
+      "call_count": 55
     },
     {
       "name": "redact_sensitive_data",
@@ -12519,6 +12525,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "sdd_detect_topology",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 337,
+          "call_type": "function_call"
+        },
+        {
           "name": "journal_add",
           "file": "src/foundry_mcp/tools/journal.py",
           "line": 114,
@@ -12773,7 +12785,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 59
+      "call_count": 60
     },
     {
       "name": "error_response",
@@ -13123,6 +13135,12 @@
           "name": "sdd_init_workspace",
           "file": "src/foundry_mcp/tools/environment.py",
           "line": 226,
+          "call_type": "function_call"
+        },
+        {
+          "name": "sdd_detect_topology",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 345,
           "call_type": "function_call"
         },
         {
@@ -13884,7 +13902,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 177
+      "call_count": 178
     },
     {
       "name": "validation_error",
@@ -20887,7 +20905,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 20,
+      "complexity": 39,
       "decorators": [],
       "is_async": false,
       "is_exported": false,

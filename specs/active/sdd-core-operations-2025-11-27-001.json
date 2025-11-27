@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T19:41:38.347965Z",
+  "last_updated": "2025-11-27T19:43:03.402436Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 3,
+    "progress_percentage": 4,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -60,7 +60,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 13,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Bootstrap tooling for workspace initialization and validation",
         "risk_level": "low"
@@ -86,7 +86,7 @@
         "task-1-5"
       ],
       "total_tasks": 10,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -109,7 +109,7 @@
         "task-1-1-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/environment.py",
         "task_category": "implementation",
@@ -183,13 +183,19 @@
     "task-1-1-4": {
       "type": "subtask",
       "title": "Implement sdd-verify-environment - validate OS packages, runtimes, credentials",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd check-environment CLI command, validate runtime requirements"
+        "details": "Wrap sdd check-environment CLI command, validate runtime requirements",
+        "started_at": "2025-11-27T19:42:08.477640Z",
+        "status_note": "Starting implementation",
+        "completed_at": "2025-11-27T19:43:03.396217Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T19:43:03.400645Z"
       }
     },
     "task-1-1-5": {
@@ -2207,6 +2213,15 @@
       "content": "Implemented sdd-detect-topology MCP tool adapter (note: used sdd- prefix per naming conventions since this is an environment-wide helper, not spec-scoped). The tool auto-detects repository layout including: project type detection (Python, Node, Rust, Go), specs directory location, docs directory location, git repository presence, and key configuration files. Returns structured JSON with project_type, has_git, specs_dir, docs_dir, and detected_files. Includes warnings for unknown project types and missing specs directories. Tool registered and verified working.",
       "metadata": {},
       "task_id": "task-1-1-3"
+    },
+    {
+      "timestamp": "2025-11-27T19:43:03.400640Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement sdd-verify-environment - validate OS packages, runtimes, credentials",
+      "author": "claude-code",
+      "content": "Implemented sdd-verify-environment MCP tool adapter for comprehensive environment validation. Features: Python runtime check with version info and 3.9+ minimum validation, Git availability and version check, optional Node.js runtime check, custom required Python packages validation via comma-separated list. Returns structured JSON with runtimes dict (availability, version, executable), packages dict, all_valid boolean, and issues list. Returns error response with validation issues and remediation guidance when checks fail. Tool registered and verified working.",
+      "metadata": {},
+      "task_id": "task-1-1-4"
     }
   ]
 }

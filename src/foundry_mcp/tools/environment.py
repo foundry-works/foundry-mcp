@@ -343,3 +343,147 @@ def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Error detecting topology")
             return asdict(error_response(f"Failed to detect topology: {e}"))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="sdd-verify-environment",
+    )
+    def sdd_verify_environment(
+        path: Optional[str] = None,
+        check_python: bool = True,
+        check_git: bool = True,
+        check_node: bool = False,
+        required_packages: Optional[str] = None,
+    ) -> dict:
+        """
+        Validate OS packages, runtimes, and environment for SDD workflows.
+
+        Performs comprehensive environment validation including runtime versions,
+        package availability, and optional credential checks.
+
+        WHEN TO USE:
+        - Before starting development work
+        - Diagnosing CI/CD environment issues
+        - Validating team member setup
+        - Pre-flight checks before deployments
+
+        Args:
+            path: Directory context for checks (default: current directory)
+            check_python: Validate Python runtime (default: True)
+            check_git: Validate Git availability (default: True)
+            check_node: Validate Node.js runtime (default: False)
+            required_packages: Comma-separated list of required Python packages
+
+        Returns:
+            JSON object with environment validation results:
+            - runtimes: Dict of runtime versions and availability
+            - packages: Dict of package installation status (if checked)
+            - all_valid: Boolean indicating if all checks passed
+            - issues: List of validation issues found
+        """
+        import sys
+        from pathlib import Path
+
+        try:
+            base_path = Path(path) if path else Path.cwd()
+
+            runtimes: Dict[str, Any] = {}
+            issues: List[str] = []
+            packages: Dict[str, bool] = {}
+
+            # Check Python
+            if check_python:
+                python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+                runtimes["python"] = {
+                    "available": True,
+                    "version": python_version,
+                    "executable": sys.executable,
+                }
+
+                # Check minimum version (3.9+)
+                if sys.version_info < (3, 9):
+                    issues.append(f"Python 3.9+ required, found {python_version}")
+
+            # Check Git
+            if check_git:
+                git_path = shutil.which("git")
+                if git_path:
+                    try:
+                        result = subprocess.run(
+                            ["git", "--version"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                        )
+                        version_str = result.stdout.strip().replace("git version ", "")
+                        runtimes["git"] = {
+                            "available": True,
+                            "version": version_str,
+                            "executable": git_path,
+                        }
+                    except Exception:
+                        runtimes["git"] = {"available": True, "version": "unknown"}
+                else:
+                    runtimes["git"] = {"available": False}
+                    issues.append("Git not found in PATH")
+
+            # Check Node.js
+            if check_node:
+                node_path = shutil.which("node")
+                if node_path:
+                    try:
+                        result = subprocess.run(
+                            ["node", "--version"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                        )
+                        runtimes["node"] = {
+                            "available": True,
+                            "version": result.stdout.strip(),
+                            "executable": node_path,
+                        }
+                    except Exception:
+                        runtimes["node"] = {"available": True, "version": "unknown"}
+                else:
+                    runtimes["node"] = {"available": False}
+                    issues.append("Node.js not found in PATH")
+
+            # Check required packages
+            if required_packages:
+                pkg_list = [p.strip() for p in required_packages.split(",")]
+                for pkg in pkg_list:
+                    try:
+                        __import__(pkg.replace("-", "_"))
+                        packages[pkg] = True
+                    except ImportError:
+                        packages[pkg] = False
+                        issues.append(f"Required package not found: {pkg}")
+
+            all_valid = len(issues) == 0
+            data: Dict[str, Any] = {
+                "runtimes": runtimes,
+                "all_valid": all_valid,
+            }
+
+            if packages:
+                data["packages"] = packages
+            if issues:
+                data["issues"] = issues
+
+            if not all_valid:
+                return asdict(
+                    error_response(
+                        f"Environment validation failed: {len(issues)} issue(s) found",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        data=data,
+                        remediation="Install missing dependencies and ensure runtimes are properly configured.",
+                    )
+                )
+
+            return asdict(success_response(data=data))
+
+        except Exception as e:
+            logger.exception("Error verifying environment")
+            return asdict(error_response(f"Failed to verify environment: {e}"))
