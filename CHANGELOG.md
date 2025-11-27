@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pagination System (Phase 5):
+  - Cursor-based pagination for all list-style tools:
+    - Opaque Base64-encoded cursors with `last_id`, `version` fields
+    - Default page size: 100, maximum: 1000
+    - Standard `meta.pagination` contract: `cursor`, `has_more`, `page_size`, `total_count`
+  - Documentation in `docs/mcp_best_practices/06-pagination-streaming.md`:
+    - Cursor design patterns vs offset pagination
+    - Pagination response format specification
+    - Streaming patterns for real-time data
+    - Partial result indication
+    - Idempotency patterns with idempotency keys
 - Resilience Infrastructure (Phase 4):
   - Documentation for timeout and resilience patterns (`docs/mcp_best_practices/12-timeout-resilience.md`):
     - Timeout budgets: Fast (5s), Medium (30s), Slow (120s), Background (600s) with max values
