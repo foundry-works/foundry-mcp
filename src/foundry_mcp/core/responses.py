@@ -125,6 +125,26 @@ class ErrorCode(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
 
 
+class ErrorType(str, Enum):
+    """Error categories for routing and client-side handling.
+
+    Each type corresponds to an HTTP status code analog and indicates
+    whether the operation should be retried.
+
+    See docs/codebase_standards/mcp_response_schema.md for the full mapping.
+    """
+
+    VALIDATION = "validation"  # 400 - No retry, fix input
+    AUTHENTICATION = "authentication"  # 401 - No retry, re-authenticate
+    AUTHORIZATION = "authorization"  # 403 - No retry
+    NOT_FOUND = "not_found"  # 404 - No retry
+    CONFLICT = "conflict"  # 409 - Maybe retry, check state
+    RATE_LIMIT = "rate_limit"  # 429 - Yes, after delay
+    FEATURE_FLAG = "feature_flag"  # 403 - No retry, check flag status
+    INTERNAL = "internal"  # 500 - Yes, with backoff
+    UNAVAILABLE = "unavailable"  # 503 - Yes, with backoff
+
+
 @dataclass
 class ToolResponse:
     """
