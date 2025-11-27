@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:50:40.305412Z",
+  "last_updated": "2025-11-27T20:52:59.632998Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,9 +22,9 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 29,
+    "progress_percentage": 30,
     "status": "active",
-    "current_phase": "phase-2"
+    "current_phase": "phase-3"
   },
   "hierarchy": {
     "spec-root": {
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 26,
+      "completed_tasks": 27,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -864,7 +864,7 @@
     "phase-3": {
       "type": "phase",
       "title": "Authoring & Metadata - Core CRUD",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-3-files",
@@ -880,7 +880,7 @@
         ]
       },
       "total_tasks": 17,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Basic spec and task creation/modification operations",
         "risk_level": "medium"
@@ -889,7 +889,7 @@
     "phase-3-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3",
       "children": [
         "task-3-1",
@@ -898,7 +898,7 @@
         "task-3-4"
       ],
       "total_tasks": 13,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -911,7 +911,7 @@
     "task-3-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/authoring.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3-files",
       "children": [
         "task-3-1-1",
@@ -925,7 +925,7 @@
         "task-3-1-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/authoring.py",
         "task_category": "implementation",
@@ -944,13 +944,19 @@
     "task-3-1-1": {
       "type": "subtask",
       "title": "Implement spec-create - scaffold a brand-new spec from scratch",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd create, generate new spec with default hierarchy structure"
+        "details": "Wrap sdd create, generate new spec with default hierarchy structure",
+        "started_at": "2025-11-27T20:51:06.011667Z",
+        "status_note": "Implementing spec-create tool in authoring.py",
+        "completed_at": "2025-11-27T20:52:59.625821Z",
+        "needs_journaling": false,
+        "actual_hours": 0.032,
+        "journaled_at": "2025-11-27T20:52:59.630941Z"
       }
     },
     "task-3-1-2": {
@@ -2621,6 +2627,15 @@
       "content": "All child tasks in phase phase-2 have been completed.",
       "metadata": {},
       "task_id": "phase-2"
+    },
+    {
+      "timestamp": "2025-11-27T20:52:59.630936Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-create - scaffold a brand-new spec from scratch",
+      "author": "claude-code",
+      "content": "Implemented spec-create tool in src/foundry_mcp/tools/authoring.py. The tool wraps the `sdd create` CLI command with full resilience features including circuit breaker protection (5 failures, 30s recovery), timeout handling (30s default), and comprehensive metrics. Supports all CLI options: name, template (simple/medium/complex/security), category (investigation/implementation/refactoring/decision/research), and path. Follows the canonical response envelope pattern with proper error handling for validation errors, duplicate entries, command failures, and infrastructure errors. Module registered in tools/__init__.py and server.py. Import verification passed.",
+      "metadata": {},
+      "task_id": "task-3-1-1"
     }
   ]
 }

@@ -6,6 +6,7 @@ from foundry_mcp.tools.validation import register_validation_tools
 from foundry_mcp.tools.journal import register_journal_tools
 from foundry_mcp.tools.environment import register_environment_tools
 from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+from foundry_mcp.tools.authoring import register_authoring_tools
 
 __all__ = [
     "register_query_tools",
@@ -14,4 +15,5 @@ __all__ = [
     "register_journal_tools",
     "register_environment_tools",
     "register_spec_helper_tools",
+    "register_authoring_tools",
 ]

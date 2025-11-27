@@ -44,6 +44,7 @@ from foundry_mcp.tools.testing import register_testing_tools
 from foundry_mcp.tools.discovery import register_discovery_tools
 from foundry_mcp.tools.environment import register_environment_tools
 from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+from foundry_mcp.tools.authoring import register_authoring_tools
 from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
 
@@ -84,6 +85,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     register_discovery_tools(mcp, config)
     register_environment_tools(mcp, config)
     register_spec_helper_tools(mcp, config)
+    register_authoring_tools(mcp, config)
 
     # Register resources
     _register_resources(mcp, config)
