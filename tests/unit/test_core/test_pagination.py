@@ -297,3 +297,147 @@ class TestPaginatedResponse:
         pagination = result["meta"]["pagination"]
         assert pagination["cursor"] == "last_page"
         assert pagination["has_more"] is False
+
+
+class TestPaginatedListToolIntegration:
+    """Integration tests for paginated list tools pattern.
+
+    These tests validate the common pagination pattern used across
+    list tools (foundry_list_specs, foundry_query_tasks, etc.).
+    """
+
+    def test_pagination_pattern_first_page(self):
+        """Test first page pagination pattern."""
+        # Simulate fetching first page of 3 items with limit=2
+        items = ["item-1", "item-2", "item-3"]
+        page_size = 2
+
+        # Fetch one extra to detect has_more
+        page_items = items[: page_size + 1]
+        has_more = len(page_items) > page_size
+        if has_more:
+            page_items = page_items[:page_size]
+
+        assert page_items == ["item-1", "item-2"]
+        assert has_more is True
+
+        # Build cursor for next page
+        next_cursor = encode_cursor({"last_id": page_items[-1]}) if has_more else None
+        assert next_cursor is not None
+
+    def test_pagination_pattern_with_cursor(self):
+        """Test pagination pattern with cursor continuation."""
+        items = ["item-1", "item-2", "item-3", "item-4", "item-5"]
+        page_size = 2
+
+        # First page
+        cursor = encode_cursor({"last_id": "item-2"})
+
+        # Decode cursor
+        cursor_data = decode_cursor(cursor)
+        start_after_id = cursor_data.get("last_id")
+
+        # Find index of cursor position
+        start_index = 0
+        for i, item in enumerate(items):
+            if item == start_after_id:
+                start_index = i + 1
+                break
+        remaining_items = items[start_index:]
+
+        # Fetch page
+        page_items = remaining_items[: page_size + 1]
+        has_more = len(page_items) > page_size
+        if has_more:
+            page_items = page_items[:page_size]
+
+        assert page_items == ["item-3", "item-4"]
+        assert has_more is True
+
+    def test_pagination_pattern_last_page(self):
+        """Test pagination pattern on last page."""
+        items = ["item-1", "item-2", "item-3"]
+        page_size = 2
+
+        # Start after item-2
+        remaining_items = ["item-3"]
+
+        # Fetch page
+        page_items = remaining_items[: page_size + 1]
+        has_more = len(page_items) > page_size
+        if has_more:
+            page_items = page_items[:page_size]
+
+        assert page_items == ["item-3"]
+        assert has_more is False
+
+        # No next cursor for last page
+        next_cursor = encode_cursor({"last_id": page_items[-1]}) if has_more else None
+        assert next_cursor is None
+
+    def test_pagination_pattern_empty_results(self):
+        """Test pagination pattern with no results."""
+        items = []
+        page_size = 10
+
+        page_items = items[: page_size + 1]
+        has_more = len(page_items) > page_size
+        if has_more:
+            page_items = page_items[:page_size]
+
+        assert page_items == []
+        assert has_more is False
+
+    def test_pagination_pattern_exact_page_boundary(self):
+        """Test pagination when items exactly match page size."""
+        items = ["item-1", "item-2"]
+        page_size = 2
+
+        # Fetch page (no extra item means no more pages)
+        page_items = items[: page_size + 1]
+        has_more = len(page_items) > page_size
+        if has_more:
+            page_items = page_items[:page_size]
+
+        assert page_items == ["item-1", "item-2"]
+        assert has_more is False
+
+    def test_cursor_roundtrip_preserves_position(self):
+        """Cursor encode/decode roundtrip preserves position info."""
+        original_position = {"last_id": "task-5-3", "timestamp": "2025-01-15"}
+
+        cursor = encode_cursor(original_position)
+        decoded = decode_cursor(cursor)
+
+        assert decoded["last_id"] == original_position["last_id"]
+        assert decoded["timestamp"] == original_position["timestamp"]
+
+    def test_pagination_response_format(self):
+        """Test that pagination response matches expected format."""
+        result = paginated_response(
+            data={"specs": [{"spec_id": "spec-1"}, {"spec_id": "spec-2"}], "count": 2},
+            cursor="next_cursor_token",
+            has_more=True,
+            page_size=100,
+        )
+
+        # Verify structure
+        assert result["success"] is True
+        assert result["data"]["count"] == 2
+        assert len(result["data"]["specs"]) == 2
+
+        # Verify pagination metadata
+        pagination = result["meta"]["pagination"]
+        assert pagination["cursor"] == "next_cursor_token"
+        assert pagination["has_more"] is True
+        assert pagination["page_size"] == 100
+
+    def test_invalid_cursor_handling(self):
+        """Test that invalid cursors are properly detected."""
+        # Should raise CursorError for invalid cursor
+        with pytest.raises(CursorError):
+            decode_cursor("invalid_cursor_value")
+
+        # validate_cursor should return False
+        assert validate_cursor("invalid") is False
+        assert validate_cursor("") is False
