@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:54:19.080222Z",
+  "last_updated": "2025-11-27T20:55:44.692881Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 31,
+    "progress_percentage": 32,
     "status": "active",
     "current_phase": "phase-3"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 28,
+      "completed_tasks": 29,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -880,7 +880,7 @@
         ]
       },
       "total_tasks": 17,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Basic spec and task creation/modification operations",
         "risk_level": "medium"
@@ -898,7 +898,7 @@
         "task-3-4"
       ],
       "total_tasks": 13,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -925,7 +925,7 @@
         "task-3-1-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/authoring.py",
         "task_category": "implementation",
@@ -980,13 +980,19 @@
     "task-3-1-3": {
       "type": "subtask",
       "title": "Implement task-add - add new task to spec",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd add-task, insert task node into hierarchy"
+        "details": "Wrap sdd add-task, insert task node into hierarchy",
+        "started_at": "2025-11-27T20:54:51.415282Z",
+        "status_note": "Implementing task-add tool",
+        "completed_at": "2025-11-27T20:55:44.685155Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T20:55:44.690595Z"
       }
     },
     "task-3-1-4": {
@@ -2651,6 +2657,15 @@
       "content": "Implemented spec-template tool in src/foundry_mcp/tools/authoring.py. The tool wraps the `sdd template` CLI command with support for three actions: list (enumerate available templates), show (view template content), and apply (generate spec sections). Includes input validation for action parameter and template_name requirement for show/apply. Uses circuit breaker protection, timeout handling, metrics tracking, and follows canonical response envelope pattern. Handles common errors like template not found with appropriate error codes (NOT_FOUND). Import verification passed.",
       "metadata": {},
       "task_id": "task-3-1-2"
+    },
+    {
+      "timestamp": "2025-11-27T20:55:44.690587Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement task-add - add new task to spec",
+      "author": "claude-code",
+      "content": "Implemented task-add tool in src/foundry_mcp/tools/authoring.py. The tool wraps `sdd add-task` CLI to insert task nodes into the spec hierarchy. Supports all parameters: spec_id, parent, title, description, task_type (task/subtask/verify), hours, position, dry_run, and path. Includes validation for required fields and task_type. Circuit breaker protection, timeout handling, and metrics tracking included. Proper error handling for spec not found and parent not found scenarios. Import verification passed.",
+      "metadata": {},
+      "task_id": "task-3-1-3"
     }
   ]
 }

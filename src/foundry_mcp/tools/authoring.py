@@ -435,3 +435,213 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="task-add",
+    )
+    def task_add(
+        spec_id: str,
+        parent: str,
+        title: str,
+        description: Optional[str] = None,
+        task_type: Optional[str] = None,
+        hours: Optional[float] = None,
+        position: Optional[int] = None,
+        dry_run: bool = False,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Add a new task to an SDD specification.
+
+        Wraps the SDD CLI add-task command to insert a new task node into the
+        specification hierarchy. Tasks can be added as children of phases or
+        other tasks.
+
+        WHEN TO USE:
+        - Adding new work items to an existing specification
+        - Expanding scope during implementation
+        - Creating subtasks for detailed work breakdown
+        - Adding verification tasks to phases
+
+        Args:
+            spec_id: Specification ID to add task to
+            parent: Parent node ID (e.g., phase-1, task-2-1)
+            title: Task title
+            description: Optional task description
+            task_type: Task type (task, subtask, verify). Default: task
+            hours: Estimated hours for the task
+            position: Position in parent's children list (0-based)
+            dry_run: Preview changes without saving
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with task creation results:
+            - task_id: The generated task ID
+            - parent: Parent node ID
+            - title: Task title
+            - type: Task type
+            - position: Position in hierarchy
+            - dry_run: Whether this was a dry run
+        """
+        tool_name = "task_add"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            if not parent:
+                return asdict(error_response(
+                    "parent is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a parent node ID (e.g., phase-1, task-2-1)",
+                ))
+
+            if not title:
+                return asdict(error_response(
+                    "title is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a task title",
+                ))
+
+            # Validate task_type if provided
+            if task_type and task_type not in ("task", "subtask", "verify"):
+                return asdict(error_response(
+                    f"Invalid task_type '{task_type}'. Must be one of: task, subtask, verify",
+                    error_code="VALIDATION_ERROR",
+                    error_type="validation",
+                    remediation="Use one of: task, subtask, verify",
+                ))
+
+            # Build command
+            cmd = ["sdd", "add-task", spec_id, "--parent", parent, "--title", title, "--json"]
+
+            if description:
+                cmd.extend(["--description", description])
+
+            if task_type:
+                cmd.extend(["--type", task_type])
+
+            if hours is not None:
+                cmd.extend(["--hours", str(hours)])
+
+            if position is not None:
+                cmd.extend(["--position", str(position)])
+
+            if dry_run:
+                cmd.append("--dry-run")
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="task-add",
+                action="add_task",
+                spec_id=spec_id,
+                parent=parent,
+                title=title,
+                dry_run=dry_run,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                data: Dict[str, Any] = {
+                    "task_id": output_data.get("task_id", output_data.get("id")),
+                    "parent": parent,
+                    "title": title,
+                    "type": task_type or "task",
+                    "dry_run": dry_run,
+                }
+
+                if position is not None:
+                    data["position"] = position
+
+                if description:
+                    data["description"] = description
+
+                if hours is not None:
+                    data["hours"] = hours
+
+                # Track metrics
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "dry_run": str(dry_run)})
+
+                return asdict(success_response(data))
+            else:
+                # Command failed
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+
+                # Check for common errors
+                if "not found" in error_msg.lower():
+                    if "spec" in error_msg.lower():
+                        return asdict(error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        ))
+                    elif "parent" in error_msg.lower() or parent in error_msg:
+                        return asdict(error_response(
+                            f"Parent node '{parent}' not found in spec",
+                            error_code="NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the parent node ID exists in the specification",
+                        ))
+
+                return asdict(error_response(
+                    f"Failed to add task: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that the spec and parent node exist",
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try again or check system resources",
+            ))
+        except FileNotFoundError:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in task-add")
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
