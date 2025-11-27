@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:59:51.024828Z",
+  "last_updated": "2025-11-27T14:04:56.309703Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 56,
+    "progress_percentage": 57,
     "current_phase": "phase-5"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 58,
+      "completed_tasks": 59,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1469,7 +1469,7 @@
         "depends": []
       },
       "total_tasks": 15,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {
         "purpose": "Handle large datasets without overwhelming responses",
         "risk_level": "medium",
@@ -1490,7 +1490,7 @@
         "task-5-4"
       ],
       "total_tasks": 11,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1653,7 +1653,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/queries.py",
         "task_category": "refactoring",
@@ -1681,12 +1681,19 @@
     "task-5-3-2": {
       "type": "subtask",
       "title": "Add pagination to foundry_list_tasks",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-3",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T14:04:07.406060Z",
+        "status_note": "Starting pagination implementation",
+        "completed_at": "2025-11-27T14:04:56.298943Z",
+        "needs_journaling": false,
+        "actual_hours": 0.014,
+        "journaled_at": "2025-11-27T14:04:56.305778Z"
+      }
     },
     "task-5-4": {
       "type": "task",
@@ -4227,6 +4234,15 @@
       "content": "Added pagination to foundry_list_specs in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns specs sorted by spec_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-5-3-1"
+    },
+    {
+      "timestamp": "2025-11-27T14:04:56.305771Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add pagination to foundry_list_tasks",
+      "author": "claude-code",
+      "content": "Added pagination to foundry_query_tasks in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns tasks sorted by task_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
+      "metadata": {},
+      "task_id": "task-5-3-2"
     }
   ]
 }

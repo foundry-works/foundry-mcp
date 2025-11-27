@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T13:57:25.465440Z",
-    "generated_at_commit": "5b02faa81bda235e02db15a216af1d824fbb9d5d",
+    "generated_at": "2025-11-27T14:03:57.814180Z",
+    "generated_at_commit": "57d53ff5cd11ffad094d1c67e60e03c458ddd552",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 34,
-    "total_lines": 14133,
+    "total_lines": 14185,
     "total_classes": 55,
     "total_functions": 168,
-    "avg_complexity": 6.74,
+    "avg_complexity": 6.79,
     "max_complexity": 59,
     "high_complexity_functions": [
       "register_task_tools (59)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 34,
-        "lines": 14133,
+        "lines": 14185,
         "classes": 55,
         "functions": 168,
-        "avg_complexity": 6.74
+        "avg_complexity": 6.79
       }
     }
   },
@@ -1026,6 +1026,12 @@
         "mcp.server.fastmcp.FastMCP",
         "foundry_mcp.config.ServerConfig",
         "foundry_mcp.core.observability.mcp_tool",
+        "foundry_mcp.core.pagination.DEFAULT_PAGE_SIZE",
+        "foundry_mcp.core.pagination.MAX_PAGE_SIZE",
+        "foundry_mcp.core.pagination.encode_cursor",
+        "foundry_mcp.core.pagination.decode_cursor",
+        "foundry_mcp.core.pagination.CursorError",
+        "foundry_mcp.core.pagination.normalize_page_size",
         "foundry_mcp.core.responses.success_response",
         "foundry_mcp.core.responses.error_response",
         "foundry_mcp.core.spec.find_specs_directory",
@@ -1034,7 +1040,7 @@
         "foundry_mcp.core.spec.load_spec"
       ],
       "exports": [],
-      "lines": 280
+      "lines": 332
     },
     {
       "name": "rendering",
@@ -5566,7 +5572,7 @@
         },
         {
           "name": "write",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 535,
           "call_type": "method_call"
         },
@@ -6920,19 +6926,19 @@
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 109,
+          "line": 117,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 161,
+          "line": 169,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 216,
+          "line": 268,
           "call_type": "function_call"
         },
         {
@@ -7110,7 +7116,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "foundry_list_specs",
+          "file": "src/foundry_mcp/tools/queries.py",
+          "line": 252,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "dumps",
@@ -7136,7 +7149,8 @@
           "line": 121,
           "call_type": "method_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "decode_cursor",
@@ -7162,6 +7176,12 @@
           "name": "validate_cursor",
           "file": "src/foundry_mcp/core/pagination.py",
           "line": 175,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_specs",
+          "file": "src/foundry_mcp/tools/queries.py",
+          "line": 210,
           "call_type": "function_call"
         }
       ],
@@ -7203,7 +7223,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 1
+      "call_count": 2
     },
     {
       "name": "validate_cursor",
@@ -7318,7 +7338,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "foundry_list_specs",
+          "file": "src/foundry_mcp/tools/queries.py",
+          "line": 204,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "min",
@@ -7332,7 +7359,8 @@
           "line": 256,
           "call_type": "function_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "recalculate_progress",
@@ -10154,25 +10182,25 @@
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 144,
+          "line": 152,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 151,
+          "line": 159,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 206,
+          "line": 254,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 270,
+          "line": 322,
           "call_type": "function_call"
         },
         {
@@ -10869,19 +10897,19 @@
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 135,
+          "line": 143,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 158,
+          "line": 166,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 189,
+          "line": 201,
           "call_type": "function_call"
         },
         {
@@ -10891,15 +10919,21 @@
           "call_type": "function_call"
         },
         {
-          "name": "foundry_query_tasks",
+          "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 247,
+          "line": 265,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 278,
+          "line": 299,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_query_tasks",
+          "file": "src/foundry_mcp/tools/queries.py",
+          "line": 330,
           "call_type": "function_call"
         },
         {
@@ -11331,7 +11365,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 158
+      "call_count": 159
     },
     {
       "name": "validation_error",
@@ -12094,37 +12128,37 @@
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 130,
+          "line": 138,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 132,
+          "line": 140,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 184,
+          "line": 196,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 186,
+          "line": 198,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 240,
+          "line": 292,
           "call_type": "function_call"
         },
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 242,
+          "line": 294,
           "call_type": "function_call"
         },
         {
@@ -12460,7 +12494,7 @@
         {
           "name": "foundry_find_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 138,
+          "line": 146,
           "call_type": "function_call"
         },
         {
@@ -12712,7 +12746,7 @@
         {
           "name": "foundry_query_tasks",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 244,
+          "line": 296,
           "call_type": "function_call"
         },
         {
@@ -13154,7 +13188,7 @@
         {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
-          "line": 193,
+          "line": 217,
           "call_type": "function_call"
         }
       ],
@@ -18355,7 +18389,7 @@
     {
       "name": "register_query_tools",
       "file": "src/foundry_mcp/tools/queries.py",
-      "line": 99,
+      "line": 107,
       "language": "python",
       "docstring": "Register query tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
       "parameters": [
@@ -18371,7 +18405,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 20,
+      "complexity": 28,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -18388,7 +18422,7 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 280,
+          "line": 332,
           "call_type": "method_call"
         }
       ],
@@ -19000,6 +19034,12 @@
       "mcp.server.fastmcp.FastMCP",
       "foundry_mcp.config.ServerConfig",
       "foundry_mcp.core.observability.mcp_tool",
+      "foundry_mcp.core.pagination.DEFAULT_PAGE_SIZE",
+      "foundry_mcp.core.pagination.MAX_PAGE_SIZE",
+      "foundry_mcp.core.pagination.encode_cursor",
+      "foundry_mcp.core.pagination.decode_cursor",
+      "foundry_mcp.core.pagination.CursorError",
+      "foundry_mcp.core.pagination.normalize_page_size",
       "foundry_mcp.core.responses.success_response",
       "foundry_mcp.core.responses.error_response",
       "foundry_mcp.core.spec.find_specs_directory",

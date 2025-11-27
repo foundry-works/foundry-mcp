@@ -270,21 +270,25 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         status: Optional[str] = None,
         parent: Optional[str] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> dict:
         """
-        Query tasks within a specification.
+        Query tasks within a specification with optional filtering and pagination.
 
-        Filter tasks by status and/or parent task ID.
+        Filter tasks by status and/or parent task ID. Supports cursor-based pagination.
 
         Args:
             spec_id: Specification ID
             status: Filter by task status (pending, in_progress, completed, blocked)
             parent: Filter by parent task ID
             workspace: Optional workspace path
+            cursor: Pagination cursor from previous response
+            limit: Number of tasks per page (default: 100, max: 1000)
 
         Returns:
-            JSON object with matching tasks
+            JSON object with matching tasks and pagination metadata
         """
         try:
             # Determine specs directory
@@ -297,6 +301,18 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if not spec_data:
                 return asdict(error_response(f"Spec not found: {spec_id}"))
+
+            # Normalize page size
+            page_size = normalize_page_size(limit)
+
+            # Decode cursor if provided
+            start_after_id = None
+            if cursor:
+                try:
+                    cursor_data = decode_cursor(cursor)
+                    start_after_id = cursor_data.get("last_id")
+                except CursorError:
+                    return asdict(error_response("Invalid pagination cursor"))
 
             hierarchy = spec_data.get("hierarchy", {})
 
@@ -319,10 +335,37 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "parent": task_data.get("parent"),
                 })
 
+            # Sort by task_id for consistent pagination
+            tasks.sort(key=lambda t: t["task_id"])
+
+            # Apply cursor-based pagination
+            if start_after_id:
+                # Find index of cursor position
+                start_index = 0
+                for i, task in enumerate(tasks):
+                    if task["task_id"] == start_after_id:
+                        start_index = i + 1
+                        break
+                tasks = tasks[start_index:]
+
+            # Fetch one extra to detect has_more
+            page_tasks = tasks[: page_size + 1]
+            has_more = len(page_tasks) > page_size
+            if has_more:
+                page_tasks = page_tasks[:page_size]
+
+            # Build next cursor
+            next_cursor = None
+            if has_more and page_tasks:
+                next_cursor = encode_cursor({"last_id": page_tasks[-1]["task_id"]})
+
             return asdict(success_response(
-                spec_id=spec_id,
-                tasks=tasks,
-                count=len(tasks)
+                data={"spec_id": spec_id, "tasks": page_tasks, "count": len(page_tasks)},
+                pagination={
+                    "cursor": next_cursor,
+                    "has_more": has_more,
+                    "page_size": page_size,
+                }
             ))
 
         except Exception as e:
