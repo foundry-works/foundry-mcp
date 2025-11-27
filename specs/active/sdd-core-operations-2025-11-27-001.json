@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T22:41:21.759851Z",
+  "last_updated": "2025-11-27T22:42:38.267473Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 71,
+    "progress_percentage": 73,
     "status": "active",
     "current_phase": "phase-5"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 64,
+      "completed_tasks": 65,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1914,7 +1914,7 @@
         ]
       },
       "total_tasks": 14,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Plan formatting, phase management, and state reconciliation",
         "risk_level": "medium"
@@ -1931,7 +1931,7 @@
         "task-5-3"
       ],
       "total_tasks": 11,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1957,7 +1957,7 @@
         "task-5-1-8"
       ],
       "total_tasks": 8,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/planning.py",
         "task_category": "implementation",
@@ -1994,13 +1994,19 @@
     "task-5-1-2": {
       "type": "subtask",
       "title": "Implement phase-list - enumerate phases in a spec",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd list-phases, return phase nodes with pagination"
+        "details": "Wrap sdd list-phases, return phase nodes with pagination",
+        "started_at": "2025-11-27T22:41:50.472149Z",
+        "status_note": "Adding phase-list tool to planning.py",
+        "completed_at": "2025-11-27T22:42:38.258976Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-27T22:42:38.264835Z"
       }
     },
     "task-5-1-3": {
@@ -3285,6 +3291,15 @@
       "content": "Created src/foundry_mcp/tools/planning.py with plan-format tool. Module includes: circuit breaker protection (sdd_cli_planning, 5-failure threshold, 30s recovery), timing metrics, audit logging, validation for spec_id and task_id params. Tool wraps sdd format-plan command and returns formatted plan output. Module imports verified successfully.",
       "metadata": {},
       "task_id": "task-5-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T22:42:38.264831Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement phase-list - enumerate phases in a spec",
+      "author": "claude-code",
+      "content": "Added phase-list tool to planning.py. Wraps sdd list-phases command, returns phases array with total_phases and completed_phases counts. Same resilience pattern as plan-format (circuit breaker, timing metrics, audit logging). Validates spec_id param. Module imports verified.",
+      "metadata": {},
+      "task_id": "task-5-1-2"
     }
   ]
 }

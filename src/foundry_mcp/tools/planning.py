@@ -269,3 +269,140 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="phase-list",
+    )
+    def phase_list(
+        spec_id: str,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Enumerate all phases in a specification.
+
+        Wraps the SDD CLI list-phases command to return all phases
+        in a specification with their completion status and progress.
+
+        WHEN TO USE:
+        - Getting an overview of spec structure
+        - Checking phase completion status
+        - Planning which phase to work on next
+        - Understanding spec organization
+
+        Args:
+            spec_id: Specification ID to enumerate phases for
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with phase list:
+            - phases: Array of phase objects with id, title, status, progress
+            - total_phases: Total number of phases
+            - completed_phases: Number of completed phases
+        """
+        tool_name = "phase_list"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            # Build command
+            cmd = ["sdd", "list-phases", spec_id, "--json"]
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="phase-list",
+                action="list_phases",
+                spec_id=spec_id,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                phases = output_data.get("phases", [])
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "phases": phases,
+                    "total_phases": len(phases),
+                    "completed_phases": sum(1 for p in phases if p.get("status") == "completed"),
+                }
+
+                # Track metrics
+                _metrics.counter(f"planning.{tool_name}", labels={"status": "success"})
+
+                return asdict(success_response(
+                    data=data,
+                    message=f"Found {len(phases)} phases",
+                ))
+            else:
+                # Handle specific error cases
+                stderr = result.stderr.strip()
+
+                if "not found" in stderr.lower():
+                    error_code = "NOT_FOUND"
+                    remediation = "Ensure the spec_id exists in specs/active or specs/pending"
+                else:
+                    error_code = "LIST_FAILED"
+                    remediation = "Check the spec_id and try again"
+
+                _metrics.counter(f"planning.{tool_name}", labels={"status": "error", "code": error_code})
+
+                return asdict(error_response(
+                    stderr or "Failed to list phases",
+                    error_code=error_code,
+                    error_type="planning",
+                    remediation=remediation,
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="resilience",
+                remediation="Wait for circuit breaker recovery, then retry",
+            ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Phase listing timed out after {CLI_TIMEOUT}s",
+                error_code="TIMEOUT",
+                error_type="timeout",
+                remediation="Try again or check system resources",
+            ))
+
+        except FileNotFoundError:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found. Ensure 'sdd' is installed and in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="configuration",
+                remediation="Install SDD toolkit: pip install claude-sdd-toolkit",
+            ))
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in {tool_name}")
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
