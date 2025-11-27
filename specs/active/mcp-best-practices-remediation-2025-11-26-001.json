@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:04:56.309703Z",
+  "last_updated": "2025-11-27T14:07:53.494737Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 57,
+    "progress_percentage": 58,
     "current_phase": "phase-5"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 59,
+      "completed_tasks": 60,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1469,7 +1469,7 @@
         "depends": []
       },
       "total_tasks": 15,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {
         "purpose": "Handle large datasets without overwhelming responses",
         "risk_level": "medium",
@@ -1490,7 +1490,7 @@
         "task-5-4"
       ],
       "total_tasks": 11,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1636,7 +1636,7 @@
     "task-5-3": {
       "type": "task",
       "title": "src/foundry_mcp/tools/queries.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-5-files",
       "children": [
         "task-5-3-1",
@@ -1653,7 +1653,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/queries.py",
         "task_category": "refactoring",
@@ -3468,13 +3468,19 @@
     "task-5-3-3": {
       "type": "subtask",
       "title": "Add cursor pagination to doc, progress, and journal listing tools.",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-3",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Ensure all list_* tools share pagination helper usage."
+        "details": "Ensure all list_* tools share pagination helper usage.",
+        "started_at": "2025-11-27T14:05:47.218551Z",
+        "status_note": "Starting pagination for doc/progress/journal tools",
+        "completed_at": "2025-11-27T14:07:53.482540Z",
+        "needs_journaling": false,
+        "actual_hours": 0.035,
+        "journaled_at": "2025-11-27T14:07:53.491361Z"
       }
     },
     "task-6-4": {
@@ -4243,6 +4249,15 @@
       "content": "Added pagination to foundry_query_tasks in src/foundry_mcp/tools/queries.py. New parameters: cursor (opaque pagination cursor), limit (page size 1-1000, default 100). Returns tasks sorted by task_id with meta.pagination containing cursor, has_more, and page_size. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-5-3-2"
+    },
+    {
+      "timestamp": "2025-11-27T14:07:53.491355Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add cursor pagination to doc, progress, and journal listing tools.",
+      "author": "claude-code",
+      "content": "Added cursor-based pagination to doc, journal, and listing tools. Updated tools: foundry_get_journal, foundry_list_blocked, foundry_unjournaled_tasks (in journal.py), foundry_find_class, foundry_find_function (in docs.py). All tools now accept cursor and limit parameters, return pagination metadata (cursor, has_more, page_size) in meta.pagination, and use the shared pagination helpers. Verified imports work correctly.",
+      "metadata": {},
+      "task_id": "task-5-3-3"
     }
   ]
 }

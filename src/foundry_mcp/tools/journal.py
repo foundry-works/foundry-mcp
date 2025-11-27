@@ -12,6 +12,12 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.observability import mcp_tool
+from foundry_mcp.core.pagination import (
+    encode_cursor,
+    decode_cursor,
+    CursorError,
+    normalize_page_size,
+)
 from foundry_mcp.core.spec import (
     find_specs_directory,
     find_spec_file,
@@ -118,21 +124,23 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         task_id: Optional[str] = None,
         entry_type: Optional[str] = None,
-        limit: int = 10,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         workspace: Optional[str] = None
     ) -> dict:
         """
-        Get journal entries from a specification.
+        Get journal entries from a specification with optional pagination.
 
         Args:
             spec_id: Specification ID
             task_id: Optional filter by task ID
             entry_type: Optional filter by entry type
-            limit: Maximum entries to return (default: 10)
+            cursor: Pagination cursor from previous response
+            limit: Number of entries per page (default: 100, max: 1000)
             workspace: Optional workspace path
 
         Returns:
-            JSON object with journal entries
+            JSON object with journal entries and pagination metadata
         """
         try:
             if workspace:
@@ -147,27 +155,70 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return asdict(error_response(f"Spec not found: {spec_id}"))
 
-            entries = get_journal_entries(
+            # Normalize page size
+            page_size = normalize_page_size(limit)
+
+            # Decode cursor if provided
+            start_after_ts = None
+            if cursor:
+                try:
+                    cursor_data = decode_cursor(cursor)
+                    start_after_ts = cursor_data.get("last_ts")
+                except CursorError:
+                    return asdict(error_response("Invalid pagination cursor"))
+
+            # Get all matching entries (no limit from core function)
+            all_entries = get_journal_entries(
                 spec_data,
                 task_id=task_id,
                 entry_type=entry_type,
-                limit=limit,
+                limit=None,
             )
 
+            # Sort by timestamp for consistent pagination (newest first)
+            all_entries.sort(key=lambda e: e.timestamp, reverse=True)
+
+            # Apply cursor-based pagination
+            if start_after_ts:
+                start_index = 0
+                for i, entry in enumerate(all_entries):
+                    if entry.timestamp == start_after_ts:
+                        start_index = i + 1
+                        break
+                all_entries = all_entries[start_index:]
+
+            # Fetch one extra to detect has_more
+            page_entries = all_entries[: page_size + 1]
+            has_more = len(page_entries) > page_size
+            if has_more:
+                page_entries = page_entries[:page_size]
+
+            # Build next cursor
+            next_cursor = None
+            if has_more and page_entries:
+                next_cursor = encode_cursor({"last_ts": page_entries[-1].timestamp})
+
             return asdict(success_response(
-                spec_id=spec_id,
-                count=len(entries),
-                entries=[
-                    {
-                        "timestamp": e.timestamp,
-                        "entry_type": e.entry_type,
-                        "title": e.title,
-                        "content": e.content,
-                        "author": e.author,
-                        "task_id": e.task_id,
-                    }
-                    for e in entries
-                ]
+                data={
+                    "spec_id": spec_id,
+                    "count": len(page_entries),
+                    "entries": [
+                        {
+                            "timestamp": e.timestamp,
+                            "entry_type": e.entry_type,
+                            "title": e.title,
+                            "content": e.content,
+                            "author": e.author,
+                            "task_id": e.task_id,
+                        }
+                        for e in page_entries
+                    ]
+                },
+                pagination={
+                    "cursor": next_cursor,
+                    "has_more": has_more,
+                    "page_size": page_size,
+                }
             ))
 
         except Exception as e:
@@ -324,17 +375,21 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
     @mcp_tool(tool_name="foundry_list_blocked")
     def foundry_list_blocked(
         spec_id: str,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         workspace: Optional[str] = None
     ) -> dict:
         """
-        List all blocked tasks in a specification.
+        List all blocked tasks in a specification with optional pagination.
 
         Args:
             spec_id: Specification ID
+            cursor: Pagination cursor from previous response
+            limit: Number of tasks per page (default: 100, max: 1000)
             workspace: Optional workspace path
 
         Returns:
-            JSON object with list of blocked tasks
+            JSON object with list of blocked tasks and pagination metadata
         """
         try:
             if workspace:
@@ -349,12 +404,54 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return asdict(error_response(f"Spec not found: {spec_id}"))
 
-            blocked = list_blocked_tasks(spec_data)
+            # Normalize page size
+            page_size = normalize_page_size(limit)
+
+            # Decode cursor if provided
+            start_after_id = None
+            if cursor:
+                try:
+                    cursor_data = decode_cursor(cursor)
+                    start_after_id = cursor_data.get("last_id")
+                except CursorError:
+                    return asdict(error_response("Invalid pagination cursor"))
+
+            all_blocked = list_blocked_tasks(spec_data)
+
+            # Sort by task_id for consistent pagination
+            all_blocked.sort(key=lambda t: t.get("task_id", ""))
+
+            # Apply cursor-based pagination
+            if start_after_id:
+                start_index = 0
+                for i, task in enumerate(all_blocked):
+                    if task.get("task_id") == start_after_id:
+                        start_index = i + 1
+                        break
+                all_blocked = all_blocked[start_index:]
+
+            # Fetch one extra to detect has_more
+            page_tasks = all_blocked[: page_size + 1]
+            has_more = len(page_tasks) > page_size
+            if has_more:
+                page_tasks = page_tasks[:page_size]
+
+            # Build next cursor
+            next_cursor = None
+            if has_more and page_tasks:
+                next_cursor = encode_cursor({"last_id": page_tasks[-1].get("task_id")})
 
             return asdict(success_response(
-                spec_id=spec_id,
-                count=len(blocked),
-                blocked_tasks=blocked
+                data={
+                    "spec_id": spec_id,
+                    "count": len(page_tasks),
+                    "blocked_tasks": page_tasks
+                },
+                pagination={
+                    "cursor": next_cursor,
+                    "has_more": has_more,
+                    "page_size": page_size,
+                }
             ))
 
         except Exception as e:
@@ -365,17 +462,21 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
     @mcp_tool(tool_name="foundry_unjournaled_tasks")
     def foundry_unjournaled_tasks(
         spec_id: str,
+        cursor: Optional[str] = None,
+        limit: Optional[int] = None,
         workspace: Optional[str] = None
     ) -> dict:
         """
-        Find completed tasks that need journal entries.
+        Find completed tasks that need journal entries with optional pagination.
 
         Args:
             spec_id: Specification ID
+            cursor: Pagination cursor from previous response
+            limit: Number of tasks per page (default: 100, max: 1000)
             workspace: Optional workspace path
 
         Returns:
-            JSON object with list of unjournaled tasks
+            JSON object with list of unjournaled tasks and pagination metadata
         """
         try:
             if workspace:
@@ -390,12 +491,54 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not spec_data:
                 return asdict(error_response(f"Spec not found: {spec_id}"))
 
-            unjournaled = find_unjournaled_tasks(spec_data)
+            # Normalize page size
+            page_size = normalize_page_size(limit)
+
+            # Decode cursor if provided
+            start_after_id = None
+            if cursor:
+                try:
+                    cursor_data = decode_cursor(cursor)
+                    start_after_id = cursor_data.get("last_id")
+                except CursorError:
+                    return asdict(error_response("Invalid pagination cursor"))
+
+            all_unjournaled = find_unjournaled_tasks(spec_data)
+
+            # Sort by task_id for consistent pagination
+            all_unjournaled.sort(key=lambda t: t.get("task_id", ""))
+
+            # Apply cursor-based pagination
+            if start_after_id:
+                start_index = 0
+                for i, task in enumerate(all_unjournaled):
+                    if task.get("task_id") == start_after_id:
+                        start_index = i + 1
+                        break
+                all_unjournaled = all_unjournaled[start_index:]
+
+            # Fetch one extra to detect has_more
+            page_tasks = all_unjournaled[: page_size + 1]
+            has_more = len(page_tasks) > page_size
+            if has_more:
+                page_tasks = page_tasks[:page_size]
+
+            # Build next cursor
+            next_cursor = None
+            if has_more and page_tasks:
+                next_cursor = encode_cursor({"last_id": page_tasks[-1].get("task_id")})
 
             return asdict(success_response(
-                spec_id=spec_id,
-                count=len(unjournaled),
-                unjournaled_tasks=unjournaled
+                data={
+                    "spec_id": spec_id,
+                    "count": len(page_tasks),
+                    "unjournaled_tasks": page_tasks
+                },
+                pagination={
+                    "cursor": next_cursor,
+                    "has_more": has_more,
+                    "page_size": page_size,
+                }
             ))
 
         except Exception as e:
