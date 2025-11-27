@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:52:59.632998Z",
+  "last_updated": "2025-11-27T20:54:19.080222Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 30,
+    "progress_percentage": 31,
     "status": "active",
     "current_phase": "phase-3"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 27,
+      "completed_tasks": 28,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -880,7 +880,7 @@
         ]
       },
       "total_tasks": 17,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Basic spec and task creation/modification operations",
         "risk_level": "medium"
@@ -898,7 +898,7 @@
         "task-3-4"
       ],
       "total_tasks": 13,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -925,7 +925,7 @@
         "task-3-1-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/authoring.py",
         "task_category": "implementation",
@@ -962,13 +962,19 @@
     "task-3-1-2": {
       "type": "subtask",
       "title": "Implement spec-template - emit opinionated templates/snippets for spec sections",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd template, provide phase/task/subtask templates"
+        "details": "Wrap sdd template, provide phase/task/subtask templates",
+        "started_at": "2025-11-27T20:53:30.554003Z",
+        "status_note": "Implementing spec-template tool",
+        "completed_at": "2025-11-27T20:54:19.071961Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-27T20:54:19.077372Z"
       }
     },
     "task-3-1-3": {
@@ -2636,6 +2642,15 @@
       "content": "Implemented spec-create tool in src/foundry_mcp/tools/authoring.py. The tool wraps the `sdd create` CLI command with full resilience features including circuit breaker protection (5 failures, 30s recovery), timeout handling (30s default), and comprehensive metrics. Supports all CLI options: name, template (simple/medium/complex/security), category (investigation/implementation/refactoring/decision/research), and path. Follows the canonical response envelope pattern with proper error handling for validation errors, duplicate entries, command failures, and infrastructure errors. Module registered in tools/__init__.py and server.py. Import verification passed.",
       "metadata": {},
       "task_id": "task-3-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T20:54:19.077364Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-template - emit opinionated templates/snippets for spec sections",
+      "author": "claude-code",
+      "content": "Implemented spec-template tool in src/foundry_mcp/tools/authoring.py. The tool wraps the `sdd template` CLI command with support for three actions: list (enumerate available templates), show (view template content), and apply (generate spec sections). Includes input validation for action parameter and template_name requirement for show/apply. Uses circuit breaker protection, timeout handling, metrics tracking, and follows canonical response envelope pattern. Handles common errors like template not found with appropriate error codes (NOT_FOUND). Import verification passed.",
+      "metadata": {},
+      "task_id": "task-3-1-2"
     }
   ]
 }
