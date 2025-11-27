@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T23:30:55.988948Z",
+  "last_updated": "2025-11-27T23:37:10.277492Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 91,
+    "progress_percentage": 92,
     "status": "active",
     "current_phase": "phase-6"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 81,
+      "completed_tasks": 82,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -2326,7 +2326,7 @@
         ]
       },
       "total_tasks": 6,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Human-readable validation/analysis reports",
         "risk_level": "low"
@@ -2464,7 +2464,7 @@
         "blocks": []
       },
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {}
     },
     "verify-6-1": {
@@ -2491,15 +2491,20 @@
     "verify-6-2": {
       "type": "verify",
       "title": "Reports are human-readable and comprehensive",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "manual",
         "expected": "spec-report generates clear, actionable validation reports",
-        "command": ""
+        "command": "",
+        "started_at": "2025-11-27T23:33:32.064609Z",
+        "completed_at": "2025-11-27T23:37:10.268274Z",
+        "needs_journaling": false,
+        "actual_hours": 0.061,
+        "journaled_at": "2025-11-27T23:37:10.274841Z"
       },
       "dependencies": {
         "blocks": [],
@@ -3591,6 +3596,15 @@
       "content": "Verification PASSED. Ran pytest tests/unit/test_reporting.py -v and all 20 tests passed in 0.30s. Tests cover spec_report, spec_report_summary, circuit breaker, error handling, response contract compliance, health score calculation, telemetry, selective sections, workspace support, and helper functions.",
       "metadata": {},
       "task_id": "verify-6-1"
+    },
+    {
+      "timestamp": "2025-11-27T23:37:10.274832Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Reports are human-readable and comprehensive",
+      "author": "claude-code",
+      "content": "Manual verification PASSED. Tested `sdd report` command with both JSON and markdown formats. The markdown output (`--format markdown --no-json -o -`) generates clear, human-readable reports with: (1) Summary section with spec_id, status, error/warning counts, (2) Statistics snapshot with totals, status counts, progress percentage, (3) Dependency findings showing potential deadlocks and bottleneck tasks, (4) Schema validation status. Reports are well-structured with headers and bullet points, and provide actionable information (e.g., \"task-7-2 blocked by task-7-1\"). JSON output is equally comprehensive with proper nesting. Both formats meet the \"human-readable and comprehensive\" requirement.",
+      "metadata": {},
+      "task_id": "verify-6-2"
     }
   ]
 }
