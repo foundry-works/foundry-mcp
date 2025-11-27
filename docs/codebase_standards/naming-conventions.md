@@ -31,6 +31,38 @@ Consistent naming shortens discovery time, improves LLM selection accuracy, and 
 | Review / PR flows | `review-` / `pr-` | `review-list-tools`, `review-parse-feedback`, `pr-create-with-spec` |
 | Lifecycle extras | domain noun | `assumption-list`, `verification-add`, `journal-bulk-add` |
 
+## CLI Naming Plan
+
+### Binary & Entry Points
+
+1. **`sdd`** – Primary end-user CLI that mirrors the canonical command set. Every doc, spec, and test assumes this name.
+2. **`sdd-native`** – Development/testing alias wired to the same entry point. Use when co-installing with the historical `claude_skills` CLI to avoid PATH collisions.
+3. **`sdd-dev-*` helpers** – Temporary binaries (e.g., `sdd-dev-smoke`) may exist inside CI scaffolding but MUST remain unadvertised outside internal scripts.
+
+All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime stack powers both aliases.
+
+### Subcommand Namespaces
+
+| CLI Namespace | Scope | Canonical Tool Prefix Alignment |
+|---------------|-------|----------------------------------|
+| `plan` | Spec creation + workspace analysis | `spec-`, `plan-`, `phase-`, `sdd-` |
+| `next` | Task discovery + preparation | `task-` |
+| `update` | Status changes, journaling, lifecycle | `task-`, `journal-`, `spec-lifecycle-` |
+| `validate` | Validation, fix, reporting | `spec-validate-*`, `spec-report-*` |
+| `render` | AI-assisted rendering | `spec-render-*`, `review-*` |
+| `doc` | Code documentation + queries | `code-*`, `doc-*` |
+| `test` | Test discovery/execution | `test-*` |
+| `spec-mod` | Bulk spec modifications | `spec-apply-*`, `verification-*` |
+| `plan-review` / `pr` | Reviews and PR helpers | `review-*`, `pr-*` |
+| `context` | Session + token tracking | `context-*`, `sdd-session-*` |
+
+### Operation Naming Workflow
+
+1. Pick the CLI namespace first (table above) so `--help` output groups related verbs.
+2. Choose the canonical tool prefix that best matches the artifact (from the Recommended Mapping Matrix).
+3. Author the canonical MCP tool name (`prefix-verb`) and reuse that name in the CLI output/help text so LLMs see the same identifier everywhere.
+4. Update specs/tests/docs simultaneously; do **not** ship CLI commands that differ from the canonical tool name unless a `--alias` flag is explicitly documented.
+
 ## Migration Checklist
 
 1. **Choose Prefix** – Identify the narrowest artifact the tool acts upon and apply the matching prefix.

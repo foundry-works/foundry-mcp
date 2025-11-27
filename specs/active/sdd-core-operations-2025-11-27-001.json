@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T19:52:31.379356Z",
+  "last_updated": "2025-11-27T19:54:12.038782Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 10,
+    "progress_percentage": 11,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -60,7 +60,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 13,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {
         "purpose": "Bootstrap tooling for workspace initialization and validation",
         "risk_level": "low"
@@ -76,7 +76,7 @@
     "phase-1-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-1",
       "children": [
         "task-1-1",
@@ -86,8 +86,12 @@
         "task-1-5"
       ],
       "total_tasks": 10,
-      "completed_tasks": 9,
-      "metadata": {},
+      "completed_tasks": 10,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T19:54:12.029352Z",
+        "journaled_at": "2025-11-27T19:54:12.038729Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-1-verify"
@@ -336,7 +340,7 @@
     "task-1-5": {
       "type": "task",
       "title": "tests/integration/test_environment_tools.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [],
       "dependencies": {
@@ -347,12 +351,17 @@
         "blocks": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/integration/test_environment_tools.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "changes": "Add dedicated integration tests for environment tools covering response envelopes and feature flags"
+        "changes": "Add dedicated integration tests for environment tools covering response envelopes and feature flags",
+        "started_at": "2025-11-27T19:53:00.722250Z",
+        "completed_at": "2025-11-27T19:54:12.029176Z",
+        "needs_journaling": false,
+        "actual_hours": 0.02,
+        "journaled_at": "2025-11-27T19:54:12.034309Z"
       }
     },
     "phase-1-verify": {
@@ -2293,6 +2302,24 @@
       "content": "Created tests/unit/test_environment.py with 26 unit tests covering: (1) TestVerifyToolchain - 4 tests for toolchain verification logic including tool availability checks and missing tool handling. (2) TestInitWorkspace - 3 tests for workspace initialization including directory creation and permission error handling. (3) TestDetectTopology - 5 tests for topology detection including Python/Node project detection, specs directory detection, git repository detection. (4) TestVerifyEnvironment - 6 tests for environment verification including Python version, git availability, package imports. (5) TestDiscoveryMetadata - 8 tests for discovery metadata from discovery.py including tool metadata, feature flags, and helper functions. All 26 tests pass.",
       "metadata": {},
       "task_id": "task-1-4"
+    },
+    {
+      "timestamp": "2025-11-27T19:54:12.034300Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/integration/test_environment_tools.py",
+      "author": "claude-code",
+      "content": "Created tests/integration/test_environment_tools.py with 22 integration tests covering: (1) TestEnvironmentToolResponseEnvelopes - 4 tests for response envelope compliance (success/error structure, warnings, remediation). (2) TestFeatureFlagIntegration - 3 tests for feature flag system integration. (3) TestToolDiscoveryMetadata - 4 tests for tool metadata and schema generation. (4) TestToolRegistration - 4 tests for tool registry functionality. (5) TestEnvironmentCapabilities - 4 tests for capability reporting. (6) TestEndToEndWorkflow - 3 tests for end-to-end workflows (workspace init, topology detection, environment verification). All 22 tests pass.",
+      "metadata": {},
+      "task_id": "task-1-5"
+    },
+    {
+      "timestamp": "2025-11-27T19:54:12.038722Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-1-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-1-files"
     }
   ]
 }
