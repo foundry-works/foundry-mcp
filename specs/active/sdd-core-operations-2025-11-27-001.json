@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T21:54:15.336791Z",
+  "last_updated": "2025-11-27T21:55:27.063667Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 60,
+    "progress_percentage": 61,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 54,
+      "completed_tasks": 55,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1364,7 +1364,7 @@
         ]
       },
       "total_tasks": 20,
-      "completed_tasks": 11,
+      "completed_tasks": 12,
       "metadata": {
         "purpose": "Analysis, bulk operations, and specialized mutations",
         "risk_level": "medium"
@@ -1382,7 +1382,7 @@
         "task-4-4"
       ],
       "total_tasks": 17,
-      "completed_tasks": 11,
+      "completed_tasks": 12,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1508,7 +1508,7 @@
         "task-4-2-9"
       ],
       "total_tasks": 9,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/mutations.py",
         "task_category": "implementation",
@@ -1652,13 +1652,19 @@
     "task-4-2-8": {
       "type": "subtask",
       "title": "Integrate resilience/telemetry for mutation flows",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Ensure mutation tools wrap file writes with core/resilience, concurrency gates, and observability tracing"
+        "details": "Ensure mutation tools wrap file writes with core/resilience, concurrency gates, and observability tracing",
+        "started_at": "2025-11-27T21:54:57.224228Z",
+        "status_note": "Verifying resilience/telemetry integration",
+        "completed_at": "2025-11-27T21:55:27.055547Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-27T21:55:27.061381Z"
       }
     },
     "task-4-2-9": {
@@ -3079,6 +3085,15 @@
       "content": "Implemented spec-sync-metadata MCP tool in mutations.py. The tool wraps 'sdd sync-metadata' CLI command and takes spec_id, dry_run, and path parameters. Returns synced status with changes list and handles warnings. Follows established patterns with circuit breaker, metrics, audit logging. Import test passing.",
       "metadata": {},
       "task_id": "task-4-2-7"
+    },
+    {
+      "timestamp": "2025-11-27T21:55:27.061376Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Integrate resilience/telemetry for mutation flows",
+      "author": "claude-code",
+      "content": "Verified resilience/telemetry integration is complete for all 7 mutation tools. All tools use _run_sdd_command() which provides circuit breaker protection and timing metrics. Each tool has audit_log() calls before CLI execution and _metrics.counter() for tracking success/error/timeout states. No additional work needed - patterns were correctly applied during initial implementation.",
+      "metadata": {},
+      "task_id": "task-4-2-8"
     }
   ]
 }
