@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T21:29:56.391684Z",
+  "last_updated": "2025-11-27T21:30:59.442316Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 47,
+    "progress_percentage": 48,
     "status": "active",
     "current_phase": "phase-3"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 42,
+      "completed_tasks": 43,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -864,7 +864,7 @@
     "phase-3": {
       "type": "phase",
       "title": "Authoring & Metadata - Core CRUD",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "phase-3-files",
@@ -880,10 +880,13 @@
         ]
       },
       "total_tasks": 17,
-      "completed_tasks": 16,
+      "completed_tasks": 17,
       "metadata": {
         "purpose": "Basic spec and task creation/modification operations",
-        "risk_level": "medium"
+        "risk_level": "medium",
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T21:30:59.429791Z",
+        "journaled_at": "2025-11-27T21:30:59.442286Z"
       }
     },
     "phase-3-files": {
@@ -1231,7 +1234,7 @@
     "phase-3-verify": {
       "type": "group",
       "title": "Verification",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-3",
       "children": [
         "verify-3-1",
@@ -1247,8 +1250,12 @@
         "blocks": []
       },
       "total_tasks": 4,
-      "completed_tasks": 3,
-      "metadata": {}
+      "completed_tasks": 4,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T21:30:59.429788Z",
+        "journaled_at": "2025-11-27T21:30:59.440085Z"
+      }
     },
     "verify-3-1": {
       "type": "verify",
@@ -1320,16 +1327,22 @@
     "verify-3-4": {
       "type": "verify",
       "title": "Integration tests pass for authoring tools",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "auto",
         "agent": "run-tests",
         "command": "pytest tests/integration/test_authoring_tools.py -v",
-        "expected": "Authoring CRUD scenarios pass envelope and hierarchy assertions"
+        "expected": "Authoring CRUD scenarios pass envelope and hierarchy assertions",
+        "started_at": "2025-11-27T21:30:22.502236Z",
+        "status_note": "Running authoring integration tests",
+        "completed_at": "2025-11-27T21:30:59.429608Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2025-11-27T21:30:59.435414Z"
       }
     },
     "phase-4": {
@@ -2874,6 +2887,33 @@
       "content": "Phase 3 fidelity review completed with 95% score (Partial Pass). All 8 authoring tools implemented correctly per spec. 66.7% AI model consensus. Minor deviation: spec references 'src/foundry_mcp/tools/server.py' but actual registration is in 'src/foundry_mcp/server.py' (no functional impact). Unit tests (58 cases) confirmed passing. Integration tests pending verify-3-4. Report saved to specs/.fidelity-reviews/sdd-core-operations-2025-11-27-001-phase-phase-3-fidelity-review.json.",
       "metadata": {},
       "task_id": "verify-3-3"
+    },
+    {
+      "timestamp": "2025-11-27T21:30:59.435408Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Integration tests pass for authoring tools",
+      "author": "claude-code",
+      "content": "Integration tests for authoring tools passed - all 45 tests pass (3.34s). Coverage: Tool Registration (9), Response Envelope Compliance (4), Hierarchy Integrity (4), Metadata Operations (5), Template Operations (4), Spec Creation (4), Task Operations (8), Authoring Workflows (3), Error Handling (3). All envelope structures conform to response schema, hierarchy integrity validated, cascade operations checked, error responses include remediation guidance. Phase 3 verification complete.",
+      "metadata": {},
+      "task_id": "verify-3-4"
+    },
+    {
+      "timestamp": "2025-11-27T21:30:59.440081Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Verification",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-3-verify have been completed.",
+      "metadata": {},
+      "task_id": "phase-3-verify"
+    },
+    {
+      "timestamp": "2025-11-27T21:30:59.442282Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Authoring & Metadata - Core CRUD",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-3 have been completed.",
+      "metadata": {},
+      "task_id": "phase-3"
     }
   ]
 }
