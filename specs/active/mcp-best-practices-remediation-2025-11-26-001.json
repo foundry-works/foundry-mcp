@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T12:36:29.236404Z",
+  "last_updated": "2025-11-27T12:44:57.533515Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 9,
+    "progress_percentage": 10,
     "current_phase": "phase-1"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -89,7 +89,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 15,
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "metadata": {
         "purpose": "Address critical security gaps that could expose the system to attacks or data leaks",
         "risk_level": "high",
@@ -118,7 +118,7 @@
         "task-1-4"
       ],
       "total_tasks": 11,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -354,7 +354,7 @@
     "task-1-4": {
       "type": "task",
       "title": "tests/unit/test_core/test_security.py (NEW)",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-1-files",
       "children": [
         "task-1-4-1",
@@ -370,7 +370,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/unit/test_core/test_security.py",
         "task_category": "implementation",
@@ -380,12 +380,19 @@
     "task-1-4-1": {
       "type": "subtask",
       "title": "Test prompt injection detection",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-4",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T12:42:11.965064Z",
+        "status_note": "Starting implementation of prompt injection detection tests",
+        "completed_at": "2025-11-27T12:44:57.517636Z",
+        "needs_journaling": false,
+        "actual_hours": 0.046,
+        "journaled_at": "2025-11-27T12:44:57.528469Z"
+      }
     },
     "task-1-4-2": {
       "type": "subtask",
@@ -3302,6 +3309,15 @@
       "content": "Added input size validation to validation.py:\n\n1. New validate_spec_input(raw_input, *, max_size) function:\n   - Takes raw JSON string or bytes input\n   - Validates size before JSON parsing (defense against resource exhaustion)\n   - Returns tuple of (parsed_data, error_result)\n   - Checks against MAX_INPUT_SIZE (100KB default)\n   - Returns INPUT_TOO_LARGE diagnostic if exceeded\n   - Returns INVALID_JSON diagnostic on parse failure\n\n2. New _validate_size_limits(spec_data, result) helper:\n   - Validates nesting depth against MAX_NESTED_DEPTH\n   - Validates hierarchy.children array against MAX_ARRAY_LENGTH\n   - Validates journal array against MAX_ARRAY_LENGTH\n   - Issues EXCESSIVE_NESTING, EXCESSIVE_ARRAY_LENGTH, EXCESSIVE_JOURNAL_LENGTH warnings\n   - Called from validate_spec() as defense in depth\n\n3. Updated validate_spec() to call _validate_size_limits() for defense in depth\n\nVerification tests passed:\n- Valid JSON input parses successfully\n- Oversized input (200KB) rejected with INPUT_TOO_LARGE error\n- Invalid JSON rejected with INVALID_JSON error\n- Excessive array length (2000 items) triggers warning\n- Excessive journal length (1500 entries) triggers warning\n\nThis completes the validation.py enhancements (2/2 subtasks).",
       "metadata": {},
       "task_id": "task-1-3-2"
+    },
+    {
+      "timestamp": "2025-11-27T12:44:57.528453Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Test prompt injection detection",
+      "author": "claude-code",
+      "content": "Implemented comprehensive prompt injection detection tests in tests/unit/test_core/test_security.py. Created TestPromptInjectionDetection class with 47 passing tests covering: instruction override attempts (10 variants), system prompt injection (4 variants), special token injection (4 variants - OpenAI, Llama markers), code block injection (2 variants), role injection (3 variants), safe input verification (13 cases), custom patterns support, case insensitivity, multiline input, unicode handling, edge cases (empty/whitespace), and regex pattern validity verification. All tests pass.",
+      "metadata": {},
+      "task_id": "task-1-4-1"
     }
   ]
 }

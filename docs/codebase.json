@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T12:34:44.740650Z",
-    "generated_at_commit": "8f43a0a2f316157a42affa2cdc9e2c299cd2aad5",
+    "generated_at": "2025-11-27T12:42:10.778959Z",
+    "generated_at_commit": "b85dee7395d18c9ae917e243ae5e44098c236b21",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 31,
-    "total_lines": 12247,
+    "total_lines": 12424,
     "total_classes": 44,
-    "total_functions": 143,
-    "avg_complexity": 7.35,
+    "total_functions": 146,
+    "avg_complexity": 7.33,
     "max_complexity": 59,
     "high_complexity_functions": [
       "register_task_tools (59)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 31,
-        "lines": 12247,
+        "lines": 12424,
         "classes": 44,
-        "functions": 143,
-        "avg_complexity": 7.35
+        "functions": 146,
+        "avg_complexity": 7.33
       }
     }
   },
@@ -600,7 +600,10 @@
         "SpecStats"
       ],
       "functions": [
+        "validate_spec_input",
         "validate_spec",
+        "_iter_valid_nodes",
+        "_validate_size_limits",
         "_validate_structure",
         "_validate_hierarchy",
         "_validate_nodes",
@@ -651,7 +654,7 @@
         "foundry_mcp.core.security.MAX_NESTED_DEPTH"
       ],
       "exports": [],
-      "lines": 1344
+      "lines": 1521
     },
     {
       "name": "__init__",
@@ -2741,113 +2744,161 @@
       "is_public": true,
       "instantiated_by": [
         {
-          "instantiator": "_validate_structure",
+          "instantiator": "validate_spec_input",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 157,
+          "line": 155,
           "context": [
-            "_validate_structure"
+            "validate_spec_input"
           ]
         },
         {
-          "instantiator": "_validate_structure",
+          "instantiator": "validate_spec_input",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 169,
+          "line": 176,
           "context": [
-            "_validate_structure"
+            "validate_spec_input"
           ]
         },
         {
-          "instantiator": "_validate_structure",
+          "instantiator": "_iter_valid_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 181,
+          "line": 251,
           "context": [
-            "_validate_structure"
+            "_iter_valid_nodes"
           ]
         },
         {
-          "instantiator": "_validate_structure",
+          "instantiator": "_validate_size_limits",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 194,
+          "line": 295,
           "context": [
-            "_validate_structure"
+            "_validate_size_limits"
           ]
         },
         {
-          "instantiator": "_validate_structure",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 201,
-          "context": [
-            "_validate_structure"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 213,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 223,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 236,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 245,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 258,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 269,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
-          "file": "src/foundry_mcp/core/validation.py",
-          "line": 279,
-          "context": [
-            "_validate_hierarchy"
-          ]
-        },
-        {
-          "instantiator": "_validate_hierarchy",
+          "instantiator": "_validate_size_limits",
           "file": "src/foundry_mcp/core/validation.py",
           "line": 306,
           "context": [
+            "_validate_size_limits"
+          ]
+        },
+        {
+          "instantiator": "_validate_size_limits",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 318,
+          "context": [
+            "_validate_size_limits"
+          ]
+        },
+        {
+          "instantiator": "_validate_structure",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 334,
+          "context": [
+            "_validate_structure"
+          ]
+        },
+        {
+          "instantiator": "_validate_structure",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 346,
+          "context": [
+            "_validate_structure"
+          ]
+        },
+        {
+          "instantiator": "_validate_structure",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 358,
+          "context": [
+            "_validate_structure"
+          ]
+        },
+        {
+          "instantiator": "_validate_structure",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 371,
+          "context": [
+            "_validate_structure"
+          ]
+        },
+        {
+          "instantiator": "_validate_structure",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 378,
+          "context": [
+            "_validate_structure"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 390,
+          "context": [
             "_validate_hierarchy"
           ]
         },
         {
           "instantiator": "_validate_hierarchy",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 335,
+          "line": 400,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 413,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 422,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 435,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 446,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 456,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 483,
+          "context": [
+            "_validate_hierarchy"
+          ]
+        },
+        {
+          "instantiator": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 512,
           "context": [
             "_validate_hierarchy"
           ]
@@ -2855,7 +2906,7 @@
         {
           "instantiator": "_validate_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 351,
+          "line": 528,
           "context": [
             "_validate_nodes"
           ]
@@ -2863,7 +2914,7 @@
         {
           "instantiator": "_validate_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 364,
+          "line": 541,
           "context": [
             "_validate_nodes"
           ]
@@ -2871,7 +2922,7 @@
         {
           "instantiator": "_validate_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 377,
+          "line": 554,
           "context": [
             "_validate_nodes"
           ]
@@ -2879,7 +2930,7 @@
         {
           "instantiator": "_validate_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 390,
+          "line": 567,
           "context": [
             "_validate_nodes"
           ]
@@ -2887,7 +2938,7 @@
         {
           "instantiator": "_validate_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 404,
+          "line": 581,
           "context": [
             "_validate_nodes"
           ]
@@ -2895,7 +2946,7 @@
         {
           "instantiator": "_validate_nodes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 416,
+          "line": 593,
           "context": [
             "_validate_nodes"
           ]
@@ -2903,7 +2954,7 @@
         {
           "instantiator": "_validate_task_counts",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 434,
+          "line": 611,
           "context": [
             "_validate_task_counts"
           ]
@@ -2911,7 +2962,7 @@
         {
           "instantiator": "_validate_task_counts",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 456,
+          "line": 633,
           "context": [
             "_validate_task_counts"
           ]
@@ -2919,7 +2970,7 @@
         {
           "instantiator": "_validate_task_counts",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 467,
+          "line": 644,
           "context": [
             "_validate_task_counts"
           ]
@@ -2927,7 +2978,7 @@
         {
           "instantiator": "_validate_task_counts",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 481,
+          "line": 658,
           "context": [
             "_validate_task_counts"
           ]
@@ -2935,7 +2986,7 @@
         {
           "instantiator": "_validate_dependencies",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 509,
+          "line": 686,
           "context": [
             "_validate_dependencies"
           ]
@@ -2943,7 +2994,7 @@
         {
           "instantiator": "_validate_dependencies",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 524,
+          "line": 701,
           "context": [
             "_validate_dependencies"
           ]
@@ -2951,7 +3002,7 @@
         {
           "instantiator": "_validate_dependencies",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 540,
+          "line": 717,
           "context": [
             "_validate_dependencies"
           ]
@@ -2959,7 +3010,7 @@
         {
           "instantiator": "_validate_metadata",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 558,
+          "line": 735,
           "context": [
             "_validate_metadata"
           ]
@@ -2967,7 +3018,7 @@
         {
           "instantiator": "_validate_metadata",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 572,
+          "line": 749,
           "context": [
             "_validate_metadata"
           ]
@@ -2975,7 +3026,7 @@
         {
           "instantiator": "_validate_metadata",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 582,
+          "line": 759,
           "context": [
             "_validate_metadata"
           ]
@@ -2983,7 +3034,7 @@
         {
           "instantiator": "_validate_metadata",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 595,
+          "line": 772,
           "context": [
             "_validate_metadata"
           ]
@@ -2991,14 +3042,14 @@
         {
           "instantiator": "_validate_metadata",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 608,
+          "line": 785,
           "context": [
             "_validate_metadata"
           ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 32
+      "instantiation_count": 38
     },
     {
       "name": "ValidationResult",
@@ -3013,16 +3064,32 @@
       "is_public": true,
       "instantiated_by": [
         {
+          "instantiator": "validate_spec_input",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 150,
+          "context": [
+            "validate_spec_input"
+          ]
+        },
+        {
+          "instantiator": "validate_spec_input",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 171,
+          "context": [
+            "validate_spec_input"
+          ]
+        },
+        {
           "instantiator": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 125,
+          "line": 202,
           "context": [
             "validate_spec"
           ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 3
     },
     {
       "name": "FixAction",
@@ -3039,7 +3106,7 @@
         {
           "instantiator": "_build_date_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 707,
+          "line": 884,
           "context": [
             "_build_date_fix"
           ]
@@ -3047,7 +3114,7 @@
         {
           "instantiator": "_build_hierarchy_align_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 738,
+          "line": 915,
           "context": [
             "_build_hierarchy_align_fix"
           ]
@@ -3055,7 +3122,7 @@
         {
           "instantiator": "_build_orphan_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 771,
+          "line": 948,
           "context": [
             "_build_orphan_fix"
           ]
@@ -3063,7 +3130,7 @@
         {
           "instantiator": "_build_missing_fields_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 811,
+          "line": 988,
           "context": [
             "_build_missing_fields_fix"
           ]
@@ -3071,7 +3138,7 @@
         {
           "instantiator": "_build_type_normalize_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 835,
+          "line": 1012,
           "context": [
             "_build_type_normalize_fix"
           ]
@@ -3079,7 +3146,7 @@
         {
           "instantiator": "_build_status_normalize_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 859,
+          "line": 1036,
           "context": [
             "_build_status_normalize_fix"
           ]
@@ -3087,7 +3154,7 @@
         {
           "instantiator": "_build_title_generate_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 883,
+          "line": 1060,
           "context": [
             "_build_title_generate_fix"
           ]
@@ -3095,7 +3162,7 @@
         {
           "instantiator": "_build_counts_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 899,
+          "line": 1076,
           "context": [
             "_build_counts_fix"
           ]
@@ -3103,7 +3170,7 @@
         {
           "instantiator": "_build_bidirectional_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 952,
+          "line": 1129,
           "context": [
             "_build_bidirectional_fix"
           ]
@@ -3111,7 +3178,7 @@
         {
           "instantiator": "_build_deps_structure_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 977,
+          "line": 1154,
           "context": [
             "_build_deps_structure_fix"
           ]
@@ -3119,7 +3186,7 @@
         {
           "instantiator": "_build_verification_type_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1003,
+          "line": 1180,
           "context": [
             "_build_verification_type_fix"
           ]
@@ -3127,7 +3194,7 @@
         {
           "instantiator": "_build_file_path_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1029,
+          "line": 1206,
           "context": [
             "_build_file_path_fix"
           ]
@@ -3135,7 +3202,7 @@
         {
           "instantiator": "_build_task_category_fix",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1055,
+          "line": 1232,
           "context": [
             "_build_task_category_fix"
           ]
@@ -3159,7 +3226,7 @@
         {
           "instantiator": "apply_fixes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1087,
+          "line": 1264,
           "context": [
             "apply_fixes"
           ]
@@ -3183,7 +3250,7 @@
         {
           "instantiator": "calculate_stats",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1207,
+          "line": 1384,
           "context": [
             "calculate_stats"
           ]
@@ -4970,7 +5037,7 @@
         },
         {
           "name": "read",
-          "file": "/home/tyler/anaconda3/lib/python3.11/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -5167,13 +5234,13 @@
         {
           "name": "apply",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 897,
+          "line": 1074,
           "call_type": "function_call"
         },
         {
           "name": "apply_fixes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1123,
+          "line": 1300,
           "call_type": "function_call"
         }
       ],
@@ -13758,11 +13825,94 @@
       "call_count": 1
     },
     {
-      "name": "validate_spec",
+      "name": "validate_spec_input",
       "file": "src/foundry_mcp/core/validation.py",
       "line": 114,
       "language": "python",
-      "docstring": "Validate a spec file and return structured diagnostics.\n\nArgs:\n    spec_data: Parsed JSON spec data\n\nReturns:\n    ValidationResult with all diagnostics",
+      "docstring": "Validate and parse raw spec input with size checks.\n\nPerforms size validation before JSON parsing to prevent resource\nexhaustion attacks from oversized payloads.\n\nArgs:\n    raw_input: Raw JSON string or bytes to validate\n    max_size: Maximum allowed size in bytes (default: MAX_INPUT_SIZE)\n\nReturns:\n    Tuple of (parsed_data, error_result):\n    - On success: (dict, None)\n    - On failure: (None, ValidationResult with error)\n\nExample:\n    >>> spec_data, error = validate_spec_input(json_string)\n    >>> if error:\n    ...     return error_response(error.diagnostics[0].message)\n    >>> result = validate_spec(spec_data)",
+      "parameters": [
+        {
+          "name": "raw_input",
+          "type": "str | bytes",
+          "default": null
+        }
+      ],
+      "return_type": "tuple[Optional[Dict[str, Any]], Optional[ValidationResult]]",
+      "complexity": 5,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "isinstance",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 143,
+          "call_type": "function_call"
+        },
+        {
+          "name": "encode",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 144,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 149,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 155,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 157,
+          "call_type": "function_call"
+        },
+        {
+          "name": "isinstance",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 166,
+          "call_type": "function_call"
+        },
+        {
+          "name": "loads",
+          "file": "/home/tyler/anaconda3/lib/python3.11/json/__init__.py",
+          "line": 167,
+          "call_type": "method_call"
+        },
+        {
+          "name": "decode",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 167,
+          "call_type": "method_call"
+        },
+        {
+          "name": "loads",
+          "file": "/home/tyler/anaconda3/lib/python3.11/json/__init__.py",
+          "line": 169,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 176,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "validate_spec",
+      "file": "src/foundry_mcp/core/validation.py",
+      "line": 187,
+      "language": "python",
+      "docstring": "Validate a spec file and return structured diagnostics.\n\nArgs:\n    spec_data: Parsed JSON spec data\n\nReturns:\n    ValidationResult with all diagnostics\n\nNote:\n    For raw JSON input, use validate_spec_input() first to perform\n    size validation before parsing.",
       "parameters": [
         {
           "name": "spec_data",
@@ -13806,58 +13956,267 @@
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 124,
+          "line": 201,
           "call_type": "method_call"
+        },
+        {
+          "name": "_validate_size_limits",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 205,
+          "call_type": "function_call"
         },
         {
           "name": "_validate_structure",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 128,
+          "line": 208,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 130,
+          "line": 210,
           "call_type": "method_call"
         },
         {
           "name": "_validate_hierarchy",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 132,
+          "line": 212,
           "call_type": "function_call"
         },
         {
           "name": "_validate_nodes",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 133,
+          "line": 213,
           "call_type": "function_call"
         },
         {
           "name": "_validate_task_counts",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 134,
+          "line": 214,
           "call_type": "function_call"
         },
         {
           "name": "_validate_dependencies",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 135,
+          "line": 215,
           "call_type": "function_call"
         },
         {
           "name": "_validate_metadata",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 136,
+          "line": 216,
           "call_type": "function_call"
         }
       ],
       "call_count": 4
     },
     {
+      "name": "_iter_valid_nodes",
+      "file": "src/foundry_mcp/core/validation.py",
+      "line": 231,
+      "language": "python",
+      "docstring": "Iterate over hierarchy yielding only valid (dict) nodes.\n\nArgs:\n    hierarchy: The hierarchy dict to iterate\n    result: ValidationResult to append errors to\n    report_invalid: Whether to report invalid nodes as errors (default True,\n                    set False if already reported by another function)\n\nYields:\n    Tuples of (node_id, node) where node is a valid dict",
+      "parameters": [
+        {
+          "name": "hierarchy",
+          "type": "Dict[str, Any]",
+          "default": null
+        },
+        {
+          "name": "result",
+          "type": "ValidationResult",
+          "default": null
+        },
+        {
+          "name": "report_invalid",
+          "type": "bool",
+          "default": null
+        }
+      ],
+      "return_type": null,
+      "complexity": 4,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": false,
+      "callers": [
+        {
+          "name": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 409,
+          "call_type": "function_call"
+        },
+        {
+          "name": "_validate_hierarchy",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 431,
+          "call_type": "function_call"
+        },
+        {
+          "name": "_validate_nodes",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 524,
+          "call_type": "function_call"
+        },
+        {
+          "name": "_validate_task_counts",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 604,
+          "call_type": "function_call"
+        },
+        {
+          "name": "_validate_dependencies",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 671,
+          "call_type": "function_call"
+        },
+        {
+          "name": "_validate_metadata",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 730,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "items",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 248,
+          "call_type": "method_call"
+        },
+        {
+          "name": "isinstance",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 249,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 251,
+          "call_type": "method_call"
+        },
+        {
+          "name": "type",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 253,
+          "call_type": "function_call"
+        },
+        {
+          "name": "str",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 256,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 6
+    },
+    {
+      "name": "_validate_size_limits",
+      "file": "src/foundry_mcp/core/validation.py",
+      "line": 263,
+      "language": "python",
+      "docstring": "Validate size limits on spec data structures (defense in depth).",
+      "parameters": [
+        {
+          "name": "spec_data",
+          "type": "Dict[str, Any]",
+          "default": null
+        },
+        {
+          "name": "result",
+          "type": "ValidationResult",
+          "default": null
+        }
+      ],
+      "return_type": "None",
+      "complexity": 10,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": false,
+      "callers": [
+        {
+          "name": "validate_spec",
+          "file": "src/foundry_mcp/core/validation.py",
+          "line": 205,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "get",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
+          "line": 291,
+          "call_type": "method_call"
+        },
+        {
+          "name": "count_items",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 293,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 295,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 304,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 305,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 306,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 308,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
+          "line": 316,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 317,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 318,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 320,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
       "name": "_validate_structure",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 151,
+      "line": 328,
       "language": "python",
       "docstring": "Validate top-level structure and required fields.",
       "parameters": [
@@ -13882,7 +14241,7 @@
         {
           "name": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 128,
+          "line": 208,
           "call_type": "function_call"
         }
       ],
@@ -13890,73 +14249,73 @@
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 157,
+          "line": 334,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 167,
+          "line": 344,
           "call_type": "method_call"
         },
         {
           "name": "_is_valid_spec_id",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 168,
+          "line": 345,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 169,
+          "line": 346,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 179,
+          "line": 356,
           "call_type": "method_call"
         },
         {
           "name": "_is_valid_iso8601",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 180,
+          "line": 357,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 181,
+          "line": 358,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 192,
+          "line": 369,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 193,
+          "line": 370,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 194,
+          "line": 371,
           "call_type": "method_call"
         },
         {
           "name": "len",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 200,
+          "line": 377,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 201,
+          "line": 378,
           "call_type": "method_call"
         }
       ],
@@ -13965,7 +14324,7 @@
     {
       "name": "_validate_hierarchy",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 209,
+      "line": 386,
       "language": "python",
       "docstring": "Validate hierarchy integrity: parent/child references, no orphans, no cycles.",
       "parameters": [
@@ -13990,7 +14349,7 @@
         {
           "name": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 132,
+          "line": 212,
           "call_type": "function_call"
         }
       ],
@@ -13998,163 +14357,163 @@
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 213,
+          "line": 390,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 222,
+          "line": 399,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 223,
+          "line": 400,
           "call_type": "method_call"
         },
         {
-          "name": "items",
-          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 232,
-          "call_type": "method_call"
+          "name": "_iter_valid_nodes",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 409,
+          "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 233,
+          "line": 410,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 236,
+          "line": 413,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 245,
+          "line": 422,
           "call_type": "method_call"
         },
         {
-          "name": "items",
-          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 254,
-          "call_type": "method_call"
+          "name": "_iter_valid_nodes",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 431,
+          "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 255,
+          "line": 432,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 257,
+          "line": 434,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 258,
+          "line": 435,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 269,
+          "line": 446,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 278,
+          "line": 455,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 279,
+          "line": 456,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 281,
+          "line": 458,
           "call_type": "method_call"
         },
         {
           "name": "set",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 290,
+          "line": 467,
           "call_type": "function_call"
         },
         {
           "name": "traverse",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 301,
+          "line": 478,
           "call_type": "function_call"
         },
         {
           "name": "set",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 303,
+          "line": 480,
           "call_type": "function_call"
         },
         {
           "name": "keys",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 303,
+          "line": 480,
           "call_type": "method_call"
         },
         {
           "name": "join",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 305,
+          "line": 482,
           "call_type": "method_call"
         },
         {
           "name": "sorted",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 305,
+          "line": 482,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 306,
+          "line": 483,
           "call_type": "method_call"
         },
         {
           "name": "len",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 308,
+          "line": 485,
           "call_type": "function_call"
         },
         {
           "name": "set",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 316,
+          "line": 493,
           "call_type": "function_call"
         },
         {
           "name": "set",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 317,
+          "line": 494,
           "call_type": "function_call"
         },
         {
           "name": "has_cycle",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 334,
+          "line": 511,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 335,
+          "line": 512,
           "call_type": "method_call"
         }
       ],
@@ -14163,7 +14522,7 @@
     {
       "name": "_validate_nodes",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 343,
+      "line": 520,
       "language": "python",
       "docstring": "Validate node structure and required fields.",
       "parameters": [
@@ -14188,93 +14547,93 @@
         {
           "name": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 133,
+          "line": 213,
           "call_type": "function_call"
         }
       ],
       "calls": [
         {
-          "name": "items",
-          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 347,
-          "call_type": "method_call"
+          "name": "_iter_valid_nodes",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 524,
+          "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 351,
+          "line": 528,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 362,
+          "line": 539,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 364,
+          "line": 541,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 375,
+          "line": 552,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 377,
+          "line": 554,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 388,
+          "line": 565,
           "call_type": "method_call"
         },
         {
           "name": "strip",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 389,
+          "line": 566,
           "call_type": "method_call"
         },
         {
           "name": "str",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 389,
+          "line": 566,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 390,
+          "line": 567,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 403,
+          "line": 580,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 404,
+          "line": 581,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 415,
+          "line": 592,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 416,
+          "line": 593,
           "call_type": "method_call"
         }
       ],
@@ -14283,7 +14642,7 @@
     {
       "name": "_validate_task_counts",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 425,
+      "line": 602,
       "language": "python",
       "docstring": "Validate task count accuracy and propagation.",
       "parameters": [
@@ -14308,75 +14667,75 @@
         {
           "name": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 134,
+          "line": 214,
           "call_type": "function_call"
         }
       ],
       "calls": [
         {
-          "name": "items",
-          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 427,
+          "name": "_iter_valid_nodes",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 604,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 605,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 428,
+          "line": 606,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 429,
-          "call_type": "method_call"
-        },
-        {
-          "name": "get",
-          "file": "built-in",
-          "line": 430,
+          "line": 607,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 434,
+          "line": 611,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 452,
+          "line": 629,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 453,
+          "line": 630,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 456,
+          "line": 633,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 467,
+          "line": 644,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 478,
+          "line": 655,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 481,
+          "line": 658,
           "call_type": "method_call"
         }
       ],
@@ -14385,7 +14744,7 @@
     {
       "name": "_validate_dependencies",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 492,
+      "line": 669,
       "language": "python",
       "docstring": "Validate dependency graph and bidirectional consistency.",
       "parameters": [
@@ -14410,87 +14769,87 @@
         {
           "name": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 135,
+          "line": 215,
           "call_type": "function_call"
         }
       ],
       "calls": [
         {
-          "name": "items",
-          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 494,
-          "call_type": "method_call"
+          "name": "_iter_valid_nodes",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 671,
+          "call_type": "function_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 499,
+          "line": 676,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 509,
+          "line": 686,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 518,
+          "line": 695,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 521,
+          "line": 698,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 522,
+          "line": 699,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 523,
+          "line": 700,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 524,
+          "line": 701,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 534,
+          "line": 711,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 537,
+          "line": 714,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 538,
+          "line": 715,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 539,
+          "line": 716,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 540,
+          "line": 717,
           "call_type": "method_call"
         }
       ],
@@ -14499,7 +14858,7 @@
     {
       "name": "_validate_metadata",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 551,
+      "line": 728,
       "language": "python",
       "docstring": "Validate type-specific metadata requirements.",
       "parameters": [
@@ -14524,81 +14883,81 @@
         {
           "name": "validate_spec",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 136,
+          "line": 216,
           "call_type": "function_call"
         }
       ],
       "calls": [
         {
-          "name": "items",
-          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 553,
+          "name": "_iter_valid_nodes",
+          "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
+          "line": 730,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 731,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 554,
-          "call_type": "method_call"
-        },
-        {
-          "name": "get",
-          "file": "built-in",
-          "line": 555,
+          "line": 732,
           "call_type": "method_call"
         },
         {
           "name": "isinstance",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 557,
+          "line": 734,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 558,
+          "line": 735,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 569,
+          "line": 746,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 572,
+          "line": 749,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 582,
+          "line": 759,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 592,
+          "line": 769,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 595,
+          "line": 772,
           "call_type": "method_call"
         },
         {
           "name": "join",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 601,
+          "line": 778,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 608,
+          "line": 785,
           "call_type": "method_call"
         }
       ],
@@ -14607,7 +14966,7 @@
     {
       "name": "get_fix_actions",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 621,
+      "line": 798,
       "language": "python",
       "docstring": "Generate fix actions from validation diagnostics.\n\nArgs:\n    result: ValidationResult with diagnostics\n    spec_data: Original spec data\n\nReturns:\n    List of FixAction objects that can be applied",
       "parameters": [
@@ -14646,31 +15005,31 @@
         {
           "name": "set",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 633,
+          "line": 810,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 634,
+          "line": 811,
           "call_type": "method_call"
         },
         {
           "name": "_build_fix_action",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 640,
+          "line": 817,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 642,
+          "line": 819,
           "call_type": "method_call"
         },
         {
           "name": "add",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 643,
+          "line": 820,
           "call_type": "method_call"
         }
       ],
@@ -14679,7 +15038,7 @@
     {
       "name": "_build_fix_action",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 648,
+      "line": 825,
       "language": "python",
       "docstring": "Build a fix action for a diagnostic.",
       "parameters": [
@@ -14709,7 +15068,7 @@
         {
           "name": "get_fix_actions",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 640,
+          "line": 817,
           "call_type": "function_call"
         }
       ],
@@ -14717,79 +15076,79 @@
         {
           "name": "_build_date_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 654,
+          "line": 831,
           "call_type": "function_call"
         },
         {
           "name": "_build_hierarchy_align_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 657,
+          "line": 834,
           "call_type": "function_call"
         },
         {
           "name": "_build_orphan_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 660,
+          "line": 837,
           "call_type": "function_call"
         },
         {
           "name": "_build_missing_fields_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 663,
+          "line": 840,
           "call_type": "function_call"
         },
         {
           "name": "_build_type_normalize_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 666,
+          "line": 843,
           "call_type": "function_call"
         },
         {
           "name": "_build_status_normalize_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 669,
+          "line": 846,
           "call_type": "function_call"
         },
         {
           "name": "_build_title_generate_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 672,
+          "line": 849,
           "call_type": "function_call"
         },
         {
           "name": "_build_counts_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 675,
+          "line": 852,
           "call_type": "function_call"
         },
         {
           "name": "_build_bidirectional_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 678,
+          "line": 855,
           "call_type": "function_call"
         },
         {
           "name": "_build_deps_structure_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 681,
+          "line": 858,
           "call_type": "function_call"
         },
         {
           "name": "_build_verification_type_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 684,
+          "line": 861,
           "call_type": "function_call"
         },
         {
           "name": "_build_file_path_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 687,
+          "line": 864,
           "call_type": "function_call"
         },
         {
           "name": "_build_task_category_fix",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 690,
+          "line": 867,
           "call_type": "function_call"
         }
       ],
@@ -14798,7 +15157,7 @@
     {
       "name": "_build_date_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 695,
+      "line": 872,
       "language": "python",
       "docstring": "Build fix for date normalization.",
       "parameters": [
@@ -14823,7 +15182,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 654,
+          "line": 831,
           "call_type": "function_call"
         }
       ],
@@ -14833,7 +15192,7 @@
     {
       "name": "_build_hierarchy_align_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 718,
+      "line": 895,
       "language": "python",
       "docstring": "Build fix for parent/child alignment.",
       "parameters": [
@@ -14858,7 +15217,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 657,
+          "line": 834,
           "call_type": "function_call"
         }
       ],
@@ -14866,19 +15225,19 @@
         {
           "name": "search",
           "file": "/home/tyler/anaconda3/lib/python3.11/re/__init__.py",
-          "line": 721,
+          "line": 898,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 725,
+          "line": 902,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 726,
+          "line": 903,
           "call_type": "method_call"
         }
       ],
@@ -14887,7 +15246,7 @@
     {
       "name": "_build_orphan_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 749,
+      "line": 926,
       "language": "python",
       "docstring": "Build fix for orphaned nodes.",
       "parameters": [
@@ -14912,7 +15271,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 660,
+          "line": 837,
           "call_type": "function_call"
         }
       ],
@@ -14920,43 +15279,43 @@
         {
           "name": "search",
           "file": "/home/tyler/anaconda3/lib/python3.11/re/__init__.py",
-          "line": 751,
+          "line": 928,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 755,
+          "line": 932,
           "call_type": "method_call"
         },
         {
           "name": "strip",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 756,
+          "line": 933,
           "call_type": "method_call"
         },
         {
           "name": "split",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 756,
+          "line": 933,
           "call_type": "method_call"
         },
         {
           "name": "len",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 772,
+          "line": 949,
           "call_type": "function_call"
         },
         {
           "name": "len",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 773,
+          "line": 950,
           "call_type": "function_call"
         },
         {
           "name": "len",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 777,
+          "line": 954,
           "call_type": "function_call"
         }
       ],
@@ -14965,7 +15324,7 @@
     {
       "name": "_build_missing_fields_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 782,
+      "line": 959,
       "language": "python",
       "docstring": "Build fix for missing node fields.",
       "parameters": [
@@ -14990,7 +15349,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 663,
+          "line": 840,
           "call_type": "function_call"
         }
       ],
@@ -15000,7 +15359,7 @@
     {
       "name": "_build_type_normalize_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 822,
+      "line": 999,
       "language": "python",
       "docstring": "Build fix for invalid node type.",
       "parameters": [
@@ -15025,7 +15384,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 666,
+          "line": 843,
           "call_type": "function_call"
         }
       ],
@@ -15035,7 +15394,7 @@
     {
       "name": "_build_status_normalize_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 846,
+      "line": 1023,
       "language": "python",
       "docstring": "Build fix for invalid status.",
       "parameters": [
@@ -15060,7 +15419,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 669,
+          "line": 846,
           "call_type": "function_call"
         }
       ],
@@ -15070,7 +15429,7 @@
     {
       "name": "_build_title_generate_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 870,
+      "line": 1047,
       "language": "python",
       "docstring": "Build fix for empty title.",
       "parameters": [
@@ -15095,7 +15454,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 672,
+          "line": 849,
           "call_type": "function_call"
         }
       ],
@@ -15105,7 +15464,7 @@
     {
       "name": "_build_counts_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 894,
+      "line": 1071,
       "language": "python",
       "docstring": "Build fix for task count issues.",
       "parameters": [
@@ -15130,7 +15489,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 675,
+          "line": 852,
           "call_type": "function_call"
         }
       ],
@@ -15140,7 +15499,7 @@
     {
       "name": "_build_bidirectional_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 910,
+      "line": 1087,
       "language": "python",
       "docstring": "Build fix for bidirectional dependency inconsistency.",
       "parameters": [
@@ -15165,7 +15524,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 678,
+          "line": 855,
           "call_type": "function_call"
         }
       ],
@@ -15173,37 +15532,37 @@
         {
           "name": "search",
           "file": "/home/tyler/anaconda3/lib/python3.11/re/__init__.py",
-          "line": 913,
+          "line": 1090,
           "call_type": "method_call"
         },
         {
           "name": "search",
           "file": "/home/tyler/anaconda3/lib/python3.11/re/__init__.py",
-          "line": 914,
+          "line": 1091,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 917,
+          "line": 1094,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 918,
+          "line": 1095,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 920,
+          "line": 1097,
           "call_type": "method_call"
         },
         {
           "name": "group",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 921,
+          "line": 1098,
           "call_type": "method_call"
         }
       ],
@@ -15212,7 +15571,7 @@
     {
       "name": "_build_deps_structure_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 963,
+      "line": 1140,
       "language": "python",
       "docstring": "Build fix for missing dependencies structure.",
       "parameters": [
@@ -15237,7 +15596,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 681,
+          "line": 858,
           "call_type": "function_call"
         }
       ],
@@ -15247,7 +15606,7 @@
     {
       "name": "_build_verification_type_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 988,
+      "line": 1165,
       "language": "python",
       "docstring": "Build fix for missing verification type.",
       "parameters": [
@@ -15272,7 +15631,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 684,
+          "line": 861,
           "call_type": "function_call"
         }
       ],
@@ -15282,7 +15641,7 @@
     {
       "name": "_build_file_path_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1014,
+      "line": 1191,
       "language": "python",
       "docstring": "Build fix for missing file path.",
       "parameters": [
@@ -15307,7 +15666,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 687,
+          "line": 864,
           "call_type": "function_call"
         }
       ],
@@ -15317,7 +15676,7 @@
     {
       "name": "_build_task_category_fix",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1040,
+      "line": 1217,
       "language": "python",
       "docstring": "Build fix for invalid task category.",
       "parameters": [
@@ -15342,7 +15701,7 @@
         {
           "name": "_build_fix_action",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 690,
+          "line": 867,
           "call_type": "function_call"
         }
       ],
@@ -15352,7 +15711,7 @@
     {
       "name": "apply_fixes",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1066,
+      "line": 1243,
       "language": "python",
       "docstring": "Apply fix actions to a spec file.\n\nArgs:\n    actions: List of FixAction objects to apply\n    spec_path: Path to spec file\n    dry_run: If True, don't actually save changes\n    create_backup: If True, create backup before modifying\n    capture_diff: If True, capture before/after state\n\nReturns:\n    FixReport with results",
       "parameters": [
@@ -15391,91 +15750,91 @@
         {
           "name": "extend",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1090,
+          "line": 1267,
           "call_type": "method_call"
         },
         {
           "name": "open",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1094,
+          "line": 1271,
           "call_type": "function_call"
         },
         {
           "name": "load",
           "file": "/home/tyler/anaconda3/lib/python3.11/json/__init__.py",
-          "line": 1095,
+          "line": 1272,
           "call_type": "method_call"
         },
         {
           "name": "deepcopy",
           "file": "/home/tyler/anaconda3/lib/python3.11/copy.py",
-          "line": 1101,
+          "line": 1278,
           "call_type": "method_call"
         },
         {
           "name": "with_suffix",
           "file": "/home/tyler/anaconda3/lib/python3.11/pathlib.py",
-          "line": 1105,
+          "line": 1282,
           "call_type": "method_call"
         },
         {
           "name": "open",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1107,
+          "line": 1284,
           "call_type": "function_call"
         },
         {
           "name": "dump",
           "file": "/home/tyler/anaconda3/lib/python3.11/json/__init__.py",
-          "line": 1108,
+          "line": 1285,
           "call_type": "method_call"
         },
         {
           "name": "str",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1109,
+          "line": 1286,
           "call_type": "function_call"
         },
         {
           "name": "apply",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 1116,
+          "line": 1293,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1117,
+          "line": 1294,
           "call_type": "method_call"
         },
         {
           "name": "append",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1119,
+          "line": 1296,
           "call_type": "method_call"
         },
         {
           "name": "_recalculate_counts",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 1123,
+          "line": 1300,
           "call_type": "function_call"
         },
         {
           "name": "deepcopy",
           "file": "/home/tyler/anaconda3/lib/python3.11/copy.py",
-          "line": 1127,
+          "line": 1304,
           "call_type": "method_call"
         },
         {
           "name": "open",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1131,
+          "line": 1308,
           "call_type": "function_call"
         },
         {
           "name": "dump",
           "file": "/home/tyler/anaconda3/lib/python3.11/json/__init__.py",
-          "line": 1132,
+          "line": 1309,
           "call_type": "method_call"
         }
       ],
@@ -15484,7 +15843,7 @@
     {
       "name": "calculate_stats",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1141,
+      "line": 1318,
       "language": "python",
       "docstring": "Calculate statistics for a spec file.\n\nArgs:\n    spec_data: Parsed JSON spec data\n    file_path: Optional path to spec file for size calculation\n\nReturns:\n    SpecStats with calculated metrics",
       "parameters": [
@@ -15517,73 +15876,73 @@
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1152,
+          "line": 1329,
           "call_type": "method_call"
         },
         {
           "name": "len",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1155,
+          "line": 1332,
           "call_type": "function_call"
         },
         {
           "name": "traverse",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 1186,
+          "line": 1363,
           "call_type": "function_call"
         },
         {
           "name": "round",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1190,
+          "line": 1367,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 1192,
+          "line": 1369,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 1193,
+          "line": 1370,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 1194,
+          "line": 1371,
           "call_type": "method_call"
         },
         {
           "name": "stat",
           "file": "/home/tyler/anaconda3/lib/python3.11/pathlib.py",
-          "line": 1203,
+          "line": 1380,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1208,
+          "line": 1385,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1209,
+          "line": 1386,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1210,
+          "line": 1387,
           "call_type": "method_call"
         },
         {
           "name": "get",
           "file": "built-in",
-          "line": 1211,
+          "line": 1388,
           "call_type": "method_call"
         }
       ],
@@ -15592,7 +15951,7 @@
     {
       "name": "_is_valid_spec_id",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1224,
+      "line": 1401,
       "language": "python",
       "docstring": "Check if spec_id follows the recommended format.",
       "parameters": [
@@ -15612,7 +15971,7 @@
         {
           "name": "_validate_structure",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 168,
+          "line": 345,
           "call_type": "function_call"
         }
       ],
@@ -15620,13 +15979,13 @@
         {
           "name": "bool",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1227,
+          "line": 1404,
           "call_type": "function_call"
         },
         {
           "name": "match",
           "file": "/home/tyler/anaconda3/lib/python3.11/re/__init__.py",
-          "line": 1227,
+          "line": 1404,
           "call_type": "method_call"
         }
       ],
@@ -15635,7 +15994,7 @@
     {
       "name": "_is_valid_iso8601",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1230,
+      "line": 1407,
       "language": "python",
       "docstring": "Check if value is valid ISO 8601 date.",
       "parameters": [
@@ -15655,7 +16014,7 @@
         {
           "name": "_validate_structure",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 180,
+          "line": 357,
           "call_type": "function_call"
         }
       ],
@@ -15663,25 +16022,25 @@
         {
           "name": "endswith",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1234,
+          "line": 1411,
           "call_type": "method_call"
         },
         {
           "name": "fromisoformat",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1235,
+          "line": 1412,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1235,
+          "line": 1412,
           "call_type": "method_call"
         },
         {
           "name": "fromisoformat",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1237,
+          "line": 1414,
           "call_type": "method_call"
         }
       ],
@@ -15690,7 +16049,7 @@
     {
       "name": "_normalize_timestamp",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1243,
+      "line": 1420,
       "language": "python",
       "docstring": "Normalize timestamp to ISO 8601 format.",
       "parameters": [
@@ -15710,7 +16069,7 @@
         {
           "name": "apply",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 703,
+          "line": 880,
           "call_type": "function_call"
         }
       ],
@@ -15718,73 +16077,73 @@
         {
           "name": "strip",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1248,
+          "line": 1425,
           "call_type": "method_call"
         },
         {
           "name": "str",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1248,
+          "line": 1425,
           "call_type": "function_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1249,
+          "line": 1426,
           "call_type": "method_call"
         },
         {
           "name": "strptime",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1253,
+          "line": 1430,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1254,
+          "line": 1431,
           "call_type": "method_call"
         },
         {
           "name": "isoformat",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1254,
+          "line": 1431,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1254,
+          "line": 1431,
           "call_type": "method_call"
         },
         {
           "name": "fromisoformat",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1259,
+          "line": 1436,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1259,
+          "line": 1436,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1260,
+          "line": 1437,
           "call_type": "method_call"
         },
         {
           "name": "isoformat",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1260,
+          "line": 1437,
           "call_type": "method_call"
         },
         {
           "name": "astimezone",
           "file": "/home/tyler/anaconda3/lib/python3.11/datetime.py",
-          "line": 1260,
+          "line": 1437,
           "call_type": "method_call"
         }
       ],
@@ -15793,7 +16152,7 @@
     {
       "name": "_normalize_status",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1265,
+      "line": 1442,
       "language": "python",
       "docstring": "Normalize status value.",
       "parameters": [
@@ -15813,7 +16172,7 @@
         {
           "name": "apply",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 857,
+          "line": 1034,
           "call_type": "function_call"
         }
       ],
@@ -15821,37 +16180,37 @@
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1270,
+          "line": 1447,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1270,
+          "line": 1447,
           "call_type": "method_call"
         },
         {
           "name": "lower",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1270,
+          "line": 1447,
           "call_type": "method_call"
         },
         {
           "name": "strip",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1270,
+          "line": 1447,
           "call_type": "method_call"
         },
         {
           "name": "str",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1270,
+          "line": 1447,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1279,
+          "line": 1456,
           "call_type": "method_call"
         }
       ],
@@ -15860,7 +16219,7 @@
     {
       "name": "_normalize_node_type",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1287,
+      "line": 1464,
       "language": "python",
       "docstring": "Normalize node type value.",
       "parameters": [
@@ -15880,7 +16239,7 @@
         {
           "name": "apply",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 833,
+          "line": 1010,
           "call_type": "function_call"
         }
       ],
@@ -15888,37 +16247,37 @@
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1292,
+          "line": 1469,
           "call_type": "method_call"
         },
         {
           "name": "replace",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1292,
+          "line": 1469,
           "call_type": "method_call"
         },
         {
           "name": "lower",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1292,
+          "line": 1469,
           "call_type": "method_call"
         },
         {
           "name": "strip",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1292,
+          "line": 1469,
           "call_type": "method_call"
         },
         {
           "name": "str",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 1292,
+          "line": 1469,
           "call_type": "function_call"
         },
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1299,
+          "line": 1476,
           "call_type": "method_call"
         }
       ],
@@ -15927,7 +16286,7 @@
     {
       "name": "_recalculate_counts",
       "file": "src/foundry_mcp/core/validation.py",
-      "line": 1307,
+      "line": 1484,
       "language": "python",
       "docstring": "Recalculate task counts for all nodes in hierarchy.",
       "parameters": [
@@ -15965,13 +16324,13 @@
         {
           "name": "apply",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 897,
+          "line": 1074,
           "call_type": "function_call"
         },
         {
           "name": "apply_fixes",
           "file": "src/foundry_mcp/core/validation.py",
-          "line": 1123,
+          "line": 1300,
           "call_type": "function_call"
         }
       ],
@@ -15979,13 +16338,13 @@
         {
           "name": "get",
           "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
-          "line": 1309,
+          "line": 1486,
           "call_type": "method_call"
         },
         {
           "name": "calculate_node",
           "file": "/home/tyler/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/validation.py",
-          "line": 1344,
+          "line": 1521,
           "call_type": "function_call"
         }
       ],

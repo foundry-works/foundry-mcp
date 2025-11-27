@@ -228,6 +228,38 @@ def validate_spec(spec_data: Dict[str, Any]) -> ValidationResult:
     return result
 
 
+def _iter_valid_nodes(
+    hierarchy: Dict[str, Any],
+    result: ValidationResult,
+    report_invalid: bool = True,
+):
+    """
+    Iterate over hierarchy yielding only valid (dict) nodes.
+
+    Args:
+        hierarchy: The hierarchy dict to iterate
+        result: ValidationResult to append errors to
+        report_invalid: Whether to report invalid nodes as errors (default True,
+                        set False if already reported by another function)
+
+    Yields:
+        Tuples of (node_id, node) where node is a valid dict
+    """
+    for node_id, node in hierarchy.items():
+        if not isinstance(node, dict):
+            if report_invalid:
+                result.diagnostics.append(Diagnostic(
+                    code="INVALID_NODE_STRUCTURE",
+                    message=f"Node '{node_id}' is not a valid object (got {type(node).__name__})",
+                    severity="error",
+                    category="node",
+                    location=str(node_id),
+                    suggested_fix="Ensure all hierarchy values are valid node objects",
+                ))
+            continue
+        yield node_id, node
+
+
 def _validate_size_limits(spec_data: Dict[str, Any], result: ValidationResult) -> None:
     """Validate size limits on spec data structures (defense in depth)."""
 
@@ -374,7 +406,7 @@ def _validate_hierarchy(hierarchy: Dict[str, Any], result: ValidationResult) -> 
         ))
 
     # Validate parent references
-    for node_id, node in hierarchy.items():
+    for node_id, node in _iter_valid_nodes(hierarchy, result):
         parent_id = node.get("parent")
 
         if node_id != "spec-root" and parent_id is None:
@@ -396,7 +428,7 @@ def _validate_hierarchy(hierarchy: Dict[str, Any], result: ValidationResult) -> 
             ))
 
     # Validate child references
-    for node_id, node in hierarchy.items():
+    for node_id, node in _iter_valid_nodes(hierarchy, result, report_invalid=False):
         children = node.get("children", [])
 
         if not isinstance(children, list):
@@ -489,7 +521,7 @@ def _validate_nodes(hierarchy: Dict[str, Any], result: ValidationResult) -> None
     """Validate node structure and required fields."""
     required_fields = ["type", "title", "status", "parent", "children", "total_tasks", "completed_tasks", "metadata"]
 
-    for node_id, node in hierarchy.items():
+    for node_id, node in _iter_valid_nodes(hierarchy, result, report_invalid=False):
         # Check required fields
         for field_name in required_fields:
             if field_name not in node:
@@ -569,7 +601,7 @@ def _validate_nodes(hierarchy: Dict[str, Any], result: ValidationResult) -> None
 
 def _validate_task_counts(hierarchy: Dict[str, Any], result: ValidationResult) -> None:
     """Validate task count accuracy and propagation."""
-    for node_id, node in hierarchy.items():
+    for node_id, node in _iter_valid_nodes(hierarchy, result, report_invalid=False):
         total_tasks = node.get("total_tasks", 0)
         completed_tasks = node.get("completed_tasks", 0)
         children = node.get("children", [])
@@ -636,7 +668,7 @@ def _validate_task_counts(hierarchy: Dict[str, Any], result: ValidationResult) -
 
 def _validate_dependencies(hierarchy: Dict[str, Any], result: ValidationResult) -> None:
     """Validate dependency graph and bidirectional consistency."""
-    for node_id, node in hierarchy.items():
+    for node_id, node in _iter_valid_nodes(hierarchy, result, report_invalid=False):
         if "dependencies" not in node:
             continue
 
@@ -695,7 +727,7 @@ def _validate_dependencies(hierarchy: Dict[str, Any], result: ValidationResult) 
 
 def _validate_metadata(hierarchy: Dict[str, Any], result: ValidationResult) -> None:
     """Validate type-specific metadata requirements."""
-    for node_id, node in hierarchy.items():
+    for node_id, node in _iter_valid_nodes(hierarchy, result, report_invalid=False):
         node_type = node.get("type")
         metadata = node.get("metadata", {})
 
