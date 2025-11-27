@@ -11,6 +11,7 @@ from foundry_mcp.core.pagination import (
     decode_cursor,
     validate_cursor,
     normalize_page_size,
+    paginated_response,
 )
 
 
@@ -187,3 +188,112 @@ class TestPaginationConstants:
     def test_cursor_version(self):
         """CURSOR_VERSION should be 1."""
         assert CURSOR_VERSION == 1
+
+
+class TestPaginatedResponse:
+    """Tests for paginated_response helper."""
+
+    def test_basic_response_structure(self):
+        """Should return standard response structure."""
+        result = paginated_response(data={"items": [1, 2, 3]})
+
+        assert result["success"] is True
+        assert result["error"] is None
+        assert "data" in result
+        assert "meta" in result
+
+    def test_data_is_preserved(self):
+        """Should preserve data in response."""
+        data = {"items": [{"id": "1"}, {"id": "2"}], "count": 2}
+        result = paginated_response(data=data)
+
+        assert result["data"] == data
+
+    def test_pagination_metadata_included(self):
+        """Should include pagination in meta."""
+        result = paginated_response(
+            data={"items": []},
+            cursor="abc123",
+            has_more=True,
+            page_size=50,
+        )
+
+        assert "pagination" in result["meta"]
+        pagination = result["meta"]["pagination"]
+        assert pagination["cursor"] == "abc123"
+        assert pagination["has_more"] is True
+        assert pagination["page_size"] == 50
+
+    def test_default_pagination_values(self):
+        """Should use default pagination values."""
+        result = paginated_response(data={"items": []})
+
+        pagination = result["meta"]["pagination"]
+        assert pagination["cursor"] is None
+        assert pagination["has_more"] is False
+        assert pagination["page_size"] == DEFAULT_PAGE_SIZE
+
+    def test_total_count_optional(self):
+        """Should include total_count when provided."""
+        result = paginated_response(
+            data={"items": []},
+            total_count=500,
+        )
+
+        pagination = result["meta"]["pagination"]
+        assert pagination["total_count"] == 500
+
+    def test_total_count_not_included_by_default(self):
+        """Should not include total_count if not provided."""
+        result = paginated_response(data={"items": []})
+
+        pagination = result["meta"]["pagination"]
+        assert "total_count" not in pagination
+
+    def test_response_version_included(self):
+        """Should include response version in meta."""
+        result = paginated_response(data={"items": []})
+
+        assert result["meta"]["version"] == "response-v2"
+
+    def test_additional_kwargs_passed_through(self):
+        """Should pass through additional kwargs to success_response."""
+        result = paginated_response(
+            data={"items": []},
+            warnings=["Partial results"],
+        )
+
+        assert "warnings" in result["meta"]
+        assert result["meta"]["warnings"] == ["Partial results"]
+
+    def test_empty_data(self):
+        """Should handle empty data dict."""
+        result = paginated_response(data={})
+
+        assert result["success"] is True
+        assert result["data"] == {}
+
+    def test_complex_data_structure(self):
+        """Should handle complex nested data."""
+        complex_data = {
+            "items": [
+                {"id": "1", "nested": {"key": "value"}},
+                {"id": "2", "nested": {"key": "other"}},
+            ],
+            "metadata": {"source": "test"},
+        }
+        result = paginated_response(data=complex_data)
+
+        assert result["data"] == complex_data
+
+    def test_cursor_with_has_more_false(self):
+        """Should allow cursor with has_more=False (edge case)."""
+        result = paginated_response(
+            data={"items": []},
+            cursor="last_page",
+            has_more=False,
+        )
+
+        pagination = result["meta"]["pagination"]
+        assert pagination["cursor"] == "last_page"
+        assert pagination["has_more"] is False
