@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:07:53.982802Z",
+  "last_updated": "2025-11-27T13:09:34.729718Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 23,
+    "progress_percentage": 24,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 24,
+      "completed_tasks": 25,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -532,7 +532,7 @@
         "depends": []
       },
       "total_tasks": 13,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {
         "purpose": "Enable safe gradual rollouts and quick feature disables for all new functionality",
         "risk_level": "low",
@@ -552,7 +552,7 @@
         "task-2-3"
       ],
       "total_tasks": 9,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -682,7 +682,7 @@
     "task-2-2": {
       "type": "task",
       "title": "tests/unit/test_core/test_feature_flags.py (NEW)",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [
         "task-2-2-1",
@@ -697,7 +697,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "tests/unit/test_core/test_feature_flags.py",
         "task_category": "implementation",
@@ -741,12 +741,19 @@
     "task-2-2-3": {
       "type": "subtask",
       "title": "Test flag override context manager",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T13:08:22.790431Z",
+        "status_note": "Starting implementation of flag_override context manager tests",
+        "completed_at": "2025-11-27T13:09:34.710685Z",
+        "needs_journaling": false,
+        "actual_hours": 0.02,
+        "journaled_at": "2025-11-27T13:09:34.724142Z"
+      }
     },
     "phase-2-verify": {
       "type": "group",
@@ -3571,6 +3578,15 @@
       "content": "Created TestPercentageRollout test class with 9 tests covering: 100% rollout always enabled, 0% rollout always disabled, deterministic rollout for same client, distribution verification (25% rollout with statistical tolerance), client-specific rollout variation, flag-specific rollout variation, small percentage rollouts (1%), large percentage rollouts (99%), and interaction between percentage rollout and default_enabled. All 9 tests pass.",
       "metadata": {},
       "task_id": "task-2-2-2"
+    },
+    {
+      "timestamp": "2025-11-27T13:09:34.724122Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Test flag override context manager",
+      "author": "claude-code",
+      "content": "Created TestFlagOverrideContextManager with 8 tests (basic enable/disable overrides, nested overrides, exception cleanup, client-specific override, multiple flags override, integration with @feature_flag decorator, preserving existing overrides) and TestFeatureFlagDecorator with 5 tests (allows when enabled, blocks when disabled, fallback function, preserves function metadata, unknown flag handling). Total test file now has 39 tests across 4 test classes, all passing.",
+      "metadata": {},
+      "task_id": "task-2-2-3"
     }
   ]
 }

@@ -588,3 +588,288 @@ class TestPercentageRollout:
 
         # default_enabled=True, rollout fails -> False (rollout failure)
         assert registry.is_enabled("enabled_no_rollout", client_id="any") is False
+
+
+class TestFlagOverrideContextManager:
+    """Tests for flag_override context manager."""
+
+    def test_basic_override_enable(self) -> None:
+        """Test basic override to enable a disabled flag."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_flag",
+            description="Test",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        assert registry.is_enabled("test_flag") is False
+
+        with flag_override("test_flag", True, registry=registry):
+            assert registry.is_enabled("test_flag") is True
+
+        assert registry.is_enabled("test_flag") is False
+
+    def test_basic_override_disable(self) -> None:
+        """Test basic override to disable an enabled flag."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_flag",
+            description="Test",
+            state=FlagState.STABLE,
+            default_enabled=True,
+        )
+        registry.register(flag)
+
+        assert registry.is_enabled("test_flag") is True
+
+        with flag_override("test_flag", False, registry=registry):
+            assert registry.is_enabled("test_flag") is False
+
+        assert registry.is_enabled("test_flag") is True
+
+    def test_nested_overrides(self) -> None:
+        """Test nested override contexts restore properly."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_flag",
+            description="Test",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        assert registry.is_enabled("test_flag") is False
+
+        with flag_override("test_flag", True, registry=registry):
+            assert registry.is_enabled("test_flag") is True
+
+            with flag_override("test_flag", False, registry=registry):
+                assert registry.is_enabled("test_flag") is False
+
+            # Should restore to outer override (True)
+            assert registry.is_enabled("test_flag") is True
+
+        # Should restore to original (False)
+        assert registry.is_enabled("test_flag") is False
+
+    def test_override_cleanup_on_exception(self) -> None:
+        """Test that override is cleaned up even when exception occurs."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_flag",
+            description="Test",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        assert registry.is_enabled("test_flag") is False
+
+        try:
+            with flag_override("test_flag", True, registry=registry):
+                assert registry.is_enabled("test_flag") is True
+                raise ValueError("Test exception")
+        except ValueError:
+            pass
+
+        # Should be cleaned up despite exception
+        assert registry.is_enabled("test_flag") is False
+
+    def test_client_specific_override(self) -> None:
+        """Test override for specific client ID."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_flag",
+            description="Test",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        with flag_override("test_flag", True, client_id="client_a", registry=registry):
+            # client_a should see enabled
+            assert registry.is_enabled("test_flag", client_id="client_a") is True
+            # client_b should see original (disabled)
+            assert registry.is_enabled("test_flag", client_id="client_b") is False
+
+    def test_multiple_flags_override(self) -> None:
+        """Test overriding multiple flags independently."""
+        registry = FeatureFlagRegistry()
+        flag1 = FeatureFlag(
+            name="flag_a",
+            description="Flag A",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        flag2 = FeatureFlag(
+            name="flag_b",
+            description="Flag B",
+            state=FlagState.STABLE,
+            default_enabled=True,
+        )
+        registry.register(flag1)
+        registry.register(flag2)
+
+        with flag_override("flag_a", True, registry=registry):
+            with flag_override("flag_b", False, registry=registry):
+                assert registry.is_enabled("flag_a") is True
+                assert registry.is_enabled("flag_b") is False
+
+            # flag_b restored, flag_a still overridden
+            assert registry.is_enabled("flag_a") is True
+            assert registry.is_enabled("flag_b") is True
+
+        # Both restored
+        assert registry.is_enabled("flag_a") is False
+        assert registry.is_enabled("flag_b") is True
+
+    def test_override_with_feature_flag_decorator(self) -> None:
+        """Test that flag_override works with @feature_flag decorator."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="gated_feature",
+            description="Gated feature",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        @feature_flag("gated_feature", registry=registry)
+        def gated_function() -> dict:
+            return {"executed": True}
+
+        # Without override, should return error
+        result = gated_function()
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "FEATURE_DISABLED"
+
+        # With override, should execute
+        with flag_override("gated_feature", True, registry=registry):
+            result = gated_function()
+            assert result == {"executed": True}
+
+        # Back to disabled
+        result = gated_function()
+        assert result["success"] is False
+
+    def test_override_preserves_existing_override(self) -> None:
+        """Test that nested override preserves and restores existing override."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_flag",
+            description="Test",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        # Set up an existing override via set_override
+        registry.set_override("anonymous", "test_flag", True)
+        assert registry.is_enabled("test_flag") is True
+
+        # Context manager override should work on top of it
+        with flag_override("test_flag", False, registry=registry):
+            assert registry.is_enabled("test_flag") is False
+
+        # Original set_override should be restored
+        assert registry.is_enabled("test_flag") is True
+
+        # Clean up
+        registry.clear_override("anonymous", "test_flag")
+
+
+class TestFeatureFlagDecorator:
+    """Tests for @feature_flag decorator."""
+
+    def test_decorator_allows_when_enabled(self) -> None:
+        """Test that decorator allows execution when flag is enabled."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="enabled_feature",
+            description="Enabled feature",
+            state=FlagState.STABLE,
+            default_enabled=True,
+        )
+        registry.register(flag)
+
+        @feature_flag("enabled_feature", registry=registry)
+        def my_function(x: int, y: int) -> dict:
+            return {"sum": x + y}
+
+        result = my_function(2, 3)
+        assert result == {"sum": 5}
+
+    def test_decorator_blocks_when_disabled(self) -> None:
+        """Test that decorator blocks execution when flag is disabled."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="disabled_feature",
+            description="Disabled feature",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        @feature_flag("disabled_feature", registry=registry)
+        def my_function(x: int, y: int) -> dict:
+            return {"sum": x + y}
+
+        result = my_function(2, 3)
+        assert result["success"] is False
+        assert result["error"] == "Feature 'disabled_feature' is not enabled"
+        assert result["data"]["error_code"] == "FEATURE_DISABLED"
+        assert result["data"]["feature"] == "disabled_feature"
+
+    def test_decorator_uses_fallback(self) -> None:
+        """Test that decorator calls fallback when flag is disabled."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="feature_with_fallback",
+            description="Feature with fallback",
+            state=FlagState.BETA,
+            default_enabled=False,
+        )
+        registry.register(flag)
+
+        def fallback_function(x: int, y: int) -> dict:
+            return {"product": x * y, "fallback": True}
+
+        @feature_flag("feature_with_fallback", fallback=fallback_function, registry=registry)
+        def my_function(x: int, y: int) -> dict:
+            return {"sum": x + y, "fallback": False}
+
+        result = my_function(2, 3)
+        assert result == {"product": 6, "fallback": True}
+
+    def test_decorator_preserves_function_metadata(self) -> None:
+        """Test that decorator preserves function name and docstring."""
+        registry = FeatureFlagRegistry()
+        flag = FeatureFlag(
+            name="test_feature",
+            description="Test",
+            state=FlagState.STABLE,
+            default_enabled=True,
+        )
+        registry.register(flag)
+
+        @feature_flag("test_feature", registry=registry)
+        def documented_function(x: int) -> int:
+            """This is my docstring."""
+            return x * 2
+
+        assert documented_function.__name__ == "documented_function"
+        assert documented_function.__doc__ == "This is my docstring."
+
+    def test_decorator_with_unknown_flag(self) -> None:
+        """Test that decorator blocks execution for unknown flags."""
+        registry = FeatureFlagRegistry()
+
+        @feature_flag("nonexistent_flag", registry=registry)
+        def my_function() -> dict:
+            return {"executed": True}
+
+        result = my_function()
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "FEATURE_DISABLED"
