@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://foundry-mcp.local/schemas/response-v2.json",
+  "title": "MCP Tool Response Schema",
+  "description": "JSON Schema for validating MCP tool responses (response-v2 contract)",
+  "type": "object",
+  "required": ["success", "data", "error", "meta"],
+  "additionalProperties": false,
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Whether the operation completed successfully"
+    },
+    "data": {
+      "type": "object",
+      "description": "Primary payload - operation-specific structured data",
+      "additionalProperties": true
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "Error message if success is false, null otherwise"
+    },
+    "meta": {
+      "$ref": "#/definitions/metadata"
+    }
+  },
+  "if": {
+    "properties": { "success": { "const": true } }
+  },
+  "then": {
+    "properties": { "error": { "type": "null" } }
+  },
+  "else": {
+    "properties": { "error": { "type": "string", "minLength": 1 } }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "description": "Response metadata including version identifier and operational context",
+      "required": ["version"],
+      "additionalProperties": true,
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "response-v2",
+          "description": "Response schema version identifier"
+        },
+        "request_id": {
+          "type": "string",
+          "description": "Correlation identifier propagated through logs/traces",
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "warnings": {
+          "type": "array",
+          "description": "Non-fatal issues for successful operations",
+          "items": { "type": "string" }
+        },
+        "pagination": {
+          "$ref": "#/definitions/pagination"
+        },
+        "rate_limit": {
+          "$ref": "#/definitions/rate_limit"
+        },
+        "telemetry": {
+          "$ref": "#/definitions/telemetry"
+        }
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "description": "Cursor-based pagination metadata",
+      "properties": {
+        "cursor": {
+          "type": ["string", "null"],
+          "description": "Opaque cursor for next page"
+        },
+        "has_more": {
+          "type": "boolean",
+          "description": "Whether more results are available"
+        },
+        "total_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of items (if known)"
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of items per page"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Current page number (1-indexed)"
+        }
+      },
+      "additionalProperties": true
+    },
+    "rate_limit": {
+      "type": "object",
+      "description": "Rate limiting state and retry hints",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum requests allowed in the period"
+        },
+        "remaining": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Remaining requests in current window"
+        },
+        "reset_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when limit resets"
+        },
+        "period": {
+          "type": "string",
+          "description": "Time window (e.g., 'minute', 'hour')"
+        },
+        "retry_after": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds until retry is allowed"
+        }
+      },
+      "additionalProperties": true
+    },
+    "telemetry": {
+      "type": "object",
+      "description": "Timing and performance metrics",
+      "properties": {
+        "duration_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Operation duration in milliseconds"
+        },
+        "downstream_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of downstream service calls"
+        },
+        "cache_hit": {
+          "type": "boolean",
+          "description": "Whether result was served from cache"
+        }
+      },
+      "additionalProperties": true
+    },
+    "error_data": {
+      "type": "object",
+      "description": "Structured error context for error responses",
+      "properties": {
+        "error_code": {
+          "type": "string",
+          "description": "Machine-readable error classification",
+          "enum": [
+            "VALIDATION_ERROR",
+            "INVALID_FORMAT",
+            "MISSING_REQUIRED",
+            "NOT_FOUND",
+            "SPEC_NOT_FOUND",
+            "TASK_NOT_FOUND",
+            "DUPLICATE_ENTRY",
+            "CONFLICT",
+            "UNAUTHORIZED",
+            "FORBIDDEN",
+            "RATE_LIMIT_EXCEEDED",
+            "FEATURE_DISABLED",
+            "INTERNAL_ERROR",
+            "UNAVAILABLE"
+          ]
+        },
+        "error_type": {
+          "type": "string",
+          "description": "Error category for routing/handling",
+          "enum": [
+            "validation",
+            "authentication",
+            "authorization",
+            "not_found",
+            "conflict",
+            "rate_limit",
+            "feature_flag",
+            "internal",
+            "unavailable"
+          ]
+        },
+        "remediation": {
+          "type": "string",
+          "description": "Actionable guidance for resolving the error"
+        },
+        "details": {
+          "type": "object",
+          "description": "Field-specific or context-specific error info",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

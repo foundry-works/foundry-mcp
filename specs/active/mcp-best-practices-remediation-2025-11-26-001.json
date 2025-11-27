@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T15:21:21.228713Z",
+  "last_updated": "2025-11-27T15:26:13.512294Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 94,
+    "progress_percentage": 95,
     "current_phase": "phase-8"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 96,
+      "completed_tasks": 97,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -2581,7 +2581,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Improve test coverage and add property-based testing",
         "risk_level": "low",
@@ -2601,7 +2601,7 @@
         "task-8-3"
       ],
       "total_tasks": 5,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2673,7 +2673,7 @@
     "task-8-2": {
       "type": "task",
       "title": "tests/contract/test_response_schema.py (NEW)",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-8-files",
       "children": [
         "task-8-2-1",
@@ -2685,7 +2685,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/contract/test_response_schema.py",
         "task_category": "implementation",
@@ -2695,12 +2695,19 @@
     "task-8-2-1": {
       "type": "subtask",
       "title": "Create response schema JSON for contract testing",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-8-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T15:25:08.131421Z",
+        "status_note": "Starting response schema JSON creation for contract testing",
+        "completed_at": "2025-11-27T15:26:13.497931Z",
+        "needs_journaling": false,
+        "actual_hours": 0.018,
+        "journaled_at": "2025-11-27T15:26:13.507796Z"
+      }
     },
     "task-8-2-2": {
       "type": "subtask",
@@ -4955,6 +4962,15 @@
       "content": "Added security property tests to tests/property/test_input_validation.py. New test classes: (1) TestPromptInjectionDetection with 9 tests covering known injections, role injections at line start, detection robustness, false positive prevention, context detection, case insensitivity, custom patterns; (2) TestSizeValidation with 7 tests for small/oversized strings/arrays, custom limits, primitives, dictionaries; (3) TestSecurityIntegration with 3 tests combining injection and size validation. Total file now has 34 property tests (15 validation + 19 security). All tests pass. Added +328 lines. Committed as 3c3a569.",
       "metadata": {},
       "task_id": "task-8-1-2"
+    },
+    {
+      "timestamp": "2025-11-27T15:26:13.507780Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create response schema JSON for contract testing",
+      "author": "claude-code",
+      "content": "Created response schema JSON for contract testing at tests/contract/response_schema.json. The JSON Schema (draft-07) includes: (1) Top-level envelope validation for success, data, error, meta fields; (2) Conditional validation ensuring error is null when success=true and non-empty string when success=false; (3) Metadata schema with required version field and optional request_id, warnings, pagination, rate_limit, telemetry; (4) Pagination definition with cursor, has_more, total_count, page_size, page fields; (5) Rate limit definition with limit, remaining, reset_at, period, retry_after fields; (6) Telemetry definition with duration_ms, downstream_calls, cache_hit fields; (7) Error data definition with error_code enum (all ErrorCode values), error_type enum (all ErrorType values), remediation, and details. Schema aligns with docs/codebase_standards/mcp_response_schema.md and src/foundry_mcp/core/responses.py.",
+      "metadata": {},
+      "task_id": "task-8-2-1"
     }
   ]
 }
