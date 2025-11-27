@@ -33,10 +33,13 @@ Example:
 import hashlib
 import logging
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Set
+from functools import wraps
+from typing import Any, Callable, Dict, Optional, Set, TypeVar, Union
+
+from foundry_mcp.core.responses import ToolResponse, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -370,6 +373,84 @@ def get_registry() -> FeatureFlagRegistry:
     return _default_registry
 
 
+# Type variable for decorated functions
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def feature_flag(
+    flag_name: str,
+    *,
+    fallback: Optional[Callable[..., Any]] = None,
+    registry: Optional[FeatureFlagRegistry] = None,
+) -> Callable[[F], F]:
+    """Decorator to gate function execution behind a feature flag.
+
+    When the feature flag is not enabled for the current client, the decorated
+    function will not execute. Instead, it returns a FEATURE_DISABLED error
+    response (or invokes the fallback if provided).
+
+    Args:
+        flag_name: Name of the feature flag to check
+        fallback: Optional fallback function to call when flag is disabled.
+            If provided, this function is called with the same arguments.
+            If not provided, returns a FEATURE_DISABLED error response.
+        registry: Optional registry to use. Defaults to the global registry.
+
+    Returns:
+        Decorated function that checks the flag before execution
+
+    Example:
+        >>> @feature_flag("new_algorithm")
+        ... def process_data(data: dict) -> dict:
+        ...     return {"processed": True}
+        ...
+        >>> # When flag is disabled, returns error response
+        >>> result = process_data({"input": "test"})
+        >>> result["success"]
+        False
+        >>> result["data"]["error_code"]
+        'FEATURE_DISABLED'
+
+        >>> # With fallback function
+        >>> @feature_flag("new_algorithm", fallback=legacy_process)
+        ... def process_data(data: dict) -> dict:
+        ...     return {"processed": True, "algorithm": "new"}
+        ...
+        >>> # When flag is disabled, calls legacy_process instead
+    """
+    def decorator(func: F) -> F:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            reg = registry or get_registry()
+
+            if not reg.is_enabled(flag_name):
+                logger.debug(
+                    f"Feature flag '{flag_name}' is disabled, "
+                    f"blocking execution of {func.__name__}"
+                )
+
+                if fallback is not None:
+                    return fallback(*args, **kwargs)
+
+                # Return FEATURE_DISABLED error response
+                response = error_response(
+                    message=f"Feature '{flag_name}' is not enabled",
+                    error_code="FEATURE_DISABLED",
+                    error_type="feature_flag",
+                    data={
+                        "feature": flag_name,
+                    },
+                    remediation="Contact support to enable this feature or check feature flag configuration",
+                )
+                return asdict(response)
+
+            return func(*args, **kwargs)
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
 # Export all public symbols
 __all__ = [
     "FlagState",
@@ -377,4 +458,5 @@ __all__ = [
     "FeatureFlagRegistry",
     "current_client_id",
     "get_registry",
+    "feature_flag",
 ]

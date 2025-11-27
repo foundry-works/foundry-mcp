@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T12:58:30.634158Z",
+  "last_updated": "2025-11-27T13:02:45.362957Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 19,
+    "progress_percentage": 20,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 20,
+      "completed_tasks": 21,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -532,7 +532,7 @@
         "depends": []
       },
       "total_tasks": 13,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Enable safe gradual rollouts and quick feature disables for all new functionality",
         "risk_level": "low",
@@ -552,7 +552,7 @@
         "task-2-3"
       ],
       "total_tasks": 9,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -584,7 +584,7 @@
         "depends": []
       },
       "total_tasks": 5,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "file_path": "src/foundry_mcp/core/feature_flags.py",
         "task_category": "implementation",
@@ -647,13 +647,19 @@
     "task-2-1-4": {
       "type": "subtask",
       "title": "Create @feature_flag decorator",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Gates tool execution based on flag state, returns FEATURE_DISABLED error when not enabled"
+        "details": "Gates tool execution based on flag state, returns FEATURE_DISABLED error when not enabled",
+        "started_at": "2025-11-27T13:01:26.217197Z",
+        "status_note": "Starting implementation of @feature_flag decorator",
+        "completed_at": "2025-11-27T13:02:45.345240Z",
+        "needs_journaling": false,
+        "actual_hours": 0.022,
+        "journaled_at": "2025-11-27T13:02:45.356909Z"
       }
     },
     "task-2-1-5": {
@@ -3508,6 +3514,15 @@
       "content": "Implemented FeatureFlagRegistry class with all required methods: register() for flag registration with duplicate check, is_enabled() with full evaluation logic (override check, expiration, blocklist/allowlist, dependencies, percentage rollout), get_flags_for_capabilities() for capabilities endpoint, _evaluate_percentage() using deterministic MD5 hashing for stable bucket assignment. Also added: get() for flag retrieval, set_override()/clear_override()/clear_all_overrides() for testing, list_flags() for listing all flags. Added global registry instance with get_registry() function. Added current_client_id context variable. Import and functionality verified.",
       "metadata": {},
       "task_id": "task-2-1-3"
+    },
+    {
+      "timestamp": "2025-11-27T13:02:45.356893Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create @feature_flag decorator",
+      "author": "claude-code",
+      "content": "Implemented @feature_flag decorator that gates function execution based on flag state. When flag is disabled, returns FEATURE_DISABLED error response with error_code, error_type, feature name, and remediation guidance. Supports optional fallback function parameter and custom registry. All tests passing - verified disabled flag returns error, enabled flag executes normally, and fallback function is called when flag disabled.",
+      "metadata": {},
+      "task_id": "task-2-1-4"
     }
   ]
 }
