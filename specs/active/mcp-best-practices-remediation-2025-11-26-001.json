@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:19:41.461743Z",
+  "last_updated": "2025-11-27T13:20:27.532776Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 29,
+    "progress_percentage": 30,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 30,
+      "completed_tasks": 31,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -860,7 +860,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Make errors machine-readable and actionable for clients and LLMs",
         "risk_level": "low",
@@ -873,14 +873,14 @@
     "phase-3-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3",
       "children": [
         "task-3-1",
         "task-3-2"
       ],
       "total_tasks": 6,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -894,7 +894,7 @@
     "task-3-1": {
       "type": "task",
       "title": "src/foundry_mcp/core/responses.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3-files",
       "children": [
         "task-3-1-1",
@@ -910,7 +910,7 @@
         "depends": []
       },
       "total_tasks": 4,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/responses.py",
         "task_category": "implementation",
@@ -920,13 +920,19 @@
     "task-3-1-1": {
       "type": "subtask",
       "title": "Create ErrorCode enum",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "VALIDATION_ERROR, NOT_FOUND, RATE_LIMIT_EXCEEDED, UNAUTHORIZED, FORBIDDEN, CONFLICT, INTERNAL_ERROR, UNAVAILABLE, FEATURE_DISABLED"
+        "details": "VALIDATION_ERROR, NOT_FOUND, RATE_LIMIT_EXCEEDED, UNAUTHORIZED, FORBIDDEN, CONFLICT, INTERNAL_ERROR, UNAVAILABLE, FEATURE_DISABLED",
+        "started_at": "2025-11-27T13:20:04.275970Z",
+        "status_note": "Creating ErrorCode enum",
+        "completed_at": "2025-11-27T13:20:27.523362Z",
+        "needs_journaling": false,
+        "actual_hours": 0.006,
+        "journaled_at": "2025-11-27T13:20:27.529751Z"
       }
     },
     "task-3-1-2": {
@@ -3715,6 +3721,15 @@
       "content": "All child tasks in group phase-3-docs have been completed.",
       "metadata": {},
       "task_id": "phase-3-docs"
+    },
+    {
+      "timestamp": "2025-11-27T13:20:27.529746Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create ErrorCode enum",
+      "author": "claude-code",
+      "content": "Created ErrorCode enum (str, Enum) in src/foundry_mcp/core/responses.py with canonical error codes organized by category: Validation (VALIDATION_ERROR, INVALID_FORMAT, MISSING_REQUIRED), Resource (NOT_FOUND, SPEC_NOT_FOUND, TASK_NOT_FOUND, DUPLICATE_ENTRY, CONFLICT), Access (UNAUTHORIZED, FORBIDDEN, RATE_LIMIT_EXCEEDED, FEATURE_DISABLED), System (INTERNAL_ERROR, UNAVAILABLE). Enum inherits from str for JSON serialization compatibility.",
+      "metadata": {},
+      "task_id": "task-3-1-1"
     }
   ]
 }

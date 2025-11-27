@@ -85,7 +85,44 @@ Key Principle:
 """
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, Mapping, Optional, Sequence
+
+
+class ErrorCode(str, Enum):
+    """Machine-readable error codes for MCP tool responses.
+
+    Use these canonical codes in `error_code` fields to enable consistent
+    client-side error handling. Codes follow SCREAMING_SNAKE_CASE convention.
+
+    Categories:
+        - Validation (input errors)
+        - Resource (not found, conflict)
+        - Access (auth, permissions, rate limits)
+        - System (internal, unavailable)
+    """
+
+    # Validation errors
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    INVALID_FORMAT = "INVALID_FORMAT"
+    MISSING_REQUIRED = "MISSING_REQUIRED"
+
+    # Resource errors
+    NOT_FOUND = "NOT_FOUND"
+    SPEC_NOT_FOUND = "SPEC_NOT_FOUND"
+    TASK_NOT_FOUND = "TASK_NOT_FOUND"
+    DUPLICATE_ENTRY = "DUPLICATE_ENTRY"
+    CONFLICT = "CONFLICT"
+
+    # Access errors
+    UNAUTHORIZED = "UNAUTHORIZED"
+    FORBIDDEN = "FORBIDDEN"
+    RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
+    FEATURE_DISABLED = "FEATURE_DISABLED"
+
+    # System errors
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 @dataclass
