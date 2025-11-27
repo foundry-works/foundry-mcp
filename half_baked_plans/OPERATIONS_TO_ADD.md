@@ -31,17 +31,21 @@ These operations are **out of scope** for foundry-mcp because they assume the Cl
 
 Use these references when evaluating what actually remains to be wrapped.
 
+## Recently Covered via SDD Core Operations
+
+`specs/active/sdd-core-operations-2025-11-27-001.json` (Phase 1) delivered environment setup tools. These operations now have MCP manifest entries and feature flags:
+
+- **Environment verification** (`sdd-verify-toolchain`, `sdd-verify-environment`) via `env_verify_toolchain` and `env_verify_environment` tools registered in `mcp/capabilities_manifest.json`.
+- **Workspace initialization** (`sdd-init-workspace`) via `env_init_workspace` tool with workspace bootstrap capabilities.
+- **Topology detection** (`spec-detect-topology`) via `env_detect_topology` tool for auto-detecting repository layout.
+
+**Feature flags:** `environment_tools` (beta, 100% rollout) and `env_auto_fix` (experimental, 0% rollout) control these capabilities. See `mcp/capabilities_manifest.json` for details.
+
 ---
 
 ## In-Scope Operations
 
 **Naming note:** All entries below list the canonical MCP tool name first, per [docs/codebase_standards/naming-conventions.md](../docs/codebase_standards/naming-conventions.md). Legacy CLI aliases remain in parentheses solely for migration tracking and should be removed once downstream clients finish the rename rollout.
-
-### Environment & Project Setup
-- `sdd-verify-toolchain` (was `verify-tools`) – sanity-check local CLI/toolchain availability.
-- `sdd-init-workspace` (was `init-env`) – bootstrap the working directory for SDD workflows.
-- `spec-detect-topology` (was `detect-project`) – auto-detect repository layout for specs/docs.
-- `sdd-verify-environment` (was `check-environment`) – validate required OS packages, runtimes, and credentials.
 
 ### Spec Discovery & Validation Helpers
 - `spec-find-related-files` (was `find-related-files`) – locate files referenced by a spec node.

@@ -89,15 +89,30 @@ Use this checklist:
 
 - [Response Schema Reference](../codebase_standards/mcp_response_schema.md) - Canonical response contract
 - [Response Helpers](../../src/foundry_mcp/core/responses.py) - Implementation code
+- [Capabilities Manifest](../../mcp/capabilities_manifest.json) - Tool discovery and feature flags
+
+## Environment & Setup Tools
+
+The following environment tools support SDD workflow initialization and verification:
+
+| Tool | Description | Feature Flag |
+|------|-------------|--------------|
+| `env_verify_toolchain` | Verify local CLI/toolchain availability (git, python, node, SDD CLI) | `environment_tools` |
+| `env_init_workspace` | Bootstrap working directory with specs folders and config | `environment_tools` |
+| `env_detect_topology` | Auto-detect repository layout for specs/docs directories | `environment_tools` |
+| `env_verify_environment` | Validate OS packages, runtimes, and credentials | `environment_tools` |
+
+These tools are gated by the `environment_tools` feature flag (beta, 100% rollout). The `env_auto_fix` flag (experimental) enables automatic fix capabilities for environment issues.
 
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.2.0 | 2025-11-27 | Added environment tools section, capabilities manifest reference |
 | 2.1.0 | 2025-11-26 | Added feature flags, concurrency patterns, multi-tenancy |
 | 2.0.0 | 2025-11-26 | Sharded structure; added AI/LLM patterns, resilience, tool discovery |
 | 1.0.0 | 2025-11-26 | Initial consolidated document |
 
 ---
 
-*Last updated: 2025-11-26*
+*Last updated: 2025-11-27*

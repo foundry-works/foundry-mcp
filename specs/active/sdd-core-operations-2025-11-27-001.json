@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T19:47:17.729577Z",
+  "last_updated": "2025-11-27T19:48:41.705732Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 6,
+    "progress_percentage": 7,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -60,7 +60,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 13,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Bootstrap tooling for workspace initialization and validation",
         "risk_level": "low"
@@ -86,7 +86,7 @@
         "task-1-5"
       ],
       "total_tasks": 10,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -219,7 +219,7 @@
     "task-1-2": {
       "type": "task",
       "title": "src/foundry_mcp/tools/server.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [
         "task-1-2-1",
@@ -233,7 +233,7 @@
         "blocks": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/server.py",
         "task_category": "implementation",
@@ -262,14 +262,19 @@
     "task-1-2-2": {
       "type": "subtask",
       "title": "Update docs/backlog for environment tool parity",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
-        "details": "Document rename rollout and remove environment entries plus add callouts in docs/mcp_best_practices/README.md"
+        "details": "Document rename rollout and remove environment entries plus add callouts in docs/mcp_best_practices/README.md",
+        "started_at": "2025-11-27T19:47:40.178854Z",
+        "completed_at": "2025-11-27T19:48:41.698964Z",
+        "needs_journaling": false,
+        "actual_hours": 0.017,
+        "journaled_at": "2025-11-27T19:48:41.703702Z"
       }
     },
     "task-1-3": {
@@ -2251,6 +2256,15 @@
       "content": "Updated mcp/capabilities_manifest.json to expose environment tools. Added: (1) environment_tools category with 4 tools: env_verify_toolchain, env_init_workspace, env_detect_topology, env_verify_environment - each with proper parameters and descriptions. (2) Feature flags: environment_tools (beta, 100% rollout) and env_auto_fix (experimental, 0% rollout with dependency). (3) server_capabilities.environment_readiness capability. JSON validation passed.",
       "metadata": {},
       "task_id": "task-1-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T19:48:41.703694Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update docs/backlog for environment tool parity",
+      "author": "claude-code",
+      "content": "Updated documentation for environment tool parity. Changes: (1) half_baked_plans/OPERATIONS_TO_ADD.md - Added \"Recently Covered via SDD Core Operations\" section documenting the 4 environment tools, removed Environment & Project Setup from In-Scope Operations. (2) docs/mcp_best_practices/README.md - Added \"Environment & Setup Tools\" section with tool table and feature flag info, added capabilities manifest link, bumped version to 2.2.0.",
+      "metadata": {},
+      "task_id": "task-1-2-2"
     }
   ]
 }
