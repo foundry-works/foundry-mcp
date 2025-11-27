@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T12:45:33.553389Z",
-    "generated_at_commit": "10092bf0427db1ded453aae4ca9d3f120d8ac48f",
+    "generated_at": "2025-11-27T12:47:42.693003Z",
+    "generated_at_commit": "5dd29230077330207ace0484a1183f494f1f66b4",
     "languages": [
       "python"
     ],
@@ -6023,7 +6023,7 @@
         },
         {
           "name": "items",
-          "file": "built-in",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
           "line": 150,
           "call_type": "method_call"
         },
