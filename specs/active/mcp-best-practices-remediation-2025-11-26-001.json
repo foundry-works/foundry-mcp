@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:57:17.149863Z",
+  "last_updated": "2025-11-27T14:58:42.827046Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 85,
+    "progress_percentage": 86,
     "current_phase": "phase-7"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 87,
+      "completed_tasks": 88,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -2245,7 +2245,7 @@
         "depends": []
       },
       "total_tasks": 11,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Enable safe parallelism and LLM-optimized responses",
         "risk_level": "low",
@@ -2266,7 +2266,7 @@
         "task-7-3"
       ],
       "total_tasks": 7,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2360,7 +2360,7 @@
     "task-7-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/llm_patterns.py (NEW)",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-7-files",
       "children": [
         "task-7-2-1",
@@ -2376,7 +2376,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/core/llm_patterns.py",
         "task_category": "implementation",
@@ -2404,13 +2404,19 @@
     "task-7-2-2": {
       "type": "subtask",
       "title": "Create batch_operation() helper",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-7-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Process multiple items in one call, return results and errors separately"
+        "details": "Process multiple items in one call, return results and errors separately",
+        "started_at": "2025-11-27T14:57:46.558445Z",
+        "status_note": "Creating batch_operation() helper",
+        "completed_at": "2025-11-27T14:58:42.814300Z",
+        "needs_journaling": false,
+        "actual_hours": 0.016,
+        "journaled_at": "2025-11-27T14:58:42.823515Z"
       }
     },
     "task-7-3": {
@@ -4766,6 +4772,15 @@
       "content": "Created src/foundry_mcp/core/llm_patterns.py with progressive_disclosure() helper. Includes: DetailLevel enum (SUMMARY, STANDARD, FULL), DisclosureConfig dataclass for customizing field inclusion and truncation limits (summary_fields, standard_fields, full_fields, max_list_items per level, max_string_length per level), progressive_disclosure() function that filters/truncates data based on level with _truncated metadata, helper functions _disclose_dict() and _disclose_list() for recursive processing, _process_value() for string/list/dict truncation, and get_detail_level() for parsing string parameters. DEFAULT_DISCLOSURE_CONFIG provides sensible defaults. All imports verified working.",
       "metadata": {},
       "task_id": "task-7-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T14:58:42.823503Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create batch_operation() helper",
+      "author": "claude-code",
+      "content": "Added batch operation helpers to src/foundry_mcp/core/llm_patterns.py. Includes: BatchItemResult dataclass for individual item results (item_id, success, result/error, error_code), BatchResult dataclass with total/succeeded/failed counts, results/errors lists, warnings, all_succeeded and success_rate properties, and to_response() for LLM-friendly output. Convenience functions: batch_response() for creating responses from results and errors lists with summary and counts, paginated_batch_response() for large result sets with pagination metadata (offset, page_size, has_more, next_offset) and automatic warnings for remaining items. All imports verified working.",
+      "metadata": {},
+      "task_id": "task-7-2-2"
     }
   ]
 }
