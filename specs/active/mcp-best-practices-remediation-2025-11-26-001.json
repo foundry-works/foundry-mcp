@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:29:52.814962Z",
+  "last_updated": "2025-11-27T14:31:20.636466Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 69,
+    "progress_percentage": 70,
     "current_phase": "phase-6"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 71,
+      "completed_tasks": 72,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1876,7 +1876,7 @@
         "depends": []
       },
       "total_tasks": 16,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Enable clients to discover tools and negotiate capabilities",
         "risk_level": "low",
@@ -1899,7 +1899,7 @@
         "task-6-5"
       ],
       "total_tasks": 12,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2012,7 +2012,7 @@
     "task-6-2": {
       "type": "task",
       "title": "src/foundry_mcp/tools/discovery.py (NEW)",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-6-files",
       "children": [
         "task-6-2-1",
@@ -2031,7 +2031,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/discovery.py",
         "task_category": "implementation",
@@ -2041,13 +2041,19 @@
     "task-6-2-1": {
       "type": "subtask",
       "title": "Implement foundry_list_tools endpoint",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-6-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Parameters: category, tag, include_deprecated. Returns paginated tool list"
+        "details": "Parameters: category, tag, include_deprecated. Returns paginated tool list",
+        "started_at": "2025-11-27T14:30:19.973976Z",
+        "status_note": "Creating foundry_list_tools MCP tool endpoint",
+        "completed_at": "2025-11-27T14:31:20.624892Z",
+        "needs_journaling": false,
+        "actual_hours": 0.017,
+        "journaled_at": "2025-11-27T14:31:20.632844Z"
       }
     },
     "task-6-2-2": {
@@ -4478,6 +4484,15 @@
       "content": "Created @deprecated_tool decorator in src/foundry_mcp/core/discovery.py that takes replacement and removal_version parameters. Decorator modifies function docstring with deprecation notice and adds deprecation warning to response meta.warnings. Also stores _deprecated, _replacement, _removal_version attributes on wrapper for introspection. Added helper functions is_deprecated() and get_deprecation_info() for checking deprecation status.",
       "metadata": {},
       "task_id": "task-6-1-4"
+    },
+    {
+      "timestamp": "2025-11-27T14:31:20.632832Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement foundry_list_tools endpoint",
+      "author": "claude-code",
+      "content": "Created foundry_list_tools MCP endpoint in src/foundry_mcp/tools/discovery.py with parameters: category, tag, include_deprecated, cursor, limit. Returns paginated tool list with pagination metadata (cursor, has_more, page_size, total_count). Uses encode_cursor/decode_cursor for offset-based pagination. Also includes filters_applied in response and categories list. Added register_discovery_tools() function following existing patterns.",
+      "metadata": {},
+      "task_id": "task-6-2-1"
     }
   ]
 }

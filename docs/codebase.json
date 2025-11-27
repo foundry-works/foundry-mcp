@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T14:29:13.239840Z",
-    "generated_at_commit": "31ab85a9df70b33291c7e73df4e40b0791c204de",
+    "generated_at": "2025-11-27T14:30:14.256521Z",
+    "generated_at_commit": "d4a686d6c8fb3c63e20c2593ca09cf867507dd3e",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 35,
-    "total_lines": 14969,
+    "total_lines": 15072,
     "total_classes": 60,
-    "total_functions": 172,
-    "avg_complexity": 6.98,
+    "total_functions": 175,
+    "avg_complexity": 6.91,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 35,
-        "lines": 14969,
+        "lines": 15072,
         "classes": 60,
-        "functions": 172,
-        "avg_complexity": 6.98
+        "functions": 175,
+        "avg_complexity": 6.91
       }
     }
   },
@@ -196,7 +196,10 @@
         "get_tool_registry",
         "get_capabilities",
         "negotiate_capabilities",
-        "set_capabilities"
+        "set_capabilities",
+        "deprecated_tool",
+        "is_deprecated",
+        "get_deprecation_info"
       ],
       "imports": [
         "dataclasses.dataclass",
@@ -211,7 +214,7 @@
         "typing.TypeVar"
       ],
       "exports": [],
-      "lines": 500
+      "lines": 603
     },
     {
       "name": "docs",
@@ -4138,6 +4141,111 @@
       "calls": []
     },
     {
+      "name": "deprecated_tool",
+      "file": "src/foundry_mcp/core/discovery.py",
+      "line": 507,
+      "language": "python",
+      "docstring": "Decorator to mark MCP tools as deprecated.\n\nModifies the function's docstring to include deprecation notice and\nadds deprecation warning to response meta.warnings.\n\nArgs:\n    replacement: Name of the tool that replaces this one\n    removal_version: Version in which this tool will be removed\n\nReturns:\n    Decorated function that adds deprecation warnings to responses\n\nExample:\n    >>> @mcp.tool()\n    ... @deprecated_tool(replacement=\"get_user\", removal_version=\"3.0.0\")\n    ... def fetch_user(user_id: str) -> dict:\n    ...     '''Fetch user by ID (deprecated).'''\n    ...     return get_user(user_id)",
+      "parameters": [
+        {
+          "name": "replacement",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "removal_version",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "return_type": "Callable[[F], F]",
+      "complexity": 6,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
+    },
+    {
+      "name": "is_deprecated",
+      "file": "src/foundry_mcp/core/discovery.py",
+      "line": 574,
+      "language": "python",
+      "docstring": "Check if a function is marked as deprecated.\n\nArgs:\n    func: Function to check\n\nReturns:\n    True if function has @deprecated_tool decorator",
+      "parameters": [
+        {
+          "name": "func",
+          "type": "Callable[..., Any]",
+          "default": null
+        }
+      ],
+      "return_type": "bool",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [
+        {
+          "name": "get_deprecation_info",
+          "file": "src/foundry_mcp/core/discovery.py",
+          "line": 597,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "getattr",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 584,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "get_deprecation_info",
+      "file": "src/foundry_mcp/core/discovery.py",
+      "line": 587,
+      "language": "python",
+      "docstring": "Get deprecation info for a deprecated function.\n\nArgs:\n    func: Function to check\n\nReturns:\n    Dict with replacement and removal_version, or None if not deprecated",
+      "parameters": [
+        {
+          "name": "func",
+          "type": "Callable[..., Any]",
+          "default": null
+        }
+      ],
+      "return_type": "Optional[Dict[str, str]]",
+      "complexity": 2,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "is_deprecated",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/discovery.py",
+          "line": 597,
+          "call_type": "function_call"
+        },
+        {
+          "name": "getattr",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 601,
+          "call_type": "function_call"
+        },
+        {
+          "name": "getattr",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 602,
+          "call_type": "function_call"
+        }
+      ]
+    },
+    {
       "name": "load_docs",
       "file": "src/foundry_mcp/core/docs.py",
       "line": 730,
@@ -5818,7 +5926,7 @@
         },
         {
           "name": "read",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 533,
           "call_type": "method_call"
         },
