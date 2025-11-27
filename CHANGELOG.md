@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Resilience Infrastructure (Phase 4):
+  - Documentation for timeout and resilience patterns (`docs/mcp_best_practices/12-timeout-resilience.md`):
+    - Timeout budgets: Fast (5s), Medium (30s), Slow (120s), Background (600s) with max values
+    - `with_timeout` decorator for async functions with configurable error messages
+    - Synchronous timeout via `signal.alarm` context manager
+    - Exponential backoff `retry_with_backoff()` with jitter and retryable exceptions
+    - `@retryable` decorator for automatic retries
+    - `CircuitBreaker` dataclass with CLOSED/OPEN/HALF_OPEN states, failure threshold, recovery timeout
+    - `with_circuit_breaker` decorator for dependency protection
+    - Partial results on timeout pattern for batch operations
+    - Resource cleanup with async context managers (`managed_connection`)
+    - Health check patterns with `HealthStatus` dataclass and latency tracking
 - Enhanced Error Handling (Phase 3):
   - Machine-readable error semantics via `error_response()` helper (`foundry_mcp.core.responses`):
     - `error_code`: SCREAMING_SNAKE_CASE classification (e.g., `VALIDATION_ERROR`, `NOT_FOUND`, `RATE_LIMIT_EXCEEDED`)

@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:32:52.719210Z",
+  "last_updated": "2025-11-27T13:33:45.757001Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 38,
+    "progress_percentage": 39,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 39,
+      "completed_tasks": 40,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1150,7 +1150,7 @@
         "depends": []
       },
       "total_tasks": 12,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Prevent hung operations and handle external dependency failures gracefully",
         "risk_level": "medium",
@@ -2852,7 +2852,7 @@
     "phase-4-docs": {
       "type": "group",
       "title": "Documentation & Change Log",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "phase-4-docs-1",
@@ -2868,12 +2868,15 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "doc_references": [
           "docs/mcp_best_practices/05-observability-telemetry.md#L12-L333",
           "docs/mcp_best_practices/12-timeout-resilience.md#L12-L398"
-        ]
+        ],
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T13:33:45.744811Z",
+        "journaled_at": "2025-11-27T13:33:45.756964Z"
       }
     },
     "phase-4-docs-1": {
@@ -2917,7 +2920,7 @@
     "phase-4-docs-2": {
       "type": "task",
       "title": "CHANGELOG.md",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-docs",
       "children": [
         "phase-4-docs-2-1"
@@ -2928,7 +2931,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "CHANGELOG.md",
         "task_category": "implementation",
@@ -2938,12 +2941,19 @@
     "phase-4-docs-2-1": {
       "type": "subtask",
       "title": "Record resilience primitives and health check coverage.",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-docs-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T13:33:17.510553Z",
+        "status_note": "Adding resilience documentation to CHANGELOG",
+        "completed_at": "2025-11-27T13:33:45.744589Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-27T13:33:45.751104Z"
+      }
     },
     "phase-5-docs": {
       "type": "group",
@@ -3892,6 +3902,24 @@
       "content": "Verified existing documentation in docs/mcp_best_practices/12-timeout-resilience.md (553 lines) comprehensively covers all required topics: (1) Timeout Budgets - categories table with Fast/Medium/Slow/Background defaults, async and sync timeout implementations with decorators; (2) Retry Patterns - exponential backoff with jitter, retryable decorator, configurable exceptions; (3) Circuit Breaker - full CircuitState enum, CircuitBreaker dataclass with failure threshold/recovery timeout, with_circuit_breaker decorator, global breakers registry. Also includes partial results handling, resource cleanup patterns, health checks, and anti-patterns guidance. No additional documentation needed.",
       "metadata": {},
       "task_id": "phase-4-docs-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T13:33:45.751099Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Record resilience primitives and health check coverage.",
+      "author": "claude-code",
+      "content": "Added CHANGELOG.md entry under [Unreleased] / Added section for Resilience Infrastructure (Phase 4) documenting: timeout budgets (Fast/Medium/Slow/Background), with_timeout decorator, sync timeout context manager, retry_with_backoff with jitter, @retryable decorator, CircuitBreaker dataclass with states and thresholds, with_circuit_breaker decorator, partial results on timeout, managed_connection for resource cleanup, and HealthStatus health check patterns.",
+      "metadata": {},
+      "task_id": "phase-4-docs-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T13:33:45.756958Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Documentation & Change Log",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-docs have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-docs"
     }
   ]
 }
