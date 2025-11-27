@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T22:39:49.146428Z",
+  "last_updated": "2025-11-27T22:41:21.759851Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,9 +22,9 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 70,
+    "progress_percentage": 71,
     "status": "active",
-    "current_phase": "phase-4"
+    "current_phase": "phase-5"
   },
   "hierarchy": {
     "spec-root": {
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 63,
+      "completed_tasks": 64,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1898,7 +1898,7 @@
     "phase-5": {
       "type": "phase",
       "title": "Task Planning & Execution Utilities",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-5-files",
@@ -1914,7 +1914,7 @@
         ]
       },
       "total_tasks": 14,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Plan formatting, phase management, and state reconciliation",
         "risk_level": "medium"
@@ -1923,7 +1923,7 @@
     "phase-5-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-5",
       "children": [
         "task-5-1",
@@ -1931,7 +1931,7 @@
         "task-5-3"
       ],
       "total_tasks": 11,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1944,7 +1944,7 @@
     "task-5-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/planning.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-5-files",
       "children": [
         "task-5-1-1",
@@ -1957,7 +1957,7 @@
         "task-5-1-8"
       ],
       "total_tasks": 8,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/planning.py",
         "task_category": "implementation",
@@ -1976,13 +1976,19 @@
     "task-5-1-1": {
       "type": "subtask",
       "title": "Implement plan-format - pretty-print task plans for sharing",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd format-plan, generate readable plan output"
+        "details": "Wrap sdd format-plan, generate readable plan output",
+        "started_at": "2025-11-27T22:40:20.128312Z",
+        "status_note": "Starting Phase 5 - planning.py module",
+        "completed_at": "2025-11-27T22:41:21.747740Z",
+        "needs_journaling": false,
+        "actual_hours": 0.017,
+        "journaled_at": "2025-11-27T22:41:21.754712Z"
       }
     },
     "task-5-1-2": {
@@ -3270,6 +3276,15 @@
       "content": "All child tasks in phase phase-4 have been completed.",
       "metadata": {},
       "task_id": "phase-4"
+    },
+    {
+      "timestamp": "2025-11-27T22:41:21.754704Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement plan-format - pretty-print task plans for sharing",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/tools/planning.py with plan-format tool. Module includes: circuit breaker protection (sdd_cli_planning, 5-failure threshold, 30s recovery), timing metrics, audit logging, validation for spec_id and task_id params. Tool wraps sdd format-plan command and returns formatted plan output. Module imports verified successfully.",
+      "metadata": {},
+      "task_id": "task-5-1-1"
     }
   ]
 }
