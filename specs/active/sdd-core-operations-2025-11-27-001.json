@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T22:29:30.629050Z",
+  "last_updated": "2025-11-27T22:39:49.146428Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 69,
+    "progress_percentage": 70,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 62,
+      "completed_tasks": 63,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1348,7 +1348,7 @@
     "phase-4": {
       "type": "phase",
       "title": "Authoring & Metadata - Advanced",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "phase-4-files",
@@ -1364,10 +1364,13 @@
         ]
       },
       "total_tasks": 20,
-      "completed_tasks": 19,
+      "completed_tasks": 20,
       "metadata": {
         "purpose": "Analysis, bulk operations, and specialized mutations",
-        "risk_level": "medium"
+        "risk_level": "medium",
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T22:39:49.131424Z",
+        "journaled_at": "2025-11-27T22:39:49.146392Z"
       }
     },
     "phase-4-files": {
@@ -1803,7 +1806,7 @@
     "phase-4-verify": {
       "type": "group",
       "title": "Verification",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "verify-4-1",
@@ -1818,8 +1821,12 @@
         "blocks": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
-      "metadata": {}
+      "completed_tasks": 3,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T22:39:49.131421Z",
+        "journaled_at": "2025-11-27T22:39:49.143881Z"
+      }
     },
     "verify-4-1": {
       "type": "verify",
@@ -1870,16 +1877,22 @@
     "verify-4-3": {
       "type": "verify",
       "title": "Phase 4 implementation fidelity review",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "fidelity",
         "agent": "sdd-fidelity-review",
         "scope": "phase",
-        "target": "phase-4"
+        "target": "phase-4",
+        "started_at": "2025-11-27T22:29:54.365723Z",
+        "status_note": "Starting phase 4 fidelity review",
+        "completed_at": "2025-11-27T22:39:49.131236Z",
+        "needs_journaling": false,
+        "actual_hours": 0.165,
+        "journaled_at": "2025-11-27T22:39:49.138079Z"
       }
     },
     "phase-5": {
@@ -3230,6 +3243,33 @@
       "content": "Manual verification completed. Tested spec-apply-plan with dry-run modifications - both simple metadata updates and complex task updates work correctly. After modifications, sdd validate confirms spec structure remains valid (0 errors, 0 warnings). Unit tests (TestSpecApplyPlan) cover basic application, missing spec_id validation, and missing modifications_file validation. The bulk operations preserve spec integrity as expected.",
       "metadata": {},
       "task_id": "verify-4-2"
+    },
+    {
+      "timestamp": "2025-11-27T22:39:49.138071Z",
+      "entry_type": "status_change",
+      "title": "Phase 4 Fidelity Review Completed",
+      "author": "claude-code",
+      "content": "Phase 4 fidelity review completed with PARTIAL verdict initially due to missing tests. Gap remediated: Added tests/unit/test_analysis.py with 18 tests covering all 3 analysis tools (spec-analyze, review-parse-feedback, spec-analyze-deps) plus circuit breaker, timeout, and CLI-not-found error handling. Also added 4 tests for verification_format_summary to test_mutations.py. All 47 unit tests now passing (29 mutations + 18 analysis). Phase 4 implementation fully verified.",
+      "metadata": {},
+      "task_id": "verify-4-3"
+    },
+    {
+      "timestamp": "2025-11-27T22:39:49.143874Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Verification",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-verify have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-verify"
+    },
+    {
+      "timestamp": "2025-11-27T22:39:49.146387Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Authoring & Metadata - Advanced",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-4 have been completed.",
+      "metadata": {},
+      "task_id": "phase-4"
     }
   ]
 }

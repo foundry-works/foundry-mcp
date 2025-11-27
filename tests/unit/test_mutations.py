@@ -246,6 +246,101 @@ class TestVerificationExecute:
 
 
 # =============================================================================
+# verification_format_summary Tool Tests
+# =============================================================================
+
+
+class TestVerificationFormatSummary:
+    """Test the verification-format-summary tool."""
+
+    def test_basic_format_from_file(self, mock_mcp, mock_config, assert_response_contract):
+        """Should format verification results from file."""
+        from foundry_mcp.tools.mutations import register_mutation_tools, _sdd_cli_breaker
+
+        _sdd_cli_breaker.reset()
+        register_mutation_tools(mock_mcp, mock_config)
+
+        with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
+            mock_cmd.return_value = subprocess.CompletedProcess(
+                args=["sdd", "format-verification-summary"],
+                returncode=0,
+                stdout=json.dumps({
+                    "summary": "5 verifications: 4 passed, 1 failed",
+                    "total_verifications": 5,
+                    "passed": 4,
+                    "failed": 1,
+                }),
+                stderr="",
+            )
+
+            verification_format_summary = mock_mcp._tools["verification_format_summary"]
+            result = verification_format_summary(json_file="/path/to/results.json")
+
+            assert_response_contract(result)
+            assert result["success"] is True
+            assert result["data"]["total_verifications"] == 5
+            assert result["data"]["passed"] == 4
+
+    def test_basic_format_from_json_input(self, mock_mcp, mock_config, assert_response_contract):
+        """Should format verification results from JSON input string."""
+        from foundry_mcp.tools.mutations import register_mutation_tools, _sdd_cli_breaker
+
+        _sdd_cli_breaker.reset()
+        register_mutation_tools(mock_mcp, mock_config)
+
+        with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
+            mock_cmd.return_value = subprocess.CompletedProcess(
+                args=["sdd", "format-verification-summary"],
+                returncode=0,
+                stdout=json.dumps({
+                    "summary": "3 verifications: 3 passed",
+                    "total_verifications": 3,
+                    "passed": 3,
+                    "failed": 0,
+                }),
+                stderr="",
+            )
+
+            verification_format_summary = mock_mcp._tools["verification_format_summary"]
+            result = verification_format_summary(json_input='{"verifications": []}')
+
+            assert_response_contract(result)
+            assert result["success"] is True
+            assert result["data"]["passed"] == 3
+
+    def test_missing_input_validation(self, mock_mcp, mock_config, assert_response_contract):
+        """Should return error when no input source provided."""
+        from foundry_mcp.tools.mutations import register_mutation_tools, _sdd_cli_breaker
+
+        _sdd_cli_breaker.reset()
+        register_mutation_tools(mock_mcp, mock_config)
+
+        verification_format_summary = mock_mcp._tools["verification_format_summary"]
+        result = verification_format_summary()
+
+        assert_response_contract(result)
+        assert result["success"] is False
+        assert "json_file" in result["error"].lower() or "json_input" in result["error"].lower()
+
+    def test_both_inputs_validation(self, mock_mcp, mock_config, assert_response_contract):
+        """Should return error when both inputs provided."""
+        from foundry_mcp.tools.mutations import register_mutation_tools, _sdd_cli_breaker
+
+        _sdd_cli_breaker.reset()
+        register_mutation_tools(mock_mcp, mock_config)
+
+        verification_format_summary = mock_mcp._tools["verification_format_summary"]
+        result = verification_format_summary(
+            json_file="/path/to/results.json",
+            json_input='{"verifications": []}',
+        )
+
+        assert_response_contract(result)
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "VALIDATION_ERROR"
+
+
+# =============================================================================
 # task_update_estimate Tool Tests
 # =============================================================================
 
