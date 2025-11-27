@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:46:09.319773Z",
+  "last_updated": "2025-11-27T13:46:40.357612Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 46,
+    "progress_percentage": 47,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 47,
+      "completed_tasks": 48,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1150,7 +1150,7 @@
         "depends": []
       },
       "total_tasks": 12,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {
         "purpose": "Prevent hung operations and handle external dependency failures gracefully",
         "risk_level": "medium",
@@ -1163,15 +1163,19 @@
     "phase-4-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "task-4-1",
         "task-4-2"
       ],
       "total_tasks": 8,
-      "completed_tasks": 7,
-      "metadata": {},
+      "completed_tasks": 8,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T13:46:40.347793Z",
+        "journaled_at": "2025-11-27T13:46:40.357575Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-4-verify",
@@ -1298,7 +1302,7 @@
     "task-4-2": {
       "type": "task",
       "title": "tests/unit/test_core/test_resilience.py (NEW)",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [
         "task-4-2-1",
@@ -1313,7 +1317,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "tests/unit/test_core/test_resilience.py",
         "task_category": "implementation",
@@ -1354,12 +1358,16 @@
     "task-4-2-3": {
       "type": "subtask",
       "title": "Test circuit breaker state transitions",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "completed_at": "2025-11-27T13:46:40.347611Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-27T13:46:40.351388Z"
+      }
     },
     "phase-4-verify": {
       "type": "group",
@@ -4021,6 +4029,24 @@
       "content": "Added retry_with_backoff and retryable decorator tests: test_successful_first_attempt, test_retries_on_failure, test_raises_after_max_retries, test_retryable_exceptions_filter, test_exponential_backoff_timing, test_jitter_adds_randomness, test_max_delay_cap, test_decorator_basic_usage, test_decorator_with_exception_filter, test_decorator_preserves_metadata. All 10 retry-related tests pass.",
       "metadata": {},
       "task_id": "task-4-2-2"
+    },
+    {
+      "timestamp": "2025-11-27T13:46:40.351382Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Test circuit breaker state transitions",
+      "author": "claude-code",
+      "content": "Added comprehensive circuit breaker tests including state transitions (CLOSED/OPEN/HALF_OPEN), CircuitBreaker class tests (initial state, failure recording, threshold opening, success reset, recovery timeout, half-open behavior, reset, status), CircuitBreakerError tests, with_circuit_breaker decorator tests, and health check tests (HealthStatus, health_check async/sync, timeout handling, check_dependencies concurrent execution). All 28 circuit breaker and health check tests pass. Total: 51 tests in test_resilience.py, all passing.",
+      "metadata": {},
+      "task_id": "task-4-2-3"
+    },
+    {
+      "timestamp": "2025-11-27T13:46:40.357571Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-files"
     }
   ]
 }
