@@ -213,4 +213,101 @@ def register_utility_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.error(f"Error in cache management: {e}")
             return asdict(error_response(str(e)))
 
-    logger.debug("Registered utility tools: sdd-cache-manage")
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-schema-export",
+    )
+    @mcp_tool(tool_name="spec-schema-export", emit_metrics=True, audit=True)
+    def spec_schema_export(
+        schema_type: str = "spec",
+    ) -> dict:
+        """
+        Export JSON schemas for SDD specifications and tasks.
+
+        Returns the JSON Schema used to validate SDD specification files.
+        Useful for schema validation, IDE integration, and documentation.
+
+        Args:
+            schema_type: Type of schema to export ('spec' for full spec schema)
+
+        Returns:
+            JSON object with:
+            - schema: The JSON Schema definition
+            - schema_type: Type of schema returned
+            - schema_url: Reference URL for the schema
+
+        WHEN TO USE:
+        - Get schema for validation tools
+        - IDE/editor schema configuration
+        - Documentation generation
+        - Understanding spec file structure
+        """
+        start_time = time.perf_counter()
+
+        try:
+            # Circuit breaker check
+            if not _utility_breaker.can_execute():
+                status = _utility_breaker.get_status()
+                metrics.counter(
+                    "utility.circuit_breaker_open",
+                    labels={"tool": "spec-schema-export"},
+                )
+                return asdict(
+                    error_response(
+                        "Utility operations temporarily unavailable",
+                        data={
+                            "retry_after_seconds": status.get("retry_after_seconds"),
+                            "breaker_state": status.get("state"),
+                        },
+                    )
+                )
+
+            # Validate schema_type
+            if schema_type not in ("spec",):
+                return asdict(
+                    error_response(
+                        f"Invalid schema_type: {schema_type}. Must be 'spec'."
+                    )
+                )
+
+            # Execute schema command
+            result = _run_sdd_command(["schema"])
+
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            metrics.timer(
+                "utility.schema_export_time",
+                duration_ms,
+                labels={"schema_type": schema_type},
+            )
+
+            if not result["success"]:
+                _utility_breaker.record_failure()
+                return asdict(error_response(result["error"]))
+
+            _utility_breaker.record_success()
+
+            schema_data = result["data"]
+
+            return asdict(
+                success_response(
+                    schema=schema_data,
+                    schema_type=schema_type,
+                    schema_url="https://github.com/sdd-toolkit/sdd-spec-schema",
+                    telemetry={"duration_ms": round(duration_ms, 2)},
+                )
+            )
+
+        except CircuitBreakerError as e:
+            logger.warning(f"Circuit breaker open for utilities: {e}")
+            return asdict(
+                error_response(
+                    "Utility operations temporarily unavailable",
+                    data={"retry_after_seconds": e.retry_after},
+                )
+            )
+        except Exception as e:
+            _utility_breaker.record_failure()
+            logger.error(f"Error exporting schema: {e}")
+            return asdict(error_response(str(e)))
+
+    logger.debug("Registered utility tools: sdd-cache-manage, spec-schema-export")

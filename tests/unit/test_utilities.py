@@ -156,6 +156,46 @@ class TestUtilityToolRegistration:
         assert "sdd-cache-manage" in registered_tools
 
 
+class TestSpecSchemaExport:
+    """Tests for spec-schema-export tool."""
+
+    def test_schema_export_success(self):
+        """Test schema export returns full JSON schema."""
+        from foundry_mcp.tools.utilities import _run_sdd_command
+
+        with patch('foundry_mcp.tools.utilities.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"$schema": "http://json-schema.org/draft-07/schema#", "title": "SDD Spec Schema"}',
+                stderr=''
+            )
+
+            result = _run_sdd_command(["schema"])
+
+            assert result["success"] is True
+            assert result["data"]["$schema"] == "http://json-schema.org/draft-07/schema#"
+            assert result["data"]["title"] == "SDD Spec Schema"
+
+    def test_schema_export_command_called_correctly(self):
+        """Test that schema command is called with correct arguments."""
+        from foundry_mcp.tools.utilities import _run_sdd_command
+
+        with patch('foundry_mcp.tools.utilities.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"$schema": "test"}',
+                stderr=''
+            )
+
+            _run_sdd_command(["schema"])
+
+            mock_run.assert_called_once()
+            call_args = mock_run.call_args[0][0]
+            assert "sdd" in call_args
+            assert "schema" in call_args
+            assert "--json" in call_args
+
+
 class TestCircuitBreaker:
     """Tests for circuit breaker behavior in utility tools."""
 

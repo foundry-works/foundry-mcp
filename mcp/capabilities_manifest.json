@@ -624,6 +624,16 @@
           {"name": "spec_id", "type": "string", "required": false, "description": "Filter clear operation by spec ID"},
           {"name": "review_type", "type": "string", "required": false, "enum": ["fidelity", "plan"], "description": "Filter clear operation by review type"}
         ]
+      },
+      {
+        "name": "spec-schema-export",
+        "description": "Export JSON schemas for SDD specifications and tasks - useful for validation, IDE integration, and documentation",
+        "auth_required": false,
+        "rate_limit": null,
+        "feature_flag": "utility_tools",
+        "parameters": [
+          {"name": "schema_type", "type": "string", "required": false, "default": "spec", "enum": ["spec"], "description": "Type of schema to export"}
+        ]
       }
     ],
     "discovery_tools": [

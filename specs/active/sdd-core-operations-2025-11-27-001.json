@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T23:46:53.377185Z",
+  "last_updated": "2025-11-27T23:48:37.853558Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 94,
+    "progress_percentage": 95,
     "status": "active",
     "current_phase": "phase-7"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 84,
+      "completed_tasks": 85,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -2556,7 +2556,7 @@
         "blocks": []
       },
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Cache management and schema export utilities",
         "risk_level": "low"
@@ -2572,7 +2572,7 @@
         "task-7-2"
       ],
       "total_tasks": 4,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2593,7 +2593,7 @@
         "task-7-1-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/utilities.py",
         "task_category": "implementation",
@@ -2628,13 +2628,18 @@
     "task-7-1-2": {
       "type": "subtask",
       "title": "Implement spec-schema-export - emit JSON schemas for specs/tasks",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-7-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd schema, output spec/task JSON schema, and update docs/codebase references plus backlog tracking"
+        "details": "Wrap sdd schema, output spec/task JSON schema, and update docs/codebase references plus backlog tracking",
+        "started_at": "2025-11-27T23:47:24.716867Z",
+        "completed_at": "2025-11-27T23:48:37.844660Z",
+        "needs_journaling": false,
+        "actual_hours": 0.02,
+        "journaled_at": "2025-11-27T23:48:37.850914Z"
       }
     },
     "task-7-1-3": {
@@ -3658,6 +3663,15 @@
       "content": "Implemented sdd-cache-manage MCP tool in src/foundry_mcp/tools/utilities.py. The tool wraps the sdd CLI cache commands (info/clear) with proper MCP response contract. Features: (1) 'info' action returns cache statistics (total entries, active entries), (2) 'clear' action removes cache entries with optional spec_id and review_type filters, (3) Circuit breaker protection for resilience, (4) Metrics instrumentation for observability, (5) Proper error handling for timeout/CLI not found/command failure cases. Added register_utility_tools to server.py. Added utility_tools feature flag and tools section to capabilities_manifest.json. Created tests/unit/test_utilities.py with 8 passing tests covering cache operations, filters, error handling, and registration.",
       "metadata": {},
       "task_id": "task-7-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T23:48:37.850909Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-schema-export - emit JSON schemas for specs/tasks",
+      "author": "claude-code",
+      "content": "Implemented spec-schema-export MCP tool in src/foundry_mcp/tools/utilities.py. The tool wraps the sdd CLI schema command to emit the full JSON Schema for SDD specifications. Features: (1) Exports complete JSON Schema definition used for spec validation, (2) Returns schema with reference URL for documentation, (3) Uses shared circuit breaker with sdd-cache-manage, (4) Metrics instrumentation for observability. Updated capabilities_manifest.json with spec-schema-export tool definition. Added 2 new tests to tests/unit/test_utilities.py (total 10 tests passing). Server import verified working.",
+      "metadata": {},
+      "task_id": "task-7-1-2"
     }
   ]
 }
