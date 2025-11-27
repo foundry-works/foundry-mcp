@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T21:59:36.216341Z",
+  "last_updated": "2025-11-27T21:59:37.414210Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 65,
+    "progress_percentage": 66,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 58,
+      "completed_tasks": 59,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1364,7 +1364,7 @@
         ]
       },
       "total_tasks": 20,
-      "completed_tasks": 15,
+      "completed_tasks": 16,
       "metadata": {
         "purpose": "Analysis, bulk operations, and specialized mutations",
         "risk_level": "medium"
@@ -1382,7 +1382,7 @@
         "task-4-4"
       ],
       "total_tasks": 17,
-      "completed_tasks": 15,
+      "completed_tasks": 16,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1692,7 +1692,7 @@
     "task-4-3": {
       "type": "task",
       "title": "src/foundry_mcp/tools/git_integration.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [
         "task-4-3-1",
@@ -1700,7 +1700,7 @@
         "task-4-3-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/git_integration.py",
         "task_category": "implementation",
@@ -1751,13 +1751,16 @@
     "task-4-3-3": {
       "type": "subtask",
       "title": "Add resilience/telemetry for git shell workflows",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-3",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap git operations with core/resilience timeouts, concurrency guardrails, and observability redaction"
+        "details": "Wrap git operations with core/resilience timeouts, concurrency guardrails, and observability redaction",
+        "completed_at": "2025-11-27T21:59:37.408483Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-27T21:59:37.411733Z"
       }
     },
     "task-4-4": {
@@ -3148,6 +3151,15 @@
       "content": "Implemented journal-bulk-add MCP tool in git_integration.py. The tool wraps 'sdd bulk-journal' CLI command with spec_id, tasks, template (completion/decision/blocker), template_author, dry_run, and path parameters. Returns tasks_journaled count and task_ids list. Follows established patterns with circuit breaker, metrics, audit logging. Import test passing.",
       "metadata": {},
       "task_id": "task-4-3-2"
+    },
+    {
+      "timestamp": "2025-11-27T21:59:37.411727Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add resilience/telemetry for git shell workflows",
+      "author": "claude-code",
+      "content": "Verified resilience/telemetry integration is complete for both git integration tools. Both task-create-commit and journal-bulk-add use _run_sdd_command() which provides circuit breaker protection and timing metrics. Each tool has audit_log() calls before CLI execution and _metrics.counter() for tracking success/error/timeout states. No additional work needed - patterns were correctly applied during initial implementation.",
+      "metadata": {},
+      "task_id": "task-4-3-3"
     }
   ]
 }
