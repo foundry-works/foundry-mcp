@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:17:56.344480Z",
+  "last_updated": "2025-11-27T14:18:58.750782Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,8 +31,8 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 63,
-    "current_phase": "phase-5"
+    "progress_percentage": 64,
+    "current_phase": "phase-6"
   },
   "hierarchy": {
     "spec-root": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 65,
+      "completed_tasks": 66,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1859,7 +1859,7 @@
     "phase-6": {
       "type": "phase",
       "title": "Tool Discovery & Lifecycle",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-6-files",
@@ -1876,7 +1876,7 @@
         "depends": []
       },
       "total_tasks": 16,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Enable clients to discover tools and negotiate capabilities",
         "risk_level": "low",
@@ -3206,7 +3206,7 @@
     "phase-6-docs": {
       "type": "group",
       "title": "Documentation & Change Log",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-6",
       "children": [
         "phase-6-docs-1",
@@ -3222,7 +3222,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "doc_references": [
           "docs/mcp_best_practices/13-tool-discovery.md#L12-L505",
@@ -3233,7 +3233,7 @@
     "phase-6-docs-1": {
       "type": "task",
       "title": "docs/mcp_best_practices/13-tool-discovery.md",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-docs",
       "children": [
         "phase-6-docs-1-1"
@@ -3244,7 +3244,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "docs/mcp_best_practices/13-tool-discovery.md",
         "task_category": "implementation",
@@ -3254,12 +3254,19 @@
     "phase-6-docs-1-1": {
       "type": "subtask",
       "title": "Explain discovery endpoints, capability negotiation, and deprecation markers.",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-docs-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T14:18:31.903796Z",
+        "status_note": "Starting tool discovery documentation",
+        "completed_at": "2025-11-27T14:18:58.737489Z",
+        "needs_journaling": false,
+        "actual_hours": 0.007,
+        "journaled_at": "2025-11-27T14:18:58.745964Z"
+      }
     },
     "phase-6-docs-2": {
       "type": "task",
@@ -4374,6 +4381,15 @@
       "content": "All child tasks in phase phase-5 have been completed.",
       "metadata": {},
       "task_id": "phase-5"
+    },
+    {
+      "timestamp": "2025-11-27T14:18:58.745954Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Explain discovery endpoints, capability negotiation, and deprecation markers.",
+      "author": "claude-code",
+      "content": "Verified docs/mcp_best_practices/13-tool-discovery.md already contains comprehensive documentation for: (1) Discovery endpoints - list_tools() and get_tool_schema() functions (lines 178-243); (2) Capability negotiation - ServerCapabilities dataclass, get_capabilities(), and negotiate_capabilities() with version/feature negotiation (lines 245-330); (3) Deprecation markers - deprecated_tool decorator with replacement and removal_version parameters (lines 417-454). No additional changes needed - documentation is complete and comprehensive.",
+      "metadata": {},
+      "task_id": "phase-6-docs-1-1"
     }
   ]
 }
