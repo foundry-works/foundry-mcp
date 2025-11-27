@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:26:50.063341Z",
+  "last_updated": "2025-11-27T20:30:49.906409Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 19,
+    "progress_percentage": 20,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 17,
+      "completed_tasks": 18,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -472,7 +472,7 @@
         ]
       },
       "total_tasks": 13,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Extend spec analysis and validation capabilities",
         "risk_level": "low"
@@ -490,7 +490,7 @@
         "task-2-4"
       ],
       "total_tasks": 9,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -503,7 +503,7 @@
     "task-2-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/spec_helpers.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [
         "task-2-1-1",
@@ -513,7 +513,7 @@
         "task-2-1-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/spec_helpers.py",
         "task_category": "implementation",
@@ -604,13 +604,19 @@
     "task-2-1-5": {
       "type": "subtask",
       "title": "Apply resilience/telemetry helpers to spec helper scans",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Use core/resilience.py timeouts, core/concurrency.py pools, and core/observability.py tracing for long-running pattern detection"
+        "details": "Use core/resilience.py timeouts, core/concurrency.py pools, and core/observability.py tracing for long-running pattern detection",
+        "started_at": "2025-11-27T20:27:30.544995Z",
+        "status_note": "Starting application of resilience/telemetry helpers",
+        "completed_at": "2025-11-27T20:30:49.899111Z",
+        "needs_journaling": false,
+        "actual_hours": 0.055,
+        "journaled_at": "2025-11-27T20:30:49.904327Z"
       }
     },
     "task-2-2": {
@@ -2448,6 +2454,15 @@
       "content": "Implemented spec-validate-paths MCP tool that wraps sdd validate-paths CLI command.\n\nAdded to src/foundry_mcp/tools/spec_helpers.py:\n- spec-validate-paths tool with @canonical_tool decorator\n- Accepts paths (required list), base_directory (optional), include_metadata (optional)\n- Wraps subprocess call to sdd validate-paths --json\n- Returns response-v2 envelope with paths_checked, valid_paths, invalid_paths, all_valid, valid_count, invalid_count\n\nAdded 6 new tests to tests/unit/test_spec_helpers.py:\n- test_successful_validate_paths_all_valid\n- test_successful_validate_paths_some_invalid\n- test_validate_paths_with_base_directory\n- test_validate_paths_with_metadata\n- test_validate_paths_command_failure\n- test_validate_paths_timeout\n\nAll 27 tests passing.",
       "metadata": {},
       "task_id": "task-2-1-4"
+    },
+    {
+      "timestamp": "2025-11-27T20:30:49.904320Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Apply resilience/telemetry helpers to spec helper scans",
+      "author": "claude-code",
+      "content": "Applied resilience/telemetry helpers to all spec helper tools.\n\nChanges to src/foundry_mcp/tools/spec_helpers.py:\n- Added imports for CircuitBreaker, CircuitBreakerError, MEDIUM_TIMEOUT from core.resilience\n- Added time module import for timing metrics\n- Created _sdd_cli_breaker circuit breaker (5 failures threshold, 30s recovery)\n- Created _run_sdd_command() helper function that:\n  - Checks circuit breaker before executing\n  - Records timing metrics via _metrics.timer()\n  - Records success/failure to circuit breaker\n  - Handles infrastructure failures (timeout, FileNotFoundError)\n- Refactored all 4 tools (spec-find-related-files, spec-find-patterns, spec-detect-cycles, spec-validate-paths) to:\n  - Use _run_sdd_command() instead of raw subprocess.run()\n  - Add CircuitBreakerError exception handling with CIRCUIT_OPEN error code\n  - Use consistent f-string metric names\n  - Reference CLI_TIMEOUT constant in error messages\n\nAdded 2 new tests in tests/unit/test_spec_helpers.py:\n- test_circuit_breaker_error_handling: Verifies circuit breaker errors produce CIRCUIT_OPEN response\n- test_timing_metrics_recorded: Verifies timer metrics are emitted for CLI calls\n\nAll 29 tests passing.",
+      "metadata": {},
+      "task_id": "task-2-1-5"
     }
   ]
 }

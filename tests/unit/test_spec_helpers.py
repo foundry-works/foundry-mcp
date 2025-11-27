@@ -798,6 +798,68 @@ class TestSpecValidatePaths:
             assert "TIMEOUT" in result["data"]["error_code"]
 
 
+class TestResilienceFeatures:
+    """Tests for resilience features in spec helper tools."""
+
+    def test_circuit_breaker_error_handling(self):
+        """Test that circuit breaker errors are handled gracefully."""
+        from foundry_mcp.core.resilience import CircuitBreakerError, CircuitState
+
+        with patch(
+            "foundry_mcp.tools.spec_helpers._run_sdd_command",
+            side_effect=CircuitBreakerError(
+                "SDD CLI circuit breaker is open",
+                breaker_name="sdd_cli",
+                state=CircuitState.OPEN,
+                retry_after=25.0,
+            )
+        ):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-find-related-files"]("src/main.py")
+
+            assert result["success"] is False
+            assert "CIRCUIT_OPEN" in result["data"]["error_code"]
+            assert "retry" in result["data"]["remediation"].lower()
+
+    def test_timing_metrics_recorded(self):
+        """Test that timing metrics are recorded for CLI calls."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "{}"
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import _run_sdd_command, _metrics, _sdd_cli_breaker
+
+            # Reset circuit breaker state
+            _sdd_cli_breaker.reset()
+
+            with patch.object(_metrics, "timer") as mock_timer:
+                _run_sdd_command(["sdd", "test"], "test_tool")
+
+                # Timer should be called with duration
+                mock_timer.assert_called_once()
+                call_args = mock_timer.call_args
+                assert "test_tool" in call_args[0][0]
+                # Duration should be a positive float
+                assert call_args[0][1] >= 0
+
+
 class TestResponseEnvelopeCompliance:
     """Tests to verify response envelope compliance."""
 

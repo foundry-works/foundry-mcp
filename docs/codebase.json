@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T20:25:22.558263Z",
-    "generated_at_commit": "8cfd5a7bcb33b0ab290ff2506ebab3cb869bd1b0",
+    "generated_at": "2025-11-27T20:27:23.981604Z",
+    "generated_at_commit": "dfaa6e4d0e183926945b99364c5a012f6bcb05c5",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 41,
-    "total_lines": 18322,
+    "total_lines": 18452,
     "total_classes": 72,
     "total_functions": 204,
-    "avg_complexity": 6.77,
+    "avg_complexity": 6.81,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 41,
-        "lines": 18322,
+        "lines": 18452,
         "classes": 72,
         "functions": 204,
-        "avg_complexity": 6.77
+        "avg_complexity": 6.81
       }
     }
   },
@@ -1324,7 +1324,7 @@
         "foundry_mcp.core.observability.get_metrics"
       ],
       "exports": [],
-      "lines": 408
+      "lines": 538
     },
     {
       "name": "tasks",
@@ -5263,7 +5263,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 771,
           "call_type": "method_call"
         },
@@ -5281,13 +5281,13 @@
         },
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 785,
           "call_type": "method_call"
         },
         {
           "name": "result",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 787,
           "call_type": "method_call"
         },
@@ -9224,6 +9224,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 410,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_prepare",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 48,
@@ -9327,7 +9333,7 @@
         }
       ],
       "calls": [],
-      "call_count": 59
+      "call_count": 60
     },
     {
       "name": "redact_sensitive_data",
@@ -9616,6 +9622,12 @@
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 321,
           "call_type": "function_call"
+        },
+        {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 453,
+          "call_type": "function_call"
         }
       ],
       "calls": [
@@ -9626,7 +9638,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 8
+      "call_count": 9
     },
     {
       "name": "mcp_tool",
@@ -13025,6 +13037,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 501,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_next",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 121,
@@ -13165,7 +13183,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 64
+      "call_count": 65
     },
     {
       "name": "error_response",
@@ -13992,6 +14010,30 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 507,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 516,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 524,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_validate_paths",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 533,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_prepare",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 76,
@@ -14366,7 +14408,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 192
+      "call_count": 196
     },
     {
       "name": "validation_error",
@@ -21572,7 +21614,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 25,
+      "complexity": 33,
       "decorators": [],
       "is_async": false,
       "is_exported": false,

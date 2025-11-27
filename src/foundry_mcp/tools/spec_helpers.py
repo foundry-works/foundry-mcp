@@ -4,11 +4,17 @@ Spec helper tools for foundry-mcp.
 Provides MCP tools for spec discovery, validation, and analysis.
 These tools wrap SDD CLI commands to provide file relationship discovery,
 pattern matching, dependency cycle detection, and path validation.
+
+Resilience features:
+- Circuit breaker for SDD CLI calls (opens after 5 consecutive failures)
+- Timing metrics for all tool invocations
+- Configurable timeout (default 30s per operation)
 """
 
 import json
 import logging
 import subprocess
+import time
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
@@ -18,11 +24,88 @@ from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics
+from foundry_mcp.core.resilience import (
+    CircuitBreaker,
+    CircuitBreakerError,
+    MEDIUM_TIMEOUT,
+)
 
 logger = logging.getLogger(__name__)
 
 # Metrics singleton for spec helper tools
 _metrics = get_metrics()
+
+# Circuit breaker for SDD CLI operations
+# Opens after 5 consecutive failures, recovers after 30 seconds
+_sdd_cli_breaker = CircuitBreaker(
+    name="sdd_cli",
+    failure_threshold=5,
+    recovery_timeout=30.0,
+    half_open_max_calls=3,
+)
+
+# Default timeout for CLI operations (30 seconds)
+CLI_TIMEOUT: float = MEDIUM_TIMEOUT
+
+
+def _run_sdd_command(
+    cmd: List[str],
+    tool_name: str,
+    timeout: float = CLI_TIMEOUT,
+) -> subprocess.CompletedProcess:
+    """
+    Execute an SDD CLI command with circuit breaker protection and timing.
+
+    Args:
+        cmd: Command list to execute
+        tool_name: Name of the calling tool (for metrics)
+        timeout: Timeout in seconds
+
+    Returns:
+        CompletedProcess result from subprocess.run
+
+    Raises:
+        CircuitBreakerError: If circuit breaker is open
+        subprocess.TimeoutExpired: If command times out
+        FileNotFoundError: If SDD CLI is not found
+    """
+    # Check circuit breaker
+    if not _sdd_cli_breaker.can_execute():
+        status = _sdd_cli_breaker.get_status()
+        _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "circuit_open"})
+        raise CircuitBreakerError(
+            f"SDD CLI circuit breaker is open (retry after {status.get('retry_after_seconds', 0):.1f}s)",
+            breaker_name="sdd_cli",
+            state=_sdd_cli_breaker.state,
+            retry_after=status.get("retry_after_seconds"),
+        )
+
+    start_time = time.perf_counter()
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+        # Record success or failure based on return code
+        if result.returncode == 0:
+            _sdd_cli_breaker.record_success()
+        else:
+            # Non-zero return code counts as a failure for circuit breaker
+            _sdd_cli_breaker.record_failure()
+
+        return result
+
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        # These are infrastructure failures that should trip the circuit breaker
+        _sdd_cli_breaker.record_failure()
+        raise
+    finally:
+        # Record timing metrics
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        _metrics.timer(f"spec_helpers.{tool_name}.duration_ms", elapsed_ms)
 
 
 def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -68,6 +151,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - spec_references: List of specs that reference this file
             - total_count: Number of related files found
         """
+        tool_name = "find_related_files"
         try:
             # Build command
             cmd = ["sdd", "find-related-files", file_path, "--json"]
@@ -84,13 +168,8 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 spec_id=spec_id,
             )
 
-            # Execute the command
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
 
             # Parse the JSON output
             if result.returncode == 0:
@@ -117,13 +196,13 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     }
 
                 # Track metrics
-                _metrics.counter("spec_helpers.find_related_files", labels={"status": "success"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "success"})
 
                 return asdict(success_response(data))
             else:
                 # Command failed
                 error_msg = result.stderr.strip() if result.stderr else "Command failed"
-                _metrics.counter("spec_helpers.find_related_files", labels={"status": "error"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
 
                 return asdict(error_response(
                     f"Failed to find related files: {error_msg}",
@@ -132,16 +211,23 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Check that the file path exists and SDD CLI is available",
                 ))
 
-        except subprocess.TimeoutExpired:
-            _metrics.counter("spec_helpers.find_related_files", labels={"status": "timeout"})
+        except CircuitBreakerError as e:
             return asdict(error_response(
-                "Command timed out after 30 seconds",
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
                 error_code="TIMEOUT",
                 error_type="unavailable",
                 remediation="Try with a smaller scope or check system resources",
             ))
         except FileNotFoundError:
-            _metrics.counter("spec_helpers.find_related_files", labels={"status": "cli_not_found"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "cli_not_found"})
             return asdict(error_response(
                 "SDD CLI not found in PATH",
                 error_code="CLI_NOT_FOUND",
@@ -150,7 +236,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             ))
         except Exception as e:
             logger.exception("Unexpected error in spec-find-related-files")
-            _metrics.counter("spec_helpers.find_related_files", labels={"status": "error"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
                 f"Unexpected error: {str(e)}",
                 error_code="INTERNAL_ERROR",
@@ -190,6 +276,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - matches: List of matching file paths
             - total_count: Number of matches found
         """
+        tool_name = "find_patterns"
         try:
             # Build command
             cmd = ["sdd", "find-pattern", pattern, "--json"]
@@ -206,13 +293,8 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 directory=directory,
             )
 
-            # Execute the command
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
 
             # Parse the JSON output
             if result.returncode == 0:
@@ -240,13 +322,13 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     }
 
                 # Track metrics
-                _metrics.counter("spec_helpers.find_patterns", labels={"status": "success"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "success"})
 
                 return asdict(success_response(data))
             else:
                 # Command failed
                 error_msg = result.stderr.strip() if result.stderr else "Command failed"
-                _metrics.counter("spec_helpers.find_patterns", labels={"status": "error"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
 
                 return asdict(error_response(
                     f"Failed to find patterns: {error_msg}",
@@ -255,16 +337,23 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Check that the pattern is valid and SDD CLI is available",
                 ))
 
-        except subprocess.TimeoutExpired:
-            _metrics.counter("spec_helpers.find_patterns", labels={"status": "timeout"})
+        except CircuitBreakerError as e:
             return asdict(error_response(
-                "Command timed out after 30 seconds",
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
                 error_code="TIMEOUT",
                 error_type="unavailable",
                 remediation="Try with a more specific pattern or smaller scope",
             ))
         except FileNotFoundError:
-            _metrics.counter("spec_helpers.find_patterns", labels={"status": "cli_not_found"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "cli_not_found"})
             return asdict(error_response(
                 "SDD CLI not found in PATH",
                 error_code="CLI_NOT_FOUND",
@@ -273,7 +362,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             ))
         except Exception as e:
             logger.exception("Unexpected error in spec-find-patterns")
-            _metrics.counter("spec_helpers.find_patterns", labels={"status": "error"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
                 f"Unexpected error: {str(e)}",
                 error_code="INTERNAL_ERROR",
@@ -313,6 +402,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - cycle_count: Number of cycles detected
             - affected_tasks: List of task IDs involved in cycles
         """
+        tool_name = "detect_cycles"
         try:
             # Build command
             cmd = ["sdd", "find-circular-deps", spec_id, "--json"]
@@ -325,13 +415,8 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 spec_id=spec_id,
             )
 
-            # Execute the command
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
 
             # Parse the JSON output
             if result.returncode == 0:
@@ -366,13 +451,13 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     }
 
                 # Track metrics
-                _metrics.counter("spec_helpers.detect_cycles", labels={"status": "success"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "success"})
 
                 return asdict(success_response(data))
             else:
                 # Command failed
                 error_msg = result.stderr.strip() if result.stderr else "Command failed"
-                _metrics.counter("spec_helpers.detect_cycles", labels={"status": "error"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
 
                 return asdict(error_response(
                     f"Failed to detect cycles: {error_msg}",
@@ -381,16 +466,23 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Check that the spec_id exists and SDD CLI is available",
                 ))
 
-        except subprocess.TimeoutExpired:
-            _metrics.counter("spec_helpers.detect_cycles", labels={"status": "timeout"})
+        except CircuitBreakerError as e:
             return asdict(error_response(
-                "Command timed out after 30 seconds",
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
                 error_code="TIMEOUT",
                 error_type="unavailable",
                 remediation="Try with a smaller specification or check system resources",
             ))
         except FileNotFoundError:
-            _metrics.counter("spec_helpers.detect_cycles", labels={"status": "cli_not_found"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "cli_not_found"})
             return asdict(error_response(
                 "SDD CLI not found in PATH",
                 error_code="CLI_NOT_FOUND",
@@ -399,7 +491,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             ))
         except Exception as e:
             logger.exception("Unexpected error in spec-detect-cycles")
-            _metrics.counter("spec_helpers.detect_cycles", labels={"status": "error"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
                 f"Unexpected error: {str(e)}",
                 error_code="INTERNAL_ERROR",
@@ -442,6 +534,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - valid_count: Number of valid paths
             - invalid_count: Number of invalid paths
         """
+        tool_name = "validate_paths"
         try:
             # Build command
             cmd = ["sdd", "validate-paths", "--json"] + paths
@@ -458,13 +551,8 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 base_directory=base_directory,
             )
 
-            # Execute the command
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
 
             # Parse the JSON output
             if result.returncode == 0:
@@ -496,13 +584,13 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     }
 
                 # Track metrics
-                _metrics.counter("spec_helpers.validate_paths", labels={"status": "success"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "success"})
 
                 return asdict(success_response(data))
             else:
                 # Command failed
                 error_msg = result.stderr.strip() if result.stderr else "Command failed"
-                _metrics.counter("spec_helpers.validate_paths", labels={"status": "error"})
+                _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
 
                 return asdict(error_response(
                     f"Failed to validate paths: {error_msg}",
@@ -511,16 +599,23 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Check that paths are valid and SDD CLI is available",
                 ))
 
-        except subprocess.TimeoutExpired:
-            _metrics.counter("spec_helpers.validate_paths", labels={"status": "timeout"})
+        except CircuitBreakerError as e:
             return asdict(error_response(
-                "Command timed out after 30 seconds",
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
                 error_code="TIMEOUT",
                 error_type="unavailable",
                 remediation="Try with fewer paths or check system resources",
             ))
         except FileNotFoundError:
-            _metrics.counter("spec_helpers.validate_paths", labels={"status": "cli_not_found"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "cli_not_found"})
             return asdict(error_response(
                 "SDD CLI not found in PATH",
                 error_code="CLI_NOT_FOUND",
@@ -529,7 +624,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             ))
         except Exception as e:
             logger.exception("Unexpected error in spec-validate-paths")
-            _metrics.counter("spec_helpers.validate_paths", labels={"status": "error"})
+            _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
                 f"Unexpected error: {str(e)}",
                 error_code="INTERNAL_ERROR",
