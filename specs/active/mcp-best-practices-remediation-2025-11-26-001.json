@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:35:21.573029Z",
+  "last_updated": "2025-11-27T14:36:16.942753Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 74,
+    "progress_percentage": 75,
     "current_phase": "phase-6"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 76,
+      "completed_tasks": 77,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1876,7 +1876,7 @@
         "depends": []
       },
       "total_tasks": 16,
-      "completed_tasks": 11,
+      "completed_tasks": 12,
       "metadata": {
         "purpose": "Enable clients to discover tools and negotiate capabilities",
         "risk_level": "low",
@@ -1899,7 +1899,7 @@
         "task-6-5"
       ],
       "total_tasks": 12,
-      "completed_tasks": 9,
+      "completed_tasks": 10,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -3594,7 +3594,7 @@
     "task-6-4": {
       "type": "task",
       "title": "src/foundry_mcp/server.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-6-files",
       "children": [
         "task-6-4-1",
@@ -3610,7 +3610,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/server.py",
         "task_category": "implementation",
@@ -3620,12 +3620,19 @@
     "task-6-4-1": {
       "type": "subtask",
       "title": "Register discovery tools with FastMCP router and CLI descriptors.",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-6-4",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T14:35:45.875395Z",
+        "status_note": "Registering discovery tools in server.py",
+        "completed_at": "2025-11-27T14:36:16.929735Z",
+        "needs_journaling": false,
+        "actual_hours": 0.009,
+        "journaled_at": "2025-11-27T14:36:16.939112Z"
+      }
     },
     "task-6-4-2": {
       "type": "subtask",
@@ -4546,6 +4553,15 @@
       "content": "Deprecation decorator tests were already implemented in tests/unit/test_core/test_discovery.py as part of task-6-3-1. The TestDeprecatedToolDecorator class includes 6 tests: test_decorator_updates_docstring, test_decorator_adds_warning_to_response, test_decorator_creates_meta_if_missing, test_is_deprecated_helper, test_get_deprecation_info, test_get_deprecation_info_not_deprecated. All tests verify decorator behavior, warning injection, and helper function utility.",
       "metadata": {},
       "task_id": "task-6-3-2"
+    },
+    {
+      "timestamp": "2025-11-27T14:36:16.939096Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Register discovery tools with FastMCP router and CLI descriptors.",
+      "author": "claude-code",
+      "content": "Added import for register_discovery_tools from foundry_mcp.tools.discovery in server.py and added register_discovery_tools(mcp, config) call in create_server() function alongside other tool registration calls. Discovery tools are now registered with the FastMCP router.",
+      "metadata": {},
+      "task_id": "task-6-4-1"
     }
   ]
 }
