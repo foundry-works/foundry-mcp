@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:38:52.969247Z",
+  "last_updated": "2025-11-27T14:42:24.408975Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 77,
+    "progress_percentage": 78,
     "current_phase": "phase-6"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 79,
+      "completed_tasks": 80,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1876,7 +1876,7 @@
         "depends": []
       },
       "total_tasks": 16,
-      "completed_tasks": 14,
+      "completed_tasks": 15,
       "metadata": {
         "purpose": "Enable clients to discover tools and negotiate capabilities",
         "risk_level": "low",
@@ -2148,7 +2148,7 @@
     "phase-6-verify": {
       "type": "group",
       "title": "Verification",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-6",
       "children": [
         "verify-6-1",
@@ -2163,21 +2163,27 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {}
     },
     "verify-6-1": {
       "type": "verify",
       "title": "Discovery tests pass",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "auto",
         "command": "pytest tests/unit/test_tools/test_discovery.py -v",
-        "expected": ""
+        "expected": "",
+        "started_at": "2025-11-27T14:42:09.115602Z",
+        "status_note": "Running discovery tests",
+        "completed_at": "2025-11-27T14:42:24.396342Z",
+        "needs_journaling": false,
+        "actual_hours": 0.004,
+        "journaled_at": "2025-11-27T14:42:24.405662Z"
       },
       "dependencies": {
         "blocks": [],
@@ -4607,6 +4613,15 @@
       "content": "All child tasks in group phase-6-files have been completed.",
       "metadata": {},
       "task_id": "phase-6-files"
+    },
+    {
+      "timestamp": "2025-11-27T14:42:24.405652Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Discovery tests pass",
+      "author": "claude-code",
+      "content": "All 35 discovery tests pass. Fixed an import issue where `get_flag_service` was missing from `feature_flags.py` - added as an alias to `get_registry` and included in __all__ exports. Tests verify: ParameterMetadata creation, ToolMetadata creation and schema generation, ToolRegistry operations (register/unregister/list by category/tag), ServerCapabilities, capability negotiation, and deprecated_tool decorator functionality.",
+      "metadata": {},
+      "task_id": "verify-6-1"
     }
   ]
 }

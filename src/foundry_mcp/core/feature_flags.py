@@ -374,6 +374,10 @@ def get_registry() -> FeatureFlagRegistry:
     return _default_registry
 
 
+# Alias for server.py compatibility
+get_flag_service = get_registry
+
+
 # Type variable for decorated functions
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -527,6 +531,7 @@ __all__ = [
     "FeatureFlagRegistry",
     "current_client_id",
     "get_registry",
+    "get_flag_service",
     "feature_flag",
     "flag_override",
 ]
