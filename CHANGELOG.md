@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Enhanced Error Handling (Phase 3):
+  - Machine-readable error semantics via `error_response()` helper (`foundry_mcp.core.responses`):
+    - `error_code`: SCREAMING_SNAKE_CASE classification (e.g., `VALIDATION_ERROR`, `NOT_FOUND`, `RATE_LIMIT_EXCEEDED`)
+    - `error_type`: Category for routing (validation, authorization, not_found, conflict, rate_limit, feature_flag, internal, unavailable)
+    - `remediation`: Actionable guidance for resolving errors
+    - `details`: Nested structure for field-specific validation context
+  - Standard error codes registry:
+    - Validation: `VALIDATION_ERROR`, `INVALID_FORMAT`, `MISSING_REQUIRED`
+    - Resources: `NOT_FOUND`, `SPEC_NOT_FOUND`, `TASK_NOT_FOUND`, `DUPLICATE_ENTRY`, `STATE_CONFLICT`
+    - Access: `FEATURE_DISABLED`, `RATE_LIMIT_EXCEEDED`
+    - System: `INTERNAL_ERROR`, `SERVICE_UNAVAILABLE`
+  - Documentation for error semantics (`docs/codebase_standards/mcp_response_schema.md`):
+    - Error type categories with HTTP analogs and retry guidance
+    - Common error codes reference table
+    - Helper usage examples for validation, not-found, rate-limit, and feature-flag errors
 - Feature Flags Infrastructure (Phase 2):
   - Documentation for feature flag patterns (`docs/mcp_best_practices/14-feature-flags.md`):
     - Feature flag lifecycle (EXPERIMENTAL → BETA → STABLE → DEPRECATED)

@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:16:29.567307Z",
+  "last_updated": "2025-11-27T13:19:41.461743Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 28,
+    "progress_percentage": 29,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 29,
+      "completed_tasks": 30,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -860,7 +860,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Make errors machine-readable and actionable for clients and LLMs",
         "risk_level": "low",
@@ -2684,7 +2684,7 @@
     "phase-3-docs": {
       "type": "group",
       "title": "Documentation & Change Log",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-3",
       "children": [
         "phase-3-docs-1",
@@ -2700,12 +2700,15 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "doc_references": [
           "docs/codebase_standards/mcp_response_schema.md",
           "docs/mcp_best_practices/07-error-semantics.md#L11-L274"
-        ]
+        ],
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T13:19:41.449735Z",
+        "journaled_at": "2025-11-27T13:19:41.461706Z"
       }
     },
     "phase-3-docs-1": {
@@ -2749,7 +2752,7 @@
     "phase-3-docs-2": {
       "type": "task",
       "title": "CHANGELOG.md",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-docs",
       "children": [
         "phase-3-docs-2-1"
@@ -2760,7 +2763,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "CHANGELOG.md",
         "task_category": "implementation",
@@ -2770,12 +2773,19 @@
     "phase-3-docs-2-1": {
       "type": "subtask",
       "title": "Summarize machine-readable error semantics for client integrators.",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-docs-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T13:18:58.833860Z",
+        "status_note": "Starting CHANGELOG.md error semantics documentation",
+        "completed_at": "2025-11-27T13:19:41.449547Z",
+        "needs_journaling": false,
+        "actual_hours": 0.012,
+        "journaled_at": "2025-11-27T13:19:41.456020Z"
+      }
     },
     "phase-4-docs": {
       "type": "group",
@@ -3687,6 +3697,24 @@
       "content": "Extended docs/codebase_standards/mcp_response_schema.md with comprehensive error_code/error_type documentation. Added: Error Response Fields section with standard error fields table (error_code, error_type, remediation, details), Error Type Categories table (9 categories with HTTP analogs and retry guidance), Error Response Example JSON, Common Error Codes table (12 codes), and expanded Error Response Helper section with parameter table and 3 practical examples (Not Found, Feature Flag Disabled, Rate Limit Exceeded).",
       "metadata": {},
       "task_id": "phase-3-docs-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T13:19:41.456015Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Summarize machine-readable error semantics for client integrators.",
+      "author": "claude-code",
+      "content": "Added CHANGELOG.md entry under [Unreleased] / Added section documenting machine-readable error semantics for client integrators. Entry covers: error_response() helper with error_code, error_type, remediation, and details fields; standard error codes registry (validation, resources, access, system categories); and documentation reference to docs/codebase_standards/mcp_response_schema.md.",
+      "metadata": {},
+      "task_id": "phase-3-docs-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T13:19:41.461701Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Documentation & Change Log",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-3-docs have been completed.",
+      "metadata": {},
+      "task_id": "phase-3-docs"
     }
   ]
 }
