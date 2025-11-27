@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T22:53:32.294649Z",
+  "last_updated": "2025-11-27T22:54:34.414491Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 78,
+    "progress_percentage": 79,
     "status": "active",
     "current_phase": "phase-5"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 70,
+      "completed_tasks": 71,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1914,7 +1914,7 @@
         ]
       },
       "total_tasks": 14,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Plan formatting, phase management, and state reconciliation",
         "risk_level": "medium"
@@ -1931,7 +1931,7 @@
         "task-5-3"
       ],
       "total_tasks": 11,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1944,7 +1944,7 @@
     "task-5-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/planning.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-5-files",
       "children": [
         "task-5-1-1",
@@ -1957,7 +1957,7 @@
         "task-5-1-8"
       ],
       "total_tasks": 8,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/planning.py",
         "task_category": "implementation",
@@ -2102,13 +2102,19 @@
     "task-5-1-8": {
       "type": "subtask",
       "title": "Apply resilience/telemetry to planning utilities",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap plan/phase reporting operations with core/resilience timeouts and observability metrics"
+        "details": "Wrap plan/phase reporting operations with core/resilience timeouts and observability metrics",
+        "started_at": "2025-11-27T22:54:06.929255Z",
+        "status_note": "Verifying resilience/telemetry already applied to all planning tools",
+        "completed_at": "2025-11-27T22:54:34.405527Z",
+        "needs_journaling": false,
+        "actual_hours": 0.008,
+        "journaled_at": "2025-11-27T22:54:34.412063Z"
       }
     },
     "task-5-2": {
@@ -3375,6 +3381,15 @@
       "content": "Added spec-audit tool to planning.py. Wraps sdd audit-spec CLI command with spec_id required. Performs comprehensive quality checks returning passed flag, score (0-100), findings array with severity classification (errors/warnings counted separately), recommendations, and optional categories breakdown. Same resilience pattern (circuit breaker, timing metrics, audit logging). Module import verified.",
       "metadata": {},
       "task_id": "task-5-1-7"
+    },
+    {
+      "timestamp": "2025-11-27T22:54:34.412058Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Apply resilience/telemetry to planning utilities",
+      "author": "claude-code",
+      "content": "Verified resilience/telemetry already applied to all 7 planning tools via centralized _run_sdd_command() helper. Infrastructure includes: (1) Circuit breaker (sdd_cli_planning) with 5-failure threshold and 30s recovery, (2) Timing metrics via _metrics.timer() for every CLI call, (3) Audit logging in each tool function, (4) MEDIUM_TIMEOUT (30s) applied to subprocess calls, (5) Proper exception handling for CircuitBreakerError, TimeoutExpired, and FileNotFoundError in all tools. No additional changes required - architecture satisfies requirements.",
+      "metadata": {},
+      "task_id": "task-5-1-8"
     }
   ]
 }
