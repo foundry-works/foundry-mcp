@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:34:25.558020Z",
+  "last_updated": "2025-11-27T20:35:20.282976Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 22,
+    "progress_percentage": 23,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 20,
+      "completed_tasks": 21,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -472,7 +472,7 @@
         ]
       },
       "total_tasks": 13,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Extend spec analysis and validation capabilities",
         "risk_level": "low"
@@ -490,7 +490,7 @@
         "task-2-4"
       ],
       "total_tasks": 9,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -685,7 +685,7 @@
     "task-2-3": {
       "type": "task",
       "title": "tests/unit/test_spec_helpers.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [],
       "dependencies": {
@@ -698,12 +698,18 @@
         ]
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/unit/test_spec_helpers.py",
         "task_category": "implementation",
         "estimated_hours": 3,
-        "changes": "Create unit tests for spec helper tools"
+        "changes": "Create unit tests for spec helper tools",
+        "started_at": "2025-11-27T20:34:49.256054Z",
+        "status_note": "Creating unit tests for spec helper tools",
+        "completed_at": "2025-11-27T20:35:20.276166Z",
+        "needs_journaling": false,
+        "actual_hours": 0.009,
+        "journaled_at": "2025-11-27T20:35:20.281004Z"
       }
     },
     "task-2-4": {
@@ -2493,6 +2499,15 @@
       "content": "Updated docs/backlog (half_baked_plans/OPERATIONS_TO_ADD.md) to move spec helper operations from In-Scope to Recently Covered section. Added new \"Recently Covered via SDD Core Operations (Phase 2)\" section documenting spec_find_related_files, spec_find_patterns, spec_detect_cycles, and spec_validate_paths tools with spec_helpers feature flag. Also updated docs/mcp_best_practices/README.md with new \"Spec Discovery & Validation Helpers\" section including tool table and cross-references to validation/discovery docs. Bumped version to 2.3.0 in the README.",
       "metadata": {},
       "task_id": "task-2-2-2"
+    },
+    {
+      "timestamp": "2025-11-27T20:35:20.280999Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/unit/test_spec_helpers.py",
+      "author": "claude-code",
+      "content": "Unit tests for spec helper tools already exist at tests/unit/test_spec_helpers.py. Verified all 29 tests pass successfully. Tests cover: TestSpecFindRelatedFiles (7 tests), TestSpecFindPatterns (6 tests), TestSpecDetectCycles (6 tests), TestSpecValidatePaths (6 tests), TestResilienceFeatures (2 tests), TestResponseEnvelopeCompliance (2 tests). Tests verify success cases, empty results, command failures, timeouts, CLI not found scenarios, circuit breaker handling, and response-v2 envelope compliance.",
+      "metadata": {},
+      "task_id": "task-2-3"
     }
   ]
 }
