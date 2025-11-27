@@ -2,19 +2,19 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T14:42:46.166116Z",
-    "generated_at_commit": "218acee9f70c56795f6e5eba6b683055eb8294c3",
+    "generated_at": "2025-11-27T14:52:48.097427Z",
+    "generated_at_commit": "eb4172eed29b263bc833f05ecb8a491db95547d1",
     "languages": [
       "python"
     ],
     "schema_version": "2.0"
   },
   "statistics": {
-    "total_files": 36,
-    "total_lines": 15381,
-    "total_classes": 60,
-    "total_functions": 176,
-    "avg_complexity": 6.94,
+    "total_files": 37,
+    "total_lines": 15794,
+    "total_classes": 64,
+    "total_functions": 179,
+    "avg_complexity": 6.84,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -25,11 +25,11 @@
     ],
     "by_language": {
       "python": {
-        "files": 36,
-        "lines": 15381,
-        "classes": 60,
-        "functions": 176,
-        "avg_complexity": 6.94
+        "files": 37,
+        "lines": 15794,
+        "classes": 64,
+        "functions": 179,
+        "avg_complexity": 6.84
       }
     }
   },
@@ -179,6 +179,45 @@
       ],
       "exports": [],
       "lines": 446
+    },
+    {
+      "name": "concurrency",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "language": "python",
+      "docstring": "Concurrency utilities for foundry-mcp.\n\nProvides concurrency limiting, cancellation handling, and request context\nmanagement for async MCP tool operations.\n\nSee docs/mcp_best_practices/15-concurrency-patterns.md for guidance.\n\nExample:\n    from foundry_mcp.core.concurrency import (\n        ConcurrencyLimiter, with_cancellation, request_context\n    )\n\n    # Limit concurrent operations\n    limiter = ConcurrencyLimiter(max_concurrent=10)\n    results = await limiter.gather([fetch(url) for url in urls])\n\n    # Handle cancellation gracefully\n    @with_cancellation\n    async def long_task():\n        ...\n\n    # Track request context\n    async with request_context(request_id=\"abc\", client_id=\"client1\"):\n        await process()",
+      "classes": [
+        "ConcurrencyConfig",
+        "ConcurrencyStats",
+        "GatherResult",
+        "ConcurrencyLimiter"
+      ],
+      "functions": [
+        "get_tool_limiter",
+        "configure_tool_limiter",
+        "get_all_limiter_stats"
+      ],
+      "imports": [
+        "asyncio",
+        "logging",
+        "time",
+        "uuid",
+        "contextlib.asynccontextmanager",
+        "contextvars.ContextVar",
+        "dataclasses.dataclass",
+        "dataclasses.field",
+        "datetime.datetime",
+        "datetime.timezone",
+        "functools.wraps",
+        "typing.Any",
+        "typing.Callable",
+        "typing.Coroutine",
+        "typing.Dict",
+        "typing.List",
+        "typing.Optional",
+        "typing.TypeVar"
+      ],
+      "exports": [],
+      "lines": 413
     },
     {
       "name": "discovery",
@@ -1460,6 +1499,128 @@
       ],
       "imported_by": [],
       "instantiation_count": 1
+    },
+    {
+      "name": "ConcurrencyConfig",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 54,
+      "language": "python",
+      "docstring": "Configuration for a concurrency limiter.\n\nAttributes:\n    max_concurrent: Maximum number of concurrent operations\n    name: Optional name for logging and identification\n    timeout: Optional timeout per operation in seconds",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "__init__",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 148,
+          "context": [
+            "ConcurrencyLimiter",
+            "__init__"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
+    },
+    {
+      "name": "ConcurrencyStats",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 69,
+      "language": "python",
+      "docstring": "Statistics from concurrent operation execution.\n\nAttributes:\n    total: Total operations attempted\n    succeeded: Operations completed successfully\n    failed: Operations that raised exceptions\n    cancelled: Operations that were cancelled\n    timed_out: Operations that timed out\n    elapsed_seconds: Total execution time",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "gather",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 244,
+          "context": [
+            "ConcurrencyLimiter",
+            "gather"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
+    },
+    {
+      "name": "GatherResult",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 90,
+      "language": "python",
+      "docstring": "Result of a gather operation with detailed status.\n\nAttributes:\n    results: List of successful results (None for failed operations)\n    errors: List of errors (None for successful operations)\n    stats: Execution statistics",
+      "bases": [],
+      "methods": [
+        "successful_results",
+        "failed_results"
+      ],
+      "properties": [
+        "all_succeeded"
+      ],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "gather",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 286,
+          "context": [
+            "ConcurrencyLimiter",
+            "gather"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
+    },
+    {
+      "name": "ConcurrencyLimiter",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 117,
+      "language": "python",
+      "docstring": "Limit concurrent async operations using a semaphore.\n\nProvides controlled concurrency for parallel operations like HTTP requests,\ndatabase queries, or file operations to prevent resource exhaustion.\n\nExample:\n    >>> limiter = ConcurrencyLimiter(max_concurrent=5)\n    >>> results = await limiter.gather([fetch(url) for url in urls])\n    >>> print(f\"Completed {results.stats.succeeded}/{results.stats.total}\")\n\n    >>> # With timeout per operation\n    >>> limiter = ConcurrencyLimiter(max_concurrent=3, timeout=30.0)\n    >>> async with limiter.acquire():\n    ...     await slow_operation()",
+      "bases": [],
+      "methods": [
+        "__init__",
+        "acquire",
+        "run",
+        "gather",
+        "map",
+        "get_stats"
+      ],
+      "properties": [
+        "max_concurrent",
+        "active_count"
+      ],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "get_tool_limiter",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 356,
+          "context": [
+            "get_tool_limiter"
+          ]
+        },
+        {
+          "instantiator": "configure_tool_limiter",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 379,
+          "context": [
+            "configure_tool_limiter"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 2
     },
     {
       "name": "ParameterType",
@@ -4075,6 +4236,96 @@
       ]
     },
     {
+      "name": "get_tool_limiter",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 342,
+      "language": "python",
+      "docstring": "Get or create a concurrency limiter for a tool.\n\nArgs:\n    tool_name: Name of the tool\n    default_limit: Default max concurrent if not configured\n\nReturns:\n    ConcurrencyLimiter instance for the tool",
+      "parameters": [
+        {
+          "name": "tool_name",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "default_limit",
+          "type": "int",
+          "default": null
+        }
+      ],
+      "return_type": "ConcurrencyLimiter",
+      "complexity": 2,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
+    },
+    {
+      "name": "configure_tool_limiter",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 363,
+      "language": "python",
+      "docstring": "Configure a concurrency limiter for a tool.\n\nArgs:\n    tool_name: Name of the tool\n    max_concurrent: Maximum concurrent operations\n    timeout: Optional timeout per operation\n\nReturns:\n    Configured ConcurrencyLimiter instance",
+      "parameters": [
+        {
+          "name": "tool_name",
+          "type": "str",
+          "default": null
+        },
+        {
+          "name": "max_concurrent",
+          "type": "int",
+          "default": null
+        }
+      ],
+      "return_type": "ConcurrencyLimiter",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "debug",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 385,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "get_all_limiter_stats",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 391,
+      "language": "python",
+      "docstring": "Get statistics for all configured tool limiters.\n\nReturns:\n    Dictionary mapping tool names to their limiter stats",
+      "parameters": [],
+      "return_type": "Dict[str, Dict[str, Any]]",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get_stats",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
+          "line": 397,
+          "call_type": "method_call"
+        },
+        {
+          "name": "items",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 397,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
       "name": "get_tool_registry",
       "file": "src/foundry_mcp/core/discovery.py",
       "line": 354,
@@ -6021,7 +6272,7 @@
         },
         {
           "name": "write",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 535,
           "call_type": "method_call"
         },
@@ -19439,6 +19690,26 @@
       "typing.Dict",
       "typing.List",
       "typing.Optional"
+    ],
+    "src/foundry_mcp/core/concurrency.py": [
+      "asyncio",
+      "logging",
+      "time",
+      "uuid",
+      "contextlib.asynccontextmanager",
+      "contextvars.ContextVar",
+      "dataclasses.dataclass",
+      "dataclasses.field",
+      "datetime.datetime",
+      "datetime.timezone",
+      "functools.wraps",
+      "typing.Any",
+      "typing.Callable",
+      "typing.Coroutine",
+      "typing.Dict",
+      "typing.List",
+      "typing.Optional",
+      "typing.TypeVar"
     ],
     "src/foundry_mcp/core/discovery.py": [
       "dataclasses.dataclass",
