@@ -26,6 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       - Concurrency state exposure for LLM capacity understanding
       - Response chunking with pagination for large result sets
     - Anti-patterns: blocking event loop, unbounded concurrency, ignored cancellation
+- Testing & Observability Enhancements (Phase 8):
+  - Enhanced property testing and schema validation guidance (`docs/mcp_best_practices/10-testing-fixtures.md`):
+    - Property-based testing with Hypothesis for automatic edge case discovery
+    - `TestSchemaCompliance` class for property tests ensuring all responses conform to schema
+    - Custom Hypothesis strategies: `valid_user_data()`, `valid_pagination()` composites
+    - Schema validation testing patterns:
+      - `Draft7Validator` pattern for compiled schema validation
+      - `validate_response()` helper returning error lists
+      - `TestSchemaStructure` for validating schema itself
+      - `TestResponseValidation` for helper output validation
+      - `TestInvalidResponses` for negative testing
+      - `TestToolResponseValidation` for end-to-end tool response checks
+    - Combined property + schema testing for maximum coverage
+    - Integration with jsonschema library for contract enforcement
 - Tool Discovery & Lifecycle (Phase 6):
   - Documentation for tool metadata and discovery (`docs/mcp_best_practices/13-tool-discovery.md`):
     - `ToolDefinition` dataclass with name, description, parameters, category, version, deprecation markers
