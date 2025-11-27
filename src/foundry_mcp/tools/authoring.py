@@ -645,3 +645,178 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="task-remove",
+    )
+    def task_remove(
+        spec_id: str,
+        task_id: str,
+        cascade: bool = False,
+        dry_run: bool = False,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Remove a task from an SDD specification.
+
+        Wraps the SDD CLI remove-task command to delete a task node from the
+        specification hierarchy. Can optionally cascade to remove child tasks.
+
+        WHEN TO USE:
+        - Removing work items that are no longer needed
+        - Cleaning up abandoned or duplicate tasks
+        - Reducing spec complexity during refactoring
+        - Pruning completed branches from hierarchy
+
+        Args:
+            spec_id: Specification ID containing the task
+            task_id: Task ID to remove
+            cascade: Also remove all child tasks recursively
+            dry_run: Preview changes without saving
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with removal results:
+            - task_id: The removed task ID
+            - spec_id: The specification ID
+            - cascade: Whether cascade deletion was used
+            - children_removed: Number of child tasks removed (if cascade)
+            - dry_run: Whether this was a dry run
+        """
+        tool_name = "task_remove"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            if not task_id:
+                return asdict(error_response(
+                    "task_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a task_id parameter",
+                ))
+
+            # Build command
+            cmd = ["sdd", "remove-task", spec_id, task_id, "--json"]
+
+            if cascade:
+                cmd.append("--cascade")
+
+            if dry_run:
+                cmd.append("--dry-run")
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="task-remove",
+                action="remove_task",
+                spec_id=spec_id,
+                task_id=task_id,
+                cascade=cascade,
+                dry_run=dry_run,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                data: Dict[str, Any] = {
+                    "task_id": task_id,
+                    "spec_id": spec_id,
+                    "cascade": cascade,
+                    "dry_run": dry_run,
+                }
+
+                if cascade:
+                    data["children_removed"] = output_data.get("children_removed", 0)
+
+                # Track metrics
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "cascade": str(cascade)})
+
+                return asdict(success_response(data))
+            else:
+                # Command failed
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+
+                # Check for common errors
+                if "not found" in error_msg.lower():
+                    if "spec" in error_msg.lower():
+                        return asdict(error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        ))
+                    else:
+                        return asdict(error_response(
+                            f"Task '{task_id}' not found in spec",
+                            error_code="TASK_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the task ID exists in the specification",
+                        ))
+
+                if "has children" in error_msg.lower():
+                    return asdict(error_response(
+                        f"Task '{task_id}' has children. Use cascade=True to remove recursively",
+                        error_code="CONFLICT",
+                        error_type="conflict",
+                        remediation="Set cascade=True to remove task and all children",
+                    ))
+
+                return asdict(error_response(
+                    f"Failed to remove task: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that the spec and task exist",
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="unavailable",
+                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
+            ))
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Command timed out after {CLI_TIMEOUT} seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try again or check system resources",
+            ))
+        except FileNotFoundError:
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in task-remove")
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
