@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_next/validation.py
+# hypothesis_version: 6.148.3
+
+['error', 'errors', 'exists', 'file_size', 'frontmatter', 'generated', 'hierarchy', 'hierarchy_summary', 'json_spec_file', 'last_updated', 'line_count', 'metadata', 'phase', 'phase_count', 'r', 'spec_error', 'spec_file', 'spec_id', 'state_info', 'subtask', 'subtask_count', 'task', 'task_count', 'title', 'total_nodes', 'type', 'valid', 'verify', 'verify_count', 'warnings']

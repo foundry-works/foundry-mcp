@@ -1,8 +1,46 @@
-"""Integration tests for prepare-task CLI with default context."""
+"""Integration tests for prepare-task CLI with default context.
+
+NOTE: These tests require a specific test fixture spec
+(prepare-task-default-context-2025-11-23-001) to be present.
+If the fixture is missing, all tests in this module are skipped.
+"""
 import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
+
+# Check if the required fixture spec exists
+REQUIRED_SPEC_ID = "prepare-task-default-context-2025-11-23-001"
+
+
+def _check_spec_exists() -> bool:
+    """Check if the required test fixture spec exists."""
+    cmd = ["sdd", "find-specs", "--json"]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent.parent,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            specs_data = json.loads(result.stdout)
+            spec_ids = [s.get("spec_id", s.get("id", "")) for s in specs_data.get("specs", [])]
+            return REQUIRED_SPEC_ID in spec_ids
+    except Exception:
+        pass
+    return False
+
+
+# Skip entire module if fixture is missing
+pytestmark = pytest.mark.skipif(
+    not _check_spec_exists(),
+    reason=f"Test fixture spec '{REQUIRED_SPEC_ID}' not found. "
+           "These tests require the sdd-toolkit test fixtures.",
+)
 
 
 def run_prepare_task_command(spec_id: str, *args) -> dict:

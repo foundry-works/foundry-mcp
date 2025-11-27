@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/calculator.py
+# hypothesis_version: 6.148.3
+
+['Good', 'Large', 'Moderate', 'Needs Attention', 'avg_complexity', 'by_language', 'classes', 'complexity', 'files', 'function_size', 'functions', 'language', 'lines', 'max_complexity', 'total_classes', 'total_files', 'total_functions', 'total_lines', 'unknown']

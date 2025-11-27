@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/rate_limit.py
+# hypothesis_version: 6.148.3
+
+[0.0, 1.0, 60.0, '1.0.0', 'FOUNDRY_RATE_LIMIT_', 'Rate limit exceeded', '_', 'auth_failure', 'burst', 'burst_limit', 'current_tokens', 'enabled', 'global_config', 'limit', 'mcp', 'name', 'r', 'rate_limit', 'rate_limit_exceeded', 'reason', 'requests', 'requests_per_minute', 'schema_version', 'tenants', 'throttled', 'tools']

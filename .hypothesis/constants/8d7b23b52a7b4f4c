@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/rich_ui.py
+# hypothesis_version: 6.148.3
+
+[1.0, 100, 'Action:', 'Error:', 'Info:', 'Modified', 'No data to display', 'No differences found', 'Original', 'Processing...', 'ProgressTask', 'Root', 'Success:', 'Warning:', 'blue', 'bold magenta', 'border_style', 'bright_blue', 'context_lines', 'cyan', 'default', 'diff', 'emoji', 'error', 'expand', 'expanded', 'green', 'guide_style', 'header_style', 'ignore', 'info', 'label', 'lexer', 'monokai', 'padding', 'panel', 'red', 'refresh_per_second', 'show_edge', 'show_header', 'show_lines', 'style', 'success', 'table', 'transient', 'tree', 'type', 'warning', 'white', 'yellow', '•', 'ℹ️', '⚠️', '✅', '❌', '🔵']

@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/contracts.py
+# hypothesis_version: 6.148.3
+
+['acceptance_criteria', 'active_work', 'active_work_found', 'blocked_by', 'blocks', 'can_start', 'category', 'completed', 'completed_tasks', 'completion_info', 'context', 'dependencies', 'details', 'dirty', 'dirty_tree_status', 'estimated_hours', 'extended_context', 'file_path', 'found', 'git', 'in_progress', 'is_complete', 'is_dirty', 'last_task', 'metadata', 'needs_branch', 'needs_setup', 'pending', 'pending_specs', 'permissions', 'reason', 'remaining_tasks', 'session_state', 'settings', 'should_prompt', 'spec_complete', 'status', 'suggested_branch', 'task_category', 'task_data', 'task_id', 'task_metadata', 'text', 'title', 'total', 'total_tasks', 'unknown', 'validation_warnings', 'verification_type']

@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/visualization_builder.py
+# hypothesis_version: 6.148.3
+
+[100, '+00:00', ', ', 'Z', '```', '```mermaid\ngantt\n', 'active', 'blocked', 'blocks', 'children', 'completed', 'completed_tasks', 'created_at', 'crit', 'critical', 'dependencies', 'dependency_graph', 'done', 'estimated_hours', 'group', 'hierarchy', 'high', 'inProgress', 'in_progress', 'low', 'medium', 'metadata', 'none', 'parent', 'pending', 'phase', 'progress_ascii', 'progress_detailed', 'progress_pie', 'risk_heatmap', 'risk_level', 'spec-root', 'status', 'subtask', 'task', 'task_category', 'timeline_gantt', 'title', 'total', 'total_tasks', 'type', 'unknown', 'verify', '█', '░', '⚪', '🔴', '🟠', '🟡', '🟢']

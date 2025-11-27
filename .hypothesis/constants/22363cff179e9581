@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/hierarchy_validation.py
+# hypothesis_version: 6.148.3
+
+[', ', '/', '<root>', 'Schema caution', 'Schema violation', 'agent', 'auto', 'blocked_by', 'blocks', 'children', 'command', 'completed_tasks', 'counts', 'critical', 'date', 'decision', 'dependencies', 'dependency', 'depends', 'empty title', 'error', 'expected', 'fidelity', 'file_path', 'generated', 'hierarchy', 'hierarchy/', 'implementation', 'info', 'invalid', 'invalid type', 'investigation', 'iso', 'last_updated', 'manual', 'message', 'metadata', 'node', 'orphaned node', 'parent', 'refactoring', 'required', 'research', 'schema', 'scope', 'sdd-spec-schema.json', 'should', 'spec-root', 'spec_id', 'status', 'structure', 'subtask', 'target', 'task', 'task_category', 'title', 'total_tasks', 'type', 'unknown', 'verification', 'verification_type', 'verify', 'warning']

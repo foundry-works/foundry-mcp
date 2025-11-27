@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/reporting.py
+# hypothesis_version: 6.148.3
+
+['## Overall Summary\n', '### JSON Spec', '### Spec Document', 'Dependency Graph', 'Hierarchy Integrity', 'JSON Structure', 'Node Structure', 'Task Count Accuracy']

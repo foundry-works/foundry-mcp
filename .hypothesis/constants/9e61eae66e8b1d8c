@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/schema.py
+# hypothesis_version: 6.148.3
+
+['2.0', 'alias', 'bases', 'call_count', 'call_type', 'callers', 'calls', 'context', 'detail-v1.0', 'file', 'import_type', 'imported_by', 'importer', 'instantiated_by', 'instantiation_count', 'instantiator', 'line', 'methods', 'name', 'parameters', 'return_type', 'signature', 'summary-v1.0']

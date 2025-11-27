@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/git_metadata.py
+# hypothesis_version: 6.148.3
+
+[' D', ' M', '"', '--cached', '--name-only', '--porcelain', '-m', '.git', '??', 'A', 'A ', 'C', 'C ', 'Clean', 'Command', 'Creating Commit', 'D ', 'HEAD', 'M ', 'MADRC', 'MD', 'MM', 'R', 'R ', 'Staged Files', 'Task', 'Uncommitted Changes', 'Unknown (timeout)', '[', ']', 'added', 'both_modified', 'commit', 'copied', 'deleted_staged', 'deleted_unstaged', 'diff', 'git', 'other', 'path', 'renamed', 'rev-parse', 'staged_modified', 'status', 'unstaged_modified', 'untracked', '✨ Staged (Added)', '❌ Staged (Deleted)', '❌ Unstaged (Deleted)', '❓ Untracked', '❔ Other', '📋 Copied', '📝 Staged (Modified)', '🔄 Renamed']

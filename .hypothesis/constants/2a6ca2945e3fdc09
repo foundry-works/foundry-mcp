@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/providers/registry.py
+# hypothesis_version: 6.148.3
+
+['ProviderFactory', 'ProviderRegistration', 'available', 'available_providers', 'create_provider', 'describe_providers', 'description', 'id', 'priority', 'register_provider', 'reset_registry', 'resolve_provider', 'tags']

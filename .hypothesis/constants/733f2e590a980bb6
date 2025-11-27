@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/llm_patterns.py
+# hypothesis_version: 6.148.3
+
+[100.0, 100, 500, 5000, '...', '1.0.0', 'BatchItemResult', 'BatchResult', 'DetailLevel', 'DisclosureConfig', 'SCHEMA_VERSION', 'T', 'Unknown error', '_truncated', 'batch_response', 'count', 'counts', 'created_at', 'description', 'details', 'error', 'error_code', 'errors', 'failed', 'full', 'get_detail_level', 'has_more', 'history', 'id', 'item_id', 'items', 'level', 'metadata', 'name', 'next_offset', 'offset', 'omitted_fields', 'page_size', 'pagination', 'remaining', 'result', 'results', 'returned', 'shown', 'standard', 'status', 'succeeded', 'success', 'success_rate', 'summary', 'total', 'truncated_fields', 'unknown', 'updated_at', 'warnings']

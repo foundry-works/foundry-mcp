@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py
+# hypothesis_version: 6.148.3
+
+[0.0, 5.0, 1000, '1.0.0', 'CancellationResult', 'CancellationToken', 'ConcurrencyConfig', 'ConcurrencyLimiter', 'ConcurrencyStats', 'GatherResult', 'RequestContext', 'SCHEMA_VERSION', 'T', 'active_count', 'anonymous', 'cancellable_scope', 'client_id', 'elapsed_ms', 'get_client_id', 'get_current_context', 'get_elapsed_time', 'get_request_id', 'get_tool_limiter', 'log_with_context', 'max_concurrent', 'name', 'request_context', 'request_id', 'start_time', 'start_timestamp', 'timeout', 'total_processed', 'with_cancellation']

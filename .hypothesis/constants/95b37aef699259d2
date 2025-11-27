@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/plain_ui.py
+# hypothesis_version: 6.148.3
+
+[1.0, 100, ' |', ' | ', '+- ', '-', '-|', '-|-', '=====', 'Modified', 'No data to display', 'No differences found', 'Original', 'PlainProgressTask', 'Processing...', 'Root', '[ACTION]', '[ERROR]', '[INFO]', '[RESULT]', '[SUCCESS]', '[WARNING]', 'context_lines', 'default', 'diff', 'flush', 'panel', 'table', 'tree', 'type', '| ', '|  ', '|-']

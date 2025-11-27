@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/javascript.py
+# hypothesis_version: 6.148.3
+
+[1000, '"', "'", '.ts', '.tsx', ':', 'Node', '_', 'arrow_function', 'async', 'body', 'catch_clause', 'cjs', 'class_declaration', 'class_heritage', 'export_statement', 'field_definition', 'for_statement', 'function', 'function_declaration', 'function_expression', 'identifier', 'if_statement', 'import_declaration', 'import_statement', 'js', 'jsx', 'lexical_declaration', 'method_definition', 'mjs', 'name', 'optional_parameter', 'parameters', 'property', 'rb', 'required_parameter', 'source', 'switch_case', 'ternary_expression', 'ts', 'tsx', 'utf-8', 'value', 'variable_declaration', 'variable_declarator', 'while_statement']

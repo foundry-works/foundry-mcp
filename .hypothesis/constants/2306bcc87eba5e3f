@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_spec_mod/__init__.py
+# hypothesis_version: 6.148.3
+
+['add_node', 'apply_modifications', 'create_revision', 'get_revision_history', 'move_node', 'parse_review_report', 'remove_node', 'rollback_to_version', 'spec_transaction', 'transactional_modify', 'update_node_field', 'update_task_counts']

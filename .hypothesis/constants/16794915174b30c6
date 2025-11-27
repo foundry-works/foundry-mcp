@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/renderer.py
+# hypothesis_version: 6.148.3
+
+[100, '#', '## Objectives', '**Command:**', '**Details:**', 'Tasks', 'Untitled Phase', 'Untitled Task', '```', '```bash', 'blocked', 'blocked_by', 'changes', 'children', 'command', 'completed', 'completed_tasks', 'complexity', 'dependencies', 'depends', 'description', 'details', 'estimated_hours', 'expected', 'failed', 'file_path', 'hierarchy', 'in_progress', 'manual', 'metadata', 'objectives', 'pending', 'purpose', 'reasoning', 'risk_level', 'spec-root', 'spec_id', 'status', 'task', 'title', 'total_tasks', 'type', 'unknown', 'verification_type', 'verify', '⏳', '✅', '❌', '❓', '🔄', '🚫']

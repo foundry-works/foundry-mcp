@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/freshness.py
+# hypothesis_version: 6.148.3
+
+[3600, '*', '*.egg-info', '+00:00', '.docs', '.eggs', '.git', '.go', '.java', '.js', '.jsx', '.php', '.py', '.pytest_cache', '.rb', '.tox', '.ts', '.tsx', '.venv', 'Z', '__pycache__', 'age_seconds', 'build', 'codebase.json', 'dist', 'docs', 'fresh', 'generated_at', 'metadata', 'missing', 'newest_file', 'newest_file_time', 'node_modules', 'r', 'reason', 'stale', 'status', 'unknown', 'utf-8', 'venv']

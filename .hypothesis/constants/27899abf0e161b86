@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_next/context_utils.py
+# hypothesis_version: 6.148.3
+
+[100, 160, 200, 'author', 'blocked_by', 'blocked_by_details', 'blockers', 'blocking', 'blocks', 'changes_summary', 'children', 'completed', 'completed_at', 'completed_steps', 'completed_tasks', 'content', 'current_step', 'dependencies', 'depends', 'description', 'entries', 'entry_count', 'entry_type', 'file_path', 'has_plan', 'hierarchy', 'id', 'journal', 'journal_excerpt', 'last_activity', 'last_entry_at', 'last_modified_by', 'lines_changed', 'metadata', 'note', 'notes', 'parent', 'pending', 'percentage', 'phase', 'plan', 'plan_items', 'position_label', 'remaining_tasks', 'sequence_index', 'soft_depends', 'spec-root', 'status', 'step', 'subtask', 'subtasks', 'summary', 'task', 'task_id', 'timestamp', 'title', 'total_steps', 'total_tasks', 'type', 'verify']

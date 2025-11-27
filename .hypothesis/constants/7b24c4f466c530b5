@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_spec_mod/revision.py
+# hypothesis_version: 6.148.3
+
+['.', '0.9', '1.0', 'changelog', 'date', 'message', 'metadata', 'modified_by', 'revision_history', 'success', 'version']

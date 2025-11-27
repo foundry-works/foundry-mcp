@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/providers/detectors.py
+# hypothesis_version: 6.148.3
+
+['--help', '--version', '0', '1', 'CLAUDE_CLI_BINARY', 'CODEX_CLI_BINARY', 'GEMINI_CLI_BINARY', 'OPENCODE_BINARY', 'ProviderDetector', 'claude', 'codex', 'cursor-agent', 'false', 'gemini', 'get_detector', 'list_detectors', 'no', 'node', 'off', 'on', 'opencode', 'register_detector', 'reset_detectors', 'true', 'yes']

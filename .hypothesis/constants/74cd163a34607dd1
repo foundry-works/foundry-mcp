@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/factory.py
+# hypothesis_version: 6.148.3
+
+['*', ', ', '.', '.egg-info', '.git', '.venv', '__pycache__', 'build', 'classes', 'dist', 'files', 'functions', 'lines', 'node_modules', 'size_filter', 'venv']

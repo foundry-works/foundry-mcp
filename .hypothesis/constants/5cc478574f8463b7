@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/progressive_disclosure.py
+# hypothesis_version: 6.148.3
+
+[4.0, 5.0, 7.0, 'blocked', 'blocked_by', 'blocks', 'completed', 'critical', 'dependencies', 'full', 'group', 'hierarchy', 'high', 'html', 'in_progress', 'markdown', 'medium', 'metadata', 'pending', 'phase', 'risk_level', 'spec-root', 'status', 'subtask', 'summary', 'task', 'type', 'verify']

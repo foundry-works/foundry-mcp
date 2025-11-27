@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/metrics.py
+# hypothesis_version: 6.148.3
+
+[1000, 1024, '.claude', 'DISABLE_METRICS', 'PYTEST_CURRENT_TEST', 'Z', 'a', 'command', 'duration_ms', 'error', 'exit_code', 'failure', 'main', 'metrics', 'pytest', 'skill', 'skills.jsonl', 'status', 'success', 'timestamp', 'utf-8']

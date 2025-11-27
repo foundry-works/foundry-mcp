@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/base.py
+# hypothesis_version: 6.148.3
+
+['*', '.', 'Language', 'ParseResult', 'bases', 'classes', 'complexity', 'cross_references', 'css', 'decorators', 'default', 'dependencies', 'docstring', 'dynamic_patterns', 'errors', 'exports', 'file', 'functions', 'go', 'htm', 'html', 'imports', 'is_async', 'is_exported', 'is_public', 'javascript', 'js', 'jsx', 'language', 'line', 'lines', 'methods', 'modules', 'name', 'parameters', 'properties', 'py', 'python', 'return_type', 'to_dict', 'total_calls', 'total_instantiations', 'total_warnings', 'ts', 'tsx', 'type', 'typescript', 'unknown']

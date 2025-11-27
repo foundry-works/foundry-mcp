@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/markdown_parser.py
+# hypothesis_version: 6.148.3
+
+[0.0, '#', '# ', '## ', '## Objectives', '### ', '####', '(\\d+(?:\\.\\d+)?)', '**', '**Blocked by:**', '**Changes:**', '**Command:**', '**Complexity:**', '**Depends on:**', '**Details:**', '**Estimated Hours:**', '**Estimated:**', '**Expected:**', '**File:**', '**Purpose:**', '**Reasoning:**', '**Risk Level:**', '**Spec ID:**', '**Status:**', '**Type:**', ', ', '- ', 'Objectives', 'ParsedTask', '^#{4,}\\s+[⏳🔄✅🚫❌❓]', '^[⏳🔄✅🚫❌❓]\\s*', '`([^`]+)`', '```', '```bash', 'completed_tasks', 'complexity', 'description', 'estimated_hours', 'manual', 'pending', 'progress_pct', 'status', 'total_tasks']

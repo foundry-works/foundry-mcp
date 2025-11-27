@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/generators/index_generator.py
+# hypothesis_version: 6.148.3
+
+[' _(To be generated)_', '## Getting Started', '## Project Overview', '## Project Structure', '## Quick Reference', '### Integration', '### Prerequisites', '### Run Locally', '### Run Tests', '### Setup', '**Install & Run:**', ', ', ', `api-contracts.md`', ', `data-models.md`', '---', 'API Contracts', 'API documentation', 'Architecture', 'Component Inventory', 'Component catalog', 'Components', 'Contribution Guide', 'Data Models', 'Data architecture', 'Deployment Guide', 'Development Guide', 'Project Overview', '```', '```bash', 'api-contracts.md', 'architecture.md', 'data-models.md', 'deployment-guide.md', 'development-guide.md', 'project-overview.md', 'project-parts.json', '| Metric | Value |', '|--------|-------|']

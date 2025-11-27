@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/python.py
+# hypothesis_version: 6.148.3
+
+['<module>', '_', '__import__', 'annotation', 'class', 'confidence', 'context', 'decorator_list', 'delattr', 'eval', 'exec', 'function', 'getattr', 'hasattr', 'high', 'import_module', 'in_class', 'is_heuristic', 'jedi', 'jedi_error', 'jedi_type', 'medium', 'property', 'py', 'r', 'resolution_method', 'setattr', 'unknown', 'utf-8']

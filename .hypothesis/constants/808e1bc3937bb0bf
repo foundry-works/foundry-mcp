@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/insight_generator.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.5, 3.0, 7.0, 100, ', ', 'blocked', 'blocked_count', 'bottlenecks', 'children', 'completed', 'completed_hours', 'completed_tasks', 'count', 'critical', 'dependency_conflict', 'effort', 'estimated_hours', 'first_wave_size', 'group', 'has_cycles', 'hierarchy', 'info', 'metadata', 'next_step', 'optimization', 'path_length', 'pending', 'pending_hours', 'percentage', 'phase', 'phase_id', 'phase_prediction', 'quick_wins', 'risk_warning', 'spec-root', 'stats', 'status', 'subtask', 'task', 'tasks', 'time_estimate', 'top_priorities', 'total', 'total_hours', 'total_tasks', 'type', 'verify', 'warning', 'wave_count']

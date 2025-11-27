@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/orchestrator.py
+# hypothesis_version: 6.148.3
+
+[7.0, 'ai_analysis', 'ai_enhancement', 'base_rendering', 'bottlenecks', 'category_groups', 'complexity_scores', 'complexity_stats', 'critical_insights', 'critical_path', 'critical_path_graph', 'dependency_graph', 'file_groups', 'full', 'high_complexity', 'insights', 'markdown', 'multi_format_output', 'parallel_waves', 'ranked_tasks', 'risk_groups', 'standard', 'stats', 'summary', 'top_priorities']

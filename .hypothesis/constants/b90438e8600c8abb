@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/doc_helper.py
+# hypothesis_version: 6.148.3
+
+[300, 1000, '--count', '--file', '--file-path', '--function', '--json', '--name-only', '--spec-id', '--threshold', '.', ':', 'HEAD', 'Location:', 'available', 'call-context', 'complexity', 'dependencies', 'diff', 'doc', 'doc-query', 'files', 'generate', 'git', 'location', 'message', 'raw_output', 'reason', 'rev-list', 'rev-parse', 'sdd', 'sdd-integration', 'should_generate', 'similar', 'stats', 'task-context', 'test-context', 'unknown location', 'user_confirmed']

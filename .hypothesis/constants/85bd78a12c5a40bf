@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/go.py
+# hypothesis_version: 6.148.3
+
+[1000, 'Node', 'field_declaration', 'fields', 'for_statement', 'function_declaration', 'go', 'if_statement', 'import_declaration', 'import_spec', 'import_spec_list', 'interface', 'interface_type', 'is_method', 'kind', 'method_declaration', 'method_spec', 'methods', 'name', 'package', 'package_clause', 'parameters', 'rb', 'receiver', 'select_statement', 'struct', 'struct_type', 'type', 'type_declaration', 'type_spec', 'utf-8']

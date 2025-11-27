@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/json_output.py
+# hypothesis_version: 6.148.3
+
+[',', ':', 'check-deps', 'next-task', 'prepare-task', 'progress', 'session-summary', 'task-info']

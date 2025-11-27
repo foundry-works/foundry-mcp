@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/optimization/streaming.py
+# hypothesis_version: 6.148.3
+
+['\n  ],\n', '  "classes": [\n', '  "classes": [],\n', '  "dependencies": ', '  "errors": []\n', '  "functions": [\n', '  "functions": [],\n', '  "metadata": ', '  "modules": [\n', '  "modules": [],\n', ',\n', ',\n  "errors": ', 'File already open', 'b', 'class', 'data', 'dependencies', 'error', 'function', 'message', 'metadata', 'module', 't', 'type', 'utf-8', 'w', 'wt', '{\n', '}\n']

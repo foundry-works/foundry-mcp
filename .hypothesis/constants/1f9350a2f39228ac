@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parser.py
+# hypothesis_version: 6.148.3
+
+['*.py', '.env', '.git', '__pycache__', 'annotation', 'bases', 'classes', 'complexity', 'decorator_list', 'decorators', 'dependencies', 'docstring', 'file', 'functions', 'imports', 'is_async', 'line', 'lines', 'methods', 'modules', 'name', 'parameters', 'properties', 'property', 'r', 'return_type', 'type', 'utf-8', 'venv']

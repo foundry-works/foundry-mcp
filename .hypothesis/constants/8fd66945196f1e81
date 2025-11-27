@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/git_config.py
+# hypothesis_version: 6.148.3
+
+['.claude', 'ai_pr', 'auto_branch', 'auto_commit', 'auto_pr', 'auto_push', 'commit_cadence', 'enabled', 'file_staging', 'git_config.json', 'include_diffs', 'include_journals', 'manual', 'max_diff_size_kb', 'model', 'phase', 'r', 'show_before_commit', 'sonnet', 'task']

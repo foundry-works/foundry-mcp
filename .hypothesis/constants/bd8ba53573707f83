@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/ast_analysis.py
+# hypothesis_version: 6.148.3
+
+['.', '/', '\\', 'call_type', 'callee', 'callee_file', 'caller', 'caller_file', 'caller_line', 'calls', 'class_file', 'class_instantiation', 'class_name', 'decorator', 'description', 'dynamic_import', 'dynamic_patterns', 'eval_exec', 'file', 'function_call', 'getattr_setattr', 'go', 'impact', 'import', 'imports', 'inheritance', 'instantiations', 'instantiator', 'instantiator_file', 'instantiator_line', 'js', 'line', 'location', 'method_call', 'monkey_patch', 'pattern_type', 'py', 'reflection', 'statistics', 'total_calls', 'total_instantiations', 'total_warnings', 'ts', 'warnings']

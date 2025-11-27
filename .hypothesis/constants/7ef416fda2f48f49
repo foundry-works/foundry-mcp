@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/spec_analysis.py
+# hypothesis_version: 6.148.3
+
+[100, 'Spec file not found', '\\{#phase-\\d+\\}', '\\{#task-\\d+-\\d+\\}', '\\{#verify-\\d+-\\d+\\}', '_count', 'active', 'avg_tasks_per_phase', 'completed', 'completed_tasks', 'difference', 'element', 'error', 'estimated_hours', 'exists', 'file_size', 'frontmatter', 'generated', 'has_mismatches', 'has_subtasks', 'hierarchy', 'json', 'json_spec_counts', 'json_spec_info', 'last_updated', 'line_count', 'markdown', 'md_spec_counts', 'mismatches', 'phase', 'phase_count', 'progress_percentage', 'r', 'spec_file', 'spec_id', 'status', 'subtask', 'subtask_count', 'task', 'task_count', 'total_nodes', 'total_tasks', 'type', 'verify', 'verify_count']

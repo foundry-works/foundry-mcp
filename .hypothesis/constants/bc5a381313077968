@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/ai_consultation.py
+# hypothesis_version: 6.148.3
+
+[120, '--model', 'codex', 'cursor-agent', 'doc_type', 'gemini', 'llm-doc-gen', 'opencode', 'overview', 'unknown']

@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/performance_benchmark.py
+# hypothesis_version: 6.148.3
+
+[2.0, 100, 500, 1024, '## Detailed Results', '## Summary', '%Y%m%d_%H%M%S', './benchmark_results', 'after_mb', 'analysis_size_kb', 'architecture', 'before_mb', 'benchmark_id', 'cache', 'classes', 'codebase', 'codebase_category', 'cold_cache', 'cold_cache_seconds', 'delta_mb', 'file', 'file_count', 'format_seconds', 'format_time', 'functions', 'hit_rate', 'hits', 'inf', 'invalidations', 'large', 'max', 'mean', 'median', 'medium', 'meets_target', 'memory', 'memory_delta_mb', 'metrics', 'min', 'misses', 'notes', 'num_runs', 'r', 'small', 'speedup_factor', 'timestamp', 'timing', 'total_seconds', 'total_time_mean', 'w', 'warm_cache', 'warm_cache_seconds', '✅', '❌']

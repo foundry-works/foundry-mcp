@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/doc_integration.py
+# hypothesis_version: 6.148.3
+
+['\nPrompt cancelled.', '+00:00', '--json', '.', '10', 'Z', 'available', 'doc', 'error', 'generated_at', 'generated_at_commit', 'is_stale', 'metadata', 'missing', 'n', 'no', 'sdd', 'sdd-next', 'sdd-plan', 'sdd-update', 'stale', 'staleness', 'stats', 'y', 'yes']

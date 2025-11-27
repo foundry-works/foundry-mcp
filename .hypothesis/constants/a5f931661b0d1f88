@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/orchestrator.py
+# hypothesis_version: 6.148.3
+
+['api-contracts.md', 'api_contracts', 'architecture', 'architecture.md', 'batches_processed', 'completed_shards', 'component_inventory', 'data-models.md', 'data_models', 'development-guide.md', 'development_guide', 'failed_shards', 'index', 'index.md', 'last_updated', 'output_folder', 'pending_shards', 'project-overview.md', 'project_overview', 'project_root', 'r', 'shard_summaries', 'shards_failed', 'shards_generated', 'source_tree', 'started_at', 'success', 'summaries', 'w']

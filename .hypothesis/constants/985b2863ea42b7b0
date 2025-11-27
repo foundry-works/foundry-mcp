@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/cli/sdd/__init__.py
+# hypothesis_version: 6.148.3
+
+['-', '--entry-type', '--no-json', '--version', '.', '.claude', '0.0.0-dev', '__main__', 'add-journal', 'claude-skills', 'command', 'commands', 'compact', 'completion', 'debug', 'default_mode', 'docs_path', 'frontmatter', 'json', 'json_compact', 'metadata', 'no_color', 'no_staleness_check', 'output', 'path', 'quiet', 'refresh', 'sdd', 'sdd_config.json', 'skip_refresh', 'specs_dir', 'update', 'update-frontmatter', 'update-status', 'verbose', 'version']

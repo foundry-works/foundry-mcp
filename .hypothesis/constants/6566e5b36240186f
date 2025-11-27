@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/markdown_validator.py
+# hypothesis_version: 6.148.3
+
+['\n```\n', '(?<!\\*)\\*(?!\\*)', '\\*\\*', '\\|\\s*$', '^#+\\s+', '^-\\s*$', '^\\*\\*[^*]+$', '^\\s*\\|', '^```', '`(?!``)']

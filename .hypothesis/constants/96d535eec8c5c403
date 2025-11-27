@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/spec.py
+# hypothesis_version: 6.148.3
+
+['#', '+00:00', '---', '.backup', '.json', '.markdown', '.md', '.tmp', ':', 'Spec file is empty', 'Z', 'blocked', 'completed', 'error', 'false', 'frontmatter', 'generated', 'hierarchy', 'in_progress', 'last_updated', 'metadata', 'pending', 'r', 'spec_id', 'status', 'title', 'true', 'type', 'version', 'w']

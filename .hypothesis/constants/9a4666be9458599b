@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/sdd_config.py
+# hypothesis_version: 6.148.3
+
+['.', '.claude', '_comment', '_description', '_work_mode_options', 'autonomous', 'call_graph', 'compact', 'default_format', 'default_mode', 'default_verbosity', 'doc_context', 'json', 'json_compact', 'markdown', 'normal', 'output', 'output.default_mode', 'output.json_compact', 'plain', 'quiet', 'r', 'rich', 'sdd_config.json', 'single', 'test_context', 'text', 'verbose', 'work_mode']

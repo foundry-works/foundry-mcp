@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/paths.py
+# hypothesis_version: 6.148.3
+
+['.backups', '.claude', '.fidelity-reviews', '.human-readable', '.json', '.reports', '.reviews', 'README.md', 'active', 'archived', 'backups_readme.md', 'completed', 'directory', 'exists', 'file', 'invalid_paths', 'is_absolute', 'normalized', 'normalized_paths', 'original', 'pending', 'reports_readme.md', 'reviews_readme.md', 'specs', 'templates', 'type', 'valid_paths']

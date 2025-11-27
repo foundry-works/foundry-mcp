@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/narrative_enhancer.py
+# hypothesis_version: 6.148.3
+
+[', ', 'after_phase_intro', 'after_task_title', 'before_phase', 'blocked_by', 'children', 'dependencies', 'dependency_count', 'dependency_rationale', 'feature', 'hierarchy', 'metadata', 'narrative', 'phase_index', 'phase_transition', 'phase_transitions', 'sdd-render', 'skill_name', 'spec-root', 'subtask', 'task', 'task_count', 'this specification', 'title', 'type', 'verify']

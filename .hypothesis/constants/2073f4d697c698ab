@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/dependency_graph.py
+# hypothesis_version: 6.148.3
+
+['    end', '"', '(', '()', ')', ')]', '...', '/]', '[', '[(', '[()]', '[/', '[/\\/]', '[]', '\\"', ']', '```', '```mermaid', 'blocked', 'children', 'completed', 'flowchart', 'flowchart TD', 'graph', 'graph LR', 'group', 'hierarchy', 'in_progress', 'pending', 'phase', 'simplified', 'spec-root', 'status', 'subtask', 'task', 'title', 'type', 'verify', '{', '{{}}', '}']

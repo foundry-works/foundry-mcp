@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/dependency_analysis.py
+# hypothesis_version: 6.148.3
+
+[' → ', 'blocked_by', 'blocks', 'bottlenecks', 'circular_chains', 'dependencies', 'has_circular', 'hierarchy', 'impossible_chains', 'issues', 'missing_dependency', 'ok', 'orphaned_tasks', 'pending', 'status', 'task', 'threshold', 'type']

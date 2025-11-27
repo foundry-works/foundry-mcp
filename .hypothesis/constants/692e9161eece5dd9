@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/capabilities.py
+# hypothesis_version: 6.148.3
+
+[0.3, 0.7, 500, 1000, '+00:00', '1.0.0', 'Z', 'available', 'capabilities', 'changes', 'content', 'enabled', 'impact_analysis', 'mcp', 'metadata', 'methods', 'notifications', 'operation', 'prompts', 'r', 'raw_response', 'request_count', 'resources', 'role', 'sampling', 'schema_version', 'spec_id', 'target', 'task_id', 'tools', 'total_tokens', 'type', 'updated', 'uri', 'user']

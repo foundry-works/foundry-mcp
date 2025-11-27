@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/completion.py
+# hypothesis_version: 6.148.3
+
+[100, 'All tasks complete!', 'Phase', 'Spec', 'Untitled', 'blocked', 'blocked_count', 'blocked_tasks', 'can_finalize', 'children', 'completed', 'completed_tasks', 'completion_context', 'error', 'estimated_hours', 'has_hours_estimate', 'hierarchy', 'incomplete_tasks', 'is_complete', 'metadata', 'node_id', 'node_type', 'percentage', 'prompt_text', 'reason', 'requires_input', 'should_prompt', 'spec', 'spec-root', 'status', 'task', 'title', 'total_tasks', 'type']

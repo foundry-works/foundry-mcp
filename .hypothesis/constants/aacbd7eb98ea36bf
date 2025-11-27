@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/generators/architecture_generator.py
+# hypothesis_version: 6.148.3
+
+[120, '## Output Format', '## Project Context', '## Synthesis Summary', '### Technology Stack', '### Unique Insights', '%Y-%m-%d', '**Error Handling:**', '- Caching layers', '---', 'Possible solutions:', 'architecture', 'truncation', '| --- | --- | --- |']

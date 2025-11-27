@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/generators/component_generator.py
+# hypothesis_version: 6.148.3
+
+['## Output Format', '## Project Context', '### 3. Entry Points', '### Project Parts', '%Y-%m-%d', '- Test directories', '---', 'Identify:', '```', 'component']

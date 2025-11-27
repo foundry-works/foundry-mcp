@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/priority_ranker.py
+# hypothesis_version: 6.148.3
+
+[0.1, 0.15, 0.2, 0.25, 0.3, 0.7, 0.8, 0.9, 1.0, 1.3, 1.5, 2.0, 10.0, 15.0, 100.0, 100, ', ', 'blocking_factor', 'category', 'category_factor', 'critical', 'dependency_factor', 'details', 'documentation', 'effort_factor', 'estimated_hours', 'hierarchy', 'high', 'implementation', 'large effort', 'low', 'medium', 'metadata', 'none', 'num_blocked', 'num_blockers', 'pending', 'quick task', 'rationale', 'risk_factor', 'risk_level', 'setup', 'setup task', 'spec-root', 'standard priority', 'status', 'task_category', 'task_id', 'total_score', 'unknown', 'verification']

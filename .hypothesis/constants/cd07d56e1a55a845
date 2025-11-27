@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/task_grouper.py
+# hypothesis_version: 6.148.3
+
+[2.0, '.', 'Unspecified', 'blocked', 'by_category', 'by_dependency', 'by_file', 'by_phase', 'by_risk', 'completed', 'critical', 'directory', 'documentation', 'effort_category', 'estimated_hours', 'extended', 'file_path', 'hierarchy', 'high', 'implementation', 'in_progress', 'long', 'low', 'medium', 'metadata', 'none', 'pending', 'quick', 'risk_level', 'root', 'setup', 'short', 'spec-root', 'status', 'task_category', 'task_count', 'uncategorized', 'unspecified', 'verification', 'wave_number']

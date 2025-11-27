@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/optimization/filters.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 100, 500, 200000, 500000, 2000000, 'balanced', 'complete', 'count_limiter', 'fast', 'file_limit', 'inf', 'sample_rate', 'sampling', 'size_filter', 'size_limit']

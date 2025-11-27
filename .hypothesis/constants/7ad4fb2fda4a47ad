@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/generator.py
+# hypothesis_version: 6.148.3
+
+['.', '1.0.0', '__enter__', '__exit__', 'add', 'analysis', 'append', 'both', 'built-in', 'classes', 'clear', 'close', 'codebase.json', 'context', 'copy', 'count', 'decode', 'dependencies', 'encode', 'endswith', 'errors', 'exists', 'extend', 'find', 'flush', 'format', 'functions', 'get', 'glob', 'is_dir', 'is_file', 'items', 'join', 'keys', 'lower', 'markdown', 'modules', 'open', 'pop', 'read', 'remove', 'replace', 'resolve', 'reverse', 'rglob', 'sort', 'split', 'startswith', 'statistics', 'strip', 'unknown', 'update', 'upper', 'utf-8', 'values', 'w', 'write']

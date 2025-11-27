@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/resilience.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 3600.0, 1000, 'T', 'checked_at', 'closed', 'default', 'degraded', 'dependencies', 'error', 'failure_count', 'failure_threshold', 'half_open', 'healthy', 'latency_ms', 'name', 'open', 'recovery_timeout', 'retry_after_seconds', 'state', 'status', 'unhealthy']

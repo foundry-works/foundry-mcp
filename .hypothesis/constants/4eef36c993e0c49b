@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_next/workflow.py
+# hypothesis_version: 6.148.3
+
+['**', '.state', 'active', 'active_dir', 'error', 'specs_dir', 'state_dir', 'success']

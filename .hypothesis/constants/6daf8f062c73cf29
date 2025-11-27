@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/ab_testing.py
+# hypothesis_version: 6.148.3
+
+[0.0, 0.1, 1.0, 2.0, 12.3, 15.7, 245.5, 100, 150, 1024, '## Detailed Results', '## Metric Breakdown', '## Summary', '%Y%m%d_%H%M%S', './ab_test_results', 'EvaluationRubric', 'N/A', 'accuracy', 'actionability', 'architecture', 'classes', 'codebase_size', 'completeness', 'composite', 'context_relevance', 'control', 'control_metrics', 'coverage', 'coverage_score', 'criteria', 'description', 'detail_depth', 'developer_usefulness', 'file', 'functions', 'generator_type', 'hallucination_count', 'meta', 'metadata', 'name', 'overall_score', 'r', 'redundancy_score', 'relevance', 'rubric.json', 'technology_stack', 'test_id', 'timestamp', 'treatment', 'treatment_metrics', 'w', 'winner']

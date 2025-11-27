@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/html.py
+# hypothesis_version: 6.148.3
+
+[1000, 'Node', 'attribute', 'attribute_name', 'custom_attributes', 'custom_attrs', 'data-', 'element', 'element_counts', 'elements', 'htm', 'html', 'htmx_attrs', 'htmx_usage', 'hx-boost', 'hx-confirm', 'hx-delete', 'hx-get', 'hx-headers', 'hx-include', 'hx-indicator', 'hx-patch', 'hx-post', 'hx-push-url', 'hx-put', 'hx-select', 'hx-swap', 'hx-target', 'hx-trigger', 'hx-vals', 'rb', 'script', 'scripts', 'start_tag', 'style', 'styles', 'tag_name', 'utf-8']

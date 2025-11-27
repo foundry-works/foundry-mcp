@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/ui_protocol.py
+# hypothesis_version: 6.148.3
+
+['Modified', 'Original', 'Processing...', 'Root', 'action', 'blank', 'default', 'detail', 'error', 'header', 'info', 'item', 'result', 'success', 'warning']

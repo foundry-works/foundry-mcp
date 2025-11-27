@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/cli/sdd/options.py
+# hypothesis_version: 6.148.3
+
+['--compact', '--debug', '--docs-path', '--json', '--no-color', '--no-compact', '--no-json', '--no-staleness-check', '--path', '--quiet', '--refresh', '--skip-refresh', '--specs-dir', '--verbose', '-q', '-v', '.', 'Specification ID', 'Task ID', 'compact', 'default_format', 'default_mode', 'json', 'json_compact', 'output', 'rich', 'spec_id', 'store_const', 'store_true', 'task_id']

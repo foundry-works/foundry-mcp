@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/markdown_enhancer.py
+# hypothesis_version: 6.148.3
+
+['#', '## Objectives', '## Visualizations', '(phase-\\d+)', '**Command:**', '```', '```bash', 'blocked', 'completed', 'critical', 'failed', 'hierarchy', 'in_progress', 'info', 'pending', 'phase', 'raw_markdown', 'subtask', 'task', 'title', 'type', 'verify', 'warning', '⏳', '✅', '❌', '❓', '🔄', '🚫']

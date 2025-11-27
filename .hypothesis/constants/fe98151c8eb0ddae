@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/tree_cache.py
+# hypothesis_version: 6.148.3
+
+[0.0, 100, 1000, 'hit_rate', 'hits', 'invalidations', 'max_size', 'misses', 'size', 'utf-8']

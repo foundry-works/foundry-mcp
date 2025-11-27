@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/doc_query/workflows/refactor_candidates.py
+# hypothesis_version: 6.148.3
+
+[100, 'avg_complexity', 'avg_dependents', 'avg_priority_score', 'callers', 'candidates', 'complexity', 'dependent_count', 'file', 'functions', 'high', 'line', 'low', 'major_refactors', 'medium', 'name', 'priority_score', 'quick_wins', 'risk_distribution', 'risk_level', 'summary', 'total_candidates', 'unknown', '💡 Recommendations:', '📊 Summary:']

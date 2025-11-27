@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/progress.py
+# hypothesis_version: 6.148.3
+
+[100, '+00:00', ',', ':', 'Z', 'blocked', 'children', 'completed', 'completed_at', 'completed_tasks', 'current_phase', 'data', 'error', 'group', 'hierarchy', 'id', 'in_progress', 'isatty', 'metadata', 'needs_journaling', 'node_id', 'parent', 'pending', 'percentage', 'phase', 'remaining_tasks', 'spec-root', 'spec_id', 'status', 'task', 'timestamp', 'title', 'total', 'total_tasks', 'type']

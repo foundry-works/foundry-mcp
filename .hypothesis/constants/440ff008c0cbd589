@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/ui_factory.py
+# hypothesis_version: 6.148.3
+
+['BUILDKITE', 'CI', 'CIRCLECI', 'DRONE', 'GITHUB_ACTIONS', 'GITLAB_CI', 'JENKINS_URL', 'Path', 'TRAVIS', 'collect', 'json', 'plain', 'quiet', 'rich']

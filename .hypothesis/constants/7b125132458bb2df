@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/sdd_render/executive_summary.py
+# hypothesis_version: 6.148.3
+
+[0.0, 100, '### Quick Stats\n\n', ', ', '1.0.0', 'Untitled Spec', 'blocked', 'blocked_tasks', 'completed', 'completed_hours', 'completed_tasks', 'created_at', 'created_date', 'default', 'default model', 'estimated_hours', 'executive_summary', 'feature', 'hierarchy', 'high', 'high_risk_task_count', 'in_progress', 'in_progress_hours', 'in_progress_tasks', 'last_updated', 'metadata', 'metrics', 'metrics_summary', 'pending', 'pending_hours', 'pending_tasks', 'phase', 'phase_count', 'progress_percentage', 'prompt', 'risk_level', 'sdd-render', 'skill_name', 'spec-root', 'spec_data', 'spec_title', 'spec_version', 'status', 'subtask', 'task', 'title', 'total_tasks', 'type', 'updated_at', 'verify', 'version']

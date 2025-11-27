@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/doc_query/codebase_query.py
+# hypothesis_version: 6.148.3
+
+['**Statistics:**', 'both', 'call_graph', 'callees', 'callers', 'classes', 'complex_functions', 'complexity', 'dependency_count', 'docstring', 'docstring_excerpt', 'edges', 'file', 'from', 'functions', 'instantiated_classes', 'instantiation_count', 'line', 'module_summary', 'name', 'nodes', 'statistics', 'to', 'truncated']

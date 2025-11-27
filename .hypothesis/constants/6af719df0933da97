@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/validation.py
+# hypothesis_version: 6.148.3
+
+[0.0, 100, '* ', '-', '- ', ':', 'blocked', 'completed', 'completed_tasks', 'critical', 'error', 'group', 'hierarchy', 'in_progress', 'pending', 'phase', 'spec', 'spec-root', 'subtask', 'task', 'total_tasks', 'verify', 'warning', '–', 'ℹ', 'ℹ️', '⚠', '⚠️', '⚠️  WARNING:', '✅', '❌', '❌ CRITICAL:', '❌ ERROR:', '❓', '❓ UNKNOWN:']

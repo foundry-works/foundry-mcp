@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/parsers/css.py
+# hypothesis_version: 6.148.3
+
+[1000, '--', '@charset', '@import', '@keyframes', '@media', '@supports', 'Node', 'at_rules', 'attribute', 'attribute_selector', 'charset_statement', 'class', 'class_selector', 'css', 'declaration', 'element', 'id', 'id_selector', 'import_statement', 'keyframes_statement', 'media_statement', 'property', 'pseudo-class', 'pseudo-element', 'rb', 'rule_set', 'selector_counts', 'selectors', 'supports_statement', 'tag_name', 'total_rules', 'utf-8', 'variables']

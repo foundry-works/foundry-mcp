@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/common/providers/base.py
+# hypothesis_version: 6.148.3
+
+['AfterResultHook', 'BeforeExecuteHook', 'GenerationRequest', 'GenerationResult', 'ModelDescriptor', 'ProviderCapability', 'ProviderContext', 'ProviderError', 'ProviderHooks', 'ProviderMetadata', 'ProviderStatus', 'ProviderTimeoutError', 'StreamCallback', 'StreamChunk', 'TokenUsage', 'canceled', 'error', 'function_calling', 'invalid_output', 'not_found', 'streaming', 'success', 'text_generation', 'thinking', 'timeout', 'vision']

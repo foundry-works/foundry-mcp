@@ -1,0 +1,4 @@
+# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/llm_doc_gen/analysis/optimization/cache.py
+# hypothesis_version: 6.148.3
+
+[8192, '_connection', 'db_path', 'dependencies', 'dependencies_tracked', 'files_cached', 'parse_cache.db', 'rb', 'results_cached', 'total_size_bytes']
