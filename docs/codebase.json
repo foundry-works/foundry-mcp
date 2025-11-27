@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T14:54:29.198684Z",
-    "generated_at_commit": "ff2e27d06661e313c7a884fbad3b4fc5714af161",
+    "generated_at": "2025-11-27T14:56:11.859650Z",
+    "generated_at_commit": "9fba8e18ed8b49a156aa43957f9b6552f802f9da",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 37,
-    "total_lines": 16080,
-    "total_classes": 66,
-    "total_functions": 183,
-    "avg_complexity": 6.8,
+    "total_lines": 16279,
+    "total_classes": 67,
+    "total_functions": 190,
+    "avg_complexity": 6.62,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 37,
-        "lines": 16080,
-        "classes": 66,
-        "functions": 183,
-        "avg_complexity": 6.8
+        "lines": 16279,
+        "classes": 67,
+        "functions": 190,
+        "avg_complexity": 6.62
       }
     }
   },
@@ -186,6 +186,7 @@
       "language": "python",
       "docstring": "Concurrency utilities for foundry-mcp.\n\nProvides concurrency limiting, cancellation handling, and request context\nmanagement for async MCP tool operations.\n\nSee docs/mcp_best_practices/15-concurrency-patterns.md for guidance.\n\nExample:\n    from foundry_mcp.core.concurrency import (\n        ConcurrencyLimiter, with_cancellation, request_context\n    )\n\n    # Limit concurrent operations\n    limiter = ConcurrencyLimiter(max_concurrent=10)\n    results = await limiter.gather([fetch(url) for url in urls])\n\n    # Handle cancellation gracefully\n    @with_cancellation\n    async def long_task():\n        ...\n\n    # Track request context\n    async with request_context(request_id=\"abc\", client_id=\"client1\"):\n        await process()",
       "classes": [
+        "RequestContext",
         "ConcurrencyConfig",
         "ConcurrencyStats",
         "GatherResult",
@@ -194,6 +195,13 @@
         "CancellationToken"
       ],
       "functions": [
+        "request_context",
+        "get_current_context",
+        "get_current_context_or_none",
+        "get_request_id",
+        "get_client_id",
+        "get_elapsed_time",
+        "log_with_context",
         "get_tool_limiter",
         "configure_tool_limiter",
         "get_all_limiter_stats",
@@ -223,7 +231,7 @@
         "typing.TypeVar"
       ],
       "exports": [],
-      "lines": 699
+      "lines": 898
     },
     {
       "name": "discovery",
@@ -1507,9 +1515,54 @@
       "instantiation_count": 1
     },
     {
+      "name": "RequestContext",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 59,
+      "language": "python",
+      "docstring": "Snapshot of request context for logging and tracking.\n\nAttributes:\n    request_id: Unique identifier for this request\n    client_id: Client making the request\n    start_time: When the request started (monotonic time)\n    start_timestamp: When the request started (wall clock)",
+      "bases": [],
+      "methods": [
+        "to_dict"
+      ],
+      "properties": [
+        "elapsed_seconds",
+        "elapsed_ms"
+      ],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "request_context",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 128,
+          "context": [
+            "request_context"
+          ]
+        },
+        {
+          "instantiator": "get_current_context",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 171,
+          "context": [
+            "get_current_context"
+          ]
+        },
+        {
+          "instantiator": "get_current_context_or_none",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 188,
+          "context": [
+            "get_current_context_or_none"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 3
+    },
+    {
       "name": "ConcurrencyConfig",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 54,
+      "line": 244,
       "language": "python",
       "docstring": "Configuration for a concurrency limiter.\n\nAttributes:\n    max_concurrent: Maximum number of concurrent operations\n    name: Optional name for logging and identification\n    timeout: Optional timeout per operation in seconds",
       "bases": [],
@@ -1521,7 +1574,7 @@
         {
           "instantiator": "__init__",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 148,
+          "line": 338,
           "context": [
             "ConcurrencyLimiter",
             "__init__"
@@ -1534,7 +1587,7 @@
     {
       "name": "ConcurrencyStats",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 69,
+      "line": 259,
       "language": "python",
       "docstring": "Statistics from concurrent operation execution.\n\nAttributes:\n    total: Total operations attempted\n    succeeded: Operations completed successfully\n    failed: Operations that raised exceptions\n    cancelled: Operations that were cancelled\n    timed_out: Operations that timed out\n    elapsed_seconds: Total execution time",
       "bases": [],
@@ -1546,7 +1599,7 @@
         {
           "instantiator": "gather",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 244,
+          "line": 434,
           "context": [
             "ConcurrencyLimiter",
             "gather"
@@ -1559,7 +1612,7 @@
     {
       "name": "GatherResult",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 90,
+      "line": 280,
       "language": "python",
       "docstring": "Result of a gather operation with detailed status.\n\nAttributes:\n    results: List of successful results (None for failed operations)\n    errors: List of errors (None for successful operations)\n    stats: Execution statistics",
       "bases": [],
@@ -1576,7 +1629,7 @@
         {
           "instantiator": "gather",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 286,
+          "line": 476,
           "context": [
             "ConcurrencyLimiter",
             "gather"
@@ -1589,7 +1642,7 @@
     {
       "name": "ConcurrencyLimiter",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 117,
+      "line": 307,
       "language": "python",
       "docstring": "Limit concurrent async operations using a semaphore.\n\nProvides controlled concurrency for parallel operations like HTTP requests,\ndatabase queries, or file operations to prevent resource exhaustion.\n\nExample:\n    >>> limiter = ConcurrencyLimiter(max_concurrent=5)\n    >>> results = await limiter.gather([fetch(url) for url in urls])\n    >>> print(f\"Completed {results.stats.succeeded}/{results.stats.total}\")\n\n    >>> # With timeout per operation\n    >>> limiter = ConcurrencyLimiter(max_concurrent=3, timeout=30.0)\n    >>> async with limiter.acquire():\n    ...     await slow_operation()",
       "bases": [],
@@ -1611,7 +1664,7 @@
         {
           "instantiator": "get_tool_limiter",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 356,
+          "line": 546,
           "context": [
             "get_tool_limiter"
           ]
@@ -1619,7 +1672,7 @@
         {
           "instantiator": "configure_tool_limiter",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 379,
+          "line": 569,
           "context": [
             "configure_tool_limiter"
           ]
@@ -1631,7 +1684,7 @@
     {
       "name": "CancellationResult",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 406,
+      "line": 596,
       "language": "python",
       "docstring": "Result of a cancellable operation.\n\nAttributes:\n    completed: Whether the operation completed successfully\n    was_cancelled: Whether the operation was cancelled\n    partial_results: Any partial results available if cancelled\n    processed_count: Number of items processed before cancellation\n    total_count: Total items that were to be processed",
       "bases": [],
@@ -1643,7 +1696,7 @@
         {
           "instantiator": "run_with_cancellation_checkpoints",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 536,
+          "line": 726,
           "context": [
             "run_with_cancellation_checkpoints"
           ]
@@ -1651,7 +1704,7 @@
         {
           "instantiator": "run_with_cancellation_checkpoints",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 545,
+          "line": 735,
           "context": [
             "run_with_cancellation_checkpoints"
           ]
@@ -1663,7 +1716,7 @@
     {
       "name": "CancellationToken",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 618,
+      "line": 808,
       "language": "python",
       "docstring": "Token for cooperative cancellation of async operations.\n\nAllows multiple operations to check for cancellation requests\nwithout relying solely on asyncio.CancelledError.\n\nExample:\n    >>> token = CancellationToken()\n    >>>\n    >>> async def worker():\n    ...     while not token.is_cancelled:\n    ...         await do_work()\n    ...         await token.check()  # Raises if cancelled\n    ...\n    >>> # Later, from another task:\n    >>> token.cancel()",
       "bases": [],
@@ -4295,9 +4348,316 @@
       ]
     },
     {
+      "name": "request_context",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 97,
+      "language": "python",
+      "docstring": "Set up request context for async operations.\n\nContext automatically propagates through all nested async calls.\n\nArgs:\n    req_id: Request ID (auto-generated UUID if not provided)\n    cli_id: Client ID (defaults to \"anonymous\")\n\nYields:\n    RequestContext object with current context values\n\nExample:\n    >>> async with request_context(cli_id=\"user123\") as ctx:\n    ...     print(f\"Request {ctx.request_id} started\")\n    ...     await do_work()\n    ...     print(f\"Completed in {ctx.elapsed_ms:.2f}ms\")",
+      "parameters": [
+        {
+          "name": "req_id",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "cli_id",
+          "type": "Optional[str]",
+          "default": null
+        }
+      ],
+      "return_type": null,
+      "complexity": 3,
+      "decorators": [
+        "asynccontextmanager"
+      ],
+      "is_async": true,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "str",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 119,
+          "call_type": "function_call"
+        },
+        {
+          "name": "uuid4",
+          "file": "/opt/anaconda3/lib/python3.13/uuid.py",
+          "line": 119,
+          "call_type": "method_call"
+        },
+        {
+          "name": "monotonic",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/2and3/time.pyi",
+          "line": 121,
+          "call_type": "method_call"
+        },
+        {
+          "name": "set",
+          "file": "built-in",
+          "line": 124,
+          "call_type": "method_call"
+        },
+        {
+          "name": "set",
+          "file": "built-in",
+          "line": 125,
+          "call_type": "method_call"
+        },
+        {
+          "name": "set",
+          "file": "built-in",
+          "line": 126,
+          "call_type": "method_call"
+        },
+        {
+          "name": "debug",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 135,
+          "call_type": "method_call"
+        },
+        {
+          "name": "debug",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 142,
+          "call_type": "method_call"
+        },
+        {
+          "name": "round",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 147,
+          "call_type": "function_call"
+        },
+        {
+          "name": "reset",
+          "file": "unknown",
+          "line": 151,
+          "call_type": "method_call"
+        },
+        {
+          "name": "reset",
+          "file": "unknown",
+          "line": 152,
+          "call_type": "method_call"
+        },
+        {
+          "name": "reset",
+          "file": "unknown",
+          "line": 153,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "get_current_context",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 156,
+      "language": "python",
+      "docstring": "Get the current request context.\n\nReturns:\n    RequestContext with current context variable values\n\nRaises:\n    RuntimeError: If called outside of a request context",
+      "parameters": [],
+      "return_type": "RequestContext",
+      "complexity": 2,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 165,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 173,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 174,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "get_current_context_or_none",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 178,
+      "language": "python",
+      "docstring": "Get the current request context, or None if not in a context.\n\nReturns:\n    RequestContext if in a request context, None otherwise",
+      "parameters": [],
+      "return_type": "Optional[RequestContext]",
+      "complexity": 2,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [
+        {
+          "name": "log_with_context",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 237,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 184,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 190,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 191,
+          "call_type": "method_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "get_request_id",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 195,
+      "language": "python",
+      "docstring": "Get the current request ID.\n\nReturns:\n    Current request ID or empty string if not in context",
+      "parameters": [],
+      "return_type": "str",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 201,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "get_client_id",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 204,
+      "language": "python",
+      "docstring": "Get the current client ID.\n\nReturns:\n    Current client ID or \"anonymous\" if not in context",
+      "parameters": [],
+      "return_type": "str",
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 210,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "get_elapsed_time",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 213,
+      "language": "python",
+      "docstring": "Get elapsed time since request started.\n\nReturns:\n    Elapsed time in seconds, or 0.0 if not in context",
+      "parameters": [],
+      "return_type": "float",
+      "complexity": 2,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get",
+          "file": "built-in",
+          "line": 219,
+          "call_type": "method_call"
+        },
+        {
+          "name": "monotonic",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/2and3/time.pyi",
+          "line": 222,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "log_with_context",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 225,
+      "language": "python",
+      "docstring": "Log a message with request context automatically included.\n\nArgs:\n    level: Logging level (e.g., logging.INFO)\n    message: Log message\n    **extra: Additional fields to include in log record",
+      "parameters": [
+        {
+          "name": "level",
+          "type": "int",
+          "default": null
+        },
+        {
+          "name": "message",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "return_type": "None",
+      "complexity": 2,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get_current_context_or_none",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
+          "line": 237,
+          "call_type": "function_call"
+        },
+        {
+          "name": "update",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 239,
+          "call_type": "method_call"
+        },
+        {
+          "name": "to_dict",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
+          "line": 239,
+          "call_type": "method_call"
+        },
+        {
+          "name": "log",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
+          "line": 240,
+          "call_type": "method_call"
+        }
+      ]
+    },
+    {
       "name": "get_tool_limiter",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 342,
+      "line": 532,
       "language": "python",
       "docstring": "Get or create a concurrency limiter for a tool.\n\nArgs:\n    tool_name: Name of the tool\n    default_limit: Default max concurrent if not configured\n\nReturns:\n    ConcurrencyLimiter instance for the tool",
       "parameters": [
@@ -4324,7 +4684,7 @@
     {
       "name": "configure_tool_limiter",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 363,
+      "line": 553,
       "language": "python",
       "docstring": "Configure a concurrency limiter for a tool.\n\nArgs:\n    tool_name: Name of the tool\n    max_concurrent: Maximum concurrent operations\n    timeout: Optional timeout per operation\n\nReturns:\n    Configured ConcurrencyLimiter instance",
       "parameters": [
@@ -4350,7 +4710,7 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 385,
+          "line": 575,
           "call_type": "method_call"
         }
       ]
@@ -4358,7 +4718,7 @@
     {
       "name": "get_all_limiter_stats",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 391,
+      "line": 581,
       "language": "python",
       "docstring": "Get statistics for all configured tool limiters.\n\nReturns:\n    Dictionary mapping tool names to their limiter stats",
       "parameters": [],
@@ -4373,13 +4733,13 @@
         {
           "name": "get_stats",
           "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
-          "line": 397,
+          "line": 587,
           "call_type": "method_call"
         },
         {
           "name": "items",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 397,
+          "line": 587,
           "call_type": "method_call"
         }
       ]
@@ -4387,7 +4747,7 @@
     {
       "name": "cancellable_scope",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 425,
+      "line": 615,
       "language": "python",
       "docstring": "Context manager for operations that may be cancelled.\n\nEnsures proper cleanup when a cancellation occurs.\n\nArgs:\n    cleanup_func: Optional async function to call on cancellation\n\nExample:\n    >>> async def cleanup():\n    ...     await close_connections()\n    ...\n    >>> async with cancellable_scope(cleanup_func=cleanup):\n    ...     await long_running_operation()\n\nYields:\n    None",
       "parameters": [
@@ -4409,7 +4769,7 @@
         {
           "name": "wrapper",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 479,
+          "line": 669,
           "call_type": "function_call"
         }
       ],
@@ -4417,19 +4777,19 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 448,
+          "line": 638,
           "call_type": "method_call"
         },
         {
           "name": "cleanup_func",
           "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
-          "line": 451,
+          "line": 641,
           "call_type": "function_call"
         },
         {
           "name": "warning",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 453,
+          "line": 643,
           "call_type": "method_call"
         }
       ],
@@ -4438,7 +4798,7 @@
     {
       "name": "with_cancellation",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 457,
+      "line": 647,
       "language": "python",
       "docstring": "Decorator for async functions that handles cancellation gracefully.\n\nEnsures cleanup is performed when the function is cancelled.\n\nArgs:\n    cleanup_func: Optional async function to call on cancellation\n\nExample:\n    >>> async def close_db():\n    ...     await db.close()\n    ...\n    >>> @with_cancellation(cleanup_func=close_db)\n    ... async def query_database():\n    ...     return await db.query(\"SELECT * FROM users\")",
       "parameters": [
@@ -4460,7 +4820,7 @@
     {
       "name": "run_with_cancellation_checkpoints",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 487,
+      "line": 677,
       "language": "python",
       "docstring": "Process items with periodic cancellation checkpoints.\n\nAllows long-running batch operations to be cancelled cleanly,\noptionally returning partial results.\n\nArgs:\n    items: List of items to process\n    process_func: Async function to process each item\n    checkpoint_interval: Check for cancellation every N items\n    return_partial: If True, return partial results on cancellation\n\nReturns:\n    CancellationResult with completion status and any partial results\n\nExample:\n    >>> async def process_item(item: str) -> dict:\n    ...     return {\"item\": item, \"processed\": True}\n    ...\n    >>> result = await run_with_cancellation_checkpoints(\n    ...     items=[\"a\", \"b\", \"c\"],\n    ...     process_func=process_item,\n    ...     checkpoint_interval=1,\n    ... )\n    >>> if result.was_cancelled:\n    ...     print(f\"Processed {result.processed_count}/{result.total_count}\")",
       "parameters": [
@@ -4486,49 +4846,49 @@
         {
           "name": "len",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 521,
+          "line": 711,
           "call_type": "function_call"
         },
         {
           "name": "enumerate",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 523,
+          "line": 713,
           "call_type": "function_call"
         },
         {
           "name": "sleep",
           "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
-          "line": 526,
+          "line": 716,
           "call_type": "method_call"
         },
         {
           "name": "process_func",
           "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
-          "line": 529,
+          "line": 719,
           "call_type": "function_call"
         },
         {
           "name": "append",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 530,
+          "line": 720,
           "call_type": "method_call"
         },
         {
           "name": "info",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 532,
+          "line": 722,
           "call_type": "method_call"
         },
         {
           "name": "len",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 540,
+          "line": 730,
           "call_type": "function_call"
         },
         {
           "name": "len",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 549,
+          "line": 739,
           "call_type": "function_call"
         }
       ]
@@ -4536,7 +4896,7 @@
     {
       "name": "cancel_tasks_gracefully",
       "file": "src/foundry_mcp/core/concurrency.py",
-      "line": 554,
+      "line": 744,
       "language": "python",
       "docstring": "Cancel multiple tasks gracefully with timeout.\n\nAttempts to cancel all tasks and waits for them to complete,\nwith a timeout to prevent hanging.\n\nArgs:\n    tasks: List of asyncio.Task objects to cancel\n    timeout: Maximum time to wait for tasks to finish cancelling\n\nReturns:\n    List of exceptions from cancelled tasks (None if clean cancellation)\n\nExample:\n    >>> tasks = [asyncio.create_task(op()) for op in operations]\n    >>> # Later, need to cancel all\n    >>> errors = await cancel_tasks_gracefully(tasks, timeout=10.0)",
       "parameters": [
@@ -4557,79 +4917,79 @@
         {
           "name": "done",
           "file": "unknown",
-          "line": 581,
-          "call_type": "method_call"
-        },
-        {
-          "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
-          "line": 582,
-          "call_type": "method_call"
-        },
-        {
-          "name": "wait",
-          "file": "unknown",
-          "line": 587,
-          "call_type": "method_call"
-        },
-        {
-          "name": "done",
-          "file": "unknown",
-          "line": 595,
-          "call_type": "method_call"
-        },
-        {
-          "name": "result",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
-          "line": 597,
-          "call_type": "method_call"
-        },
-        {
-          "name": "append",
-          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 598,
-          "call_type": "method_call"
-        },
-        {
-          "name": "append",
-          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 600,
-          "call_type": "method_call"
-        },
-        {
-          "name": "append",
-          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 602,
-          "call_type": "method_call"
-        },
-        {
-          "name": "append",
-          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 605,
-          "call_type": "method_call"
-        },
-        {
-          "name": "TimeoutError",
-          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 605,
+          "line": 771,
           "call_type": "method_call"
         },
         {
           "name": "cancel",
           "file": "src/foundry_mcp/core/concurrency.py",
-          "line": 609,
+          "line": 772,
+          "call_type": "method_call"
+        },
+        {
+          "name": "wait",
+          "file": "unknown",
+          "line": 777,
+          "call_type": "method_call"
+        },
+        {
+          "name": "done",
+          "file": "unknown",
+          "line": 785,
+          "call_type": "method_call"
+        },
+        {
+          "name": "result",
+          "file": "unknown",
+          "line": 787,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 788,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 790,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 792,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 795,
+          "call_type": "method_call"
+        },
+        {
+          "name": "TimeoutError",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 795,
+          "call_type": "method_call"
+        },
+        {
+          "name": "cancel",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "line": 799,
           "call_type": "method_call"
         },
         {
           "name": "error",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 612,
+          "line": 802,
           "call_type": "method_call"
         },
         {
           "name": "len",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 613,
+          "line": 803,
           "call_type": "function_call"
         }
       ]

@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:55:44.587320Z",
+  "last_updated": "2025-11-27T14:57:17.149863Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 84,
+    "progress_percentage": 85,
     "current_phase": "phase-7"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 86,
+      "completed_tasks": 87,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -2245,7 +2245,7 @@
         "depends": []
       },
       "total_tasks": 11,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Enable safe parallelism and LLM-optimized responses",
         "risk_level": "low",
@@ -2266,7 +2266,7 @@
         "task-7-3"
       ],
       "total_tasks": 7,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2360,7 +2360,7 @@
     "task-7-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/llm_patterns.py (NEW)",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-7-files",
       "children": [
         "task-7-2-1",
@@ -2376,7 +2376,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/llm_patterns.py",
         "task_category": "implementation",
@@ -2386,13 +2386,19 @@
     "task-7-2-1": {
       "type": "subtask",
       "title": "Create progressive_disclosure() helper",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-7-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "detail_level parameter: summary, standard, full. Truncates based on level"
+        "details": "detail_level parameter: summary, standard, full. Truncates based on level",
+        "started_at": "2025-11-27T14:56:17.448006Z",
+        "status_note": "Creating progressive_disclosure() helper",
+        "completed_at": "2025-11-27T14:57:17.134835Z",
+        "needs_journaling": false,
+        "actual_hours": 0.017,
+        "journaled_at": "2025-11-27T14:57:17.145876Z"
       }
     },
     "task-7-2-2": {
@@ -4751,6 +4757,15 @@
       "content": "Added comprehensive request context management to src/foundry_mcp/core/concurrency.py. Includes: RequestContext dataclass with request_id, client_id, start_time, start_timestamp and elapsed_seconds/elapsed_ms properties plus to_dict() for serialization. Added request_context() async context manager that auto-generates UUIDs if not provided and properly resets ContextVars on exit. Helper functions: get_current_context() (raises if not in context), get_current_context_or_none(), get_request_id(), get_client_id(), get_elapsed_time(), and log_with_context() for logging with automatic context inclusion. All exports updated and imports verified working.",
       "metadata": {},
       "task_id": "task-7-1-3"
+    },
+    {
+      "timestamp": "2025-11-27T14:57:17.145865Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create progressive_disclosure() helper",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/core/llm_patterns.py with progressive_disclosure() helper. Includes: DetailLevel enum (SUMMARY, STANDARD, FULL), DisclosureConfig dataclass for customizing field inclusion and truncation limits (summary_fields, standard_fields, full_fields, max_list_items per level, max_string_length per level), progressive_disclosure() function that filters/truncates data based on level with _truncated metadata, helper functions _disclose_dict() and _disclose_list() for recursive processing, _process_value() for string/list/dict truncation, and get_detail_level() for parsing string parameters. DEFAULT_DISCLOSURE_CONFIG provides sensible defaults. All imports verified working.",
+      "metadata": {},
+      "task_id": "task-7-2-1"
     }
   ]
 }
