@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T22:45:43.265523Z",
-    "generated_at_commit": "eced2fcfe0549d53687a6716c72fef4d1012da73",
+    "generated_at": "2025-11-27T22:48:15.582114Z",
+    "generated_at_commit": "488f7b9e0de74f987f3b696115515c7b9669bb4e",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 46,
-    "total_lines": 23000,
+    "total_lines": 23190,
     "total_classes": 72,
     "total_functions": 215,
-    "avg_complexity": 8.52,
+    "avg_complexity": 8.61,
     "max_complexity": 160,
     "high_complexity_functions": [
       "register_mutation_tools (160)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 46,
-        "lines": 23000,
+        "lines": 23190,
         "classes": 72,
         "functions": 215,
-        "avg_complexity": 8.52
+        "avg_complexity": 8.61
       }
     }
   },
@@ -1405,7 +1405,7 @@
         "foundry_mcp.core.resilience.MEDIUM_TIMEOUT"
       ],
       "exports": [],
-      "lines": 408
+      "lines": 598
     },
     {
       "name": "queries",
@@ -5529,7 +5529,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 771,
           "call_type": "method_call"
         },
@@ -5547,13 +5547,13 @@
         },
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 785,
           "call_type": "method_call"
         },
         {
           "name": "result",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 787,
           "call_type": "method_call"
         },
@@ -5589,7 +5589,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -7701,7 +7701,7 @@
         },
         {
           "name": "write",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 535,
           "call_type": "method_call"
         },
@@ -9568,6 +9568,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 410,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find",
           "file": "src/foundry_mcp/tools/queries.py",
           "line": 110,
@@ -9731,7 +9737,7 @@
         }
       ],
       "calls": [],
-      "call_count": 82
+      "call_count": 83
     },
     {
       "name": "redact_sensitive_data",
@@ -10166,6 +10172,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 490,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 163,
@@ -10198,7 +10210,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 31
+      "call_count": 32
     },
     {
       "name": "mcp_tool",
@@ -13705,6 +13717,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 540,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find",
           "file": "src/foundry_mcp/tools/queries.py",
           "line": 149,
@@ -13911,7 +13929,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 93
+      "call_count": 94
     },
     {
       "name": "error_response",
@@ -15740,6 +15758,48 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 452,
+          "call_type": "function_call"
+        },
+        {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 461,
+          "call_type": "function_call"
+        },
+        {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 557,
+          "call_type": "function_call"
+        },
+        {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 565,
+          "call_type": "function_call"
+        },
+        {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 574,
+          "call_type": "function_call"
+        },
+        {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 583,
+          "call_type": "function_call"
+        },
+        {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 593,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find",
           "file": "src/foundry_mcp/tools/queries.py",
           "line": 139,
@@ -16336,7 +16396,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 396
+      "call_count": 403
     },
     {
       "name": "validation_error",
@@ -23430,6 +23490,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 500,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -23528,7 +23594,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 26
+      "call_count": 27
     },
     {
       "name": "register_analysis_tools",
@@ -23728,6 +23794,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 500,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -23826,7 +23898,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 26
+      "call_count": 27
     },
     {
       "name": "register_authoring_tools",
@@ -24138,6 +24210,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 500,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -24236,7 +24314,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 26
+      "call_count": 27
     },
     {
       "name": "register_git_integration_tools",
@@ -24512,6 +24590,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 500,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -24610,7 +24694,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 26
+      "call_count": 27
     },
     {
       "name": "register_mutation_tools",
@@ -24810,6 +24894,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 500,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -24908,7 +24998,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 26
+      "call_count": 27
     },
     {
       "name": "register_planning_tools",
@@ -24929,7 +25019,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 24,
+      "complexity": 44,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -25184,6 +25274,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "phase_check_complete",
+          "file": "src/foundry_mcp/tools/planning.py",
+          "line": 500,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -25282,7 +25378,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 26
+      "call_count": 27
     },
     {
       "name": "register_spec_helper_tools",

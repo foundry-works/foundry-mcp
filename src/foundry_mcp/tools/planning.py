@@ -596,3 +596,166 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="phase-report-time",
+    )
+    def phase_report_time(
+        spec_id: str,
+        phase_id: str,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Summarize time tracking metrics for a phase.
+
+        Wraps the SDD CLI phase-time command to aggregate estimated
+        and actual hours for all tasks in a phase.
+
+        WHEN TO USE:
+        - Reviewing time spent on a phase
+        - Comparing estimated vs actual hours
+        - Planning future phases based on historical data
+        - Generating time reports for stakeholders
+
+        Args:
+            spec_id: Specification ID containing the phase
+            phase_id: Phase ID to report time for
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with time metrics:
+            - estimated_hours: Total estimated hours for phase
+            - actual_hours: Total actual hours spent
+            - variance_hours: Difference (actual - estimated)
+            - variance_percent: Percentage variance
+            - task_count: Number of tasks in phase
+            - completed_count: Number of completed tasks
+        """
+        tool_name = "phase_report_time"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            if not phase_id:
+                return asdict(error_response(
+                    "phase_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a phase_id parameter",
+                ))
+
+            # Build command
+            cmd = ["sdd", "phase-time", spec_id, phase_id, "--json"]
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="phase-report-time",
+                action="report_phase_time",
+                spec_id=spec_id,
+                phase_id=phase_id,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                estimated = output_data.get("estimated_hours", 0)
+                actual = output_data.get("actual_hours", 0)
+                variance = actual - estimated
+                variance_pct = (variance / estimated * 100) if estimated > 0 else 0
+
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "phase_id": phase_id,
+                    "estimated_hours": estimated,
+                    "actual_hours": actual,
+                    "variance_hours": round(variance, 2),
+                    "variance_percent": round(variance_pct, 1),
+                    "task_count": output_data.get("task_count", 0),
+                    "completed_count": output_data.get("completed_count", 0),
+                }
+
+                # Include phase title if available
+                if "phase_title" in output_data:
+                    data["phase_title"] = output_data["phase_title"]
+
+                # Track metrics
+                _metrics.counter(f"planning.{tool_name}", labels={"status": "success"})
+
+                return asdict(success_response(
+                    data=data,
+                    message=f"Phase time: {actual:.1f}h actual / {estimated:.1f}h estimated",
+                ))
+            else:
+                # Handle specific error cases
+                stderr = result.stderr.strip()
+
+                if "not found" in stderr.lower():
+                    error_code = "NOT_FOUND"
+                    remediation = "Ensure the spec_id and phase_id exist"
+                else:
+                    error_code = "REPORT_FAILED"
+                    remediation = "Check the spec_id and phase_id"
+
+                _metrics.counter(f"planning.{tool_name}", labels={"status": "error", "code": error_code})
+
+                return asdict(error_response(
+                    stderr or "Failed to report phase time",
+                    error_code=error_code,
+                    error_type="planning",
+                    remediation=remediation,
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="resilience",
+                remediation="Wait for circuit breaker recovery, then retry",
+            ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Phase time report timed out after {CLI_TIMEOUT}s",
+                error_code="TIMEOUT",
+                error_type="timeout",
+                remediation="Try again or check system resources",
+            ))
+
+        except FileNotFoundError:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found. Ensure 'sdd' is installed and in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="configuration",
+                remediation="Install SDD toolkit: pip install claude-sdd-toolkit",
+            ))
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in {tool_name}")
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
