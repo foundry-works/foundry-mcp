@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T19:43:03.402436Z",
+  "last_updated": "2025-11-27T19:44:40.924671Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 4,
+    "progress_percentage": 5,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -60,7 +60,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 13,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Bootstrap tooling for workspace initialization and validation",
         "risk_level": "low"
@@ -86,7 +86,7 @@
         "task-1-5"
       ],
       "total_tasks": 10,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -99,7 +99,7 @@
     "task-1-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/environment.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [
         "task-1-1-1",
@@ -109,7 +109,7 @@
         "task-1-1-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/environment.py",
         "task_category": "implementation",
@@ -201,13 +201,19 @@
     "task-1-1-5": {
       "type": "subtask",
       "title": "Wire resilience/telemetry helpers for environment adapters",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Ensure environment tools call core/resilience.py, core/concurrency.py, and core/observability.py for timeouts, retries, and tracing"
+        "details": "Ensure environment tools call core/resilience.py, core/concurrency.py, and core/observability.py for timeouts, retries, and tracing",
+        "started_at": "2025-11-27T19:43:33.925854Z",
+        "status_note": "Starting implementation - wiring resilience/telemetry to environment tools",
+        "completed_at": "2025-11-27T19:44:40.917527Z",
+        "needs_journaling": false,
+        "actual_hours": 0.019,
+        "journaled_at": "2025-11-27T19:44:40.922727Z"
       }
     },
     "task-1-2": {
@@ -2222,6 +2228,15 @@
       "content": "Implemented sdd-verify-environment MCP tool adapter for comprehensive environment validation. Features: Python runtime check with version info and 3.9+ minimum validation, Git availability and version check, optional Node.js runtime check, custom required Python packages validation via comma-separated list. Returns structured JSON with runtimes dict (availability, version, executable), packages dict, all_valid boolean, and issues list. Returns error response with validation issues and remediation guidance when checks fail. Tool registered and verified working.",
       "metadata": {},
       "task_id": "task-1-1-4"
+    },
+    {
+      "timestamp": "2025-11-27T19:44:40.922717Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Wire resilience/telemetry helpers for environment adapters",
+      "author": "claude-code",
+      "content": "Wired resilience/telemetry helpers for environment adapters. The canonical_tool decorator already applies mcp_tool for automatic telemetry on all tools. Added explicit imports from core/observability.py (audit_log, get_metrics) and core/resilience.py (FAST_TIMEOUT). Added audit_log call and metrics counter for sdd-init-workspace (workspace_init event). The _metrics singleton is initialized for tracking environment operations. All 4 environment tools (sdd-verify-toolchain, sdd-init-workspace, sdd-detect-topology, sdd-verify-environment) are now properly instrumented with observability hooks via the canonical_tool pattern.",
+      "metadata": {},
+      "task_id": "task-1-1-5"
     }
   ]
 }

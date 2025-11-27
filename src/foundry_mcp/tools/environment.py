@@ -16,8 +16,13 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.core.observability import audit_log, get_metrics
+from foundry_mcp.core.resilience import FAST_TIMEOUT
 
 logger = logging.getLogger(__name__)
+
+# Metrics singleton for environment tools
+_metrics = get_metrics()
 
 
 def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -203,6 +208,16 @@ def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
             warnings: List[str] = []
             if not created_dirs:
                 warnings.append("All directories already existed, no changes made")
+
+            # Audit log workspace initialization
+            audit_log(
+                "workspace_init",
+                tool="sdd-init-workspace",
+                path=str(base_path),
+                created_count=len(created_dirs),
+                success=True,
+            )
+            _metrics.counter("environment.workspace_init", labels={"status": "success"})
 
             return asdict(
                 success_response(

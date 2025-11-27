@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T19:42:01.508442Z",
-    "generated_at_commit": "59e5cbc5ad01ae4eddfe5597f23e7a44b0c17c75",
+    "generated_at": "2025-11-27T19:43:27.948202Z",
+    "generated_at_commit": "75c7d0298d93c48f51a8e71179d5bbe809907fa7",
     "languages": [
       "python"
     ],
@@ -11,25 +11,25 @@
   },
   "statistics": {
     "total_files": 40,
-    "total_lines": 17456,
+    "total_lines": 17600,
     "total_classes": 71,
     "total_functions": 199,
-    "avg_complexity": 6.71,
+    "avg_complexity": 6.78,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
       "register_task_tools (59)",
+      "register_environment_tools (54)",
       "register_docs_tools (42)",
-      "register_environment_tools (39)",
       "register_lifecycle_tools (36)"
     ],
     "by_language": {
       "python": {
         "files": 40,
-        "lines": 17456,
+        "lines": 17600,
         "classes": 71,
         "functions": 199,
-        "avg_complexity": 6.71
+        "avg_complexity": 6.78
       }
     }
   },
@@ -1154,7 +1154,7 @@
         "foundry_mcp.core.naming.canonical_tool"
       ],
       "exports": [],
-      "lines": 345
+      "lines": 489
     },
     {
       "name": "journal",
@@ -5114,7 +5114,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 771,
           "call_type": "method_call"
         },
@@ -5132,7 +5132,7 @@
         },
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 785,
           "call_type": "method_call"
         },
@@ -7139,7 +7139,7 @@
         },
         {
           "name": "write",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 535,
           "call_type": "method_call"
         },
@@ -8796,6 +8796,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "sdd_verify_environment",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 347,
+          "call_type": "function_call"
+        },
+        {
           "name": "journal_add",
           "file": "src/foundry_mcp/tools/journal.py",
           "line": 50,
@@ -9007,7 +9013,7 @@
         }
       ],
       "calls": [],
-      "call_count": 55
+      "call_count": 56
     },
     {
       "name": "redact_sensitive_data",
@@ -12531,6 +12537,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "sdd_verify_environment",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 485,
+          "call_type": "function_call"
+        },
+        {
           "name": "journal_add",
           "file": "src/foundry_mcp/tools/journal.py",
           "line": 114,
@@ -12785,7 +12797,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 60
+      "call_count": 61
     },
     {
       "name": "error_response",
@@ -13141,6 +13153,18 @@
           "name": "sdd_detect_topology",
           "file": "src/foundry_mcp/tools/environment.py",
           "line": 345,
+          "call_type": "function_call"
+        },
+        {
+          "name": "sdd_verify_environment",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 476,
+          "call_type": "function_call"
+        },
+        {
+          "name": "sdd_verify_environment",
+          "file": "src/foundry_mcp/tools/environment.py",
+          "line": 489,
           "call_type": "function_call"
         },
         {
@@ -13902,7 +13926,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 178
+      "call_count": 180
     },
     {
       "name": "validation_error",
@@ -20905,7 +20929,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 39,
+      "complexity": 54,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
