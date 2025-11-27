@@ -2,16 +2,16 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T12:17:41.422438Z",
-    "generated_at_commit": "267b3f33239c82c1aeed67980a4f6c4d1849a730",
+    "generated_at": "2025-11-27T12:26:28.678566Z",
+    "generated_at_commit": "d3b91848d1ca1429f4b3f7e86d80c94556255b86",
     "languages": [
       "python"
     ],
     "schema_version": "2.0"
   },
   "statistics": {
-    "total_files": 30,
-    "total_lines": 11638,
+    "total_files": 31,
+    "total_lines": 11697,
     "total_classes": 42,
     "total_functions": 137,
     "avg_complexity": 7.41,
@@ -25,8 +25,8 @@
     ],
     "by_language": {
       "python": {
-        "files": 30,
-        "lines": 11638,
+        "files": 31,
+        "lines": 11697,
         "classes": 42,
         "functions": 137,
         "avg_complexity": 7.41
@@ -449,6 +449,19 @@
       ],
       "exports": [],
       "lines": 228
+    },
+    {
+      "name": "security",
+      "file": "src/foundry_mcp/core/security.py",
+      "language": "python",
+      "docstring": "Security utilities for foundry-mcp.\n\nProvides input validation, size limits, and prompt injection defense\nfor MCP tools. See docs/mcp_best_practices/04-validation-input-hygiene.md\nand docs/mcp_best_practices/08-security-trust-boundaries.md for guidance.",
+      "classes": [],
+      "functions": [],
+      "imports": [
+        "typing.Final"
+      ],
+      "exports": [],
+      "lines": 59
     },
     {
       "name": "spec",
@@ -4878,7 +4891,7 @@
         },
         {
           "name": "read",
-          "file": "/home/tyler/anaconda3/lib/python3.11/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -4890,7 +4903,7 @@
         },
         {
           "name": "write",
-          "file": "built-in",
+          "file": "/home/tyler/anaconda3/lib/python3.11/typing.py",
           "line": 535,
           "call_type": "method_call"
         },
@@ -16463,6 +16476,9 @@
       "typing.Mapping",
       "typing.Optional",
       "typing.Sequence"
+    ],
+    "src/foundry_mcp/core/security.py": [
+      "typing.Final"
     ],
     "src/foundry_mcp/core/spec.py": [
       "json",

@@ -49,6 +49,49 @@ MAX_FIELD_COUNT: Final[int] = 100
 Prevents resource exhaustion from objects with excessive properties.
 """
 
+# =============================================================================
+# Prompt Injection Detection Patterns
+# =============================================================================
+# These regex patterns detect common prompt injection attempts in LLM-generated
+# input. MCP tools receiving untrusted input should check against these patterns.
+# See docs/mcp_best_practices/08-security-trust-boundaries.md for details.
+
+INJECTION_PATTERNS: Final[list[str]] = [
+    # Instruction override attempts
+    r"ignore\s+(all\s+)?(previous|prior)\s+(instructions?|prompts?)",
+    r"disregard\s+(all\s+)?(previous|prior|above)",
+    r"forget\s+(everything|all)\s+(above|before)",
+    r"new\s+instructions?\s*:",
+
+    # System prompt injection
+    r"system\s*:\s*",
+    r"<\s*system\s*>",
+
+    # Special tokens (model-specific)
+    r"<\|.*?\|>",              # OpenAI-style special tokens
+    r"\[INST\]|\[/INST\]",     # Llama instruction markers
+    r"<\|im_start\|>|<\|im_end\|>",  # ChatML markers
+    r"<<SYS>>|<</SYS>>",       # Llama system markers
+
+    # Code block injection attempts
+    r"```system",
+    r"```\s*<\s*system",
+
+    # Role injection
+    r"^(assistant|user|system)\s*:",
+]
+"""Regex patterns for detecting prompt injection attempts.
+
+Each pattern targets a specific injection technique:
+- Instruction overrides: attempts to ignore/discard previous context
+- System prompt injection: attempts to inject system-level instructions
+- Special tokens: model-specific control sequences
+- Code block injection: attempts to inject via markdown code blocks
+- Role injection: attempts to assume different conversation roles
+
+Use with detect_prompt_injection() for comprehensive checking.
+"""
+
 # Export all constants for easy importing
 __all__ = [
     "MAX_INPUT_SIZE",
@@ -56,4 +99,5 @@ __all__ = [
     "MAX_STRING_LENGTH",
     "MAX_NESTED_DEPTH",
     "MAX_FIELD_COUNT",
+    "INJECTION_PATTERNS",
 ]
