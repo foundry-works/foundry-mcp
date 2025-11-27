@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T13:36:08.655027Z",
-    "generated_at_commit": "808a7dccb7c8df1ac87608248db12099de4d0070",
+    "generated_at": "2025-11-27T13:40:02.212448Z",
+    "generated_at_commit": "0c630a7737ba09d319af30757e857fef5d76ac2e",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 33,
-    "total_lines": 13417,
+    "total_lines": 13522,
     "total_classes": 50,
-    "total_functions": 158,
-    "avg_complexity": 6.98,
+    "total_functions": 160,
+    "avg_complexity": 6.94,
     "max_complexity": 59,
     "high_complexity_functions": [
       "register_task_tools (59)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 33,
-        "lines": 13417,
+        "lines": 13522,
         "classes": 50,
-        "functions": 158,
-        "avg_complexity": 6.98
+        "functions": 160,
+        "avg_complexity": 6.94
       }
     }
   },
@@ -481,7 +481,9 @@
         "TimeoutException"
       ],
       "functions": [
-        "with_timeout"
+        "with_timeout",
+        "retry_with_backoff",
+        "retryable"
       ],
       "imports": [
         "dataclasses.dataclass",
@@ -503,7 +505,7 @@
         "time"
       ],
       "exports": [],
-      "lines": 140
+      "lines": 245
     },
     {
       "name": "responses",
@@ -5379,7 +5381,7 @@
         },
         {
           "name": "write",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 535,
           "call_type": "method_call"
         },
@@ -9147,6 +9149,105 @@
       ],
       "return_type": "Callable[[Callable[..., T]], Callable[..., T]]",
       "complexity": 3,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
+    },
+    {
+      "name": "retry_with_backoff",
+      "file": "src/foundry_mcp/core/resilience.py",
+      "line": 148,
+      "language": "python",
+      "docstring": "Retry a function with exponential backoff.\n\nRetries the function on failure with increasing delays between attempts.\nSupports jitter to prevent thundering herd problems.\n\nArgs:\n    func: Function to retry (should take no arguments; use lambda for args).\n    max_retries: Maximum number of retry attempts (default 3).\n    base_delay: Initial delay in seconds (default 1.0).\n    max_delay: Maximum delay cap in seconds (default 60.0).\n    exponential_base: Multiplier for each retry (default 2.0).\n    jitter: Add randomness to delay (default True).\n    retryable_exceptions: List of exceptions to retry on (default: all).\n\nReturns:\n    Result from the function on success.\n\nRaises:\n    Exception: The last exception if all retries exhausted.\n\nExample:\n    >>> result = retry_with_backoff(\n    ...     lambda: http_client.get(url),\n    ...     max_retries=3,\n    ...     retryable_exceptions=[ConnectionError, TimeoutException],\n    ... )",
+      "parameters": [
+        {
+          "name": "func",
+          "type": "Callable[..., T]",
+          "default": null
+        }
+      ],
+      "return_type": "T",
+      "complexity": 7,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [
+        {
+          "name": "wrapper",
+          "file": "src/foundry_mcp/core/resilience.py",
+          "line": 236,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "tuple",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 185,
+          "call_type": "function_call"
+        },
+        {
+          "name": "range",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 188,
+          "call_type": "function_call"
+        },
+        {
+          "name": "func",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/resilience.py",
+          "line": 190,
+          "call_type": "function_call"
+        },
+        {
+          "name": "min",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 198,
+          "call_type": "function_call"
+        },
+        {
+          "name": "random",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/resilience.py",
+          "line": 202,
+          "call_type": "method_call"
+        },
+        {
+          "name": "sleep",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/2and3/time.pyi",
+          "line": 204,
+          "call_type": "method_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "retryable",
+      "file": "src/foundry_mcp/core/resilience.py",
+      "line": 212,
+      "language": "python",
+      "docstring": "Decorator for automatic retries with exponential backoff.\n\nArgs:\n    max_retries: Maximum retry attempts (default 3).\n    delay: Base delay in seconds (default 1.0).\n    exceptions: Tuple of exceptions to retry on.\n\nReturns:\n    Decorated function with retry logic.\n\nExample:\n    >>> @retryable(max_retries=3, exceptions=(ConnectionError,))\n    ... def call_api(endpoint: str):\n    ...     return http_client.get(endpoint)",
+      "parameters": [
+        {
+          "name": "max_retries",
+          "type": "int",
+          "default": null
+        },
+        {
+          "name": "delay",
+          "type": "float",
+          "default": null
+        },
+        {
+          "name": "exceptions",
+          "type": "Tuple[Type[Exception], ...]",
+          "default": null
+        }
+      ],
+      "return_type": "Callable[[Callable[..., T]], Callable[..., T]]",
+      "complexity": 1,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
