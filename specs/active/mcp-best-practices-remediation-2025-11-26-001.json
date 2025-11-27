@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T15:29:02.076843Z",
+  "last_updated": "2025-11-27T15:31:11.329747Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 96,
+    "progress_percentage": 97,
     "current_phase": "phase-8"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 98,
+      "completed_tasks": 99,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -2581,7 +2581,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Improve test coverage and add property-based testing",
         "risk_level": "low",
@@ -2593,7 +2593,7 @@
     "phase-8-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-8",
       "children": [
         "task-8-1",
@@ -2601,8 +2601,12 @@
         "task-8-3"
       ],
       "total_tasks": 5,
-      "completed_tasks": 4,
-      "metadata": {},
+      "completed_tasks": 5,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T15:31:11.313416Z",
+        "journaled_at": "2025-11-27T15:31:11.329708Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-8-verify",
@@ -2729,7 +2733,7 @@
     "task-8-3": {
       "type": "task",
       "title": "tests/conftest.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-8-files",
       "children": [
         "task-8-3-1"
@@ -2740,7 +2744,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/conftest.py",
         "task_category": "implementation",
@@ -2750,13 +2754,19 @@
     "task-8-3-1": {
       "type": "subtask",
       "title": "Add fixture freshness validation",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-8-3",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Autouse fixture that validates fixture versions match schema version"
+        "details": "Autouse fixture that validates fixture versions match schema version",
+        "started_at": "2025-11-27T15:29:35.842623Z",
+        "status_note": "Adding fixture freshness validation to conftest.py",
+        "completed_at": "2025-11-27T15:31:11.313184Z",
+        "needs_journaling": false,
+        "actual_hours": 0.027,
+        "journaled_at": "2025-11-27T15:31:11.321792Z"
       }
     },
     "phase-8-verify": {
@@ -4987,6 +4997,24 @@
       "content": "Created comprehensive jsonschema validation tests at tests/contract/test_response_schema.py with 42 tests covering: (1) TestSchemaValidity - validates schema is valid Draft-07 and has required definitions; (2) TestSuccessResponseContract - 9 tests for success responses with various metadata combinations; (3) TestErrorResponseContract - 6 tests for error responses with codes, types, remediation, details; (4) TestSpecializedErrorHelpers - 8 tests for validation_error, not_found_error, rate_limit_error, unauthorized_error, forbidden_error, conflict_error, internal_error, unavailable_error; (5) TestEnvelopeInvariants - 4 tests for success/error mutual exclusion, version requirement, data type; (6) TestSchemaRejection - 8 tests ensuring schema rejects invalid responses; (7) TestRealWorldScenarios - 5 tests modeling real-world response patterns. Also added test dependencies (pytest, pytest-asyncio, jsonschema, hypothesis) to pyproject.toml [project.optional-dependencies]. All 42 tests pass.",
       "metadata": {},
       "task_id": "task-8-2-2"
+    },
+    {
+      "timestamp": "2025-11-27T15:31:11.321783Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add fixture freshness validation",
+      "author": "claude-code",
+      "content": "Created tests/conftest.py with comprehensive fixture freshness validation. Features: (1) FIXTURE_SCHEMA_VERSION and RESPONSE_CONTRACT_VERSION constants for version tracking; (2) get_fixture_version() helper that extracts version from JSON fixtures (checks fixture_version, metadata.version, _fixture_meta.version); (3) validate_fixture_freshness() function with strict/lenient modes; (4) validate_response_envelope() function that validates response-v2 contract compliance; (5) Session-scoped autouse fixture validate_fixture_versions that scans fixture directories at test start and warns about stale fixtures; (6) response_validator fixture for response envelope validation; (7) fixture_freshness_checker fixture for on-demand validation; (8) assert_response_contract fixture for chained assertions; (9) Custom pytest markers (fixture_version, requires_fresh_fixtures); (10) pytest_configure and pytest_collection_modifyitems hooks for marker handling. All existing tests continue to pass.",
+      "metadata": {},
+      "task_id": "task-8-3-1"
+    },
+    {
+      "timestamp": "2025-11-27T15:31:11.329700Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-8-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-8-files"
     }
   ]
 }
