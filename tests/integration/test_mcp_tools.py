@@ -567,9 +567,9 @@ class TestDocsToolsRegistration:
         assert "test-run" in tools
 
     def test_code_impact_analysis_registered(self, mcp_server):
-        """Test that code_impact_analysis tool is registered."""
+        """Test that code-impact-analysis tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "code_impact_analysis" in tools
+        assert "code-impact-analysis" in tools
 
 
 class TestToolCategories:

@@ -1,0 +1,1085 @@
+{
+  "spec_id": "sdd-llm-features-2025-11-27-001",
+  "title": "SDD LLM-Powered Features - AI Integration",
+  "generated": "2025-11-27T12:00:00Z",
+  "last_updated": "2025-11-27T18:47:28.430839Z",
+  "metadata": {
+    "description": "Implement LLM-powered SDD operations including provider abstraction, review workflows, PR creation, and AI-enhanced documentation. Requires configurable LLM provider support with graceful degradation.",
+    "objectives": [
+      "LLM provider abstraction layer supporting OpenAI, Anthropic, and local models",
+      "Configurable via TOML config and environment variables",
+      "Graceful degradation to data-only mode when no LLM configured",
+      "AI-enhanced spec review, PR creation, and documentation generation"
+    ],
+    "complexity": "high",
+    "estimated_hours": 60,
+      "assumptions": [
+        "Users configure LLM provider via foundry-mcp.toml or environment variables",
+        "All LLM operations have data-only fallback mode",
+        "Response envelopes use success_response/error_response helpers",
+        "LLM timeouts and retries use foundry_mcp.core.resilience patterns",
+        "Tool identifiers follow canonical hyphenated names and register via canonical_tool/discovery helpers",
+        "LLM tools enforce input hygiene, prompt shielding, observability, and feature-flag gating per docs/mcp_best_practices/04-05-08-11-12-14",
+        "Docs plus half_baked_plans/OPERATIONS_TO_ADD.md are updated alongside implementation"
+      ]
+
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "SDD LLM-Powered Features - AI Integration",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4"
+      ],
+      "total_tasks": 35,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "LLM Provider Infrastructure",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-1-files",
+        "phase-1-verify"
+      ],
+      "total_tasks": 13,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Foundation for all LLM-powered features - provider abstraction and configuration",
+        "risk_level": "medium"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-1-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/llm_provider.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-1-1",
+        "task-1-1-2",
+        "task-1-1-3",
+        "task-1-1-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/llm_provider.py",
+        "task_category": "implementation",
+        "estimated_hours": 8,
+        "changes": "Create LLM provider abstraction layer with multiple backend support plus prompt-shielding, observability, and resilience hooks"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-4",
+          "task-1-5"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1-1": {
+      "type": "subtask",
+      "title": "Define LLMProvider abstract base class",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Abstract interface for LLM operations: complete(), chat(), embed()"
+      }
+    },
+    "task-1-1-2": {
+      "type": "subtask",
+      "title": "Implement OpenAIProvider",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "OpenAI API integration with gpt-4, gpt-3.5-turbo support"
+      }
+    },
+    "task-1-1-3": {
+      "type": "subtask",
+      "title": "Implement AnthropicProvider",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Anthropic API integration with claude-3-opus, claude-3-sonnet support"
+      }
+    },
+    "task-1-1-4": {
+      "type": "subtask",
+      "title": "Implement LocalProvider (ollama/llama.cpp)",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Local model support via ollama or llama.cpp API"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/llm_config.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-2-1",
+        "task-1-2-2",
+        "task-1-2-3",
+        "task-1-2-4",
+        "task-1-2-5"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/llm_config.py",
+        "task_category": "implementation",
+        "estimated_hours": 5,
+        "changes": "Create LLM configuration loading from TOML and environment variables with validation, secret redaction, feature-flag exposure, and document new [llm]/[workflow] keys in docs/README.md plus samples/foundry-mcp.toml"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-3",
+          "task-1-4",
+          "task-1-5"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2-1": {
+      "type": "subtask",
+      "title": "Implement TOML config parsing for [llm] section",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Parse provider, api_key, model, timeout from foundry-mcp.toml"
+      }
+    },
+    "task-1-2-2": {
+      "type": "subtask",
+      "title": "Implement environment variable fallback",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Support FOUNDRY_MCP_LLM_PROVIDER, FOUNDRY_MCP_LLM_API_KEY, etc."
+      }
+    },
+    "task-1-2-3": {
+      "type": "subtask",
+      "title": "Implement workflow mode configuration",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Support [workflow] section with mode, auto_validate, journal_enabled"
+      }
+    },
+    "task-1-2-4": {
+      "type": "subtask",
+      "title": "Update docs/README.md with LLM config guidance",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Document new [llm]/[workflow] keys, env vars, and feature flag expectations for LLM adapters"
+      }
+    },
+    "task-1-2-5": {
+      "type": "subtask",
+      "title": "Add samples/foundry-mcp.toml illustrating [llm]/[workflow] sections",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Provide canonical sample config with provider/model/timeouts plus workflow mode defaults"
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/context.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-2"
+        ],
+        "depends": [],
+        "blocks": [
+          "task-1-4"
+        ]
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/context.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Implement get-server-context MCP tool for workspace info, exposing negotiated capabilities while masking sensitive config"
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/server.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-1",
+          "task-1-2",
+          "task-1-3"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "changes": "Register context tools and wire up LLM provider with canonical_tool metadata plus discovery/capabilities manifest updates"
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "tests/unit/test_llm_provider.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-1",
+          "task-1-2"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_llm_provider.py",
+        "task_category": "implementation",
+        "estimated_hours": 4,
+        "changes": "Create unit tests for LLM provider abstraction and config"
+      }
+    },
+    "phase-1-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "verify-1-1",
+        "verify-1-2",
+        "verify-1-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-1-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Unit tests pass for LLM provider module",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_llm_provider.py -v",
+        "expected": "All tests pass including mocked provider calls"
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Graceful degradation without LLM config",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "LLM-powered tools return data-only responses when no provider configured",
+        "command": ""
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-3": {
+      "type": "verify",
+      "title": "Phase 1 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-1"
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "LLM-Powered Review & PR Workflow",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-2-files",
+        "phase-2-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-3"
+        ]
+      },
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "AI-enhanced review sessions and PR creation capabilities",
+        "risk_level": "high"
+      }
+    },
+    "phase-2-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-2-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/review.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [
+        "task-2-1-1",
+        "task-2-1-2",
+        "task-2-1-3",
+        "task-2-1-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/review.py",
+        "task_category": "implementation",
+        "estimated_hours": 11,
+        "changes": "Create new module with LLM-powered spec review tools that enforce input hygiene, prompt shielding, observability, resilience controls, feature flags, and canonical_tool/discovery metadata"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1-1": {
+      "type": "subtask",
+      "title": "Implement spec-review - interactive or automated spec review sessions",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd review, use LLM for intelligent spec analysis and suggestions"
+      }
+    },
+    "task-2-1-2": {
+      "type": "subtask",
+      "title": "Implement review-list-plan-tools - enumerate review toolchains for plans",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd list-plan-review-tools, return available plan review pipelines"
+      }
+    },
+    "task-2-1-3": {
+      "type": "subtask",
+      "title": "Implement review-list-tools - list available review pipelines",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd list-review-tools, return non-plan-focused review options"
+      }
+    },
+    "task-2-1-4": {
+      "type": "subtask",
+      "title": "Wire resilience/telemetry helpers for review tools",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Integrate foundry_mcp/core/resilience.py, core/concurrency.py, and core/observability.py to enforce timeouts, retries, and tracing for all review adapters"
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/pr_workflow.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [
+        "task-2-2-1",
+        "task-2-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/pr_workflow.py",
+        "task_category": "implementation",
+        "estimated_hours": 9,
+        "changes": "Create new module with AI-enhanced PR creation, layering prompt shielding, auditing, resilience hooks, feature flags, and canonical_tool/discovery metadata"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2-1": {
+      "type": "subtask",
+      "title": "Implement pr-create-with-spec - scaffold GitHub PRs with SDD context",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd create-pr, use LLM for AI-enhanced PR descriptions from spec metadata"
+      }
+    },
+    "task-2-2-2": {
+      "type": "subtask",
+      "title": "Apply resilience/telemetry helpers to PR workflow",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Enforce timeouts, retries, and tracing using core/resilience.py, core/concurrency.py, and core/observability.py for pr-create-with-spec"
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "tests/unit/test_review.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-2-1",
+          "task-2-2"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_review.py",
+        "task_category": "implementation",
+        "estimated_hours": 4,
+        "changes": "Create unit tests for review and PR workflow tools with mocked LLM plus data-only fallback pathways"
+      }
+    },
+    "phase-2-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "verify-2-1",
+        "verify-2-2",
+        "verify-2-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-2-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Unit tests pass for review module",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_review.py -v",
+        "expected": "All tests pass with mocked LLM responses"
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Data-only mode works for review tools",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_llm_review.py -v -k data_only",
+        "expected": "spec-review and pr-create-with-spec pass mocked provider matrix and data-only fallback assertions"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-3": {
+      "type": "verify",
+      "title": "Phase 2 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-2"
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "LLM-Powered Documentation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-3-files",
+        "phase-3-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-4"
+        ]
+      },
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "AI-enhanced documentation generation capabilities",
+        "risk_level": "high"
+      }
+    },
+    "phase-3-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-3-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/documentation.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-1-1",
+        "task-3-1-2",
+        "task-3-1-3",
+        "task-3-1-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/documentation.py",
+        "task_category": "implementation",
+        "estimated_hours": 13,
+        "changes": "Create new module with LLM-powered documentation tools including prompt shielding, content validation, discovery/capabilities exposure, and shared resilience/telemetry helpers"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-3-2",
+          "task-3-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1-1": {
+      "type": "subtask",
+      "title": "Implement spec-doc - generate human-facing documentation bundles",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd doc, generate markdown/HTML documentation from spec"
+      }
+    },
+    "task-3-1-2": {
+      "type": "subtask",
+      "title": "Implement spec-doc-llm - LLM-powered doc generation suite",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd llm-doc-gen, use LLM to enhance documentation with context and explanations"
+      }
+    },
+    "task-3-1-3": {
+      "type": "subtask",
+      "title": "Implement spec-review-fidelity - specialized documentation fidelity checks",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd fidelity-review, compare code implementation to spec documentation"
+      }
+    },
+    "task-3-1-4": {
+      "type": "subtask",
+      "title": "Add resilience/telemetry hooks to documentation tools",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure spec-doc, spec-doc-llm, and spec-review-fidelity wrap LLM calls with core/resilience, core/concurrency, and core/observability helpers"
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/server.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-3-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "changes": "Register documentation tools with FastMCP server, ensure canonical_tool registration, and refresh discovery plus capabilities manifest"
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "tests/unit/test_documentation.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-3-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_documentation.py",
+        "task_category": "implementation",
+        "estimated_hours": 4,
+        "changes": "Create unit tests for documentation tools with mocked LLM plus data-only fallback snapshots"
+      }
+    },
+    "phase-3-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "verify-3-1",
+        "verify-3-2",
+        "verify-3-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-3-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Unit tests pass for documentation module",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_documentation.py -v",
+        "expected": "All tests pass with mocked LLM responses"
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "Fidelity review produces actionable output",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_llm_docs.py -v -k fidelity",
+        "expected": "spec-doc, spec-doc-llm, and spec-review-fidelity emit actionable results with data-only fallback"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-3": {
+      "type": "verify",
+      "title": "Phase 3 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-3"
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Integration & Final Verification",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-4-files",
+        "phase-4-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "End-to-end integration testing and documentation",
+        "risk_level": "medium"
+      }
+    },
+    "phase-4-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "task-4-5"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-4-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "tests/integration/test_llm_tools.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_llm_tools.py",
+        "task_category": "implementation",
+        "estimated_hours": 4,
+        "changes": "Create integration tests for all LLM-powered tools, including data-only fallback paths and multi-provider matrix"
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/discovery.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/discovery.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Add discovery metadata for all LLM-powered tools including capability negotiation"
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "docs/llm-integration.md",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "docs/llm-integration.md",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Document LLM configuration, provider options, graceful degradation, and backlog cleanup steps"
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "tests/integration/test_llm_review.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_llm_review.py",
+        "task_category": "implementation",
+        "estimated_hours": 3,
+        "changes": "Add focused integration coverage for spec-review and pr-create-with-spec including mocked provider matrix and data-only fallback assertions"
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "tests/integration/test_llm_docs.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_llm_docs.py",
+        "task_category": "implementation",
+        "estimated_hours": 3,
+        "changes": "Add integration coverage for spec-doc, spec-doc-llm, and spec-review-fidelity with provider matrix and graceful degradation checks"
+      }
+    },
+    "phase-4-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "verify-4-1",
+        "verify-4-2",
+        "verify-4-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-4-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Integration tests pass",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_llm_tools.py tests/integration/test_llm_review.py tests/integration/test_llm_docs.py -v",
+        "expected": "All integration suites pass across provider matrix and fallback scenarios"
+      }
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "Full test suite passes",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest -v",
+        "expected": "All tests pass including new LLM tools"
+      }
+    },
+    "verify-4-3": {
+      "type": "verify",
+      "title": "Spec implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "spec",
+        "target": "spec-root"
+      }
+    }
+  }
+}

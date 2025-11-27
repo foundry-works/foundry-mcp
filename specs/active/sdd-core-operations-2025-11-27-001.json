@@ -1,0 +1,2182 @@
+{
+  "spec_id": "sdd-core-operations-2025-11-27-001",
+  "title": "SDD Core Operations - Non-LLM Tool Adapters",
+  "generated": "2025-11-27T12:00:00Z",
+  "last_updated": "2025-11-27T19:38:56.398561Z",
+  "metadata": {
+    "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
+    "objectives": [
+      "Full parity coverage for in-scope non-LLM SDD CLI operations",
+      "Consistent response envelope using success_response/error_response helpers",
+      "Proper input validation, observability, and resilience patterns",
+      "Integration with existing MCP best practices infrastructure"
+    ],
+    "complexity": "high",
+    "estimated_hours": 80,
+    "assumptions": [
+      "All operations use foundry_mcp.core.responses helpers (success_response/error_response)",
+      "Input validation uses foundry_mcp.core.security patterns",
+      "List operations use foundry_mcp.core.pagination helpers",
+      "Tool naming follows docs/codebase_standards/naming-conventions.md and registers via canonical_tool",
+      "Each tool suite updates src/foundry_mcp/core/discovery.py and mcp/capabilities_manifest.json to expose readiness and feature flags",
+      "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
+      "Specs, docs, and backlog files are updated together"
+    ],
+    "progress_percentage": 1,
+    "status": "active",
+    "current_phase": "phase-1"
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "SDD Core Operations - Non-LLM Tool Adapters",
+      "status": "in_progress",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6",
+        "phase-7"
+      ],
+      "total_tasks": 89,
+      "completed_tasks": 1,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Environment & Project Setup",
+      "status": "in_progress",
+      "parent": "spec-root",
+      "children": [
+        "phase-1-files",
+        "phase-1-verify"
+      ],
+      "total_tasks": 13,
+      "completed_tasks": 1,
+      "metadata": {
+        "purpose": "Bootstrap tooling for workspace initialization and validation",
+        "risk_level": "low"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "in_progress",
+      "parent": "phase-1",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 1,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-1-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/environment.py",
+      "status": "in_progress",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-1-1",
+        "task-1-1-2",
+        "task-1-1-3",
+        "task-1-1-4",
+        "task-1-1-5"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 1,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/environment.py",
+        "task_category": "implementation",
+        "estimated_hours": 5,
+        "changes": "Create new module with environment and setup tool adapters, wiring validation, observability, resilience, and feature-flag helpers"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-2",
+          "task-1-3",
+          "task-1-4"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1-1": {
+      "type": "subtask",
+      "title": "Implement sdd-verify-toolchain - sanity-check local CLI/toolchain availability",
+      "status": "completed",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "details": "Wrap sdd verify-tools CLI command, check for required binaries (git, python, etc.)",
+        "started_at": "2025-11-27T19:31:29.723332Z",
+        "status_note": "Starting implementation of sdd-verify-toolchain tool",
+        "completed_at": "2025-11-27T19:38:56.391509Z",
+        "needs_journaling": false,
+        "actual_hours": 0.124,
+        "journaled_at": "2025-11-27T19:38:56.396633Z"
+      }
+    },
+    "task-1-1-2": {
+      "type": "subtask",
+      "title": "Implement sdd-init-workspace - bootstrap working directory for SDD workflows",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd init-env CLI command, create specs/ directory structure"
+      }
+    },
+    "task-1-1-3": {
+      "type": "subtask",
+      "title": "Implement spec-detect-topology - auto-detect repository layout for specs/docs",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd detect-project CLI command, identify project structure"
+      }
+    },
+    "task-1-1-4": {
+      "type": "subtask",
+      "title": "Implement sdd-verify-environment - validate OS packages, runtimes, credentials",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd check-environment CLI command, validate runtime requirements"
+      }
+    },
+    "task-1-1-5": {
+      "type": "subtask",
+      "title": "Wire resilience/telemetry helpers for environment adapters",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure environment tools call core/resilience.py, core/concurrency.py, and core/observability.py for timeouts, retries, and tracing"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/server.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-2-1",
+        "task-1-2-2"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Register environment tools with FastMCP server, ensure canonical_tool registration, and coordinate discovery plus documentation/manifest updates"
+      }
+    },
+    "task-1-2-1": {
+      "type": "subtask",
+      "title": "Update mcp/capabilities_manifest for environment tools",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "mcp/capabilities_manifest.json",
+        "details": "Expose sdd-verify-toolchain/init-workspace/topology/verify-environment readiness and feature flags"
+      }
+    },
+    "task-1-2-2": {
+      "type": "subtask",
+      "title": "Update docs/backlog for environment tool parity",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
+        "details": "Document rename rollout and remove environment entries plus add callouts in docs/mcp_best_practices/README.md"
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/discovery.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/discovery.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "changes": "Add discovery metadata and capability/feature-flag descriptors for environment tools"
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "tests/unit/test_environment.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": [],
+        "blocks": [
+          "task-1-5"
+        ]
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_environment.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Create unit tests for environment tools"
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "tests/integration/test_environment_tools.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-1-4"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_environment_tools.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Add dedicated integration tests for environment tools covering response envelopes and feature flags"
+      }
+    },
+    "phase-1-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "verify-1-1",
+        "verify-1-2",
+        "verify-1-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-1-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Unit tests pass for environment module",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_environment.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Integration tests pass for environment tools",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_environment_tools.py -v",
+        "expected": "All tests pass with v2 envelope assertions"
+      }
+    },
+    "verify-1-3": {
+      "type": "verify",
+      "title": "Phase 1 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-1"
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Spec Discovery & Validation Helpers",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-2-files",
+        "phase-2-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-3"
+        ]
+      },
+      "total_tasks": 13,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Extend spec analysis and validation capabilities",
+        "risk_level": "low"
+      }
+    },
+    "phase-2-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-2-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/spec_helpers.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [
+        "task-2-1-1",
+        "task-2-1-2",
+        "task-2-1-3",
+        "task-2-1-4",
+        "task-2-1-5"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/spec_helpers.py",
+        "task_category": "implementation",
+        "estimated_hours": 7,
+        "changes": "Create new module with spec discovery and validation helper tools, enforcing validation/observability hooks and resilience helpers for long-running scans"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-2",
+          "task-2-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1-1": {
+      "type": "subtask",
+      "title": "Implement spec-find-related-files - locate files referenced by a spec node",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd find-related-files, scan spec for file_path metadata references"
+      }
+    },
+    "task-2-1-2": {
+      "type": "subtask",
+      "title": "Implement spec-find-patterns - search specs for structural/code patterns",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd find-pattern, regex/glob search across spec contents"
+      }
+    },
+    "task-2-1-3": {
+      "type": "subtask",
+      "title": "Implement spec-detect-cycles - detect cyclic task dependencies",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd find-circular-deps, analyze dependency graph for cycles"
+      }
+    },
+    "task-2-1-4": {
+      "type": "subtask",
+      "title": "Implement spec-validate-paths - ensure file references exist on disk",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd validate-paths, check all file_path references resolve"
+      }
+    },
+    "task-2-1-5": {
+      "type": "subtask",
+      "title": "Apply resilience/telemetry helpers to spec helper scans",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Use core/resilience.py timeouts, core/concurrency.py pools, and core/observability.py tracing for long-running pattern detection"
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/server.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [
+        "task-2-2-1",
+        "task-2-2-2"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "task-2-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Register spec helper tools with FastMCP server, ensure canonical_tool registration, and coordinate discovery/manifest/backlog updates"
+      }
+    },
+    "task-2-2-1": {
+      "type": "subtask",
+      "title": "Add spec helper entries to mcp/capabilities_manifest",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "mcp/capabilities_manifest.json",
+        "details": "Expose spec-find-related-files/find-patterns/detect-cycles/validate-paths with feature flags"
+      }
+    },
+    "task-2-2-2": {
+      "type": "subtask",
+      "title": "Update docs/backlog to reflect spec helper coverage",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
+        "details": "Remove helper operations from backlog and call out best-practice impact in docs/mcp_best_practices/README.md"
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "tests/unit/test_spec_helpers.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-2-1"
+        ],
+        "depends": [],
+        "blocks": [
+          "task-2-4"
+        ]
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_spec_helpers.py",
+        "task_category": "implementation",
+        "estimated_hours": 3,
+        "changes": "Create unit tests for spec helper tools"
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "tests/integration/test_spec_helpers.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-2-3"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_spec_helpers.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Add integration tests for spec helper tools covering pagination and cycle detection"
+      }
+    },
+    "phase-2-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "verify-2-1",
+        "verify-2-2",
+        "verify-2-3",
+        "verify-2-4"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-2-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Unit tests pass for spec helpers module",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_spec_helpers.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Cycle detection works correctly",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "spec-detect-cycles identifies circular dependencies in test fixtures",
+        "command": ""
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-3": {
+      "type": "verify",
+      "title": "Phase 2 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-2"
+      }
+    },
+    "verify-2-4": {
+      "type": "verify",
+      "title": "Integration tests pass for spec helper tools",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_spec_helpers.py -v",
+        "expected": "Integration coverage passes including pagination/cycle detection guards"
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Authoring & Metadata - Core CRUD",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-3-files",
+        "phase-3-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-4"
+        ]
+      },
+      "total_tasks": 17,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Basic spec and task creation/modification operations",
+        "risk_level": "medium"
+      }
+    },
+    "phase-3-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4"
+      ],
+      "total_tasks": 13,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-3-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/authoring.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-1-1",
+        "task-3-1-2",
+        "task-3-1-3",
+        "task-3-1-4",
+        "task-3-1-5",
+        "task-3-1-6",
+        "task-3-1-7",
+        "task-3-1-8",
+        "task-3-1-9"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/authoring.py",
+        "task_category": "implementation",
+        "estimated_hours": 11,
+        "changes": "Create new module with spec authoring and metadata CRUD tools plus canonical feature-flag hooks, validation, and resilience safeguards"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-3-2",
+          "task-3-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1-1": {
+      "type": "subtask",
+      "title": "Implement spec-create - scaffold a brand-new spec from scratch",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd create, generate new spec with default hierarchy structure"
+      }
+    },
+    "task-3-1-2": {
+      "type": "subtask",
+      "title": "Implement spec-template - emit opinionated templates/snippets for spec sections",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd template, provide phase/task/subtask templates"
+      }
+    },
+    "task-3-1-3": {
+      "type": "subtask",
+      "title": "Implement task-add - add new task to spec",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd add-task, insert task node into hierarchy"
+      }
+    },
+    "task-3-1-4": {
+      "type": "subtask",
+      "title": "Implement task-remove - remove task from spec",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd remove-task, delete task node and update hierarchy"
+      }
+    },
+    "task-3-1-5": {
+      "type": "subtask",
+      "title": "Implement assumption-add - add assumption to spec",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd add-assumption, append to assumptions array"
+      }
+    },
+    "task-3-1-6": {
+      "type": "subtask",
+      "title": "Implement assumption-list - list assumptions in spec",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd list-assumptions, return assumptions with pagination"
+      }
+    },
+    "task-3-1-7": {
+      "type": "subtask",
+      "title": "Implement revision-add - append revision history entry",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd add-revision, add to revision_history array"
+      }
+    },
+    "task-3-1-8": {
+      "type": "subtask",
+      "title": "Implement spec-update-frontmatter - mutate top-level metadata blocks",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd update-frontmatter, update spec metadata fields"
+      }
+    },
+    "task-3-1-9": {
+      "type": "subtask",
+      "title": "Apply resilience/telemetry helpers to authoring tools",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure authoring CRUD operations leverage core/resilience, core/concurrency, and core/observability for file mutations"
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/server.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-2-1",
+        "task-3-2-2"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "task-3-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Register authoring tools with FastMCP server, wire canonical_tool registration, and coordinate discovery/manifest/backlog updates"
+      }
+    },
+    "task-3-2-1": {
+      "type": "subtask",
+      "title": "Add authoring tools to mcp/capabilities_manifest",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "mcp/capabilities_manifest.json",
+        "details": "Expose spec-create/task-add/assumption CRUD/revision updates with feature flags"
+      }
+    },
+    "task-3-2-2": {
+      "type": "subtask",
+      "title": "Update docs/backlog for authoring coverage",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
+        "details": "Remove authoring operations from backlog and summarize changes in docs/mcp_best_practices/README.md"
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "tests/unit/test_authoring.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-3-1"
+        ],
+        "depends": [],
+        "blocks": [
+          "task-3-4"
+        ]
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_authoring.py",
+        "task_category": "implementation",
+        "estimated_hours": 4,
+        "changes": "Create unit tests for authoring tools"
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "tests/integration/test_authoring_tools.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-3-3"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_authoring_tools.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Add integration tests for authoring CRUD tools covering hierarchy integrity and envelopes"
+      }
+    },
+    "phase-3-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "verify-3-1",
+        "verify-3-2",
+        "verify-3-3",
+        "verify-3-4"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-3-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Unit tests pass for authoring module",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_authoring.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "CRUD operations maintain hierarchy integrity",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "task-add/task-remove update parent-child relationships correctly",
+        "command": ""
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-3": {
+      "type": "verify",
+      "title": "Phase 3 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-3"
+      }
+    },
+    "verify-3-4": {
+      "type": "verify",
+      "title": "Integration tests pass for authoring tools",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_authoring_tools.py -v",
+        "expected": "Authoring CRUD scenarios pass envelope and hierarchy assertions"
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Authoring & Metadata - Advanced",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-4-files",
+        "phase-4-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-5"
+        ]
+      },
+      "total_tasks": 20,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Analysis, bulk operations, and specialized mutations",
+        "risk_level": "medium"
+      }
+    },
+    "phase-4-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4"
+      ],
+      "total_tasks": 17,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-4-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/analysis.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [
+        "task-4-1-1",
+        "task-4-1-2",
+        "task-4-1-3",
+        "task-4-1-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/analysis.py",
+        "task_category": "implementation",
+        "estimated_hours": 7,
+        "changes": "Create new module with spec analysis tools, integrating observability metrics, timeout/resilience controls, and feature-flag guardrails"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-4-4"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1-1": {
+      "type": "subtask",
+      "title": "Implement spec-analyze - deep heuristics on existing spec",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd analyze, perform structural and quality analysis"
+      }
+    },
+    "task-4-1-2": {
+      "type": "subtask",
+      "title": "Implement spec-analyze-deps - inspect dependency graph health",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd analyze-deps, analyze dependency relationships"
+      }
+    },
+    "task-4-1-3": {
+      "type": "subtask",
+      "title": "Implement review-parse-feedback - transform review feedback into structured actions",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd parse-review, convert review markdown to modifications JSON"
+      }
+    },
+    "task-4-1-4": {
+      "type": "subtask",
+      "title": "Apply resilience/telemetry helpers to analysis tools",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Use core/resilience timeouts, retries, and observability metrics for long-running spec analysis"
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/mutations.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [
+        "task-4-2-1",
+        "task-4-2-2",
+        "task-4-2-3",
+        "task-4-2-4",
+        "task-4-2-5",
+        "task-4-2-6",
+        "task-4-2-7",
+        "task-4-2-8",
+        "task-4-2-9"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/mutations.py",
+        "task_category": "implementation",
+        "estimated_hours": 12,
+        "changes": "Create new module with bulk and specialized mutation tools, ensuring mutation safety with validation, journaling hooks, and resilience/feature-flag enforcement"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-4-4"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2-1": {
+      "type": "subtask",
+      "title": "Implement spec-apply-plan - apply bulk structural edits from diff/plan",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd apply-modifications, batch apply changes from JSON"
+      }
+    },
+    "task-4-2-2": {
+      "type": "subtask",
+      "title": "Implement verification-add - add verification to task/spec",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd add-verification, insert verify node"
+      }
+    },
+    "task-4-2-3": {
+      "type": "subtask",
+      "title": "Implement verification-execute - run verification steps",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd execute-verify, execute verification commands"
+      }
+    },
+    "task-4-2-4": {
+      "type": "subtask",
+      "title": "Implement verification-format-summary - format verification results",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd format-verification-summary, produce human-readable summary"
+      }
+    },
+    "task-4-2-5": {
+      "type": "subtask",
+      "title": "Implement task-update-estimate - update effort/time estimates",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd update-estimate, modify estimated_hours metadata"
+      }
+    },
+    "task-4-2-6": {
+      "type": "subtask",
+      "title": "Implement task-update-metadata - mutate per-task metadata payloads",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd update-task-metadata, update arbitrary metadata fields"
+      }
+    },
+    "task-4-2-7": {
+      "type": "subtask",
+      "title": "Implement spec-sync-metadata - push/pull spec metadata across stores",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd sync-metadata, synchronize metadata between locations"
+      }
+    },
+    "task-4-2-8": {
+      "type": "subtask",
+      "title": "Integrate resilience/telemetry for mutation flows",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure mutation tools wrap file writes with core/resilience, concurrency gates, and observability tracing"
+      }
+    },
+    "task-4-2-9": {
+      "type": "subtask",
+      "title": "Update docs/backlog for lifecycle mutations",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
+        "details": "Remove lifecycle mutation commands from backlog and document safeguards in docs/mcp_best_practices/README.md"
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/git_integration.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [
+        "task-4-3-1",
+        "task-4-3-2",
+        "task-4-3-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/git_integration.py",
+        "task_category": "implementation",
+        "estimated_hours": 5,
+        "changes": "Create new module with git integration tools, propagating security validation and observability for shell access"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-4-4"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3-1": {
+      "type": "subtask",
+      "title": "Implement task-create-commit - generate git commits for task-scoped changes",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd create-task-commit, create commit with task context"
+      }
+    },
+    "task-4-3-2": {
+      "type": "subtask",
+      "title": "Implement journal-bulk-add - add multiple journal entries in one shot",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd bulk-journal, batch add journal entries"
+      }
+    },
+    "task-4-3-3": {
+      "type": "subtask",
+      "title": "Add resilience/telemetry for git shell workflows",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap git operations with core/resilience timeouts, concurrency guardrails, and observability redaction"
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "tests/unit/test_mutations.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-4-1",
+          "task-4-2",
+          "task-4-3"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_mutations.py",
+        "task_category": "implementation",
+        "estimated_hours": 5,
+        "changes": "Create unit tests for analysis, mutation, and git integration tools"
+      }
+    },
+    "phase-4-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "verify-4-1",
+        "verify-4-2",
+        "verify-4-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-4-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Unit tests pass for advanced authoring modules",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_mutations.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "Bulk operations preserve spec integrity",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "spec-apply-plan maintains valid hierarchy after batch changes",
+        "command": ""
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-4-3": {
+      "type": "verify",
+      "title": "Phase 4 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-4"
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "Task Planning & Execution Utilities",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-5-files",
+        "phase-5-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-6"
+        ]
+      },
+      "total_tasks": 14,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Plan formatting, phase management, and state reconciliation",
+        "risk_level": "medium"
+      }
+    },
+    "phase-5-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "task-5-1",
+        "task-5-2",
+        "task-5-3"
+      ],
+      "total_tasks": 11,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-5-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/planning.py",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [
+        "task-5-1-1",
+        "task-5-1-2",
+        "task-5-1-3",
+        "task-5-1-4",
+        "task-5-1-5",
+        "task-5-1-6",
+        "task-5-1-7",
+        "task-5-1-8"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/planning.py",
+        "task_category": "implementation",
+        "estimated_hours": 11,
+        "changes": "Create new module with task planning and execution utilities, including pagination helpers, observability metrics, and resilience/time-budget enforcement"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-5-2",
+          "task-5-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-1-1": {
+      "type": "subtask",
+      "title": "Implement plan-format - pretty-print task plans for sharing",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd format-plan, generate readable plan output"
+      }
+    },
+    "task-5-1-2": {
+      "type": "subtask",
+      "title": "Implement phase-list - enumerate phases in a spec",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd list-phases, return phase nodes with pagination"
+      }
+    },
+    "task-5-1-3": {
+      "type": "subtask",
+      "title": "Implement phase-check-complete - verify completion readiness for a phase/spec",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd check-complete, check all tasks in phase are completed"
+      }
+    },
+    "task-5-1-4": {
+      "type": "subtask",
+      "title": "Implement phase-report-time - summarize timelines per phase",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd phase-time, aggregate estimated/actual hours"
+      }
+    },
+    "task-5-1-5": {
+      "type": "subtask",
+      "title": "Implement spec-reconcile-state - compare filesystem vs spec state for drift",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd reconcile-state, detect file changes not reflected in spec"
+      }
+    },
+    "task-5-1-6": {
+      "type": "subtask",
+      "title": "Implement plan_report_time - summarize time tracking metrics",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd time-report, generate time tracking summary"
+      }
+    },
+    "task-5-1-7": {
+      "type": "subtask",
+      "title": "Implement spec-audit - run higher-level audits beyond basic validation",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd audit-spec, comprehensive spec quality checks"
+      }
+    },
+    "task-5-1-8": {
+      "type": "subtask",
+      "title": "Apply resilience/telemetry to planning utilities",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap plan/phase reporting operations with core/resilience timeouts and observability metrics"
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/server.py",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [
+        "task-5-2-1",
+        "task-5-2-2"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "task-5-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Register planning tools with FastMCP server, ensure canonical_tool metadata, and coordinate discovery/manifest/backlog updates"
+      }
+    },
+    "task-5-2-1": {
+      "type": "subtask",
+      "title": "Insert planning tools into mcp/capabilities_manifest",
+      "status": "pending",
+      "parent": "task-5-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "mcp/capabilities_manifest.json",
+        "details": "Expose plan-format/phase-list/plan-report tools with readiness metadata"
+      }
+    },
+    "task-5-2-2": {
+      "type": "subtask",
+      "title": "Update docs/backlog for planning utilities",
+      "status": "pending",
+      "parent": "task-5-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
+        "details": "Remove planning-related backlog items and summarize behavior in docs/mcp_best_practices/README.md"
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "tests/unit/test_planning.py",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-5-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_planning.py",
+        "task_category": "implementation",
+        "estimated_hours": 4,
+        "changes": "Create unit tests for planning tools"
+      }
+    },
+    "phase-5-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "verify-5-1",
+        "verify-5-2",
+        "verify-5-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-5-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "Unit tests pass for planning module",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_planning.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-5-2": {
+      "type": "verify",
+      "title": "State reconciliation detects drift correctly",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "spec-reconcile-state identifies file changes not in spec",
+        "command": ""
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-5-3": {
+      "type": "verify",
+      "title": "Phase 5 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-5"
+      }
+    },
+    "phase-6": {
+      "type": "phase",
+      "title": "Validation, Reporting & Analytics",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-6-files",
+        "phase-6-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-5"
+        ],
+        "depends": [],
+        "blocks": [
+          "phase-7"
+        ]
+      },
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Human-readable validation/analysis reports",
+        "risk_level": "low"
+      }
+    },
+    "phase-6-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [
+        "task-6-1",
+        "task-6-2"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-6-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/reporting.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [
+        "task-6-1-1",
+        "task-6-1-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/reporting.py",
+        "task_category": "implementation",
+        "estimated_hours": 6,
+        "changes": "Create new module with spec-report - produce human-readable validation/analysis reports with observability hooks and pagination-aware envelopes"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-6-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-1-1": {
+      "type": "subtask",
+      "title": "Integrate resilience/telemetry for reporting",
+      "status": "pending",
+      "parent": "task-6-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure reporting tool enforces timeouts, retries, and tracing using core helpers"
+      }
+    },
+    "task-6-1-2": {
+      "type": "subtask",
+      "title": "Update docs/backlog for reporting coverage",
+      "status": "pending",
+      "parent": "task-6-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
+        "details": "Remove spec-report backlog entries and add documentation references in docs/mcp_best_practices/README.md"
+      }
+    },
+    "task-6-2": {
+      "type": "task",
+      "title": "tests/unit/test_reporting.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-6-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_reporting.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Create unit tests for reporting tools"
+      }
+    },
+    "phase-6-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [
+        "verify-6-1",
+        "verify-6-2",
+        "verify-6-3"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-6-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-6-1": {
+      "type": "verify",
+      "title": "Unit tests pass for reporting module",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_reporting.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-6-2": {
+      "type": "verify",
+      "title": "Reports are human-readable and comprehensive",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "spec-report generates clear, actionable validation reports",
+        "command": ""
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-3": {
+      "type": "verify",
+      "title": "Phase 6 implementation fidelity review",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-6"
+      }
+    },
+    "phase-7": {
+      "type": "phase",
+      "title": "Miscellaneous Tooling",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-7-files",
+        "phase-7-verify"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-6"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Cache management and schema export utilities",
+        "risk_level": "low"
+      }
+    },
+    "phase-7-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [
+        "task-7-1",
+        "task-7-2"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-7-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/utilities.py",
+      "status": "pending",
+      "parent": "phase-7-files",
+      "children": [
+        "task-7-1-1",
+        "task-7-1-2",
+        "task-7-1-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/utilities.py",
+        "task_category": "implementation",
+        "estimated_hours": 5,
+        "changes": "Create new module with miscellaneous utility tools and ensure cache/schema operations honor security, observability, and feature-flag requirements"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-7-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-1-1": {
+      "type": "subtask",
+      "title": "Implement sdd-cache-manage - manage SDD CLI cache entries",
+      "status": "pending",
+      "parent": "task-7-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd cache, list/clear/inspect cache entries, and document cache controls plus backlog removal in docs/ + half_baked_plans"
+      }
+    },
+    "task-7-1-2": {
+      "type": "subtask",
+      "title": "Implement spec-schema-export - emit JSON schemas for specs/tasks",
+      "status": "pending",
+      "parent": "task-7-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wrap sdd schema, output spec/task JSON schema, and update docs/codebase references plus backlog tracking"
+      }
+    },
+    "task-7-1-3": {
+      "type": "subtask",
+      "title": "Add resilience/telemetry to utility tooling",
+      "status": "pending",
+      "parent": "task-7-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure cache/schema operations enforce timeouts, retries, and structured logging via core helpers"
+      }
+    },
+    "task-7-2": {
+      "type": "task",
+      "title": "tests/unit/test_utilities.py",
+      "status": "pending",
+      "parent": "phase-7-files",
+      "children": [],
+      "dependencies": {
+        "blocked_by": [
+          "task-7-1"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_utilities.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "changes": "Create unit tests for utility tools"
+      }
+    },
+    "phase-7-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [
+        "verify-7-1",
+        "verify-7-2"
+      ],
+      "dependencies": {
+        "blocked_by": [
+          "phase-7-files"
+        ],
+        "depends": [],
+        "blocks": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-7-1": {
+      "type": "verify",
+      "title": "Unit tests pass for utilities module",
+      "status": "pending",
+      "parent": "phase-7-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_utilities.py -v",
+        "expected": "All tests pass"
+      }
+    },
+    "verify-7-2": {
+      "type": "verify",
+      "title": "Full test suite passes",
+      "status": "pending",
+      "parent": "phase-7-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest -v",
+        "expected": "All tests pass including new tool adapters"
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2025-11-27T19:38:56.396628Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement sdd-verify-toolchain - sanity-check local CLI/toolchain availability",
+      "author": "claude-code",
+      "content": "Implemented sdd-verify-toolchain MCP tool adapter in src/foundry_mcp/tools/environment.py. The tool wraps the CLI's verify-tools command, checking for required binaries (python, git) and optional tools (grep, cat, find, node, npm). Returns structured JSON response following the MCP response contract with success/error states, warnings for missing optional tools, and remediation guidance. Also registered the tool in server.py and exported in tools/__init__.py. Fixed pre-existing test failure with code-impact-analysis tool name. All tests pass.",
+      "metadata": {},
+      "task_id": "task-1-1-1"
+    }
+  ]
+}

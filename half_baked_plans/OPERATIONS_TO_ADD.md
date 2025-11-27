@@ -35,6 +35,8 @@ Use these references when evaluating what actually remains to be wrapped.
 
 ## In-Scope Operations
 
+**Naming note:** All entries below list the canonical MCP tool name first, per [docs/codebase_standards/naming-conventions.md](../docs/codebase_standards/naming-conventions.md). Legacy CLI aliases remain in parentheses solely for migration tracking and should be removed once downstream clients finish the rename rollout.
+
 ### Environment & Project Setup
 - `sdd-verify-toolchain` (was `verify-tools`) – sanity-check local CLI/toolchain availability.
 - `sdd-init-workspace` (was `init-env`) – bootstrap the working directory for SDD workflows.
@@ -143,6 +145,13 @@ FOUNDRY_MCP_AUTO_VALIDATE=true
 ---
 
 ## Implementation Notes
+
+### Naming Conventions & Canonical Registration
+Reference: `docs/codebase_standards/naming-conventions.md` (authoritative guidance) and `src/foundry_mcp/core/naming.py` (`canonical_tool` helper). Keep the backlog honest by ensuring every adapter you add from this list:
+
+1. **Registers with `canonical_tool`** so FastMCP exposes only the canonical identifier.
+2. **Documents the rename** across specs (`specs/completed/*.json`), discovery metadata (`mcp/capabilities_manifest.json`), tests, and this backlog in the same change.
+3. **Deletes temporary aliases** after downstream clients migrate, per the deprecation flow outlined in §13 Tool Discovery.
 
 ### Response Schema Standardization Guardrails
 Reference: `specs/completed/response-schema-standardization-2025-11-26-001.json` (authoritative contract) and `src/foundry_mcp/core/responses.py` (helper implementation). As of that rollout, all shipped tool modules—`tasks.py`, `queries.py`, `docs.py`, `testing.py`, `journal.py`, `validation.py`, `server.py`, `lifecycle.py`, and `rendering.py`—already import and return `success_response` / `error_response`. Keep the backlog honest by applying the same pattern to every new adapter listed above.
