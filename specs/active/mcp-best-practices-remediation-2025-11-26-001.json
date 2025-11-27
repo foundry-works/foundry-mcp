@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T12:32:14.377270Z",
+  "last_updated": "2025-11-27T12:33:27.181812Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 6,
+    "progress_percentage": 7,
     "current_phase": "phase-1"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -89,7 +89,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 15,
-      "completed_tasks": 7,
+      "completed_tasks": 8,
       "metadata": {
         "purpose": "Address critical security gaps that could expose the system to attacks or data leaks",
         "risk_level": "high",
@@ -118,7 +118,7 @@
         "task-1-4"
       ],
       "total_tasks": 11,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -232,7 +232,7 @@
     "task-1-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/observability.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [
         "task-1-2-1",
@@ -248,7 +248,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/core/observability.py",
         "task_category": "implementation",
@@ -276,13 +276,19 @@
     "task-1-2-2": {
       "type": "subtask",
       "title": "Create redact_sensitive_data() function",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Recursively redact sensitive values in dicts/strings before logging"
+        "details": "Recursively redact sensitive values in dicts/strings before logging",
+        "started_at": "2025-11-27T12:32:34.894600Z",
+        "status_note": "Implementing redact_sensitive_data() function",
+        "completed_at": "2025-11-27T12:33:27.165699Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T12:33:27.176433Z"
       }
     },
     "task-1-3": {
@@ -3257,6 +3263,15 @@
       "content": "Added SENSITIVE_PATTERNS constant to observability.py with 15 regex patterns for sensitive data redaction:\n\n1. API Keys & Tokens (4 patterns):\n   - api_key, secret_key, access_token assignments\n   - Bearer token headers\n\n2. Passwords (1 pattern):\n   - password/passwd/pwd assignments\n\n3. AWS Credentials (2 patterns):\n   - AKIA access key IDs\n   - AWS secret access keys\n\n4. Private Keys (1 pattern):\n   - PEM-format private key headers\n\n5. PII Data (4 patterns):\n   - Email addresses\n   - Social Security Numbers (US format)\n   - Credit card numbers\n   - Phone numbers\n\n6. Platform Tokens (2 patterns):\n   - GitHub tokens (gh[pousr]_*)\n   - GitLab tokens (glpat-*)\n\n7. Generic Secrets (1 pattern):\n   - Base64-encoded secrets in key contexts\n\nEach pattern is a tuple of (regex, label) for use with redact_sensitive_data().\n\nVerification: Tested pattern matching against sample data - correctly identified API keys, passwords, emails, SSNs, and bearer tokens.",
       "metadata": {},
       "task_id": "task-1-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T12:33:27.176417Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create redact_sensitive_data() function",
+      "author": "claude-code",
+      "content": "Implemented redact_sensitive_data() and redact_for_logging() functions in observability.py:\n\n1. redact_sensitive_data(data, *, patterns, redaction_format, max_depth) -> Any\n   - Recursively processes strings, dicts, lists, and tuples\n   - String redaction: applies regex patterns from SENSITIVE_PATTERNS\n   - Dict redaction: \n     - Checks key names against sensitive_keys set (password, token, api_key, etc.)\n     - Redacts entire values for known sensitive keys\n     - Recursively processes other values\n   - List/tuple redaction: processes each item recursively\n   - Max depth protection (default 10) prevents stack overflow\n   - Returns [MAX_DEPTH_EXCEEDED] marker if depth exceeded\n   - Preserves original data types (tuple stays tuple)\n\n2. redact_for_logging(data) -> str\n   - Convenience function combining redaction + JSON serialization\n   - Falls back to str() if JSON serialization fails\n   - Safe for direct use in log statements\n\nVerification tests passed:\n- Dict with sensitive keys (password, api_key, nested.token) correctly redacted\n- String patterns (api_key=..., email) correctly redacted\n- List with mixed content correctly processed\n- JSON serialization works correctly\n- Non-sensitive data preserved (user, count)\n\nThis completes the observability.py enhancements (2/2 subtasks).",
+      "metadata": {},
+      "task_id": "task-1-2-2"
     }
   ]
 }
