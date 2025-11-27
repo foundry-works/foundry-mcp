@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T20:56:09.905033Z",
-    "generated_at_commit": "10a23c43cb5351e54dadd36e8557a982a3b4a16c",
+    "generated_at": "2025-11-27T20:57:24.789812Z",
+    "generated_at_commit": "7176422d06d277428bbacd8a88a747cc6d1eec92",
     "languages": [
       "python"
     ],
@@ -11,25 +11,25 @@
   },
   "statistics": {
     "total_files": 42,
-    "total_lines": 19202,
+    "total_lines": 19377,
     "total_classes": 72,
     "total_functions": 207,
-    "avg_complexity": 7.05,
-    "max_complexity": 65,
+    "avg_complexity": 7.13,
+    "max_complexity": 73,
     "high_complexity_functions": [
+      "register_authoring_tools (73)",
       "register_journal_tools (65)",
       "register_task_tools (59)",
-      "register_authoring_tools (58)",
       "register_environment_tools (54)",
       "register_docs_tools (42)"
     ],
     "by_language": {
       "python": {
         "files": 42,
-        "lines": 19202,
+        "lines": 19377,
         "classes": 72,
         "functions": 207,
-        "avg_complexity": 7.05
+        "avg_complexity": 7.13
       }
     }
   },
@@ -1112,7 +1112,7 @@
         "foundry_mcp.core.resilience.MEDIUM_TIMEOUT"
       ],
       "exports": [],
-      "lines": 647
+      "lines": 822
     },
     {
       "name": "discovery",
@@ -5336,7 +5336,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 771,
           "call_type": "method_call"
         },
@@ -5354,7 +5354,7 @@
         },
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 785,
           "call_type": "method_call"
         },
@@ -5396,7 +5396,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -9093,6 +9093,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 649,
+          "call_type": "function_call"
+        },
+        {
           "name": "tool_list",
           "file": "src/foundry_mcp/tools/discovery.py",
           "line": 43,
@@ -9424,7 +9430,7 @@
         }
       ],
       "calls": [],
-      "call_count": 63
+      "call_count": 64
     },
     {
       "name": "redact_sensitive_data",
@@ -9715,6 +9721,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 719,
+          "call_type": "function_call"
+        },
+        {
           "name": "sdd_init_workspace",
           "file": "src/foundry_mcp/tools/environment.py",
           "line": 213,
@@ -9753,7 +9765,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 12
+      "call_count": 13
     },
     {
       "name": "mcp_tool",
@@ -12948,6 +12960,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 753,
+          "call_type": "function_call"
+        },
+        {
           "name": "tool_get_schema",
           "file": "src/foundry_mcp/tools/discovery.py",
           "line": 182,
@@ -13316,7 +13334,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 68
+      "call_count": 69
     },
     {
       "name": "error_response",
@@ -13618,6 +13636,66 @@
           "name": "task_add",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 642,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 691,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 699,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 762,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 769,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 777,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 784,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 792,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 800,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 808,
+          "call_type": "function_call"
+        },
+        {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 817,
           "call_type": "function_call"
         },
         {
@@ -14727,7 +14805,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 227
+      "call_count": 237
     },
     {
       "name": "validation_error",
@@ -21695,6 +21773,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 730,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -21793,7 +21877,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 7
+      "call_count": 8
     },
     {
       "name": "register_authoring_tools",
@@ -21814,7 +21898,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 58,
+      "complexity": 73,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -22159,6 +22243,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "task_remove",
+          "file": "src/foundry_mcp/tools/authoring.py",
+          "line": 730,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_find_related_files",
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 172,
@@ -22257,7 +22347,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 7
+      "call_count": 8
     },
     {
       "name": "register_spec_helper_tools",
