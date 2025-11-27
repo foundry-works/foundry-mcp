@@ -280,3 +280,129 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-detect-cycles",
+    )
+    def spec_detect_cycles(
+        spec_id: str,
+        include_metadata: bool = False,
+    ) -> dict:
+        """
+        Detect cyclic dependencies in a specification's task dependency graph.
+
+        Wraps the SDD CLI find-circular-deps command to analyze task dependencies
+        and identify any circular references that would prevent task completion.
+
+        WHEN TO USE:
+        - Validating a specification before starting implementation
+        - Debugging blocked tasks that can't be started
+        - Auditing dependency structure after spec modifications
+        - Ensuring task graph is acyclic before phase planning
+
+        Args:
+            spec_id: The specification ID to analyze
+            include_metadata: Include additional metadata about the analysis
+
+        Returns:
+            JSON object with cycle detection results:
+            - spec_id: The analyzed specification ID
+            - has_cycles: Boolean indicating if cycles were detected
+            - cycles: List of detected cycles (each cycle is a list of task IDs)
+            - cycle_count: Number of cycles detected
+            - affected_tasks: List of task IDs involved in cycles
+        """
+        try:
+            # Build command
+            cmd = ["sdd", "find-circular-deps", spec_id, "--json"]
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="spec-detect-cycles",
+                action="detect_cycles",
+                spec_id=spec_id,
+            )
+
+            # Execute the command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                cycles: List[List[str]] = output_data.get("cycles", [])
+                affected_tasks: List[str] = output_data.get("affected_tasks", [])
+
+                # If affected_tasks not provided, derive from cycles
+                if not affected_tasks and cycles:
+                    seen = set()
+                    for cycle in cycles:
+                        seen.update(cycle)
+                    affected_tasks = list(seen)
+
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "has_cycles": len(cycles) > 0,
+                    "cycles": cycles,
+                    "cycle_count": len(cycles),
+                    "affected_tasks": affected_tasks,
+                }
+
+                if include_metadata:
+                    data["metadata"] = {
+                        "command": " ".join(cmd),
+                        "exit_code": result.returncode,
+                    }
+
+                # Track metrics
+                _metrics.counter("spec_helpers.detect_cycles", labels={"status": "success"})
+
+                return asdict(success_response(data))
+            else:
+                # Command failed
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter("spec_helpers.detect_cycles", labels={"status": "error"})
+
+                return asdict(error_response(
+                    f"Failed to detect cycles: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that the spec_id exists and SDD CLI is available",
+                ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter("spec_helpers.detect_cycles", labels={"status": "timeout"})
+            return asdict(error_response(
+                "Command timed out after 30 seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try with a smaller specification or check system resources",
+            ))
+        except FileNotFoundError:
+            _metrics.counter("spec_helpers.detect_cycles", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in spec-detect-cycles")
+            _metrics.counter("spec_helpers.detect_cycles", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))

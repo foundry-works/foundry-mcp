@@ -412,6 +412,201 @@ class TestSpecFindPatterns:
             assert "TIMEOUT" in result["data"]["error_code"]
 
 
+class TestSpecDetectCycles:
+    """Tests for spec-detect-cycles tool."""
+
+    def test_successful_detect_cycles_no_cycles(self):
+        """Test successful detect-cycles with no cycles found."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({
+            "cycles": [],
+            "affected_tasks": [],
+        })
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-detect-cycles"]("feature-123")
+
+            assert result["success"] is True
+            assert result["data"]["spec_id"] == "feature-123"
+            assert result["data"]["has_cycles"] is False
+            assert result["data"]["cycles"] == []
+            assert result["data"]["cycle_count"] == 0
+            assert result["data"]["affected_tasks"] == []
+
+    def test_successful_detect_cycles_with_cycles(self):
+        """Test successful detect-cycles with cycles found."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({
+            "cycles": [
+                ["task-1", "task-2", "task-3", "task-1"],
+                ["task-4", "task-5", "task-4"],
+            ],
+            "affected_tasks": ["task-1", "task-2", "task-3", "task-4", "task-5"],
+        })
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-detect-cycles"]("feature-456")
+
+            assert result["success"] is True
+            assert result["data"]["has_cycles"] is True
+            assert len(result["data"]["cycles"]) == 2
+            assert result["data"]["cycle_count"] == 2
+            assert len(result["data"]["affected_tasks"]) == 5
+
+    def test_detect_cycles_derives_affected_tasks(self):
+        """Test detect-cycles derives affected_tasks when not provided."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({
+            "cycles": [["task-a", "task-b", "task-a"]],
+        })
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-detect-cycles"]("feature-789")
+
+            assert result["success"] is True
+            # Should derive affected_tasks from cycles
+            assert set(result["data"]["affected_tasks"]) == {"task-a", "task-b"}
+
+    def test_detect_cycles_with_metadata(self):
+        """Test detect-cycles with include_metadata=True."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"cycles": []})
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-detect-cycles"]("feature-123", include_metadata=True)
+
+            assert result["success"] is True
+            assert "metadata" in result["data"]
+            assert "command" in result["data"]["metadata"]
+            assert "exit_code" in result["data"]["metadata"]
+
+    def test_detect_cycles_command_failure(self):
+        """Test detect-cycles when command fails."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "Spec not found"
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-detect-cycles"]("nonexistent-spec")
+
+            assert result["success"] is False
+            assert "COMMAND_FAILED" in result["data"]["error_code"]
+            assert "Spec not found" in result["error"]
+
+    def test_detect_cycles_timeout(self):
+        """Test detect-cycles timeout handling."""
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("sdd", 30)):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-detect-cycles"]("large-spec")
+
+            assert result["success"] is False
+            assert "TIMEOUT" in result["data"]["error_code"]
+
+
 class TestResponseEnvelopeCompliance:
     """Tests to verify response envelope compliance."""
 
