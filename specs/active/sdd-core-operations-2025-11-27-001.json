@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:35:20.282976Z",
+  "last_updated": "2025-11-27T20:37:22.616209Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 23,
+    "progress_percentage": 24,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 21,
+      "completed_tasks": 22,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -472,7 +472,7 @@
         ]
       },
       "total_tasks": 13,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {
         "purpose": "Extend spec analysis and validation capabilities",
         "risk_level": "low"
@@ -481,7 +481,7 @@
     "phase-2-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2",
       "children": [
         "task-2-1",
@@ -490,8 +490,12 @@
         "task-2-4"
       ],
       "total_tasks": 9,
-      "completed_tasks": 8,
-      "metadata": {},
+      "completed_tasks": 9,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T20:37:22.606826Z",
+        "journaled_at": "2025-11-27T20:37:22.616178Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-2-verify"
@@ -715,7 +719,7 @@
     "task-2-4": {
       "type": "task",
       "title": "tests/integration/test_spec_helpers.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [],
       "dependencies": {
@@ -726,12 +730,18 @@
         "blocks": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/integration/test_spec_helpers.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "changes": "Add integration tests for spec helper tools covering pagination and cycle detection"
+        "changes": "Add integration tests for spec helper tools covering pagination and cycle detection",
+        "started_at": "2025-11-27T20:35:45.983652Z",
+        "status_note": "Creating integration tests for spec helper tools",
+        "completed_at": "2025-11-27T20:37:22.606688Z",
+        "needs_journaling": false,
+        "actual_hours": 0.027,
+        "journaled_at": "2025-11-27T20:37:22.611716Z"
       }
     },
     "phase-2-verify": {
@@ -2508,6 +2518,24 @@
       "content": "Unit tests for spec helper tools already exist at tests/unit/test_spec_helpers.py. Verified all 29 tests pass successfully. Tests cover: TestSpecFindRelatedFiles (7 tests), TestSpecFindPatterns (6 tests), TestSpecDetectCycles (6 tests), TestSpecValidatePaths (6 tests), TestResilienceFeatures (2 tests), TestResponseEnvelopeCompliance (2 tests). Tests verify success cases, empty results, command failures, timeouts, CLI not found scenarios, circuit breaker handling, and response-v2 envelope compliance.",
       "metadata": {},
       "task_id": "task-2-3"
+    },
+    {
+      "timestamp": "2025-11-27T20:37:22.611703Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/integration/test_spec_helpers.py",
+      "author": "claude-code",
+      "content": "Created integration tests at tests/integration/test_spec_helpers.py with 21 tests covering: TestSpecHelperResponseEnvelopes (4 tests - envelope compliance), TestSpecHelperFeatureFlagIntegration (4 tests - manifest and capabilities integration), TestCycleDetectionScenarios (4 tests - simple/complex/multiple cycles), TestPathValidationWorkflows (3 tests - valid/mixed/empty paths), TestPatternSearchWorkflows (2 tests - TypeScript and test files), TestRelatedFilesWorkflows (2 tests - source relationships), TestEndToEndWorkflow (2 tests - spec validation and file auditing). All tests pass successfully.",
+      "metadata": {},
+      "task_id": "task-2-4"
+    },
+    {
+      "timestamp": "2025-11-27T20:37:22.616173Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-2-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-2-files"
     }
   ]
 }
