@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Feature Flags Infrastructure (Phase 2):
+  - Documentation for feature flag patterns (`docs/mcp_best_practices/14-feature-flags.md`):
+    - Feature flag lifecycle (EXPERIMENTAL → BETA → STABLE → DEPRECATED)
+    - FlagState enum and FeatureFlag dataclass registry contract
+    - FeatureFlagService with percentage rollouts, allowlist/blocklist, dependencies
+    - Override tooling: `set_override()`, `clear_override()`, `flag_override()` context manager
+    - Gradual rollout patterns: percentage-based, allowlist expansion, canary deployment
+    - Integration examples with FastMCP tool decorators
+    - Testing patterns for both flag states
+    - Flag cleanup and audit utilities
+    - Anti-patterns guidance (permanent conditionals, nested checks, stale flags)
+  - Gating strategy guidance for controlled rollouts:
+    - Per-client override support for tenant/client-specific behavior
+    - Deterministic bucket assignment using consistent hashing
+    - Expiration dates for technical debt prevention
+    - Capabilities endpoint integration for client flag discovery
 - Security & Input Hygiene (Phase 1):
   - Rate limiting module (`foundry_mcp.core.rate_limit`):
     - `TokenBucketLimiter` - Token bucket algorithm with burst support

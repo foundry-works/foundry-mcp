@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T12:53:30.725527Z",
+  "last_updated": "2025-11-27T12:54:31.581854Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 15,
+    "progress_percentage": 16,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 16,
+      "completed_tasks": 17,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -532,7 +532,7 @@
         "depends": []
       },
       "total_tasks": 13,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Enable safe gradual rollouts and quick feature disables for all new functionality",
         "risk_level": "low",
@@ -2503,7 +2503,7 @@
     "phase-2-docs": {
       "type": "group",
       "title": "Documentation & Change Log",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2",
       "children": [
         "phase-2-docs-1",
@@ -2519,11 +2519,14 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "doc_references": [
           "docs/mcp_best_practices/14-feature-flags.md#L10-L330"
-        ]
+        ],
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T12:54:31.549243Z",
+        "journaled_at": "2025-11-27T12:54:31.581653Z"
       }
     },
     "phase-2-docs-1": {
@@ -2567,7 +2570,7 @@
     "phase-2-docs-2": {
       "type": "task",
       "title": "CHANGELOG.md",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2-docs",
       "children": [
         "phase-2-docs-2-1"
@@ -2578,7 +2581,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "CHANGELOG.md",
         "task_category": "implementation",
@@ -2588,12 +2591,19 @@
     "phase-2-docs-2-1": {
       "type": "subtask",
       "title": "Capture feature-flag infrastructure rollout notes and gating strategy.",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2-docs-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T12:53:58.485781Z",
+        "status_note": "Adding feature flag infrastructure to CHANGELOG",
+        "completed_at": "2025-11-27T12:54:31.549136Z",
+        "needs_journaling": false,
+        "actual_hours": 0.009,
+        "journaled_at": "2025-11-27T12:54:31.563175Z"
+      }
     },
     "phase-3-docs": {
       "type": "group",
@@ -3434,6 +3444,24 @@
       "content": "Reviewed docs/mcp_best_practices/14-feature-flags.md and confirmed the documentation already comprehensively covers the required content: (1) Feature Flag Lifecycle - detailed diagram showing EXPERIMENTAL\u2192BETA\u2192STABLE\u2192DEPRECATED progression with descriptions for each state (opt-in, default behavior, SLA levels), (2) Registry Contracts - FlagState enum and FeatureFlag dataclass with all required fields (name, description, state, default_enabled, created_at, expires_at, owner, allowed/blocked_clients, percentage_rollout, dependencies, metadata), plus FLAGS dict registry pattern, (3) Override Tooling - FeatureFlagService class with set_override() and clear_override() methods, plus flag_override() context manager for testing. No additional documentation needed - existing content exceeds requirements.",
       "metadata": {},
       "task_id": "phase-2-docs-1-1"
+    },
+    {
+      "timestamp": "2025-11-27T12:54:31.563155Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Capture feature-flag infrastructure rollout notes and gating strategy.",
+      "author": "claude-code",
+      "content": "Added feature flag infrastructure rollout notes to CHANGELOG.md under [Unreleased] section. Documented: feature flag lifecycle states, FlagState enum and FeatureFlag dataclass registry contract, FeatureFlagService capabilities (percentage rollouts, allowlist/blocklist, dependencies), override tooling methods, gradual rollout patterns (percentage-based, allowlist expansion, canary deployment), FastMCP integration examples, testing patterns, cleanup/audit utilities, anti-patterns guidance. Also documented gating strategy: per-client overrides, deterministic bucket assignment, expiration dates, capabilities endpoint integration.",
+      "metadata": {},
+      "task_id": "phase-2-docs-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T12:54:31.581607Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Documentation & Change Log",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-2-docs have been completed.",
+      "metadata": {},
+      "task_id": "phase-2-docs"
     }
   ]
 }
