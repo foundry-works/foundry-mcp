@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T14:07:53.494737Z",
+  "last_updated": "2025-11-27T14:09:18.949620Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 58,
+    "progress_percentage": 59,
     "current_phase": "phase-5"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 60,
+      "completed_tasks": 61,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -1469,7 +1469,7 @@
         "depends": []
       },
       "total_tasks": 15,
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "metadata": {
         "purpose": "Handle large datasets without overwhelming responses",
         "risk_level": "medium",
@@ -1490,7 +1490,7 @@
         "task-5-4"
       ],
       "total_tasks": 11,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1698,7 +1698,7 @@
     "task-5-4": {
       "type": "task",
       "title": "tests/unit/test_core/test_pagination.py (NEW)",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-5-files",
       "children": [
         "task-5-4-1",
@@ -1714,7 +1714,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/unit/test_core/test_pagination.py",
         "task_category": "implementation",
@@ -1724,12 +1724,19 @@
     "task-5-4-1": {
       "type": "subtask",
       "title": "Test cursor encoding/decoding",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-4",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T14:08:26.598897Z",
+        "status_note": "Starting cursor encoding/decoding tests",
+        "completed_at": "2025-11-27T14:09:18.938633Z",
+        "needs_journaling": false,
+        "actual_hours": 0.015,
+        "journaled_at": "2025-11-27T14:09:18.945982Z"
+      }
     },
     "task-5-4-2": {
       "type": "subtask",
@@ -4258,6 +4265,15 @@
       "content": "Added cursor-based pagination to doc, journal, and listing tools. Updated tools: foundry_get_journal, foundry_list_blocked, foundry_unjournaled_tasks (in journal.py), foundry_find_class, foundry_find_function (in docs.py). All tools now accept cursor and limit parameters, return pagination metadata (cursor, has_more, page_size) in meta.pagination, and use the shared pagination helpers. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-5-3-3"
+    },
+    {
+      "timestamp": "2025-11-27T14:09:18.945974Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Test cursor encoding/decoding",
+      "author": "claude-code",
+      "content": "Created tests/unit/test_core/test_pagination.py with 24 tests for cursor encoding/decoding. Tests cover: encode_cursor basic and complex data, decode_cursor basic and field preservation, decode error handling (empty, None, invalid base64, invalid JSON, non-dict), validate_cursor function, normalize_page_size function with edge cases, and pagination constants. All 24 tests pass.",
+      "metadata": {},
+      "task_id": "task-5-4-1"
     }
   ]
 }

@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T14:05:39.864478Z",
-    "generated_at_commit": "ab81f5510e97a6dd91ae240fe4590fcce5ac37fa",
+    "generated_at": "2025-11-27T14:08:19.637828Z",
+    "generated_at_commit": "33b9688e7a286d2806237c9a1bcede626cd03c10",
     "languages": [
       "python"
     ],
@@ -11,25 +11,25 @@
   },
   "statistics": {
     "total_files": 34,
-    "total_lines": 14228,
+    "total_lines": 14469,
     "total_classes": 55,
     "total_functions": 168,
-    "avg_complexity": 6.83,
-    "max_complexity": 59,
+    "avg_complexity": 7.07,
+    "max_complexity": 65,
     "high_complexity_functions": [
+      "register_journal_tools (65)",
       "register_task_tools (59)",
-      "register_journal_tools (41)",
+      "register_docs_tools (42)",
       "register_lifecycle_tools (36)",
-      "register_query_tools (36)",
-      "register_validation_tools (31)"
+      "register_query_tools (36)"
     ],
     "by_language": {
       "python": {
         "files": 34,
-        "lines": 14228,
+        "lines": 14469,
         "classes": 55,
         "functions": 168,
-        "avg_complexity": 6.83
+        "avg_complexity": 7.07
       }
     }
   },
@@ -936,11 +936,15 @@
         "foundry_mcp.config.ServerConfig",
         "foundry_mcp.core.observability.mcp_tool",
         "foundry_mcp.core.docs.DocsQuery",
+        "foundry_mcp.core.pagination.encode_cursor",
+        "foundry_mcp.core.pagination.decode_cursor",
+        "foundry_mcp.core.pagination.CursorError",
+        "foundry_mcp.core.pagination.normalize_page_size",
         "foundry_mcp.core.responses.success_response",
         "foundry_mcp.core.responses.error_response"
       ],
       "exports": [],
-      "lines": 358
+      "lines": 456
     },
     {
       "name": "journal",
@@ -958,6 +962,10 @@
         "mcp.server.fastmcp.FastMCP",
         "foundry_mcp.config.ServerConfig",
         "foundry_mcp.core.observability.mcp_tool",
+        "foundry_mcp.core.pagination.encode_cursor",
+        "foundry_mcp.core.pagination.decode_cursor",
+        "foundry_mcp.core.pagination.CursorError",
+        "foundry_mcp.core.pagination.normalize_page_size",
         "foundry_mcp.core.spec.find_specs_directory",
         "foundry_mcp.core.spec.find_spec_file",
         "foundry_mcp.core.spec.load_spec",
@@ -973,7 +981,7 @@
         "foundry_mcp.core.responses.error_response"
       ],
       "exports": [],
-      "lines": 407
+      "lines": 550
     },
     {
       "name": "lifecycle",
@@ -1879,7 +1887,7 @@
         {
           "instantiator": "_get_query",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 34,
+          "line": 40,
           "context": [
             "register_docs_tools",
             "_get_query"
@@ -3952,7 +3960,7 @@
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 62,
+          "line": 72,
           "call_type": "method_call"
         }
       ],
@@ -4071,7 +4079,7 @@
         {
           "name": "foundry_find_function",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 111,
+          "line": 167,
           "call_type": "method_call"
         }
       ],
@@ -4200,7 +4208,7 @@
         {
           "name": "foundry_trace_calls",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 161,
+          "line": 259,
           "call_type": "method_call"
         }
       ],
@@ -4299,7 +4307,7 @@
         {
           "name": "foundry_impact_analysis",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 213,
+          "line": 311,
           "call_type": "method_call"
         }
       ],
@@ -4640,19 +4648,19 @@
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 88,
+          "line": 94,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 225,
+          "line": 276,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 295,
+          "line": 346,
           "call_type": "function_call"
         }
       ],
@@ -4734,7 +4742,7 @@
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 150,
+          "line": 171,
           "call_type": "function_call"
         }
       ],
@@ -4897,7 +4905,7 @@
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 221,
+          "line": 272,
           "call_type": "function_call"
         }
       ],
@@ -4973,7 +4981,7 @@
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 291,
+          "line": 342,
           "call_type": "function_call"
         }
       ],
@@ -5087,7 +5095,7 @@
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 286,
+          "line": 337,
           "call_type": "function_call"
         }
       ],
@@ -5260,7 +5268,7 @@
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 352,
+          "line": 419,
           "call_type": "function_call"
         }
       ],
@@ -5459,7 +5467,7 @@
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 393,
+          "line": 506,
           "call_type": "function_call"
         }
       ],
@@ -5572,7 +5580,7 @@
         },
         {
           "name": "write",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 535,
           "call_type": "method_call"
         },
@@ -6812,79 +6820,79 @@
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 37,
+          "line": 43,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_function",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 86,
+          "line": 138,
           "call_type": "function_call"
         },
         {
           "name": "foundry_trace_calls",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 135,
+          "line": 233,
           "call_type": "function_call"
         },
         {
           "name": "foundry_impact_analysis",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 186,
+          "line": 284,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callers",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 235,
+          "line": 333,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callees",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 279,
+          "line": 377,
           "call_type": "function_call"
         },
         {
           "name": "foundry_docs_stats",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 323,
+          "line": 421,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 45,
+          "line": 51,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 116,
+          "line": 122,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 178,
+          "line": 229,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 251,
+          "line": 302,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 324,
+          "line": 375,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 365,
+          "line": 462,
           "call_type": "function_call"
         },
         {
@@ -7118,6 +7126,36 @@
       "is_public": true,
       "callers": [
         {
+          "name": "foundry_find_class",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 110,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_find_function",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 205,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_journal",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 199,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_blocked",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 442,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_unjournaled_tasks",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 529,
+          "call_type": "function_call"
+        },
+        {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
           "line": 252,
@@ -7156,7 +7194,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 2
+      "call_count": 7
     },
     {
       "name": "decode_cursor",
@@ -7182,6 +7220,36 @@
           "name": "validate_cursor",
           "file": "src/foundry_mcp/core/pagination.py",
           "line": 175,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_find_class",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 84,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_find_function",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 179,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_journal",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 165,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_blocked",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 414,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_unjournaled_tasks",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 501,
           "call_type": "function_call"
         },
         {
@@ -7235,7 +7303,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 3
+      "call_count": 8
     },
     {
       "name": "validate_cursor",
@@ -7352,6 +7420,36 @@
       "is_public": true,
       "callers": [
         {
+          "name": "foundry_find_class",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 78,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_find_function",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 173,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_journal",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 159,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_blocked",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 408,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_unjournaled_tasks",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 495,
+          "call_type": "function_call"
+        },
+        {
           "name": "foundry_list_specs",
           "file": "src/foundry_mcp/tools/queries.py",
           "line": 204,
@@ -7378,7 +7476,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 2
+      "call_count": 7
     },
     {
       "name": "recalculate_progress",
@@ -10086,79 +10184,79 @@
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 67,
+          "line": 112,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_function",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 116,
+          "line": 207,
           "call_type": "function_call"
         },
         {
           "name": "foundry_trace_calls",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 166,
+          "line": 264,
           "call_type": "function_call"
         },
         {
           "name": "foundry_impact_analysis",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 217,
+          "line": 315,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callers",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 260,
+          "line": 358,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callees",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 304,
+          "line": 402,
           "call_type": "function_call"
         },
         {
           "name": "foundry_docs_stats",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 348,
+          "line": 446,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 101,
+          "line": 107,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 157,
+          "line": 201,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 238,
+          "line": 289,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 308,
+          "line": 359,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 354,
+          "line": 444,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 395,
+          "line": 531,
           "call_type": "function_call"
         },
         {
@@ -10525,283 +10623,313 @@
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 60,
+          "line": 70,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 65,
+          "line": 75,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_class",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 83,
+          "line": 87,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_find_class",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 135,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_function",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 109,
+          "line": 165,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_function",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 114,
+          "line": 170,
           "call_type": "function_call"
         },
         {
           "name": "foundry_find_function",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 132,
+          "line": 182,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_find_function",
+          "file": "src/foundry_mcp/tools/docs.py",
+          "line": 230,
           "call_type": "function_call"
         },
         {
           "name": "foundry_trace_calls",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 159,
+          "line": 257,
           "call_type": "function_call"
         },
         {
           "name": "foundry_trace_calls",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 164,
+          "line": 262,
           "call_type": "function_call"
         },
         {
           "name": "foundry_trace_calls",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 183,
+          "line": 281,
           "call_type": "function_call"
         },
         {
           "name": "foundry_impact_analysis",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 211,
+          "line": 309,
           "call_type": "function_call"
         },
         {
           "name": "foundry_impact_analysis",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 228,
+          "line": 326,
           "call_type": "function_call"
         },
         {
           "name": "foundry_impact_analysis",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 232,
+          "line": 330,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callers",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 253,
+          "line": 351,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callers",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 258,
+          "line": 356,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callers",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 276,
+          "line": 374,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callees",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 297,
+          "line": 395,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callees",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 302,
+          "line": 400,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_callees",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 320,
+          "line": 418,
           "call_type": "function_call"
         },
         {
           "name": "foundry_docs_stats",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 342,
+          "line": 440,
           "call_type": "function_call"
         },
         {
           "name": "foundry_docs_stats",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 350,
+          "line": 448,
           "call_type": "function_call"
         },
         {
           "name": "foundry_docs_stats",
           "file": "src/foundry_mcp/tools/docs.py",
-          "line": 354,
+          "line": 452,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 72,
+          "line": 78,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 81,
+          "line": 87,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 85,
+          "line": 91,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 99,
+          "line": 105,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 113,
+          "line": 119,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 144,
+          "line": 152,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 148,
+          "line": 156,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 175,
+          "line": 168,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_get_journal",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 226,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 205,
+          "line": 256,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 214,
+          "line": 265,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 218,
+          "line": 269,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 222,
+          "line": 273,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 236,
+          "line": 287,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 248,
+          "line": 299,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 279,
+          "line": 330,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 283,
+          "line": 334,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 288,
+          "line": 339,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 292,
+          "line": 343,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 306,
+          "line": 357,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 321,
+          "line": 372,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 346,
+          "line": 401,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 350,
+          "line": 405,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 362,
+          "line": 417,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_list_blocked",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 459,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 387,
+          "line": 488,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 391,
+          "line": 492,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 403,
+          "line": 504,
+          "call_type": "function_call"
+        },
+        {
+          "name": "foundry_unjournaled_tasks",
+          "file": "src/foundry_mcp/tools/journal.py",
+          "line": 546,
           "call_type": "function_call"
         },
         {
@@ -11389,7 +11517,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 160
+      "call_count": 165
     },
     {
       "name": "validation_error",
@@ -12008,73 +12136,73 @@
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 76,
+          "line": 82,
           "call_type": "function_call"
         },
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 78,
+          "line": 84,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 139,
+          "line": 147,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 141,
+          "line": 149,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 209,
+          "line": 260,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 211,
+          "line": 262,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 274,
+          "line": 325,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 276,
+          "line": 327,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 341,
+          "line": 396,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 343,
+          "line": 398,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 382,
+          "line": 483,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 384,
+          "line": 485,
           "call_type": "function_call"
         },
         {
@@ -12734,37 +12862,37 @@
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 83,
+          "line": 89,
           "call_type": "function_call"
         },
         {
           "name": "foundry_get_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 146,
+          "line": 154,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 216,
+          "line": 267,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 281,
+          "line": 332,
           "call_type": "function_call"
         },
         {
           "name": "foundry_list_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 348,
+          "line": 403,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unjournaled_tasks",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 389,
+          "line": 490,
           "call_type": "function_call"
         },
         {
@@ -12929,19 +13057,19 @@
         {
           "name": "foundry_add_journal",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 98,
+          "line": 104,
           "call_type": "function_call"
         },
         {
           "name": "foundry_mark_blocked",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 235,
+          "line": 286,
           "call_type": "function_call"
         },
         {
           "name": "foundry_unblock",
           "file": "src/foundry_mcp/tools/journal.py",
-          "line": 305,
+          "line": 356,
           "call_type": "function_call"
         },
         {
@@ -18287,7 +18415,7 @@
     {
       "name": "register_docs_tools",
       "file": "src/foundry_mcp/tools/docs.py",
-      "line": 21,
+      "line": 27,
       "language": "python",
       "docstring": "Register documentation tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
       "parameters": [
@@ -18303,7 +18431,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 26,
+      "complexity": 42,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -18320,7 +18448,7 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 356,
+          "line": 454,
           "call_type": "method_call"
         }
       ],
@@ -18329,7 +18457,7 @@
     {
       "name": "register_journal_tools",
       "file": "src/foundry_mcp/tools/journal.py",
-      "line": 35,
+      "line": 41,
       "language": "python",
       "docstring": "Register journal tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
       "parameters": [
@@ -18345,7 +18473,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 41,
+      "complexity": 65,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -18362,7 +18490,7 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 405,
+          "line": 548,
           "call_type": "method_call"
         }
       ],
@@ -19004,6 +19132,10 @@
       "foundry_mcp.config.ServerConfig",
       "foundry_mcp.core.observability.mcp_tool",
       "foundry_mcp.core.docs.DocsQuery",
+      "foundry_mcp.core.pagination.encode_cursor",
+      "foundry_mcp.core.pagination.decode_cursor",
+      "foundry_mcp.core.pagination.CursorError",
+      "foundry_mcp.core.pagination.normalize_page_size",
       "foundry_mcp.core.responses.success_response",
       "foundry_mcp.core.responses.error_response"
     ],
@@ -19014,6 +19146,10 @@
       "mcp.server.fastmcp.FastMCP",
       "foundry_mcp.config.ServerConfig",
       "foundry_mcp.core.observability.mcp_tool",
+      "foundry_mcp.core.pagination.encode_cursor",
+      "foundry_mcp.core.pagination.decode_cursor",
+      "foundry_mcp.core.pagination.CursorError",
+      "foundry_mcp.core.pagination.normalize_page_size",
       "foundry_mcp.core.spec.find_specs_directory",
       "foundry_mcp.core.spec.find_spec_file",
       "foundry_mcp.core.spec.load_spec",
