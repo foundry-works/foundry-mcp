@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T20:24:52.308736Z",
+  "last_updated": "2025-11-27T20:26:50.063341Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 17,
+    "progress_percentage": 19,
     "status": "active",
     "current_phase": "phase-2"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 16,
+      "completed_tasks": 17,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -472,7 +472,7 @@
         ]
       },
       "total_tasks": 13,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Extend spec analysis and validation capabilities",
         "risk_level": "low"
@@ -490,7 +490,7 @@
         "task-2-4"
       ],
       "total_tasks": 9,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -513,7 +513,7 @@
         "task-2-1-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/spec_helpers.py",
         "task_category": "implementation",
@@ -586,13 +586,19 @@
     "task-2-1-4": {
       "type": "subtask",
       "title": "Implement spec-validate-paths - ensure file references exist on disk",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd validate-paths, check all file_path references resolve"
+        "details": "Wrap sdd validate-paths, check all file_path references resolve",
+        "started_at": "2025-11-27T20:25:33.362566Z",
+        "status_note": "Starting implementation of spec-validate-paths tool",
+        "completed_at": "2025-11-27T20:26:50.056348Z",
+        "needs_journaling": false,
+        "actual_hours": 0.021,
+        "journaled_at": "2025-11-27T20:26:50.061178Z"
       }
     },
     "task-2-1-5": {
@@ -2433,6 +2439,15 @@
       "content": "Implemented spec-detect-cycles MCP tool that wraps sdd find-circular-deps CLI command.\n\nAdded to src/foundry_mcp/tools/spec_helpers.py:\n- spec-detect-cycles tool with @canonical_tool decorator\n- Accepts spec_id (required) and include_metadata (optional)\n- Wraps subprocess call to sdd find-circular-deps --json\n- Returns response-v2 envelope with spec_id, has_cycles, cycles, cycle_count, affected_tasks\n- Includes logic to derive affected_tasks from cycles if not provided by CLI\n\nAdded 6 new tests to tests/unit/test_spec_helpers.py:\n- test_successful_detect_cycles_no_cycles\n- test_successful_detect_cycles_with_cycles\n- test_detect_cycles_derives_affected_tasks\n- test_detect_cycles_with_metadata\n- test_detect_cycles_command_failure\n- test_detect_cycles_timeout\n\nAll 21 tests passing.",
       "metadata": {},
       "task_id": "task-2-1-3"
+    },
+    {
+      "timestamp": "2025-11-27T20:26:50.061174Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-validate-paths - ensure file references exist on disk",
+      "author": "claude-code",
+      "content": "Implemented spec-validate-paths MCP tool that wraps sdd validate-paths CLI command.\n\nAdded to src/foundry_mcp/tools/spec_helpers.py:\n- spec-validate-paths tool with @canonical_tool decorator\n- Accepts paths (required list), base_directory (optional), include_metadata (optional)\n- Wraps subprocess call to sdd validate-paths --json\n- Returns response-v2 envelope with paths_checked, valid_paths, invalid_paths, all_valid, valid_count, invalid_count\n\nAdded 6 new tests to tests/unit/test_spec_helpers.py:\n- test_successful_validate_paths_all_valid\n- test_successful_validate_paths_some_invalid\n- test_validate_paths_with_base_directory\n- test_validate_paths_with_metadata\n- test_validate_paths_command_failure\n- test_validate_paths_timeout\n\nAll 27 tests passing.",
+      "metadata": {},
+      "task_id": "task-2-1-4"
     }
   ]
 }

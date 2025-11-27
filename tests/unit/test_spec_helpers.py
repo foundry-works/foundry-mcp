@@ -607,6 +607,197 @@ class TestSpecDetectCycles:
             assert "TIMEOUT" in result["data"]["error_code"]
 
 
+class TestSpecValidatePaths:
+    """Tests for spec-validate-paths tool."""
+
+    def test_successful_validate_paths_all_valid(self):
+        """Test successful validate-paths with all paths valid."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({
+            "valid_paths": ["src/main.py", "src/utils.py"],
+            "invalid_paths": [],
+        })
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-validate-paths"](["src/main.py", "src/utils.py"])
+
+            assert result["success"] is True
+            assert result["data"]["paths_checked"] == 2
+            assert result["data"]["all_valid"] is True
+            assert result["data"]["valid_count"] == 2
+            assert result["data"]["invalid_count"] == 0
+
+    def test_successful_validate_paths_some_invalid(self):
+        """Test successful validate-paths with some invalid paths."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({
+            "valid_paths": ["src/main.py"],
+            "invalid_paths": ["src/nonexistent.py"],
+        })
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-validate-paths"](["src/main.py", "src/nonexistent.py"])
+
+            assert result["success"] is True
+            assert result["data"]["all_valid"] is False
+            assert result["data"]["valid_count"] == 1
+            assert result["data"]["invalid_count"] == 1
+            assert "src/nonexistent.py" in result["data"]["invalid_paths"]
+
+    def test_validate_paths_with_base_directory(self):
+        """Test validate-paths with base_directory option."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"valid_paths": [], "invalid_paths": []})
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-validate-paths"](["main.py"], base_directory="/project/src")
+
+            # Verify the command included base_directory
+            call_args = mock_run.call_args
+            cmd = call_args[0][0]
+            assert "--base-directory" in cmd
+            assert "/project/src" in cmd
+            assert result["data"]["base_directory"] == "/project/src"
+
+    def test_validate_paths_with_metadata(self):
+        """Test validate-paths with include_metadata=True."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = json.dumps({"valid_paths": ["file.py"], "invalid_paths": []})
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-validate-paths"](["file.py"], include_metadata=True)
+
+            assert result["success"] is True
+            assert "metadata" in result["data"]
+            assert "command" in result["data"]["metadata"]
+            assert "exit_code" in result["data"]["metadata"]
+
+    def test_validate_paths_command_failure(self):
+        """Test validate-paths when command fails."""
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "Invalid argument"
+
+        with patch("subprocess.run", return_value=mock_result):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-validate-paths"](["bad/path"])
+
+            assert result["success"] is False
+            assert "COMMAND_FAILED" in result["data"]["error_code"]
+
+    def test_validate_paths_timeout(self):
+        """Test validate-paths timeout handling."""
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("sdd", 30)):
+            from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
+
+            mock_mcp = MagicMock()
+            mock_config = MagicMock()
+            captured_funcs = {}
+
+            def capture_decorator(mcp, canonical_name):
+                def decorator(func):
+                    captured_funcs[canonical_name] = func
+                    return func
+                return decorator
+
+            with patch("foundry_mcp.tools.spec_helpers.canonical_tool", capture_decorator):
+                with patch("foundry_mcp.tools.spec_helpers.audit_log"):
+                    register_spec_helper_tools(mock_mcp, mock_config)
+
+            result = captured_funcs["spec-validate-paths"](["path1", "path2", "path3"])
+
+            assert result["success"] is False
+            assert "TIMEOUT" in result["data"]["error_code"]
+
+
 class TestResponseEnvelopeCompliance:
     """Tests to verify response envelope compliance."""
 

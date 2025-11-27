@@ -406,3 +406,133 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-validate-paths",
+    )
+    def spec_validate_paths(
+        paths: List[str],
+        base_directory: Optional[str] = None,
+        include_metadata: bool = False,
+    ) -> dict:
+        """
+        Validate that file paths exist on disk.
+
+        Wraps the SDD CLI validate-paths command to check that file references
+        in specifications or code actually exist in the filesystem.
+
+        WHEN TO USE:
+        - Validating spec file references before implementation
+        - Auditing broken file references after refactoring
+        - Pre-flight checks before large-scale changes
+        - Ensuring spec metadata file_path entries are current
+
+        Args:
+            paths: List of file paths to validate
+            base_directory: Optional base directory for resolving relative paths
+            include_metadata: Include additional metadata about the validation
+
+        Returns:
+            JSON object with path validation results:
+            - paths_checked: Number of paths validated
+            - valid_paths: List of paths that exist
+            - invalid_paths: List of paths that do not exist
+            - all_valid: Boolean indicating if all paths are valid
+            - valid_count: Number of valid paths
+            - invalid_count: Number of invalid paths
+        """
+        try:
+            # Build command
+            cmd = ["sdd", "validate-paths", "--json"] + paths
+
+            if base_directory:
+                cmd.extend(["--base-directory", base_directory])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="spec-validate-paths",
+                action="validate_paths",
+                path_count=len(paths),
+                base_directory=base_directory,
+            )
+
+            # Execute the command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                valid_paths: List[str] = output_data.get("valid_paths", output_data.get("valid", []))
+                invalid_paths: List[str] = output_data.get("invalid_paths", output_data.get("invalid", []))
+
+                data: Dict[str, Any] = {
+                    "paths_checked": len(paths),
+                    "valid_paths": valid_paths,
+                    "invalid_paths": invalid_paths,
+                    "all_valid": len(invalid_paths) == 0,
+                    "valid_count": len(valid_paths),
+                    "invalid_count": len(invalid_paths),
+                }
+
+                if base_directory:
+                    data["base_directory"] = base_directory
+
+                if include_metadata:
+                    data["metadata"] = {
+                        "command": " ".join(cmd),
+                        "exit_code": result.returncode,
+                    }
+
+                # Track metrics
+                _metrics.counter("spec_helpers.validate_paths", labels={"status": "success"})
+
+                return asdict(success_response(data))
+            else:
+                # Command failed
+                error_msg = result.stderr.strip() if result.stderr else "Command failed"
+                _metrics.counter("spec_helpers.validate_paths", labels={"status": "error"})
+
+                return asdict(error_response(
+                    f"Failed to validate paths: {error_msg}",
+                    error_code="COMMAND_FAILED",
+                    error_type="internal",
+                    remediation="Check that paths are valid and SDD CLI is available",
+                ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter("spec_helpers.validate_paths", labels={"status": "timeout"})
+            return asdict(error_response(
+                "Command timed out after 30 seconds",
+                error_code="TIMEOUT",
+                error_type="unavailable",
+                remediation="Try with fewer paths or check system resources",
+            ))
+        except FileNotFoundError:
+            _metrics.counter("spec_helpers.validate_paths", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="internal",
+                remediation="Ensure SDD CLI is installed and available in PATH",
+            ))
+        except Exception as e:
+            logger.exception("Unexpected error in spec-validate-paths")
+            _metrics.counter("spec_helpers.validate_paths", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))

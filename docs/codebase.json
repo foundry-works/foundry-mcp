@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T20:23:06.199055Z",
-    "generated_at_commit": "33ed0d7ef796aa59499e85dd0093440cd5051cfa",
+    "generated_at": "2025-11-27T20:25:22.558263Z",
+    "generated_at_commit": "8cfd5a7bcb33b0ab290ff2506ebab3cb869bd1b0",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 41,
-    "total_lines": 18196,
+    "total_lines": 18322,
     "total_classes": 72,
     "total_functions": 204,
-    "avg_complexity": 6.73,
+    "avg_complexity": 6.77,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 41,
-        "lines": 18196,
+        "lines": 18322,
         "classes": 72,
         "functions": 204,
-        "avg_complexity": 6.73
+        "avg_complexity": 6.77
       }
     }
   },
@@ -1324,7 +1324,7 @@
         "foundry_mcp.core.observability.get_metrics"
       ],
       "exports": [],
-      "lines": 282
+      "lines": 408
     },
     {
       "name": "tasks",
@@ -5287,7 +5287,7 @@
         },
         {
           "name": "result",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 787,
           "call_type": "method_call"
         },
@@ -9218,6 +9218,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 284,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_prepare",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 48,
@@ -9321,7 +9327,7 @@
         }
       ],
       "calls": [],
-      "call_count": 58
+      "call_count": 59
     },
     {
       "name": "redact_sensitive_data",
@@ -9604,6 +9610,12 @@
           "file": "src/foundry_mcp/tools/spec_helpers.py",
           "line": 201,
           "call_type": "function_call"
+        },
+        {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 321,
+          "call_type": "function_call"
         }
       ],
       "calls": [
@@ -9614,7 +9626,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 7
+      "call_count": 8
     },
     {
       "name": "mcp_tool",
@@ -13007,6 +13019,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 371,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_next",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 121,
@@ -13147,7 +13165,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 63
+      "call_count": 64
     },
     {
       "name": "error_response",
@@ -13950,6 +13968,30 @@
           "call_type": "function_call"
         },
         {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 377,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 386,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 394,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_detect_cycles",
+          "file": "src/foundry_mcp/tools/spec_helpers.py",
+          "line": 403,
+          "call_type": "function_call"
+        },
+        {
           "name": "task_prepare",
           "file": "src/foundry_mcp/tools/tasks.py",
           "line": 76,
@@ -14324,7 +14366,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 188
+      "call_count": 192
     },
     {
       "name": "validation_error",
@@ -21530,7 +21572,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 16,
+      "complexity": 25,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
