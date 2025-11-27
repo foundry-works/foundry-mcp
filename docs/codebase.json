@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T14:52:48.097427Z",
-    "generated_at_commit": "eb4172eed29b263bc833f05ecb8a491db95547d1",
+    "generated_at": "2025-11-27T14:54:29.198684Z",
+    "generated_at_commit": "ff2e27d06661e313c7a884fbad3b4fc5714af161",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 37,
-    "total_lines": 15794,
-    "total_classes": 64,
-    "total_functions": 179,
-    "avg_complexity": 6.84,
+    "total_lines": 16080,
+    "total_classes": 66,
+    "total_functions": 183,
+    "avg_complexity": 6.8,
     "max_complexity": 65,
     "high_complexity_functions": [
       "register_journal_tools (65)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 37,
-        "lines": 15794,
-        "classes": 64,
-        "functions": 179,
-        "avg_complexity": 6.84
+        "lines": 16080,
+        "classes": 66,
+        "functions": 183,
+        "avg_complexity": 6.8
       }
     }
   },
@@ -189,12 +189,18 @@
         "ConcurrencyConfig",
         "ConcurrencyStats",
         "GatherResult",
-        "ConcurrencyLimiter"
+        "ConcurrencyLimiter",
+        "CancellationResult",
+        "CancellationToken"
       ],
       "functions": [
         "get_tool_limiter",
         "configure_tool_limiter",
-        "get_all_limiter_stats"
+        "get_all_limiter_stats",
+        "cancellable_scope",
+        "with_cancellation",
+        "run_with_cancellation_checkpoints",
+        "cancel_tasks_gracefully"
       ],
       "imports": [
         "asyncio",
@@ -217,7 +223,7 @@
         "typing.TypeVar"
       ],
       "exports": [],
-      "lines": 413
+      "lines": 699
     },
     {
       "name": "discovery",
@@ -1621,6 +1627,59 @@
       ],
       "imported_by": [],
       "instantiation_count": 2
+    },
+    {
+      "name": "CancellationResult",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 406,
+      "language": "python",
+      "docstring": "Result of a cancellable operation.\n\nAttributes:\n    completed: Whether the operation completed successfully\n    was_cancelled: Whether the operation was cancelled\n    partial_results: Any partial results available if cancelled\n    processed_count: Number of items processed before cancellation\n    total_count: Total items that were to be processed",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "run_with_cancellation_checkpoints",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 536,
+          "context": [
+            "run_with_cancellation_checkpoints"
+          ]
+        },
+        {
+          "instantiator": "run_with_cancellation_checkpoints",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 545,
+          "context": [
+            "run_with_cancellation_checkpoints"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 2
+    },
+    {
+      "name": "CancellationToken",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 618,
+      "language": "python",
+      "docstring": "Token for cooperative cancellation of async operations.\n\nAllows multiple operations to check for cancellation requests\nwithout relying solely on asyncio.CancelledError.\n\nExample:\n    >>> token = CancellationToken()\n    >>>\n    >>> async def worker():\n    ...     while not token.is_cancelled:\n    ...         await do_work()\n    ...         await token.check()  # Raises if cancelled\n    ...\n    >>> # Later, from another task:\n    >>> token.cancel()",
+      "bases": [],
+      "methods": [
+        "__init__",
+        "cancel",
+        "check",
+        "wait_for_cancel"
+      ],
+      "properties": [
+        "is_cancelled"
+      ],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
     },
     {
       "name": "ParameterType",
@@ -4322,6 +4381,256 @@
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
           "line": 397,
           "call_type": "method_call"
+        }
+      ]
+    },
+    {
+      "name": "cancellable_scope",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 425,
+      "language": "python",
+      "docstring": "Context manager for operations that may be cancelled.\n\nEnsures proper cleanup when a cancellation occurs.\n\nArgs:\n    cleanup_func: Optional async function to call on cancellation\n\nExample:\n    >>> async def cleanup():\n    ...     await close_connections()\n    ...\n    >>> async with cancellable_scope(cleanup_func=cleanup):\n    ...     await long_running_operation()\n\nYields:\n    None",
+      "parameters": [
+        {
+          "name": "cleanup_func",
+          "type": "Optional[Callable[[], Coroutine[Any, Any, None]]]",
+          "default": null
+        }
+      ],
+      "return_type": null,
+      "complexity": 4,
+      "decorators": [
+        "asynccontextmanager"
+      ],
+      "is_async": true,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [
+        {
+          "name": "wrapper",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 479,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "debug",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 448,
+          "call_type": "method_call"
+        },
+        {
+          "name": "cleanup_func",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
+          "line": 451,
+          "call_type": "function_call"
+        },
+        {
+          "name": "warning",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 453,
+          "call_type": "method_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "with_cancellation",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 457,
+      "language": "python",
+      "docstring": "Decorator for async functions that handles cancellation gracefully.\n\nEnsures cleanup is performed when the function is cancelled.\n\nArgs:\n    cleanup_func: Optional async function to call on cancellation\n\nExample:\n    >>> async def close_db():\n    ...     await db.close()\n    ...\n    >>> @with_cancellation(cleanup_func=close_db)\n    ... async def query_database():\n    ...     return await db.query(\"SELECT * FROM users\")",
+      "parameters": [
+        {
+          "name": "cleanup_func",
+          "type": "Optional[Callable[[], Coroutine[Any, Any, None]]]",
+          "default": null
+        }
+      ],
+      "return_type": null,
+      "complexity": 1,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
+    },
+    {
+      "name": "run_with_cancellation_checkpoints",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 487,
+      "language": "python",
+      "docstring": "Process items with periodic cancellation checkpoints.\n\nAllows long-running batch operations to be cancelled cleanly,\noptionally returning partial results.\n\nArgs:\n    items: List of items to process\n    process_func: Async function to process each item\n    checkpoint_interval: Check for cancellation every N items\n    return_partial: If True, return partial results on cancellation\n\nReturns:\n    CancellationResult with completion status and any partial results\n\nExample:\n    >>> async def process_item(item: str) -> dict:\n    ...     return {\"item\": item, \"processed\": True}\n    ...\n    >>> result = await run_with_cancellation_checkpoints(\n    ...     items=[\"a\", \"b\", \"c\"],\n    ...     process_func=process_item,\n    ...     checkpoint_interval=1,\n    ... )\n    >>> if result.was_cancelled:\n    ...     print(f\"Processed {result.processed_count}/{result.total_count}\")",
+      "parameters": [
+        {
+          "name": "items",
+          "type": "List[T]",
+          "default": null
+        },
+        {
+          "name": "process_func",
+          "type": "Callable[[T], Coroutine[Any, Any, Any]]",
+          "default": null
+        }
+      ],
+      "return_type": "CancellationResult",
+      "complexity": 5,
+      "decorators": [],
+      "is_async": true,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "len",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 521,
+          "call_type": "function_call"
+        },
+        {
+          "name": "enumerate",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 523,
+          "call_type": "function_call"
+        },
+        {
+          "name": "sleep",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
+          "line": 526,
+          "call_type": "method_call"
+        },
+        {
+          "name": "process_func",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/concurrency.py",
+          "line": 529,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 530,
+          "call_type": "method_call"
+        },
+        {
+          "name": "info",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 532,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 540,
+          "call_type": "function_call"
+        },
+        {
+          "name": "len",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 549,
+          "call_type": "function_call"
+        }
+      ]
+    },
+    {
+      "name": "cancel_tasks_gracefully",
+      "file": "src/foundry_mcp/core/concurrency.py",
+      "line": 554,
+      "language": "python",
+      "docstring": "Cancel multiple tasks gracefully with timeout.\n\nAttempts to cancel all tasks and waits for them to complete,\nwith a timeout to prevent hanging.\n\nArgs:\n    tasks: List of asyncio.Task objects to cancel\n    timeout: Maximum time to wait for tasks to finish cancelling\n\nReturns:\n    List of exceptions from cancelled tasks (None if clean cancellation)\n\nExample:\n    >>> tasks = [asyncio.create_task(op()) for op in operations]\n    >>> # Later, need to cancel all\n    >>> errors = await cancel_tasks_gracefully(tasks, timeout=10.0)",
+      "parameters": [
+        {
+          "name": "tasks",
+          "type": "List[asyncio.Task]",
+          "default": null
+        }
+      ],
+      "return_type": "List[Optional[Exception]]",
+      "complexity": 10,
+      "decorators": [],
+      "is_async": true,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "done",
+          "file": "unknown",
+          "line": 581,
+          "call_type": "method_call"
+        },
+        {
+          "name": "cancel",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
+          "line": 582,
+          "call_type": "method_call"
+        },
+        {
+          "name": "wait",
+          "file": "unknown",
+          "line": 587,
+          "call_type": "method_call"
+        },
+        {
+          "name": "done",
+          "file": "unknown",
+          "line": 595,
+          "call_type": "method_call"
+        },
+        {
+          "name": "result",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "line": 597,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 598,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 600,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 602,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 605,
+          "call_type": "method_call"
+        },
+        {
+          "name": "TimeoutError",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 605,
+          "call_type": "method_call"
+        },
+        {
+          "name": "cancel",
+          "file": "src/foundry_mcp/core/concurrency.py",
+          "line": 609,
+          "call_type": "method_call"
+        },
+        {
+          "name": "error",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 612,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 613,
+          "call_type": "function_call"
         }
       ]
     },

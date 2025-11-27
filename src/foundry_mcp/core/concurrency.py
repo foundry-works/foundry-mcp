@@ -50,6 +50,196 @@ start_time: ContextVar[float] = ContextVar("start_time", default=0.0)
 T = TypeVar("T")
 
 
+# -----------------------------------------------------------------------------
+# Request Context Management
+# -----------------------------------------------------------------------------
+
+
+@dataclass
+class RequestContext:
+    """Snapshot of request context for logging and tracking.
+
+    Attributes:
+        request_id: Unique identifier for this request
+        client_id: Client making the request
+        start_time: When the request started (monotonic time)
+        start_timestamp: When the request started (wall clock)
+    """
+
+    request_id: str
+    client_id: str
+    start_time: float
+    start_timestamp: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+
+    @property
+    def elapsed_seconds(self) -> float:
+        """Get elapsed time since request started."""
+        return time.monotonic() - self.start_time
+
+    @property
+    def elapsed_ms(self) -> float:
+        """Get elapsed time in milliseconds."""
+        return self.elapsed_seconds * 1000
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for logging/serialization."""
+        return {
+            "request_id": self.request_id,
+            "client_id": self.client_id,
+            "elapsed_ms": round(self.elapsed_ms, 2),
+            "start_timestamp": self.start_timestamp.isoformat(),
+        }
+
+
+@asynccontextmanager
+async def request_context(
+    req_id: Optional[str] = None,
+    cli_id: Optional[str] = None,
+):
+    """Set up request context for async operations.
+
+    Context automatically propagates through all nested async calls.
+
+    Args:
+        req_id: Request ID (auto-generated UUID if not provided)
+        cli_id: Client ID (defaults to "anonymous")
+
+    Yields:
+        RequestContext object with current context values
+
+    Example:
+        >>> async with request_context(cli_id="user123") as ctx:
+        ...     print(f"Request {ctx.request_id} started")
+        ...     await do_work()
+        ...     print(f"Completed in {ctx.elapsed_ms:.2f}ms")
+    """
+    # Generate request ID if not provided
+    actual_req_id = req_id or str(uuid.uuid4())
+    actual_cli_id = cli_id or "anonymous"
+    actual_start = time.monotonic()
+
+    # Set context variables
+    token1 = request_id.set(actual_req_id)
+    token2 = client_id.set(actual_cli_id)
+    token3 = start_time.set(actual_start)
+
+    ctx = RequestContext(
+        request_id=actual_req_id,
+        client_id=actual_cli_id,
+        start_time=actual_start,
+    )
+
+    try:
+        logger.debug(
+            f"Request context started",
+            extra={"request_id": actual_req_id, "client_id": actual_cli_id},
+        )
+        yield ctx
+    finally:
+        elapsed = ctx.elapsed_ms
+        logger.debug(
+            f"Request context ended",
+            extra={
+                "request_id": actual_req_id,
+                "client_id": actual_cli_id,
+                "elapsed_ms": round(elapsed, 2),
+            },
+        )
+        # Reset context variables
+        request_id.reset(token1)
+        client_id.reset(token2)
+        start_time.reset(token3)
+
+
+def get_current_context() -> RequestContext:
+    """Get the current request context.
+
+    Returns:
+        RequestContext with current context variable values
+
+    Raises:
+        RuntimeError: If called outside of a request context
+    """
+    req_id = request_id.get()
+    if not req_id:
+        raise RuntimeError(
+            "get_current_context() called outside of request_context"
+        )
+
+    return RequestContext(
+        request_id=req_id,
+        client_id=client_id.get(),
+        start_time=start_time.get(),
+    )
+
+
+def get_current_context_or_none() -> Optional[RequestContext]:
+    """Get the current request context, or None if not in a context.
+
+    Returns:
+        RequestContext if in a request context, None otherwise
+    """
+    req_id = request_id.get()
+    if not req_id:
+        return None
+
+    return RequestContext(
+        request_id=req_id,
+        client_id=client_id.get(),
+        start_time=start_time.get(),
+    )
+
+
+def get_request_id() -> str:
+    """Get the current request ID.
+
+    Returns:
+        Current request ID or empty string if not in context
+    """
+    return request_id.get()
+
+
+def get_client_id() -> str:
+    """Get the current client ID.
+
+    Returns:
+        Current client ID or "anonymous" if not in context
+    """
+    return client_id.get()
+
+
+def get_elapsed_time() -> float:
+    """Get elapsed time since request started.
+
+    Returns:
+        Elapsed time in seconds, or 0.0 if not in context
+    """
+    start = start_time.get()
+    if start == 0.0:
+        return 0.0
+    return time.monotonic() - start
+
+
+def log_with_context(
+    level: int,
+    message: str,
+    **extra: Any,
+) -> None:
+    """Log a message with request context automatically included.
+
+    Args:
+        level: Logging level (e.g., logging.INFO)
+        message: Log message
+        **extra: Additional fields to include in log record
+    """
+    ctx = get_current_context_or_none()
+    if ctx:
+        extra.update(ctx.to_dict())
+    logger.log(level, message, extra=extra)
+
+
 @dataclass
 class ConcurrencyConfig:
     """Configuration for a concurrency limiter.
@@ -692,7 +882,16 @@ __all__ = [
     "with_cancellation",
     "run_with_cancellation_checkpoints",
     "cancel_tasks_gracefully",
-    # Context variables
+    # Request context management
+    "RequestContext",
+    "request_context",
+    "get_current_context",
+    "get_current_context_or_none",
+    "get_request_id",
+    "get_client_id",
+    "get_elapsed_time",
+    "log_with_context",
+    # Context variables (raw access)
     "request_id",
     "client_id",
     "start_time",
