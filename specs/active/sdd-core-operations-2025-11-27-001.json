@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T21:37:12.435364Z",
+  "last_updated": "2025-11-27T21:38:04.148324Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 51,
+    "progress_percentage": 52,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 46,
+      "completed_tasks": 47,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1364,7 +1364,7 @@
         ]
       },
       "total_tasks": 20,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Analysis, bulk operations, and specialized mutations",
         "risk_level": "medium"
@@ -1382,7 +1382,7 @@
         "task-4-4"
       ],
       "total_tasks": 17,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1395,7 +1395,7 @@
     "task-4-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/analysis.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [
         "task-4-1-1",
@@ -1404,7 +1404,7 @@
         "task-4-1-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/analysis.py",
         "task_category": "implementation",
@@ -1476,13 +1476,19 @@
     "task-4-1-4": {
       "type": "subtask",
       "title": "Apply resilience/telemetry helpers to analysis tools",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Use core/resilience timeouts, retries, and observability metrics for long-running spec analysis"
+        "details": "Use core/resilience timeouts, retries, and observability metrics for long-running spec analysis",
+        "started_at": "2025-11-27T21:37:45.785731Z",
+        "status_note": "Verifying resilience/telemetry already applied",
+        "completed_at": "2025-11-27T21:38:04.140410Z",
+        "needs_journaling": false,
+        "actual_hours": 0.005,
+        "journaled_at": "2025-11-27T21:38:04.146094Z"
       }
     },
     "task-4-2": {
@@ -2959,6 +2965,15 @@
       "content": "Implemented review-parse-feedback tool in analysis.py. Wraps sdd parse-review CLI command with spec_id and review_path required params, optional output_path. Converts review markdown/JSON into structured suggestions file. Circuit breaker protection, metrics, audit logging. Handles NOT_FOUND, PARSE_ERROR error codes. Server now has 71 tools.",
       "metadata": {},
       "task_id": "task-4-1-3"
+    },
+    {
+      "timestamp": "2025-11-27T21:38:04.146087Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Apply resilience/telemetry helpers to analysis tools",
+      "author": "claude-code",
+      "content": "Verified resilience/telemetry already applied to all 3 analysis tools. 34 references found: CircuitBreaker (sdd_cli_analysis, 5-failure threshold, 30s recovery), CLI_TIMEOUT (MEDIUM_TIMEOUT), _metrics.counter/timer for all tools, audit_log for all operations. Each tool handles CIRCUIT_OPEN, TIMEOUT, CLI_NOT_FOUND errors. Completes task-4-1 (analysis.py implementation).",
+      "metadata": {},
+      "task_id": "task-4-1-4"
     }
   ]
 }

@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T21:34:42.148898Z",
-    "generated_at_commit": "aedcfbcdb4a859b61c93ce24d62fedfdb1561a7a",
+    "generated_at": "2025-11-27T21:37:37.507128Z",
+    "generated_at_commit": "dec82c8f7f2da8e6f71bdab83af6b0b1cfa90cce",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 43,
-    "total_lines": 20423,
+    "total_lines": 20571,
     "total_classes": 72,
     "total_functions": 209,
-    "avg_complexity": 7.49,
+    "avg_complexity": 7.56,
     "max_complexity": 135,
     "high_complexity_functions": [
       "register_authoring_tools (135)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 43,
-        "lines": 20423,
+        "lines": 20571,
         "classes": 72,
         "functions": 209,
-        "avg_complexity": 7.49
+        "avg_complexity": 7.56
       }
     }
   },
@@ -1112,7 +1112,7 @@
         "foundry_mcp.core.resilience.MEDIUM_TIMEOUT"
       ],
       "exports": [],
-      "lines": 379
+      "lines": 527
     },
     {
       "name": "authoring",
@@ -5384,13 +5384,13 @@
       "calls": [
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 771,
           "call_type": "method_call"
         },
         {
           "name": "cancel",
-          "file": "src/foundry_mcp/core/concurrency.py",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
           "line": 772,
           "call_type": "method_call"
         },
@@ -5402,7 +5402,7 @@
         },
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 785,
           "call_type": "method_call"
         },
@@ -5444,7 +5444,7 @@
         },
         {
           "name": "cancel",
-          "file": "src/foundry_mcp/core/concurrency.py",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -7544,7 +7544,7 @@
         },
         {
           "name": "read",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -7556,7 +7556,7 @@
         },
         {
           "name": "write",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 535,
           "call_type": "method_call"
         },
@@ -9129,9 +9129,15 @@
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
           "line": 243,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 391,
           "call_type": "function_call"
         },
         {
@@ -9514,7 +9520,7 @@
         }
       ],
       "calls": [],
-      "call_count": 70
+      "call_count": 71
     },
     {
       "name": "redact_sensitive_data",
@@ -9799,9 +9805,15 @@
           "call_type": "function_call"
         },
         {
+          "name": "review_parse_feedback",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 307,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_analyze_deps",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 298,
+          "line": 446,
           "call_type": "function_call"
         },
         {
@@ -9891,7 +9903,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 19
+      "call_count": 20
     },
     {
       "name": "mcp_tool",
@@ -13074,9 +13086,15 @@
           "call_type": "function_call"
         },
         {
+          "name": "review_parse_feedback",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 328,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_analyze_deps",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 318,
+          "line": 466,
           "call_type": "function_call"
         },
         {
@@ -13496,7 +13514,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 75
+      "call_count": 76
     },
     {
       "name": "error_response",
@@ -13669,39 +13687,81 @@
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 281,
+          "line": 282,
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 338,
+          "line": 290,
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 346,
+          "line": 348,
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 355,
+          "line": 356,
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 364,
+          "line": 365,
           "call_type": "function_call"
         },
         {
-          "name": "spec_analyze_deps",
+          "name": "review_parse_feedback",
           "file": "src/foundry_mcp/tools/analysis.py",
           "line": 374,
+          "call_type": "function_call"
+        },
+        {
+          "name": "review_parse_feedback",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 384,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 429,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 486,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 494,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 503,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 512,
+          "call_type": "function_call"
+        },
+        {
+          "name": "spec_analyze_deps",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 522,
           "call_type": "function_call"
         },
         {
@@ -15255,7 +15315,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 285
+      "call_count": 292
     },
     {
       "name": "validation_error",
@@ -22217,9 +22277,15 @@
           "call_type": "function_call"
         },
         {
+          "name": "review_parse_feedback",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 316,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_analyze_deps",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 306,
+          "line": 454,
           "call_type": "function_call"
         },
         {
@@ -22369,7 +22435,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 14
+      "call_count": 15
     },
     {
       "name": "register_analysis_tools",
@@ -22390,7 +22456,7 @@
         }
       ],
       "return_type": "None",
-      "complexity": 24,
+      "complexity": 38,
       "decorators": [],
       "is_async": false,
       "is_exported": false,
@@ -22443,9 +22509,15 @@
           "call_type": "function_call"
         },
         {
+          "name": "review_parse_feedback",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 316,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_analyze_deps",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 306,
+          "line": 454,
           "call_type": "function_call"
         },
         {
@@ -22595,7 +22667,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 14
+      "call_count": 15
     },
     {
       "name": "register_authoring_tools",
@@ -22949,9 +23021,15 @@
           "call_type": "function_call"
         },
         {
+          "name": "review_parse_feedback",
+          "file": "src/foundry_mcp/tools/analysis.py",
+          "line": 316,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_analyze_deps",
           "file": "src/foundry_mcp/tools/analysis.py",
-          "line": 306,
+          "line": 454,
           "call_type": "function_call"
         },
         {
@@ -23101,7 +23179,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 14
+      "call_count": 15
     },
     {
       "name": "register_spec_helper_tools",
