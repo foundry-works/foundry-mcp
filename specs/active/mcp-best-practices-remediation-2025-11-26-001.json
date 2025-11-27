@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T15:26:13.512294Z",
+  "last_updated": "2025-11-27T15:29:02.076843Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 95,
+    "progress_percentage": 96,
     "current_phase": "phase-8"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 97,
+      "completed_tasks": 98,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -2581,7 +2581,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Improve test coverage and add property-based testing",
         "risk_level": "low",
@@ -2601,7 +2601,7 @@
         "task-8-3"
       ],
       "total_tasks": 5,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2673,7 +2673,7 @@
     "task-8-2": {
       "type": "task",
       "title": "tests/contract/test_response_schema.py (NEW)",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-8-files",
       "children": [
         "task-8-2-1",
@@ -2685,7 +2685,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "tests/contract/test_response_schema.py",
         "task_category": "implementation",
@@ -2712,12 +2712,19 @@
     "task-8-2-2": {
       "type": "subtask",
       "title": "Add jsonschema validation tests for all tools",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-8-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T15:26:45.471507Z",
+        "status_note": "Adding jsonschema validation tests for all tools",
+        "completed_at": "2025-11-27T15:29:02.062596Z",
+        "needs_journaling": false,
+        "actual_hours": 0.038,
+        "journaled_at": "2025-11-27T15:29:02.072653Z"
+      }
     },
     "task-8-3": {
       "type": "task",
@@ -4971,6 +4978,15 @@
       "content": "Created response schema JSON for contract testing at tests/contract/response_schema.json. The JSON Schema (draft-07) includes: (1) Top-level envelope validation for success, data, error, meta fields; (2) Conditional validation ensuring error is null when success=true and non-empty string when success=false; (3) Metadata schema with required version field and optional request_id, warnings, pagination, rate_limit, telemetry; (4) Pagination definition with cursor, has_more, total_count, page_size, page fields; (5) Rate limit definition with limit, remaining, reset_at, period, retry_after fields; (6) Telemetry definition with duration_ms, downstream_calls, cache_hit fields; (7) Error data definition with error_code enum (all ErrorCode values), error_type enum (all ErrorType values), remediation, and details. Schema aligns with docs/codebase_standards/mcp_response_schema.md and src/foundry_mcp/core/responses.py.",
       "metadata": {},
       "task_id": "task-8-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T15:29:02.072638Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add jsonschema validation tests for all tools",
+      "author": "claude-code",
+      "content": "Created comprehensive jsonschema validation tests at tests/contract/test_response_schema.py with 42 tests covering: (1) TestSchemaValidity - validates schema is valid Draft-07 and has required definitions; (2) TestSuccessResponseContract - 9 tests for success responses with various metadata combinations; (3) TestErrorResponseContract - 6 tests for error responses with codes, types, remediation, details; (4) TestSpecializedErrorHelpers - 8 tests for validation_error, not_found_error, rate_limit_error, unauthorized_error, forbidden_error, conflict_error, internal_error, unavailable_error; (5) TestEnvelopeInvariants - 4 tests for success/error mutual exclusion, version requirement, data type; (6) TestSchemaRejection - 8 tests ensuring schema rejects invalid responses; (7) TestRealWorldScenarios - 5 tests modeling real-world response patterns. Also added test dependencies (pytest, pytest-asyncio, jsonschema, hypothesis) to pyproject.toml [project.optional-dependencies]. All 42 tests pass.",
+      "metadata": {},
+      "task_id": "task-8-2-2"
     }
   ]
 }

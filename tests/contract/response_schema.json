@@ -1,6 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://foundry-mcp.local/schemas/response-v2.json",
   "title": "MCP Tool Response Schema",
   "description": "JSON Schema for validating MCP tool responses (response-v2 contract)",
   "type": "object",

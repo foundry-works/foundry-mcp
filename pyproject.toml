@@ -27,6 +27,14 @@ dependencies = [
     "mcp>=1.0.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "jsonschema>=4.0.0",
+    "hypothesis>=6.0.0",
+]
+
 [project.scripts]
 foundry-mcp = "foundry_mcp.server:main"
 
