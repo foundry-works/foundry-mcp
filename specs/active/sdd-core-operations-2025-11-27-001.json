@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T21:07:11.841110Z",
+  "last_updated": "2025-11-27T21:08:30.069946Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 40,
+    "progress_percentage": 41,
     "status": "active",
     "current_phase": "phase-3"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 36,
+      "completed_tasks": 37,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -880,7 +880,7 @@
         ]
       },
       "total_tasks": 17,
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "metadata": {
         "purpose": "Basic spec and task creation/modification operations",
         "risk_level": "medium"
@@ -898,7 +898,7 @@
         "task-3-4"
       ],
       "total_tasks": 13,
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1106,7 +1106,7 @@
     "task-3-2": {
       "type": "task",
       "title": "src/foundry_mcp/tools/server.py",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-3-files",
       "children": [
         "task-3-2-1",
@@ -1120,7 +1120,7 @@
         "blocks": []
       },
       "total_tasks": 2,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/server.py",
         "task_category": "implementation",
@@ -1150,14 +1150,20 @@
     "task-3-2-2": {
       "type": "subtask",
       "title": "Update docs/backlog for authoring coverage",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "half_baked_plans/OPERATIONS_TO_ADD.md",
-        "details": "Remove authoring operations from backlog and summarize changes in docs/mcp_best_practices/README.md"
+        "details": "Remove authoring operations from backlog and summarize changes in docs/mcp_best_practices/README.md",
+        "started_at": "2025-11-27T21:07:32.769824Z",
+        "status_note": "Updating docs/backlog for authoring coverage",
+        "completed_at": "2025-11-27T21:08:30.062409Z",
+        "needs_journaling": false,
+        "actual_hours": 0.016,
+        "journaled_at": "2025-11-27T21:08:30.067714Z"
       }
     },
     "task-3-3": {
@@ -2771,6 +2777,15 @@
       "content": "Added authoring_tools section to mcp/capabilities_manifest.json with all 8 tools (spec-create, spec-template, task-add, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter). Each tool includes full parameter definitions with types, required flags, enums, and descriptions. Added authoring_tools feature flag (beta state, 100% rollout). Added authoring_tools to server_capabilities features with tool list. JSON validated. Committed as 1a0cdd7.",
       "metadata": {},
       "task_id": "task-3-2-1"
+    },
+    {
+      "timestamp": "2025-11-27T21:08:30.067706Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update docs/backlog for authoring coverage",
+      "author": "claude-code",
+      "content": "Updated half_baked_plans/OPERATIONS_TO_ADD.md to document Phase 3 authoring coverage. Added \"Recently Covered via SDD Core Operations (Phase 3)\" section documenting all 8 authoring tools (spec-create, spec-template, task-add, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter) with implementation details (authoring.py) and feature flag reference (authoring_tools). Marked covered operations in Authoring section with strikethrough and COVERED labels. Committed as e69b384.",
+      "metadata": {},
+      "task_id": "task-3-2-2"
     }
   ]
 }
