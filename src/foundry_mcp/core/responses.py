@@ -86,7 +86,7 @@ Key Principle:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
 
 class ErrorCode(str, Enum):
@@ -239,8 +239,8 @@ def error_response(
     message: str,
     *,
     data: Optional[Mapping[str, Any]] = None,
-    error_code: Optional[str] = None,
-    error_type: Optional[str] = None,
+    error_code: Optional[Union[ErrorCode, str]] = None,
+    error_type: Optional[Union[ErrorType, str]] = None,
     remediation: Optional[str] = None,
     details: Optional[Mapping[str, Any]] = None,
     request_id: Optional[str] = None,
@@ -253,14 +253,24 @@ def error_response(
     Args:
         message: Human-readable description of the failure.
         data: Optional mapping with additional machine-readable context.
-        error_code: Canonical error code (e.g., ``VALIDATION_ERROR``).
-        error_type: Error category (validation, authorization, internal, ...).
+        error_code: Canonical error code (use ``ErrorCode`` enum or string,
+            e.g., ``ErrorCode.VALIDATION_ERROR`` or ``"VALIDATION_ERROR"``).
+        error_type: Error category for routing (use ``ErrorType`` enum or string,
+            e.g., ``ErrorType.VALIDATION`` or ``"validation"``).
         remediation: User-facing guidance on how to fix the issue.
         details: Nested structure describing validation failures or metadata.
         request_id: Correlation identifier propagated through logs/traces.
         rate_limit: Rate limit state to help clients back off correctly.
         telemetry: Timing/performance metadata captured before failure.
         meta: Arbitrary extra metadata to merge into ``meta``.
+
+    Example:
+        >>> error_response(
+        ...     "Validation failed: spec_id is required",
+        ...     error_code=ErrorCode.MISSING_REQUIRED,
+        ...     error_type=ErrorType.VALIDATION,
+        ...     remediation="Provide a non-empty spec_id parameter",
+        ... )
     """
     payload: Dict[str, Any] = {}
     if data:

@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T13:21:18.451634Z",
+  "last_updated": "2025-11-27T13:22:32.406385Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 31,
+    "progress_percentage": 32,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 32,
+      "completed_tasks": 33,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -860,7 +860,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Make errors machine-readable and actionable for clients and LLMs",
         "risk_level": "low",
@@ -880,7 +880,7 @@
         "task-3-2"
       ],
       "total_tasks": 6,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -910,7 +910,7 @@
         "depends": []
       },
       "total_tasks": 4,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/core/responses.py",
         "task_category": "implementation",
@@ -956,12 +956,19 @@
     "task-3-1-3": {
       "type": "subtask",
       "title": "Add error_code, error_type, remediation to ErrorResponse",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
-      "metadata": {}
+      "completed_tasks": 1,
+      "metadata": {
+        "started_at": "2025-11-27T13:21:45.112222Z",
+        "status_note": "Adding error fields to error_response",
+        "completed_at": "2025-11-27T13:22:32.397550Z",
+        "needs_journaling": false,
+        "actual_hours": 0.013,
+        "journaled_at": "2025-11-27T13:22:32.403822Z"
+      }
     },
     "task-3-1-4": {
       "type": "subtask",
@@ -3745,6 +3752,15 @@
       "content": "Created ErrorType enum (str, Enum) in src/foundry_mcp/core/responses.py with error categories for routing: VALIDATION (400), AUTHENTICATION (401), AUTHORIZATION (403), NOT_FOUND (404), CONFLICT (409), RATE_LIMIT (429), FEATURE_FLAG (403), INTERNAL (500), UNAVAILABLE (503). Each member includes inline comment with HTTP analog and retry guidance.",
       "metadata": {},
       "task_id": "task-3-1-2"
+    },
+    {
+      "timestamp": "2025-11-27T13:22:32.403818Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add error_code, error_type, remediation to ErrorResponse",
+      "author": "claude-code",
+      "content": "Updated error_response() type hints to accept Union[ErrorCode, str] and Union[ErrorType, str] for backwards-compatible enum support. Updated docstring to document enum usage with examples. Enums serialize as strings due to str base class inheritance.",
+      "metadata": {},
+      "task_id": "task-3-1-3"
     }
   ]
 }

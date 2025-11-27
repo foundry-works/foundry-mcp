@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T13:20:49.671531Z",
-    "generated_at_commit": "fa9ea042588793efc07c8e8263289ea6fb986286",
+    "generated_at": "2025-11-27T13:21:39.761587Z",
+    "generated_at_commit": "b7d22e86ca47aa70fc32c4fb95762a6fe2b38dcc",
     "languages": [
       "python"
     ],
@@ -11,8 +11,8 @@
   },
   "statistics": {
     "total_files": 32,
-    "total_lines": 12993,
-    "total_classes": 48,
+    "total_lines": 13013,
+    "total_classes": 49,
     "total_functions": 149,
     "avg_complexity": 7.26,
     "max_complexity": 59,
@@ -26,8 +26,8 @@
     "by_language": {
       "python": {
         "files": 32,
-        "lines": 12993,
-        "classes": 48,
+        "lines": 13013,
+        "classes": 49,
         "functions": 149,
         "avg_complexity": 7.26
       }
@@ -479,6 +479,7 @@
       "docstring": "Standard response contracts for MCP tool operations.\nProvides consistent response structures across all foundry-mcp tools.\n\nResponse Schema Contract\n========================\n\nAll MCP tool responses follow a standard structure:\n\n    {\n        \"success\": bool,       # Required: operation success/failure\n        \"data\": {...},         # Required: primary payload (empty dict on error)\n        \"error\": str | null,   # Required: error message or null on success\n        \"meta\": {              # Required: response metadata\n            \"version\": \"response-v2\",\n            \"request_id\": \"req_abc123\"?,\n            \"warnings\": [\"...\"]?,\n            \"pagination\": { ... }?,\n            \"rate_limit\": { ... }?,\n            \"telemetry\": { ... }?\n        }\n    }\n\nMetadata Semantics\n------------------\n\nAttach operational context through `meta` so every tool shares an identical\nenvelope. The standard keys are:\n\n* `version` *(required)* \u2013 identifies the contract version (`response-v2`).\n* `request_id` *(should)* \u2013 correlation identifier propagated through logs.\n* `warnings` *(should)* \u2013 array of non-fatal issues for successful operations.\n* `pagination` *(may)* \u2013 cursor information (`cursor`, `has_more`, `total_count`).\n* `rate_limit` *(may)* \u2013 limit, remaining, reset timestamp, retry hints.\n* `telemetry` *(may)* \u2013 timing/performance metrics, downstream call counts, etc.\n\nMulti-Payload Tools\n-------------------\n\nTools returning multiple payloads should nest each value under a named key:\n\n    data = {\n        \"spec\": {...},          # First payload\n        \"tasks\": [...],         # Second payload\n    }\n\nThis ensures consumers can access each payload by name rather than relying\non position or implicit structure.\n\nEdge Cases & Partial Payloads\n-----------------------------\n\nEmpty Results (success=True):\n    When a query succeeds but finds no results, return success=True with\n    empty/partial data to distinguish from errors:\n\n    {\"success\": True, \"data\": {\"tasks\": [], \"count\": 0}, \"error\": None}\n\nNot Found (success=False):\n    When the requested resource doesn't exist, return success=False:\n\n    {\"success\": False, \"data\": {}, \"error\": \"Spec not found: my-spec\"}\n\nBlocked/Conditional States (success=True):\n    Dependency checks and similar queries return success=True with state info:\n\n    {\n        \"success\": True,\n        \"data\": {\n            \"task_id\": \"task-1-2\",\n            \"can_start\": False,\n            \"blocked_by\": [{\"id\": \"task-1-1\", \"status\": \"pending\"}]\n        },\n        \"error\": None,\n        \"meta\": {\n            \"version\": \"response-v2\",\n            \"warnings\": [\"Task currently blocked\"]\n        }\n    }\n\nKey Principle:\n    - `success=True` means the operation executed correctly (even if the result is empty).\n    - `success=False` means the operation failed to execute; include actionable error details.\n    - Keep business data inside `data` and operational context inside `meta`.",
       "classes": [
         "ErrorCode",
+        "ErrorType",
         "ToolResponse"
       ],
       "functions": [
@@ -497,7 +498,7 @@
         "typing.Sequence"
       ],
       "exports": [],
-      "lines": 265
+      "lines": 285
     },
     {
       "name": "security",
@@ -2549,9 +2550,26 @@
       "imported_by": []
     },
     {
+      "name": "ErrorType",
+      "file": "src/foundry_mcp/core/responses.py",
+      "line": 128,
+      "language": "python",
+      "docstring": "Error categories for routing and client-side handling.\n\nEach type corresponds to an HTTP status code analog and indicates\nwhether the operation should be retried.\n\nSee docs/codebase_standards/mcp_response_schema.md for the full mapping.",
+      "bases": [
+        "str",
+        "Enum"
+      ],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
       "name": "ToolResponse",
       "file": "src/foundry_mcp/core/responses.py",
-      "line": 129,
+      "line": 149,
       "language": "python",
       "docstring": "Standard response structure for MCP tool operations.\n\nAll tool handlers should return data that can be serialized to this format,\nensuring consistent API responses across the codebase.\n\nAttributes:\n    success: Whether the operation completed successfully\n    data: The primary payload (operation-specific structured data)\n    error: Error message if success is False, None otherwise\n    meta: Response metadata including version identifier",
       "bases": [],
@@ -2563,7 +2581,7 @@
         {
           "instantiator": "success_response",
           "file": "src/foundry_mcp/core/responses.py",
-          "line": 215,
+          "line": 235,
           "context": [
             "success_response"
           ]
@@ -2571,7 +2589,7 @@
         {
           "instantiator": "error_response",
           "file": "src/foundry_mcp/core/responses.py",
-          "line": 265,
+          "line": 285,
           "context": [
             "error_response"
           ]
@@ -5277,7 +5295,7 @@
         },
         {
           "name": "read",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -9040,7 +9058,7 @@
     {
       "name": "_build_meta",
       "file": "src/foundry_mcp/core/responses.py",
-      "line": 149,
+      "line": 169,
       "language": "python",
       "docstring": "Construct a metadata payload that always includes the response version.",
       "parameters": [],
@@ -9054,13 +9072,13 @@
         {
           "name": "success_response",
           "file": "src/foundry_mcp/core/responses.py",
-          "line": 206,
+          "line": 226,
           "call_type": "function_call"
         },
         {
           "name": "error_response",
           "file": "src/foundry_mcp/core/responses.py",
-          "line": 258,
+          "line": 278,
           "call_type": "function_call"
         }
       ],
@@ -9068,37 +9086,37 @@
         {
           "name": "list",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 164,
+          "line": 184,
           "call_type": "function_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 166,
+          "line": 186,
           "call_type": "function_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 168,
+          "line": 188,
           "call_type": "function_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 170,
+          "line": 190,
           "call_type": "function_call"
         },
         {
           "name": "update",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 172,
+          "line": 192,
           "call_type": "method_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 172,
+          "line": 192,
           "call_type": "function_call"
         }
       ],
@@ -9107,7 +9125,7 @@
     {
       "name": "success_response",
       "file": "src/foundry_mcp/core/responses.py",
-      "line": 177,
+      "line": 197,
       "language": "python",
       "docstring": "Create a standardized success response.\n\nArgs:\n    data: Optional mapping used as the base payload.\n    warnings: Non-fatal issues to surface in ``meta.warnings``.\n    pagination: Cursor metadata for list results.\n    rate_limit: Rate limit state (limit, remaining, reset_at, etc.).\n    telemetry: Timing/performance metadata.\n    request_id: Correlation identifier propagated through logs/traces.\n    meta: Arbitrary extra metadata to merge into ``meta``.\n    **fields: Additional payload fields (shorthand for ``data.update``).",
       "parameters": [
@@ -9441,25 +9459,25 @@
         {
           "name": "update",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 202,
+          "line": 222,
           "call_type": "method_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 202,
+          "line": 222,
           "call_type": "function_call"
         },
         {
           "name": "update",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 204,
+          "line": 224,
           "call_type": "method_call"
         },
         {
           "name": "_build_meta",
           "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/responses.py",
-          "line": 206,
+          "line": 226,
           "call_type": "function_call"
         }
       ],
@@ -9468,7 +9486,7 @@
     {
       "name": "error_response",
       "file": "src/foundry_mcp/core/responses.py",
-      "line": 218,
+      "line": 238,
       "language": "python",
       "docstring": "Create a standardized error response.\n\nArgs:\n    message: Human-readable description of the failure.\n    data: Optional mapping with additional machine-readable context.\n    error_code: Canonical error code (e.g., ``VALIDATION_ERROR``).\n    error_type: Error category (validation, authorization, internal, ...).\n    remediation: User-facing guidance on how to fix the issue.\n    details: Nested structure describing validation failures or metadata.\n    request_id: Correlation identifier propagated through logs/traces.\n    rate_limit: Rate limit state to help clients back off correctly.\n    telemetry: Timing/performance metadata captured before failure.\n    meta: Arbitrary extra metadata to merge into ``meta``.",
       "parameters": [
@@ -10390,25 +10408,25 @@
         {
           "name": "update",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 247,
+          "line": 267,
           "call_type": "method_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 247,
+          "line": 267,
           "call_type": "function_call"
         },
         {
           "name": "dict",
           "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
-          "line": 256,
+          "line": 276,
           "call_type": "function_call"
         },
         {
           "name": "_build_meta",
           "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/responses.py",
-          "line": 258,
+          "line": 278,
           "call_type": "function_call"
         }
       ],
