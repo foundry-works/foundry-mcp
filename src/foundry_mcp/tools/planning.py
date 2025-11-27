@@ -1085,3 +1085,162 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 error_type="internal",
                 remediation="Check logs for details",
             ))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="spec-audit",
+    )
+    def spec_audit(
+        spec_id: str,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Run comprehensive quality audits on a specification.
+
+        Wraps the SDD CLI audit-spec command to perform higher-level
+        quality checks beyond basic validation, including best practice
+        adherence, completeness, and consistency checks.
+
+        WHEN TO USE:
+        - Before marking a spec as ready for review
+        - Identifying quality issues in spec structure
+        - Ensuring specs follow best practices
+        - Pre-merge quality gates
+
+        Args:
+            spec_id: Specification ID to audit
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with audit results:
+            - passed: Boolean indicating if audit passed
+            - score: Overall quality score (0-100)
+            - findings: Array of audit findings with severity
+            - recommendations: Suggested improvements
+            - categories: Breakdown by audit category
+        """
+        tool_name = "spec_audit"
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(error_response(
+                    "spec_id is required",
+                    error_code="MISSING_REQUIRED",
+                    error_type="validation",
+                    remediation="Provide a spec_id parameter",
+                ))
+
+            # Build command
+            cmd = ["sdd", "audit-spec", spec_id, "--json"]
+
+            if path:
+                cmd.extend(["--path", path])
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="spec-audit",
+                action="audit_spec",
+                spec_id=spec_id,
+            )
+
+            # Execute the command with resilience
+            result = _run_sdd_command(cmd, tool_name)
+
+            # Parse the JSON output
+            if result.returncode == 0:
+                try:
+                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
+                except json.JSONDecodeError:
+                    output_data = {}
+
+                # Build response data
+                findings = output_data.get("findings", [])
+                errors = [f for f in findings if f.get("severity") == "error"]
+                warnings = [f for f in findings if f.get("severity") == "warning"]
+
+                data: Dict[str, Any] = {
+                    "spec_id": spec_id,
+                    "passed": output_data.get("passed", len(errors) == 0),
+                    "score": output_data.get("score", 100 if not findings else 0),
+                    "findings": findings,
+                    "error_count": len(errors),
+                    "warning_count": len(warnings),
+                    "recommendations": output_data.get("recommendations", []),
+                }
+
+                # Include categories if available
+                if "categories" in output_data:
+                    data["categories"] = output_data["categories"]
+
+                # Track metrics
+                _metrics.counter(f"planning.{tool_name}", labels={
+                    "status": "success",
+                    "passed": str(data["passed"]).lower(),
+                })
+
+                # Craft appropriate message
+                if data["passed"]:
+                    message = f"Audit passed with score {data['score']}"
+                else:
+                    message = f"Audit failed: {data['error_count']} error(s), {data['warning_count']} warning(s)"
+
+                return asdict(success_response(
+                    data=data,
+                    message=message,
+                ))
+            else:
+                # Handle specific error cases
+                stderr = result.stderr.strip()
+
+                if "not found" in stderr.lower():
+                    error_code = "NOT_FOUND"
+                    remediation = "Ensure the spec_id exists"
+                else:
+                    error_code = "AUDIT_FAILED"
+                    remediation = "Check the spec_id and try again"
+
+                _metrics.counter(f"planning.{tool_name}", labels={"status": "error", "code": error_code})
+
+                return asdict(error_response(
+                    stderr or "Failed to audit spec",
+                    error_code=error_code,
+                    error_type="planning",
+                    remediation=remediation,
+                ))
+
+        except CircuitBreakerError as e:
+            return asdict(error_response(
+                str(e),
+                error_code="CIRCUIT_OPEN",
+                error_type="resilience",
+                remediation="Wait for circuit breaker recovery, then retry",
+            ))
+
+        except subprocess.TimeoutExpired:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "timeout"})
+            return asdict(error_response(
+                f"Spec audit timed out after {CLI_TIMEOUT}s",
+                error_code="TIMEOUT",
+                error_type="timeout",
+                remediation="Try again or check system resources",
+            ))
+
+        except FileNotFoundError:
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "cli_not_found"})
+            return asdict(error_response(
+                "SDD CLI not found. Ensure 'sdd' is installed and in PATH",
+                error_code="CLI_NOT_FOUND",
+                error_type="configuration",
+                remediation="Install SDD toolkit: pip install claude-sdd-toolkit",
+            ))
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in {tool_name}")
+            _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
+            return asdict(error_response(
+                f"Unexpected error: {str(e)}",
+                error_code="INTERNAL_ERROR",
+                error_type="internal",
+                remediation="Check logs for details",
+            ))
