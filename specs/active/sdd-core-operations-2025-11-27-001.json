@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T21:59:16.381151Z",
+  "last_updated": "2025-11-27T21:59:36.216341Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 64,
+    "progress_percentage": 65,
     "status": "active",
     "current_phase": "phase-4"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 57,
+      "completed_tasks": 58,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1364,7 +1364,7 @@
         ]
       },
       "total_tasks": 20,
-      "completed_tasks": 14,
+      "completed_tasks": 15,
       "metadata": {
         "purpose": "Analysis, bulk operations, and specialized mutations",
         "risk_level": "medium"
@@ -1382,7 +1382,7 @@
         "task-4-4"
       ],
       "total_tasks": 17,
-      "completed_tasks": 14,
+      "completed_tasks": 15,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1700,7 +1700,7 @@
         "task-4-3-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/git_integration.py",
         "task_category": "implementation",
@@ -1736,13 +1736,16 @@
     "task-4-3-2": {
       "type": "subtask",
       "title": "Implement journal-bulk-add - add multiple journal entries in one shot",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-3",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd bulk-journal, batch add journal entries"
+        "details": "Wrap sdd bulk-journal, batch add journal entries",
+        "completed_at": "2025-11-27T21:59:36.210279Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-27T21:59:36.213739Z"
       }
     },
     "task-4-3-3": {
@@ -3136,6 +3139,15 @@
       "content": "Implemented task-create-commit MCP tool in git_integration.py. The tool wraps 'sdd create-task-commit' CLI command with spec_id, task_id, skip_status_check, force, and path parameters. Returns commit_hash, commit_message, files_committed. Follows established patterns with circuit breaker, metrics, audit logging. Import test passing.",
       "metadata": {},
       "task_id": "task-4-3-1"
+    },
+    {
+      "timestamp": "2025-11-27T21:59:36.213731Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement journal-bulk-add - add multiple journal entries in one shot",
+      "author": "claude-code",
+      "content": "Implemented journal-bulk-add MCP tool in git_integration.py. The tool wraps 'sdd bulk-journal' CLI command with spec_id, tasks, template (completion/decision/blocker), template_author, dry_run, and path parameters. Returns tasks_journaled count and task_ids list. Follows established patterns with circuit breaker, metrics, audit logging. Import test passing.",
+      "metadata": {},
+      "task_id": "task-4-3-2"
     }
   ]
 }
