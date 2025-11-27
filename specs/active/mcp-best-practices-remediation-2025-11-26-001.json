@@ -3,7 +3,7 @@
   "title": "MCP Best Practices Gap Remediation",
   "status": "draft",
   "generated": "2025-11-26T23:30:00Z",
-  "last_updated": "2025-11-27T12:30:57.356281Z",
+  "last_updated": "2025-11-27T12:32:14.377270Z",
   "metadata": {
     "description": "Implement missing MCP best practices across foundry-mcp codebase",
     "objectives": [
@@ -31,7 +31,7 @@
     "status_notes": "Pending remediation spec tracking security, pagination, discovery, and tooling upgrades.",
     "status": "active",
     "activated_date": "2025-11-27T12:17:19.958266Z",
-    "progress_percentage": 5,
+    "progress_percentage": 6,
     "current_phase": "phase-1"
   },
   "hierarchy": {
@@ -51,7 +51,7 @@
         "phase-8"
       ],
       "total_tasks": 102,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "description": "Implement missing MCP best practices across foundry-mcp codebase",
         "objectives": [
@@ -89,7 +89,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 15,
-      "completed_tasks": 6,
+      "completed_tasks": 7,
       "metadata": {
         "purpose": "Address critical security gaps that could expose the system to attacks or data leaks",
         "risk_level": "high",
@@ -118,7 +118,7 @@
         "task-1-4"
       ],
       "total_tasks": 11,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -232,7 +232,7 @@
     "task-1-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/observability.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-1-files",
       "children": [
         "task-1-2-1",
@@ -248,7 +248,7 @@
         "depends": []
       },
       "total_tasks": 2,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/observability.py",
         "task_category": "implementation",
@@ -258,13 +258,19 @@
     "task-1-2-1": {
       "type": "subtask",
       "title": "Add SENSITIVE_PATTERNS regex list for redaction",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Patterns for passwords, API keys, tokens, emails, SSNs"
+        "details": "Patterns for passwords, API keys, tokens, emails, SSNs",
+        "started_at": "2025-11-27T12:31:22.571322Z",
+        "status_note": "Adding SENSITIVE_PATTERNS to observability.py",
+        "completed_at": "2025-11-27T12:32:14.360483Z",
+        "needs_journaling": false,
+        "actual_hours": 0.014,
+        "journaled_at": "2025-11-27T12:32:14.372477Z"
       }
     },
     "task-1-2-2": {
@@ -3242,6 +3248,15 @@
       "content": "Implemented validate_input_size() decorator and supporting infrastructure in security.py:\n\n1. SizeValidationResult dataclass - structured validation result with:\n   - is_valid: bool flag\n   - violations: list of (field_name, message) tuples\n\n2. validate_size(value, field_name, *, max_size, max_length, max_string_length) -> SizeValidationResult\n   - Validates serialized byte size, array length, and string length\n   - Uses MAX_* constants as defaults when not specified\n   - Returns structured result with all violations\n\n3. validate_input_size() decorator with parameters:\n   - max_size: Maximum total input size (default: MAX_INPUT_SIZE)\n   - max_array_length: Maximum array length (default: MAX_ARRAY_LENGTH)\n   - max_string_length: Maximum string length (default: MAX_STRING_LENGTH)\n   - check_injection: Also check for prompt injection (default: False)\n   - Supports both sync and async functions\n   - Returns standardized error_response on validation failure\n   - Includes fallback response format if responses module unavailable\n\nVerification tests passed:\n- Decorator correctly blocks oversized strings\n- Decorator allows valid inputs\n- Decorator blocks injection attempts when check_injection=True\n- Response format matches standard ToolResponse schema\n\nThis completes the security.py module with all 4 subtasks.",
       "metadata": {},
       "task_id": "task-1-1-4"
+    },
+    {
+      "timestamp": "2025-11-27T12:32:14.372459Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add SENSITIVE_PATTERNS regex list for redaction",
+      "author": "claude-code",
+      "content": "Added SENSITIVE_PATTERNS constant to observability.py with 15 regex patterns for sensitive data redaction:\n\n1. API Keys & Tokens (4 patterns):\n   - api_key, secret_key, access_token assignments\n   - Bearer token headers\n\n2. Passwords (1 pattern):\n   - password/passwd/pwd assignments\n\n3. AWS Credentials (2 patterns):\n   - AKIA access key IDs\n   - AWS secret access keys\n\n4. Private Keys (1 pattern):\n   - PEM-format private key headers\n\n5. PII Data (4 patterns):\n   - Email addresses\n   - Social Security Numbers (US format)\n   - Credit card numbers\n   - Phone numbers\n\n6. Platform Tokens (2 patterns):\n   - GitHub tokens (gh[pousr]_*)\n   - GitLab tokens (glpat-*)\n\n7. Generic Secrets (1 pattern):\n   - Base64-encoded secrets in key contexts\n\nEach pattern is a tuple of (regex, label) for use with redact_sensitive_data().\n\nVerification: Tested pattern matching against sample data - correctly identified API keys, passwords, emails, SSNs, and bearer tokens.",
+      "metadata": {},
+      "task_id": "task-1-2-1"
     }
   ]
 }

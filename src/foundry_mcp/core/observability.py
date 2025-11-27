@@ -31,14 +31,67 @@ FastMCP Middleware Integration:
 
 import logging
 import functools
+import re
 import time
 import json
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Callable, TypeVar, Union
+from typing import Final, Optional, Dict, Any, Callable, TypeVar, Union, List, Tuple
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Sensitive Data Patterns for Redaction
+# =============================================================================
+# These patterns identify sensitive data that should be redacted from logs,
+# error messages, and audit trails. See docs/mcp_best_practices/08-security-trust-boundaries.md
+
+SENSITIVE_PATTERNS: Final[List[Tuple[str, str]]] = [
+    # API Keys and Tokens
+    (r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?", "API_KEY"),
+    (r"(?i)(secret[_-]?key|secretkey)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?", "SECRET_KEY"),
+    (r"(?i)(access[_-]?token|accesstoken)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]{20,})['\"]?", "ACCESS_TOKEN"),
+    (r"(?i)bearer\s+([a-zA-Z0-9_\-\.]+)", "BEARER_TOKEN"),
+
+    # Passwords
+    (r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"]?([^\s'\"]{4,})['\"]?", "PASSWORD"),
+
+    # AWS Credentials
+    (r"AKIA[0-9A-Z]{16}", "AWS_ACCESS_KEY"),
+    (r"(?i)(aws[_-]?secret[_-]?access[_-]?key)\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{40})['\"]?", "AWS_SECRET"),
+
+    # Private Keys
+    (r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", "PRIVATE_KEY"),
+
+    # Email Addresses (for PII protection)
+    (r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", "EMAIL"),
+
+    # Social Security Numbers (US)
+    (r"\b\d{3}-\d{2}-\d{4}\b", "SSN"),
+
+    # Credit Card Numbers (basic pattern)
+    (r"\b(?:\d{4}[- ]?){3}\d{4}\b", "CREDIT_CARD"),
+
+    # Phone Numbers (various formats)
+    (r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b", "PHONE"),
+
+    # GitHub/GitLab Tokens
+    (r"gh[pousr]_[a-zA-Z0-9]{36,}", "GITHUB_TOKEN"),
+    (r"glpat-[a-zA-Z0-9\-]{20,}", "GITLAB_TOKEN"),
+
+    # Generic Base64-encoded secrets (long base64 strings in key contexts)
+    (r"(?i)(token|secret|key|credential)\s*[:=]\s*['\"]?([a-zA-Z0-9+/]{40,}={0,2})['\"]?", "BASE64_SECRET"),
+]
+"""Patterns for detecting sensitive data that should be redacted.
+
+Each tuple contains:
+- regex pattern: The pattern to match sensitive data
+- label: A human-readable label for the type of sensitive data
+
+Use with redact_sensitive_data() to sanitize logs and error messages.
+"""
 
 T = TypeVar('T')
 

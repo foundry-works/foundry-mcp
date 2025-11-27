@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T12:28:53.078507Z",
-    "generated_at_commit": "c7fc743568319e17af6650a65eddf2f3b4e05f56",
+    "generated_at": "2025-11-27T12:31:18.864341Z",
+    "generated_at_commit": "e0843d10a77dee6866f059f667548b8c774e7704",
     "languages": [
       "python"
     ],
@@ -11,10 +11,10 @@
   },
   "statistics": {
     "total_files": 31,
-    "total_lines": 11845,
-    "total_classes": 43,
-    "total_functions": 139,
-    "avg_complexity": 7.34,
+    "total_lines": 12076,
+    "total_classes": 44,
+    "total_functions": 141,
+    "avg_complexity": 7.38,
     "max_complexity": 59,
     "high_complexity_functions": [
       "register_task_tools (59)",
@@ -26,10 +26,10 @@
     "by_language": {
       "python": {
         "files": 31,
-        "lines": 11845,
-        "classes": 43,
-        "functions": 139,
-        "avg_complexity": 7.34
+        "lines": 12076,
+        "classes": 44,
+        "functions": 141,
+        "avg_complexity": 7.38
       }
     }
   },
@@ -456,11 +456,14 @@
       "language": "python",
       "docstring": "Security utilities for foundry-mcp.\n\nProvides input validation, size limits, and prompt injection defense\nfor MCP tools. See docs/mcp_best_practices/04-validation-input-hygiene.md\nand docs/mcp_best_practices/08-security-trust-boundaries.md for guidance.",
       "classes": [
-        "InjectionDetectionResult"
+        "InjectionDetectionResult",
+        "SizeValidationResult"
       ],
       "functions": [
         "detect_prompt_injection",
-        "is_prompt_injection"
+        "is_prompt_injection",
+        "validate_size",
+        "validate_input_size"
       ],
       "imports": [
         "logging",
@@ -471,7 +474,7 @@
         "typing.Tuple"
       ],
       "exports": [],
-      "lines": 207
+      "lines": 438
     },
     {
       "name": "spec",
@@ -2467,6 +2470,30 @@
       ],
       "imported_by": [],
       "instantiation_count": 2
+    },
+    {
+      "name": "SizeValidationResult",
+      "file": "src/foundry_mcp/core/security.py",
+      "line": 198,
+      "language": "python",
+      "docstring": "Result of input size validation.\n\nAttributes:\n    is_valid: Whether all size checks passed\n    violations: List of (field_name, violation_message) tuples",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "validate_size",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 263,
+          "context": [
+            "validate_size"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "TestResult",
@@ -4933,7 +4960,7 @@
         },
         {
           "name": "read",
-          "file": "/home/tyler/anaconda3/lib/python3.11/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -8974,6 +9001,18 @@
       "is_public": true,
       "callers": [
         {
+          "name": "wrapper",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 337,
+          "call_type": "function_call"
+        },
+        {
+          "name": "async_wrapper",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 388,
+          "call_type": "function_call"
+        },
+        {
           "name": "prepare_task",
           "file": "src/foundry_mcp/core/task.py",
           "line": 546,
@@ -9882,7 +9921,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 147
+      "call_count": 149
     },
     {
       "name": "detect_prompt_injection",
@@ -9908,6 +9947,18 @@
           "name": "is_prompt_injection",
           "file": "src/foundry_mcp/core/security.py",
           "line": 190,
+          "call_type": "function_call"
+        },
+        {
+          "name": "wrapper",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 326,
+          "call_type": "function_call"
+        },
+        {
+          "name": "async_wrapper",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 378,
           "call_type": "function_call"
         }
       ],
@@ -9937,7 +9988,7 @@
           "call_type": "method_call"
         }
       ],
-      "call_count": 1
+      "call_count": 3
     },
     {
       "name": "is_prompt_injection",
@@ -9967,6 +10018,136 @@
           "call_type": "function_call"
         }
       ]
+    },
+    {
+      "name": "validate_size",
+      "file": "src/foundry_mcp/core/security.py",
+      "line": 209,
+      "language": "python",
+      "docstring": "Validate size constraints on a value.\n\nArgs:\n    value: The value to validate\n    field_name: Name of the field (for error messages)\n    max_size: Maximum byte size for serialized value (default: MAX_INPUT_SIZE)\n    max_length: Maximum length for arrays/lists (default: MAX_ARRAY_LENGTH)\n    max_string_length: Maximum length for strings (default: MAX_STRING_LENGTH)\n\nReturns:\n    SizeValidationResult with validation status and any violations",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "any",
+          "default": null
+        },
+        {
+          "name": "field_name",
+          "type": "str",
+          "default": null
+        }
+      ],
+      "return_type": "SizeValidationResult",
+      "complexity": 7,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [
+        {
+          "name": "wrapper",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 315,
+          "call_type": "function_call"
+        },
+        {
+          "name": "async_wrapper",
+          "file": "src/foundry_mcp/core/security.py",
+          "line": 368,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "isinstance",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 236,
+          "call_type": "function_call"
+        },
+        {
+          "name": "dumps",
+          "file": "/home/tyler/anaconda3/lib/python3.11/json/__init__.py",
+          "line": 236,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 237,
+          "call_type": "function_call"
+        },
+        {
+          "name": "encode",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 237,
+          "call_type": "method_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 238,
+          "call_type": "method_call"
+        },
+        {
+          "name": "isinstance",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 247,
+          "call_type": "function_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 248,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 249,
+          "call_type": "method_call"
+        },
+        {
+          "name": "isinstance",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 256,
+          "call_type": "function_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 257,
+          "call_type": "function_call"
+        },
+        {
+          "name": "append",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 258,
+          "call_type": "method_call"
+        },
+        {
+          "name": "len",
+          "file": "/home/tyler/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 264,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 2
+    },
+    {
+      "name": "validate_input_size",
+      "file": "src/foundry_mcp/core/security.py",
+      "line": 273,
+      "language": "python",
+      "docstring": "Decorator to validate input size limits on tool parameters.\n\nValidates all string and collection parameters against size limits\nbefore the function executes. Returns an error response if validation fails.\n\nArgs:\n    max_size: Maximum total input size in bytes (default: MAX_INPUT_SIZE)\n    max_array_length: Maximum array/list length (default: MAX_ARRAY_LENGTH)\n    max_string_length: Maximum string length (default: MAX_STRING_LENGTH)\n    check_injection: Also check for prompt injection patterns (default: False)\n\nReturns:\n    Decorator function\n\nExample:\n    @mcp.tool()\n    @validate_input_size(max_string_length=5000, check_injection=True)\n    def process_text(text: str, items: list) -> dict:\n        # Parameters are validated before this runs\n        return {\"result\": process(text)}\n\nNote:\n    This decorator should be applied AFTER @mcp.tool() to ensure\n    validation runs before the tool handler.",
+      "parameters": [],
+      "return_type": null,
+      "complexity": 14,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": []
     },
     {
       "name": "find_git_root",
