@@ -2,7 +2,7 @@
   "spec_id": "sdd-core-operations-2025-11-27-001",
   "title": "SDD Core Operations - Non-LLM Tool Adapters",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-27T23:02:41.926405Z",
+  "last_updated": "2025-11-27T23:11:33.570065Z",
   "metadata": {
     "description": "Implement remaining SDD CLI operations as MCP tool adapters (non-LLM features). Covers environment setup, spec discovery, authoring/metadata, task planning, validation/reporting, and miscellaneous tooling.",
     "objectives": [
@@ -22,7 +22,7 @@
       "Modules wire observability, resilience, security, and feature-flag helpers per docs/mcp_best_practices/04-05-08-12-14",
       "Specs, docs, and backlog files are updated together"
     ],
-    "progress_percentage": 82,
+    "progress_percentage": 83,
     "status": "active",
     "current_phase": "phase-5"
   },
@@ -42,7 +42,7 @@
         "phase-7"
       ],
       "total_tasks": 89,
-      "completed_tasks": 73,
+      "completed_tasks": 74,
       "metadata": {},
       "dependencies": {
         "blocks": [],
@@ -1914,7 +1914,7 @@
         ]
       },
       "total_tasks": 14,
-      "completed_tasks": 10,
+      "completed_tasks": 11,
       "metadata": {
         "purpose": "Plan formatting, phase management, and state reconciliation",
         "risk_level": "medium"
@@ -1923,7 +1923,7 @@
     "phase-5-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-5",
       "children": [
         "task-5-1",
@@ -1931,8 +1931,12 @@
         "task-5-3"
       ],
       "total_tasks": 11,
-      "completed_tasks": 10,
-      "metadata": {},
+      "completed_tasks": 11,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-11-27T23:11:33.558449Z",
+        "journaled_at": "2025-11-27T23:11:33.570029Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-5-verify"
@@ -2183,7 +2187,7 @@
     "task-5-3": {
       "type": "task",
       "title": "tests/unit/test_planning.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-5-files",
       "children": [],
       "dependencies": {
@@ -2194,12 +2198,18 @@
         "blocks": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/unit/test_planning.py",
         "task_category": "implementation",
         "estimated_hours": 4,
-        "changes": "Create unit tests for planning tools"
+        "changes": "Create unit tests for planning tools",
+        "started_at": "2025-11-27T23:08:50.691373Z",
+        "status_note": "Creating unit tests for planning tools",
+        "completed_at": "2025-11-27T23:11:33.558277Z",
+        "needs_journaling": false,
+        "actual_hours": 0.045,
+        "journaled_at": "2025-11-27T23:11:33.564632Z"
       }
     },
     "phase-5-verify": {
@@ -3420,6 +3430,24 @@
       "content": "Updated documentation for planning utilities - added \"Task Planning & Execution Utilities\" section to docs/mcp_best_practices/README.md documenting 7 planning tools (plan_format, phase_list, phase_check_complete, phase_report_time, spec_reconcile_state, plan_report_time, spec_audit) with feature flag planning_tools. Updated half_baked_plans/OPERATIONS_TO_ADD.md to add Phase 5 coverage summary and strike through all 7 planning utility items as covered. Updated README version to 2.4.0.",
       "metadata": {},
       "task_id": "task-5-2-2"
+    },
+    {
+      "timestamp": "2025-11-27T23:11:33.564628Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/unit/test_planning.py",
+      "author": "claude-code",
+      "content": "Created comprehensive unit tests for planning tools in tests/unit/test_planning.py. Added 31 tests covering all 7 planning tools (plan_format, phase_list, phase_check_complete, phase_report_time, spec_reconcile_state, plan_report_time, spec_audit). Tests include: _run_sdd_command helper with circuit breaker protection, validation tests for required parameters, success path tests with mock CLI responses, error handling tests (circuit breaker, timeout, CLI not found, generic exceptions), response contract validation using assert_response_contract fixture, tool registration verification, and path parameter propagation tests. All 31 tests passing.",
+      "metadata": {},
+      "task_id": "task-5-3"
+    },
+    {
+      "timestamp": "2025-11-27T23:11:33.570024Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-5-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-5-files"
     }
   ]
 }
