@@ -2,19 +2,19 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-28T11:40:12.163310Z",
-    "generated_at_commit": "d40e24e3a25d4f1fad86eafd7816486f1a712fbf",
+    "generated_at": "2025-11-28T11:44:07.384807Z",
+    "generated_at_commit": "2876c0abeefb05bf91ad687f730f06d1964ef0e8",
     "languages": [
       "python"
     ],
     "schema_version": "2.0"
   },
   "statistics": {
-    "total_files": 50,
-    "total_lines": 26996,
+    "total_files": 51,
+    "total_lines": 27321,
     "total_classes": 97,
-    "total_functions": 231,
-    "avg_complexity": 8.81,
+    "total_functions": 236,
+    "avg_complexity": 8.73,
     "max_complexity": 160,
     "high_complexity_functions": [
       "register_mutation_tools (160)",
@@ -25,11 +25,11 @@
     ],
     "by_language": {
       "python": {
-        "files": 50,
-        "lines": 26996,
+        "files": 51,
+        "lines": 27321,
         "classes": 97,
-        "functions": 231,
-        "avg_complexity": 8.81
+        "functions": 236,
+        "avg_complexity": 8.73
       }
     }
   },
@@ -1232,6 +1232,38 @@
       ],
       "exports": [],
       "lines": 1487
+    },
+    {
+      "name": "context",
+      "file": "src/foundry_mcp/tools/context.py",
+      "language": "python",
+      "docstring": "Server context tools for foundry-mcp.\n\nProvides MCP tools for querying server capabilities, workspace info,\nand configuration (with sensitive data masked).",
+      "classes": [],
+      "functions": [
+        "_mask_sensitive_value",
+        "_get_llm_config_safe",
+        "_get_api_key_source",
+        "_get_workflow_config_safe",
+        "register_context_tools"
+      ],
+      "imports": [
+        "logging",
+        "time",
+        "dataclasses.asdict",
+        "typing.Any",
+        "typing.Dict",
+        "typing.Optional",
+        "mcp.server.fastmcp.FastMCP",
+        "foundry_mcp.config.ServerConfig",
+        "foundry_mcp.core.responses.success_response",
+        "foundry_mcp.core.responses.error_response",
+        "foundry_mcp.core.naming.canonical_tool",
+        "foundry_mcp.core.resilience.CircuitBreaker",
+        "foundry_mcp.core.observability.get_metrics",
+        "foundry_mcp.core.observability.mcp_tool"
+      ],
+      "exports": [],
+      "lines": 325
     },
     {
       "name": "discovery",
@@ -4999,6 +5031,12 @@
         },
         {
           "instantiator": "<module>",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 24,
+          "context": []
+        },
+        {
+          "instantiator": "<module>",
           "file": "src/foundry_mcp/tools/git_integration.py",
           "line": 39,
           "context": []
@@ -5035,7 +5073,7 @@
         }
       ],
       "imported_by": [],
-      "instantiation_count": 8
+      "instantiation_count": 9
     },
     {
       "name": "HealthStatus",
@@ -6728,7 +6766,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 771,
           "call_type": "method_call"
         },
@@ -6746,7 +6784,7 @@
         },
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 785,
           "call_type": "method_call"
         },
@@ -8888,7 +8926,7 @@
         },
         {
           "name": "read",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
@@ -9929,7 +9967,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "_get_llm_config_safe",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 57,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "load_llm_config",
@@ -9937,7 +9982,8 @@
           "line": 384,
           "call_type": "function_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "set_llm_config",
@@ -10104,7 +10150,14 @@
       "is_async": false,
       "is_exported": false,
       "is_public": true,
-      "callers": [],
+      "callers": [
+        {
+          "name": "_get_workflow_config_safe",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 104,
+          "call_type": "function_call"
+        }
+      ],
       "calls": [
         {
           "name": "load_workflow_config",
@@ -10112,7 +10165,8 @@
           "line": 667,
           "call_type": "function_call"
         }
-      ]
+      ],
+      "call_count": 1
     },
     {
       "name": "set_workflow_config",
@@ -10871,6 +10925,18 @@
           "call_type": "function_call"
         },
         {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 129,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_llm_status",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 260,
+          "call_type": "function_call"
+        },
+        {
           "name": "tool_list",
           "file": "src/foundry_mcp/tools/discovery.py",
           "line": 43,
@@ -11322,7 +11388,7 @@
         }
       ],
       "calls": [],
-      "call_count": 91
+      "call_count": 93
     },
     {
       "name": "redact_sensitive_data",
@@ -11525,6 +11591,12 @@
           "call_type": "function_call"
         },
         {
+          "name": "register_context_tools",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 127,
+          "call_type": "function_call"
+        },
+        {
           "name": "<module>",
           "file": "src/foundry_mcp/tools/environment.py",
           "line": 25,
@@ -11568,7 +11640,7 @@
         }
       ],
       "calls": [],
-      "call_count": 10
+      "call_count": 11
     },
     {
       "name": "get_audit_logger",
@@ -11890,6 +11962,18 @@
           "call_type": "function_call"
         },
         {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 133,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_llm_status",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 264,
+          "call_type": "function_call"
+        },
+        {
           "name": "spec_report",
           "file": "src/foundry_mcp/tools/reporting.py",
           "line": 259,
@@ -11915,7 +11999,7 @@
         }
       ],
       "calls": [],
-      "call_count": 6
+      "call_count": 8
     },
     {
       "name": "mcp_resource",
@@ -15112,6 +15196,18 @@
           "call_type": "function_call"
         },
         {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 248,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_llm_status",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 316,
+          "call_type": "function_call"
+        },
+        {
           "name": "tool_get_schema",
           "file": "src/foundry_mcp/tools/discovery.py",
           "line": 182,
@@ -15648,7 +15744,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 104
+      "call_count": 106
     },
     {
       "name": "error_response",
@@ -16340,6 +16436,24 @@
           "name": "spec_update_frontmatter",
           "file": "src/foundry_mcp/tools/authoring.py",
           "line": 1482,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 178,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 254,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_llm_status",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 321,
           "call_type": "function_call"
         },
         {
@@ -18379,7 +18493,7 @@
           "call_type": "function_call"
         }
       ],
-      "call_count": 447
+      "call_count": 450
     },
     {
       "name": "validation_error",
@@ -26075,6 +26189,253 @@
       "call_count": 1
     },
     {
+      "name": "_mask_sensitive_value",
+      "file": "src/foundry_mcp/tools/context.py",
+      "line": 31,
+      "language": "python",
+      "docstring": "Mask a sensitive string value, showing only first few characters.\n\nArgs:\n    value: The value to mask\n    visible_chars: Number of characters to show at start\n\nReturns:\n    Masked string like \"sk-a...****\" or None if value is None",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "Optional[str]",
+          "default": null
+        },
+        {
+          "name": "visible_chars",
+          "type": "int",
+          "default": null
+        }
+      ],
+      "return_type": "Optional[str]",
+      "complexity": 3,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": false,
+      "callers": [
+        {
+          "name": "_get_llm_config_safe",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 65,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "len",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 43,
+          "call_type": "function_call"
+        },
+        {
+          "name": "len",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 44,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "_get_llm_config_safe",
+      "file": "src/foundry_mcp/tools/context.py",
+      "line": 48,
+      "language": "python",
+      "docstring": "Get LLM configuration with sensitive data masked.\n\nReturns:\n    Dict with LLM config, API keys masked",
+      "parameters": [],
+      "return_type": "Dict[str, Any]",
+      "complexity": 3,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": false,
+      "callers": [
+        {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 204,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_llm_status",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 288,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "get_llm_config",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/context.py",
+          "line": 57,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_model",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/llm_config.py",
+          "line": 60,
+          "call_type": "method_call"
+        },
+        {
+          "name": "_mask_sensitive_value",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/context.py",
+          "line": 65,
+          "call_type": "function_call"
+        },
+        {
+          "name": "get_api_key",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/llm_config.py",
+          "line": 66,
+          "call_type": "method_call"
+        },
+        {
+          "name": "_get_api_key_source",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/context.py",
+          "line": 67,
+          "call_type": "function_call"
+        },
+        {
+          "name": "warning",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 72,
+          "call_type": "method_call"
+        },
+        {
+          "name": "str",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 73,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 2
+    },
+    {
+      "name": "_get_api_key_source",
+      "file": "src/foundry_mcp/tools/context.py",
+      "line": 76,
+      "language": "python",
+      "docstring": "Determine where the API key is sourced from.\n\nReturns:\n    String indicating source: \"config\", \"env_unified\", \"env_provider\", or None",
+      "parameters": [
+        {
+          "name": "config",
+          "type": null,
+          "default": null
+        }
+      ],
+      "return_type": "Optional[str]",
+      "complexity": 5,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": false,
+      "callers": [
+        {
+          "name": "_get_llm_config_safe",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 67,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "get",
+          "file": "/opt/anaconda3/lib/python3.13/_collections_abc.py",
+          "line": 87,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/typing.pyi",
+          "line": 89,
+          "call_type": "method_call"
+        },
+        {
+          "name": "get",
+          "file": "/opt/anaconda3/lib/python3.13/_collections_abc.py",
+          "line": 90,
+          "call_type": "method_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "_get_workflow_config_safe",
+      "file": "src/foundry_mcp/tools/context.py",
+      "line": 95,
+      "language": "python",
+      "docstring": "Get workflow configuration.\n\nReturns:\n    Dict with workflow config",
+      "parameters": [],
+      "return_type": "Dict[str, Any]",
+      "complexity": 3,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": false,
+      "callers": [
+        {
+          "name": "get_server_context",
+          "file": "src/foundry_mcp/tools/context.py",
+          "line": 208,
+          "call_type": "function_call"
+        }
+      ],
+      "calls": [
+        {
+          "name": "get_workflow_config",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/context.py",
+          "line": 104,
+          "call_type": "function_call"
+        },
+        {
+          "name": "warning",
+          "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
+          "line": 115,
+          "call_type": "method_call"
+        },
+        {
+          "name": "str",
+          "file": "/Users/tylerburleigh/anaconda3/lib/python3.11/site-packages/jedi/third_party/typeshed/stdlib/3/builtins.pyi",
+          "line": 116,
+          "call_type": "function_call"
+        }
+      ],
+      "call_count": 1
+    },
+    {
+      "name": "register_context_tools",
+      "file": "src/foundry_mcp/tools/context.py",
+      "line": 119,
+      "language": "python",
+      "docstring": "Register context tools with the FastMCP server.\n\nArgs:\n    mcp: FastMCP server instance\n    config: Server configuration",
+      "parameters": [
+        {
+          "name": "mcp",
+          "type": "FastMCP",
+          "default": null
+        },
+        {
+          "name": "config",
+          "type": "ServerConfig",
+          "default": null
+        }
+      ],
+      "return_type": "None",
+      "complexity": 10,
+      "decorators": [],
+      "is_async": false,
+      "is_exported": false,
+      "is_public": true,
+      "callers": [],
+      "calls": [
+        {
+          "name": "get_metrics",
+          "file": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/context.py",
+          "line": 127,
+          "call_type": "function_call"
+        }
+      ]
+    },
+    {
       "name": "register_discovery_tools",
       "file": "src/foundry_mcp/tools/discovery.py",
       "line": 34,
@@ -29413,6 +29774,22 @@
       "foundry_mcp.core.resilience.CircuitBreaker",
       "foundry_mcp.core.resilience.CircuitBreakerError",
       "foundry_mcp.core.resilience.MEDIUM_TIMEOUT"
+    ],
+    "src/foundry_mcp/tools/context.py": [
+      "logging",
+      "time",
+      "dataclasses.asdict",
+      "typing.Any",
+      "typing.Dict",
+      "typing.Optional",
+      "mcp.server.fastmcp.FastMCP",
+      "foundry_mcp.config.ServerConfig",
+      "foundry_mcp.core.responses.success_response",
+      "foundry_mcp.core.responses.error_response",
+      "foundry_mcp.core.naming.canonical_tool",
+      "foundry_mcp.core.resilience.CircuitBreaker",
+      "foundry_mcp.core.observability.get_metrics",
+      "foundry_mcp.core.observability.mcp_tool"
     ],
     "src/foundry_mcp/tools/discovery.py": [
       "logging",
