@@ -419,6 +419,21 @@ Must-have functionality for basic SDD operations. Migration blockers if missing.
 | `check-complete` | Not Implemented | Required for lifecycle transitions - blocks spec completion workflow |
 | `create-task-commit` | Not Implemented | Essential for git integration in task workflows |
 
+**Tier 1 Command Specifications:**
+
+`check-complete` validates readiness before lifecycle transitions:
+- Verifies all tasks in spec/phase have `status: completed`
+- Checks no tasks are `blocked` or `in_progress`
+- Validates all completed tasks have journal entries (`needs_journaling: false`)
+- Returns structured result with blocking issues if not ready
+- **Workflow-blocking:** Called before `spec-lifecycle-complete` to prevent premature completion
+
+`create-task-commit` automates git commits during task workflows:
+- Creates atomic commit with task context (spec_id, task_id, title)
+- Follows configured commit message format from `.claude/sdd_config.json`
+- Stages only files modified during task (from task metadata)
+- **Workflow-blocking:** Core to the SDD auto-commit workflow when `git.auto_commit: true`
+
 **Partial Commands to Enhance:**
 | Command | Current MCP | Enhancement Needed |
 |---------|-------------|-------------------|

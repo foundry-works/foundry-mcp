@@ -217,7 +217,7 @@ The CLI implementation leverages existing core helpers to avoid duplication and 
 | `core/responses.py` | Response envelope helpers | Adapt for CLI JSON output |
 | `core/validation.py` | Spec validation + auto-fix | Direct use for `sdd validate` |
 | `core/security.py` | Input limits and sanitization | Direct use for path/input validation |
-| `core/observability.py` | Telemetry and tracing | Optional for CLI debugging |
+| `core/observability.py` | Telemetry and tracing | Required for CLI command tracking (parity with MCP) |
 | `core/resilience.py` | Retry and timeout patterns | Use for file operations |
 | `core/pagination.py` | Cursor-based pagination | Adapt for CLI list commands |
 
