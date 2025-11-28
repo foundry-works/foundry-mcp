@@ -892,6 +892,361 @@ class OpenAIProvider(LLMProvider):
 
 
 # =============================================================================
+# Anthropic Provider Implementation
+# =============================================================================
+
+
+class AnthropicProvider(LLMProvider):
+    """Anthropic API provider implementation.
+
+    Supports Claude 3 models (opus, sonnet, haiku) via the Anthropic API.
+
+    Attributes:
+        name: Provider identifier ('anthropic')
+        default_model: Default chat model ('claude-3-sonnet-20240229')
+        api_key: Anthropic API key
+        base_url: API base URL (for proxies)
+        max_tokens_default: Default max tokens for responses
+
+    Example:
+        provider = AnthropicProvider(api_key="sk-ant-...")
+        response = await provider.chat(ChatRequest(
+            messages=[ChatMessage(role=ChatRole.USER, content="Hello!")]
+        ))
+
+    Note:
+        Anthropic does not support embeddings. The embed() method will raise
+        an error if called.
+    """
+
+    name: str = "anthropic"
+    default_model: str = "claude-sonnet-4-20250514"
+    max_tokens_default: int = 4096
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        default_model: Optional[str] = None,
+        max_tokens_default: Optional[int] = None,
+    ):
+        """Initialize the Anthropic provider.
+
+        Args:
+            api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY env var)
+            base_url: API base URL (defaults to Anthropic's API)
+            default_model: Override default chat model
+            max_tokens_default: Override default max tokens
+        """
+        import os
+
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.base_url = base_url
+
+        if default_model:
+            self.default_model = default_model
+        if max_tokens_default:
+            self.max_tokens_default = max_tokens_default
+
+        self._client: Optional[Any] = None
+
+    def _get_client(self) -> Any:
+        """Get or create the Anthropic client (lazy initialization)."""
+        if self._client is None:
+            try:
+                from anthropic import AsyncAnthropic
+            except ImportError:
+                raise LLMError(
+                    "anthropic package not installed. Install with: pip install anthropic",
+                    provider=self.name,
+                )
+
+            if not self.api_key:
+                raise AuthenticationError(
+                    "Anthropic API key not provided. Set ANTHROPIC_API_KEY or pass api_key.",
+                    provider=self.name,
+                )
+
+            kwargs: Dict[str, Any] = {"api_key": self.api_key}
+            if self.base_url:
+                kwargs["base_url"] = self.base_url
+
+            self._client = AsyncAnthropic(**kwargs)
+
+        return self._client
+
+    def _handle_api_error(self, error: Exception) -> None:
+        """Convert Anthropic errors to LLMError types."""
+        error_str = str(error)
+        error_type = type(error).__name__
+
+        if "rate_limit" in error_str.lower() or error_type == "RateLimitError":
+            retry_after = None
+            if hasattr(error, "response") and error.response:
+                retry_after_str = error.response.headers.get("retry-after")
+                if retry_after_str:
+                    try:
+                        retry_after = float(retry_after_str)
+                    except ValueError:
+                        pass
+            raise RateLimitError(error_str, provider=self.name, retry_after=retry_after)
+
+        if "authentication" in error_str.lower() or error_type == "AuthenticationError":
+            raise AuthenticationError(error_str, provider=self.name)
+
+        if "invalid" in error_str.lower() or error_type == "BadRequestError":
+            raise InvalidRequestError(error_str, provider=self.name)
+
+        if "not found" in error_str.lower() or error_type == "NotFoundError":
+            raise ModelNotFoundError(error_str, provider=self.name)
+
+        # Generic error
+        raise LLMError(error_str, provider=self.name, retryable=True)
+
+    def _convert_messages(self, messages: List[ChatMessage]) -> tuple[Optional[str], List[Dict[str, Any]]]:
+        """Convert ChatMessages to Anthropic format, extracting system message.
+
+        Anthropic requires system message as a separate parameter.
+
+        Returns:
+            Tuple of (system_message, messages_list)
+        """
+        system_message = None
+        converted = []
+
+        for msg in messages:
+            if msg.role == ChatRole.SYSTEM:
+                # Anthropic takes system as separate param
+                system_message = msg.content
+            elif msg.role == ChatRole.TOOL:
+                # Tool results in Anthropic format
+                converted.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": msg.tool_call_id,
+                        "content": msg.content,
+                    }],
+                })
+            elif msg.role == ChatRole.ASSISTANT and msg.tool_calls:
+                # Assistant message with tool calls
+                content: List[Dict[str, Any]] = []
+                if msg.content:
+                    content.append({"type": "text", "text": msg.content})
+                for tc in msg.tool_calls:
+                    import json
+                    content.append({
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": json.loads(tc.arguments) if tc.arguments else {},
+                    })
+                converted.append({"role": "assistant", "content": content})
+            else:
+                # Regular user/assistant message
+                converted.append({
+                    "role": msg.role.value,
+                    "content": msg.content or "",
+                })
+
+        return system_message, converted
+
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Generate a text completion using Anthropic's API.
+
+        Uses the messages API internally.
+        """
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            response = await client.messages.create(
+                model=model,
+                messages=[{"role": "user", "content": request.prompt}],
+                max_tokens=request.max_tokens or self.max_tokens_default,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                stop_sequences=request.stop or [],
+            )
+
+            text = ""
+            for block in response.content:
+                if block.type == "text":
+                    text += block.text
+
+            usage = TokenUsage(
+                prompt_tokens=response.usage.input_tokens,
+                completion_tokens=response.usage.output_tokens,
+                total_tokens=response.usage.input_tokens + response.usage.output_tokens,
+            )
+
+            return CompletionResponse(
+                text=text,
+                finish_reason=self._map_stop_reason(response.stop_reason),
+                usage=usage,
+                model=response.model,
+                raw_response=response.model_dump() if hasattr(response, "model_dump") else None,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def chat(self, request: ChatRequest) -> ChatResponse:
+        """Generate a chat completion using Anthropic's API."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            system_message, messages = self._convert_messages(request.messages)
+
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": request.max_tokens or self.max_tokens_default,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+            }
+
+            if system_message:
+                kwargs["system"] = system_message
+            if request.stop:
+                kwargs["stop_sequences"] = request.stop
+            if request.tools:
+                # Convert OpenAI-style tools to Anthropic format
+                kwargs["tools"] = self._convert_tools(request.tools)
+
+            response = await client.messages.create(**kwargs)
+
+            # Parse response content
+            content_text = None
+            tool_calls = []
+
+            for block in response.content:
+                if block.type == "text":
+                    content_text = (content_text or "") + block.text
+                elif block.type == "tool_use":
+                    import json
+                    tool_calls.append(ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=json.dumps(block.input),
+                    ))
+
+            usage = TokenUsage(
+                prompt_tokens=response.usage.input_tokens,
+                completion_tokens=response.usage.output_tokens,
+                total_tokens=response.usage.input_tokens + response.usage.output_tokens,
+            )
+
+            return ChatResponse(
+                message=ChatMessage(
+                    role=ChatRole.ASSISTANT,
+                    content=content_text,
+                    tool_calls=tool_calls if tool_calls else None,
+                ),
+                finish_reason=self._map_stop_reason(response.stop_reason),
+                usage=usage,
+                model=response.model,
+                raw_response=response.model_dump() if hasattr(response, "model_dump") else None,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
+        """Anthropic does not support embeddings.
+
+        Raises:
+            LLMError: Always, as embeddings are not supported
+        """
+        raise LLMError(
+            "Anthropic does not support embeddings. Use OpenAI or a local embedding model.",
+            provider=self.name,
+            retryable=False,
+        )
+
+    async def stream_chat(self, request: ChatRequest) -> AsyncIterator[ChatResponse]:
+        """Stream chat completion tokens from Anthropic."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            system_message, messages = self._convert_messages(request.messages)
+
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": request.max_tokens or self.max_tokens_default,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+            }
+
+            if system_message:
+                kwargs["system"] = system_message
+            if request.stop:
+                kwargs["stop_sequences"] = request.stop
+
+            async with client.messages.stream(**kwargs) as stream:
+                async for text in stream.text_stream:
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=ChatRole.ASSISTANT,
+                            content=text,
+                        ),
+                        finish_reason=FinishReason.STOP,
+                        model=model,
+                    )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    def _convert_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert OpenAI-style tool definitions to Anthropic format."""
+        converted = []
+        for tool in tools:
+            if tool.get("type") == "function":
+                func = tool.get("function", {})
+                converted.append({
+                    "name": func.get("name"),
+                    "description": func.get("description", ""),
+                    "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
+                })
+        return converted
+
+    def _map_stop_reason(self, reason: Optional[str]) -> FinishReason:
+        """Map Anthropic stop reason to FinishReason enum."""
+        if reason is None:
+            return FinishReason.STOP
+
+        mapping = {
+            "end_turn": FinishReason.STOP,
+            "stop_sequence": FinishReason.STOP,
+            "max_tokens": FinishReason.LENGTH,
+            "tool_use": FinishReason.TOOL_CALL,
+        }
+        return mapping.get(reason, FinishReason.STOP)
+
+    def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+        """Estimate tokens for Anthropic models.
+
+        Uses anthropic's token counting if available, otherwise rough estimate.
+        """
+        try:
+            from anthropic import Anthropic
+            client = Anthropic(api_key=self.api_key or "dummy")
+            return client.count_tokens(text)
+        except (ImportError, Exception):
+            # Rough estimate: ~4 characters per token
+            return len(text) // 4
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -920,4 +1275,5 @@ __all__ = [
     "LLMProvider",
     # Providers
     "OpenAIProvider",
+    "AnthropicProvider",
 ]

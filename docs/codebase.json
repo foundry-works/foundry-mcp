@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-28T00:05:30.397922Z",
-    "generated_at_commit": "15fab0a506a07717c8622bb0aa2523af21b77d12",
+    "generated_at": "2025-11-28T00:07:08.823547Z",
+    "generated_at_commit": "4a6a9ddad1558fc84beef5bbe2d79e70466b37d3",
     "languages": [
       "python"
     ],
@@ -11,8 +11,8 @@
   },
   "statistics": {
     "total_files": 49,
-    "total_lines": 25309,
-    "total_classes": 90,
+    "total_lines": 25643,
+    "total_classes": 91,
     "total_functions": 223,
     "avg_complexity": 8.91,
     "max_complexity": 160,
@@ -26,8 +26,8 @@
     "by_language": {
       "python": {
         "files": 49,
-        "lines": 25309,
-        "classes": 90,
+        "lines": 25643,
+        "classes": 91,
         "functions": 223,
         "avg_complexity": 8.91
       }
@@ -488,7 +488,8 @@
         "InvalidRequestError",
         "ModelNotFoundError",
         "ContentFilterError",
-        "LLMProvider"
+        "LLMProvider",
+        "OpenAIProvider"
       ],
       "functions": [],
       "imports": [
@@ -506,7 +507,7 @@
         "typing.Union"
       ],
       "exports": [],
-      "lines": 589
+      "lines": 923
     },
     {
       "name": "naming",
@@ -3298,8 +3299,19 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 754,
+          "context": [
+            "OpenAIProvider",
+            "chat"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "ChatMessage",
@@ -3323,10 +3335,28 @@
             "LLMProvider",
             "health_check"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 769,
+          "context": [
+            "OpenAIProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "stream_chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 851,
+          "context": [
+            "OpenAIProvider",
+            "stream_chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 3
     },
     {
       "name": "CompletionRequest",
@@ -3392,8 +3422,37 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "complete",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 702,
+          "context": [
+            "OpenAIProvider",
+            "complete"
+          ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 762,
+          "context": [
+            "OpenAIProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "embed",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 803,
+          "context": [
+            "OpenAIProvider",
+            "embed"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 3
     },
     {
       "name": "CompletionResponse",
@@ -3406,8 +3465,19 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "complete",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 708,
+          "context": [
+            "OpenAIProvider",
+            "complete"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "ChatResponse",
@@ -3420,8 +3490,28 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 768,
+          "context": [
+            "OpenAIProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "stream_chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 850,
+          "context": [
+            "OpenAIProvider",
+            "stream_chat"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 2
     },
     {
       "name": "EmbeddingResponse",
@@ -3434,8 +3524,19 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "embed",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 808,
+          "context": [
+            "OpenAIProvider",
+            "embed"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "LLMError",
@@ -3452,8 +3553,28 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "_get_client",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 627,
+          "context": [
+            "OpenAIProvider",
+            "_get_client"
+          ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 678,
+          "context": [
+            "OpenAIProvider",
+            "_handle_api_error"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 2
     },
     {
       "name": "RateLimitError",
@@ -3470,8 +3591,19 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 663,
+          "context": [
+            "OpenAIProvider",
+            "_handle_api_error"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "AuthenticationError",
@@ -3488,8 +3620,28 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "_get_client",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 633,
+          "context": [
+            "OpenAIProvider",
+            "_get_client"
+          ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 666,
+          "context": [
+            "OpenAIProvider",
+            "_handle_api_error"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 2
     },
     {
       "name": "InvalidRequestError",
@@ -3551,10 +3703,19 @@
             "LLMProvider",
             "validate_request"
           ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 669,
+          "context": [
+            "OpenAIProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 5
+      "instantiation_count": 6
     },
     {
       "name": "ModelNotFoundError",
@@ -3571,8 +3732,19 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 672,
+          "context": [
+            "OpenAIProvider",
+            "_handle_api_error"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "ContentFilterError",
@@ -3589,8 +3761,19 @@
       "properties": [],
       "is_exported": false,
       "is_public": true,
-      "instantiated_by": [],
-      "imported_by": []
+      "instantiated_by": [
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 675,
+          "context": [
+            "OpenAIProvider",
+            "_handle_api_error"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
     },
     {
       "name": "LLMProvider",
@@ -3611,6 +3794,32 @@
         "validate_request",
         "get_model",
         "health_check"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "OpenAIProvider",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 567,
+      "language": "python",
+      "docstring": "OpenAI API provider implementation.\n\nSupports GPT-4, GPT-3.5-turbo, and embedding models via the OpenAI API.\n\nAttributes:\n    name: Provider identifier ('openai')\n    default_model: Default chat model ('gpt-4')\n    default_embedding_model: Default embedding model\n    api_key: OpenAI API key\n    organization: Optional organization ID\n    base_url: API base URL (for proxies/Azure)\n\nExample:\n    provider = OpenAIProvider(api_key=\"sk-...\")\n    response = await provider.chat(ChatRequest(\n        messages=[ChatMessage(role=ChatRole.USER, content=\"Hello!\")]\n    ))",
+      "bases": [
+        "LLMProvider"
+      ],
+      "methods": [
+        "__init__",
+        "_get_client",
+        "_handle_api_error",
+        "complete",
+        "chat",
+        "embed",
+        "stream_chat",
+        "_map_finish_reason",
+        "count_tokens"
       ],
       "properties": [],
       "is_exported": false,
@@ -6024,13 +6233,13 @@
       "calls": [
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 771,
           "call_type": "method_call"
         },
         {
           "name": "cancel",
-          "file": "src/foundry_mcp/core/concurrency.py",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
           "line": 772,
           "call_type": "method_call"
         },
@@ -6042,13 +6251,13 @@
         },
         {
           "name": "done",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 785,
           "call_type": "method_call"
         },
         {
           "name": "result",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 787,
           "call_type": "method_call"
         },
@@ -6084,7 +6293,7 @@
         },
         {
           "name": "cancel",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "src/foundry_mcp/core/concurrency.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -8184,7 +8393,7 @@
         },
         {
           "name": "read",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 533,
           "call_type": "method_call"
         },
@@ -8196,7 +8405,7 @@
         },
         {
           "name": "write",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 535,
           "call_type": "method_call"
         },
