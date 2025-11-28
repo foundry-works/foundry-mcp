@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-28T00:08:54.899735Z",
-    "generated_at_commit": "410931544d1605284e914c768da843016d564b39",
+    "generated_at": "2025-11-28T11:29:25.630137Z",
+    "generated_at_commit": "7ab75d6c110bccbbb30522aa8185e47a58b36c29",
     "languages": [
       "python"
     ],
@@ -11,8 +11,8 @@
   },
   "statistics": {
     "total_files": 49,
-    "total_lines": 25999,
-    "total_classes": 92,
+    "total_lines": 26289,
+    "total_classes": 93,
     "total_functions": 223,
     "avg_complexity": 8.91,
     "max_complexity": 160,
@@ -26,8 +26,8 @@
     "by_language": {
       "python": {
         "files": 49,
-        "lines": 25999,
-        "classes": 92,
+        "lines": 26289,
+        "classes": 93,
         "functions": 223,
         "avg_complexity": 8.91
       }
@@ -490,7 +490,8 @@
         "ContentFilterError",
         "LLMProvider",
         "OpenAIProvider",
-        "AnthropicProvider"
+        "AnthropicProvider",
+        "LocalProvider"
       ],
       "functions": [],
       "imports": [
@@ -508,7 +509,7 @@
         "typing.Union"
       ],
       "exports": [],
-      "lines": 1279
+      "lines": 1569
     },
     {
       "name": "naming",
@@ -3318,10 +3319,19 @@
             "AnthropicProvider",
             "chat"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1408,
+          "context": [
+            "LocalProvider",
+            "chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 2
+      "instantiation_count": 3
     },
     {
       "name": "ChatMessage",
@@ -3381,10 +3391,28 @@
             "AnthropicProvider",
             "stream_chat"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1423,
+          "context": [
+            "LocalProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "stream_chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1499,
+          "context": [
+            "LocalProvider",
+            "stream_chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 5
+      "instantiation_count": 7
     },
     {
       "name": "CompletionRequest",
@@ -3495,10 +3523,37 @@
             "AnthropicProvider",
             "chat"
           ]
+        },
+        {
+          "instantiator": "complete",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1359,
+          "context": [
+            "LocalProvider",
+            "complete"
+          ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1416,
+          "context": [
+            "LocalProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "embed",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1451,
+          "context": [
+            "LocalProvider",
+            "embed"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 5
+      "instantiation_count": 8
     },
     {
       "name": "CompletionResponse",
@@ -3529,10 +3584,19 @@
             "AnthropicProvider",
             "complete"
           ]
+        },
+        {
+          "instantiator": "complete",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1365,
+          "context": [
+            "LocalProvider",
+            "complete"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 2
+      "instantiation_count": 3
     },
     {
       "name": "ChatResponse",
@@ -3581,10 +3645,28 @@
             "AnthropicProvider",
             "stream_chat"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1422,
+          "context": [
+            "LocalProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "stream_chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1498,
+          "context": [
+            "LocalProvider",
+            "stream_chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 4
+      "instantiation_count": 6
     },
     {
       "name": "EmbeddingResponse",
@@ -3606,10 +3688,19 @@
             "OpenAIProvider",
             "embed"
           ]
+        },
+        {
+          "instantiator": "embed",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1456,
+          "context": [
+            "LocalProvider",
+            "embed"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 2
     },
     {
       "name": "LLMError",
@@ -3671,10 +3762,37 @@
             "AnthropicProvider",
             "embed"
           ]
+        },
+        {
+          "instantiator": "_get_client",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1310,
+          "context": [
+            "LocalProvider",
+            "_get_client"
+          ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1327,
+          "context": [
+            "LocalProvider",
+            "_handle_api_error"
+          ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1340,
+          "context": [
+            "LocalProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 5
+      "instantiation_count": 8
     },
     {
       "name": "RateLimitError",
@@ -3886,10 +4004,19 @@
             "AnthropicProvider",
             "_handle_api_error"
           ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1335,
+          "context": [
+            "LocalProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 2
+      "instantiation_count": 3
     },
     {
       "name": "ContentFilterError",
@@ -3993,6 +4120,32 @@
         "_convert_tools",
         "_map_stop_reason",
         "count_tokens"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "LocalProvider",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 1254,
+      "language": "python",
+      "docstring": "Local LLM provider using Ollama or llama.cpp compatible API.\n\nSupports local models via Ollama's OpenAI-compatible API endpoint.\n\nAttributes:\n    name: Provider identifier ('local')\n    default_model: Default model ('llama3.2')\n    base_url: Local API endpoint (default: http://localhost:11434/v1)\n\nExample:\n    # Using Ollama (default)\n    provider = LocalProvider()\n    response = await provider.chat(ChatRequest(\n        messages=[ChatMessage(role=ChatRole.USER, content=\"Hello!\")]\n    ))\n\n    # Custom endpoint\n    provider = LocalProvider(base_url=\"http://localhost:8080/v1\")",
+      "bases": [
+        "LLMProvider"
+      ],
+      "methods": [
+        "__init__",
+        "_get_client",
+        "_handle_api_error",
+        "complete",
+        "chat",
+        "embed",
+        "stream_chat",
+        "_map_finish_reason",
+        "health_check"
       ],
       "properties": [],
       "is_exported": false,
@@ -6430,7 +6583,7 @@
         },
         {
           "name": "result",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 787,
           "call_type": "method_call"
         },

@@ -2,7 +2,7 @@
   "spec_id": "sdd-llm-features-2025-11-27-001",
   "title": "SDD LLM-Powered Features - AI Integration",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-28T00:10:01.754389Z",
+  "last_updated": "2025-11-28T11:31:06.208431Z",
   "metadata": {
     "description": "Implement LLM-powered SDD operations including provider abstraction, review workflows, PR creation, and AI-enhanced documentation. Requires configurable LLM provider support with graceful degradation.",
     "objectives": [
@@ -24,7 +24,7 @@
     ],
     "status": "active",
     "activated_date": "2025-11-28T00:02:09.184712Z",
-    "progress_percentage": 9,
+    "progress_percentage": 11,
     "current_phase": "phase-1"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-4"
       ],
       "total_tasks": 42,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {}
     },
     "phase-1": {
@@ -53,7 +53,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 15,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Foundation for all LLM-powered features - provider abstraction and configuration",
         "risk_level": "medium"
@@ -79,7 +79,7 @@
         "task-1-5"
       ],
       "total_tasks": 12,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -192,7 +192,7 @@
     "task-1-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/llm_config.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-1-files",
       "children": [
         "task-1-2-1",
@@ -202,7 +202,7 @@
         "task-1-2-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/llm_config.py",
         "task_category": "implementation",
@@ -222,13 +222,19 @@
     "task-1-2-1": {
       "type": "subtask",
       "title": "Implement TOML config parsing for [llm] section",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-2",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Parse provider, api_key, model, timeout from foundry-mcp.toml"
+        "details": "Parse provider, api_key, model, timeout from foundry-mcp.toml",
+        "started_at": "2025-11-28T11:29:28.430233Z",
+        "status_note": "Starting TOML config parsing implementation",
+        "completed_at": "2025-11-28T11:31:06.204198Z",
+        "needs_journaling": false,
+        "actual_hours": 0.027,
+        "journaled_at": "2025-11-28T11:31:06.207308Z"
       }
     },
     "task-1-2-2": {
@@ -1145,6 +1151,15 @@
       "content": "Implemented LocalProvider class for Ollama/llama.cpp support using OpenAI-compatible API. Features: configurable base_url (default http://localhost:11434/v1), default model llama3.2, default embedding model nomic-embed-text, complete()/chat()/embed()/stream_chat() methods using AsyncOpenAI client, helpful error messages for connection failures and missing models, health_check() using Ollama's /api/tags endpoint. Import verified alongside OpenAIProvider and AnthropicProvider.",
       "metadata": {},
       "task_id": "task-1-1-4"
+    },
+    {
+      "timestamp": "2025-11-28T11:31:06.207300Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement TOML config parsing for [llm] section",
+      "author": "claude-code",
+      "content": "Implemented TOML config parsing for [llm] section in src/foundry_mcp/core/llm_config.py. Created LLMConfig dataclass with fields for provider, api_key, model, timeout, base_url, organization, max_tokens, and temperature. Includes from_toml() and from_dict() class methods for parsing, plus get_api_key() and get_model() methods with defaults. Validation ensures required fields are present. All 1746 existing tests pass. Manual verification confirmed parsing works correctly with test cases for basic instantiation, dict parsing, default models per provider, invalid provider validation, and global config functions.",
+      "metadata": {},
+      "task_id": "task-1-2-1"
     }
   ]
 }
