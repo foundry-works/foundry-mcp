@@ -2,7 +2,7 @@
   "spec_id": "sdd-llm-features-2025-11-27-001",
   "title": "SDD LLM-Powered Features - AI Integration",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-28T12:25:14.672588Z",
+  "last_updated": "2025-11-28T14:00:21.956943Z",
   "metadata": {
     "description": "Implement LLM-powered SDD operations including provider abstraction, review workflows, PR creation, and AI-enhanced documentation. Requires configurable LLM provider support with graceful degradation.",
     "objectives": [
@@ -24,8 +24,8 @@
     ],
     "status": "active",
     "activated_date": "2025-11-28T00:02:09.184712Z",
-    "progress_percentage": 59,
-    "current_phase": "phase-2"
+    "progress_percentage": 61,
+    "current_phase": "phase-3"
   },
   "hierarchy": {
     "spec-root": {
@@ -40,7 +40,7 @@
         "phase-4"
       ],
       "total_tasks": 42,
-      "completed_tasks": 25,
+      "completed_tasks": 26,
       "metadata": {}
     },
     "phase-1": {
@@ -816,7 +816,7 @@
     "phase-3": {
       "type": "phase",
       "title": "LLM-Powered Documentation",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-3-files",
@@ -832,7 +832,7 @@
         ]
       },
       "total_tasks": 9,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "AI-enhanced documentation generation capabilities",
         "risk_level": "high"
@@ -841,7 +841,7 @@
     "phase-3-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3",
       "children": [
         "task-3-1",
@@ -849,7 +849,7 @@
         "task-3-3"
       ],
       "total_tasks": 6,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -862,7 +862,7 @@
     "task-3-1": {
       "type": "task",
       "title": "src/foundry_mcp/tools/documentation.py",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3-files",
       "children": [
         "task-3-1-1",
@@ -871,7 +871,7 @@
         "task-3-1-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/documentation.py",
         "task_category": "implementation",
@@ -890,13 +890,19 @@
     "task-3-1-1": {
       "type": "subtask",
       "title": "Implement spec-doc - generate human-facing documentation bundles",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd doc, generate markdown/HTML documentation from spec"
+        "details": "Wrap sdd doc, generate markdown/HTML documentation from spec",
+        "started_at": "2025-11-28T13:57:14.057851Z",
+        "status_note": "Starting implementation of spec-doc tool in documentation.py",
+        "completed_at": "2025-11-28T14:00:21.951269Z",
+        "needs_journaling": false,
+        "actual_hours": 0.052,
+        "journaled_at": "2025-11-28T14:00:21.955637Z"
       }
     },
     "task-3-1-2": {
@@ -1490,6 +1496,15 @@
       "content": "All child tasks in phase phase-2 have been completed.",
       "metadata": {},
       "task_id": "phase-2"
+    },
+    {
+      "timestamp": "2025-11-28T14:00:21.955632Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-doc - generate human-facing documentation bundles",
+      "author": "claude-code",
+      "content": "Implemented spec-doc tool in src/foundry_mcp/tools/documentation.py. The tool wraps sdd render CLI to generate human-facing markdown documentation bundles from SDD specifications.\n\nKey features implemented:\n- Wraps sdd render command with proper error handling\n- Supports markdown output format (md/markdown)\n- Two rendering modes: basic (fast) and enhanced (AI features)\n- Circuit breaker for resilience (3 failures, 60s recovery)\n- Full response-v2 envelope compliance with proper error codes\n- Telemetry/metrics integration via observability module\n\nFiles created/modified:\n- src/foundry_mcp/tools/documentation.py (new, ~270 lines)\n- src/foundry_mcp/tools/__init__.py (added export)\n- src/foundry_mcp/server.py (added import and registration)\n- tests/unit/test_documentation.py (new, 15 unit tests)\n\nAll 15 unit tests passing. Tool properly registered and ready for use.",
+      "metadata": {},
+      "task_id": "task-3-1-1"
     }
   ]
 }
