@@ -2,17 +2,17 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-27T23:53:46.260463Z",
-    "generated_at_commit": "f898600fa7908ae6e6965a5004a35cd11ba591c7",
+    "generated_at": "2025-11-28T00:05:30.397922Z",
+    "generated_at_commit": "15fab0a506a07717c8622bb0aa2523af21b77d12",
     "languages": [
       "python"
     ],
     "schema_version": "2.0"
   },
   "statistics": {
-    "total_files": 48,
-    "total_lines": 24720,
-    "total_classes": 72,
+    "total_files": 49,
+    "total_lines": 25309,
+    "total_classes": 90,
     "total_functions": 223,
     "avg_complexity": 8.91,
     "max_complexity": 160,
@@ -25,9 +25,9 @@
     ],
     "by_language": {
       "python": {
-        "files": 48,
-        "lines": 24720,
-        "classes": 72,
+        "files": 49,
+        "lines": 25309,
+        "classes": 90,
         "functions": 223,
         "avg_complexity": 8.91
       }
@@ -464,6 +464,49 @@
       ],
       "exports": [],
       "lines": 510
+    },
+    {
+      "name": "llm_provider",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "language": "python",
+      "docstring": "LLM Provider abstraction for foundry-mcp.\n\nProvides a unified interface for interacting with different LLM providers\n(OpenAI, Anthropic, local models) with consistent error handling,\nrate limiting, and observability.\n\nExample:\n    from foundry_mcp.core.llm_provider import (\n        LLMProvider, ChatMessage, ChatRole, CompletionRequest\n    )\n\n    class MyProvider(LLMProvider):\n        async def complete(self, request: CompletionRequest) -> CompletionResponse:\n            # Implementation\n            pass\n\n        async def chat(self, messages: List[ChatMessage], **kwargs) -> ChatResponse:\n            # Implementation\n            pass\n\n        async def embed(self, texts: List[str], **kwargs) -> EmbeddingResponse:\n            # Implementation\n            pass",
+      "classes": [
+        "ChatRole",
+        "FinishReason",
+        "ToolCall",
+        "ChatMessage",
+        "CompletionRequest",
+        "ChatRequest",
+        "EmbeddingRequest",
+        "TokenUsage",
+        "CompletionResponse",
+        "ChatResponse",
+        "EmbeddingResponse",
+        "LLMError",
+        "RateLimitError",
+        "AuthenticationError",
+        "InvalidRequestError",
+        "ModelNotFoundError",
+        "ContentFilterError",
+        "LLMProvider"
+      ],
+      "functions": [],
+      "imports": [
+        "logging",
+        "abc.ABC",
+        "abc.abstractmethod",
+        "dataclasses.dataclass",
+        "dataclasses.field",
+        "enum.Enum",
+        "typing.Any",
+        "typing.AsyncIterator",
+        "typing.Dict",
+        "typing.List",
+        "typing.Optional",
+        "typing.Union"
+      ],
+      "exports": [],
+      "lines": 589
     },
     {
       "name": "naming",
@@ -3211,6 +3254,371 @@
       "instantiation_count": 1
     },
     {
+      "name": "ChatRole",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 41,
+      "language": "python",
+      "docstring": "Role of a message in a chat conversation.\n\nSYSTEM: System instructions/context\nUSER: User input\nASSISTANT: Model response\nTOOL: Tool/function call result",
+      "bases": [
+        "str",
+        "Enum"
+      ],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "FinishReason",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 56,
+      "language": "python",
+      "docstring": "Reason why the model stopped generating.\n\nSTOP: Natural completion (hit stop sequence or end)\nLENGTH: Hit max_tokens limit\nTOOL_CALL: Model wants to call a tool/function\nCONTENT_FILTER: Filtered due to content policy\nERROR: Generation error occurred",
+      "bases": [
+        "str",
+        "Enum"
+      ],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "ToolCall",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 79,
+      "language": "python",
+      "docstring": "A tool/function call requested by the model.\n\nAttributes:\n    id: Unique identifier for this tool call\n    name: Name of the tool/function to call\n    arguments: JSON-encoded arguments for the call",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "ChatMessage",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 94,
+      "language": "python",
+      "docstring": "A message in a chat conversation.\n\nAttributes:\n    role: The role of the message sender\n    content: The text content of the message\n    name: Optional name for the sender (for multi-user chats)\n    tool_calls: List of tool calls if role is ASSISTANT\n    tool_call_id: ID of the tool call this responds to (if role is TOOL)",
+      "bases": [],
+      "methods": [
+        "to_dict"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "health_check",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 552,
+          "context": [
+            "LLMProvider",
+            "health_check"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
+    },
+    {
+      "name": "CompletionRequest",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 134,
+      "language": "python",
+      "docstring": "Request for text completion (non-chat).\n\nAttributes:\n    prompt: The prompt to complete\n    max_tokens: Maximum tokens to generate\n    temperature: Sampling temperature (0-2)\n    top_p: Nucleus sampling parameter\n    stop: Stop sequences\n    model: Model identifier (optional, uses provider default)",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "ChatRequest",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 155,
+      "language": "python",
+      "docstring": "Request for chat completion.\n\nAttributes:\n    messages: The conversation messages\n    max_tokens: Maximum tokens to generate\n    temperature: Sampling temperature (0-2)\n    top_p: Nucleus sampling parameter\n    stop: Stop sequences\n    model: Model identifier (optional, uses provider default)\n    tools: Tool/function definitions for function calling\n    tool_choice: How to handle tool selection ('auto', 'none', or specific)",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "health_check",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 551,
+          "context": [
+            "LLMProvider",
+            "health_check"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 1
+    },
+    {
+      "name": "EmbeddingRequest",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 180,
+      "language": "python",
+      "docstring": "Request for text embeddings.\n\nAttributes:\n    texts: List of texts to embed\n    model: Model identifier (optional, uses provider default)\n    dimensions: Output dimension size (if supported by model)",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "TokenUsage",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 200,
+      "language": "python",
+      "docstring": "Token usage statistics.\n\nAttributes:\n    prompt_tokens: Tokens in the input\n    completion_tokens: Tokens in the output\n    total_tokens: Total tokens used",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "CompletionResponse",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 215,
+      "language": "python",
+      "docstring": "Response from text completion.\n\nAttributes:\n    text: The generated text\n    finish_reason: Why generation stopped\n    usage: Token usage statistics\n    model: Model that generated the response\n    raw_response: Original API response (for debugging)",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "ChatResponse",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 234,
+      "language": "python",
+      "docstring": "Response from chat completion.\n\nAttributes:\n    message: The assistant's response message\n    finish_reason: Why generation stopped\n    usage: Token usage statistics\n    model: Model that generated the response\n    raw_response: Original API response (for debugging)",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "EmbeddingResponse",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 253,
+      "language": "python",
+      "docstring": "Response from embedding request.\n\nAttributes:\n    embeddings: List of embedding vectors\n    usage: Token usage statistics\n    model: Model that generated the embeddings\n    dimensions: Dimension size of embeddings",
+      "bases": [],
+      "methods": [],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "LLMError",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 274,
+      "language": "python",
+      "docstring": "Base exception for LLM operations.\n\nAttributes:\n    message: Human-readable error description\n    provider: Name of the provider that raised the error\n    retryable: Whether the operation can be retried\n    status_code: HTTP status code if applicable",
+      "bases": [
+        "Exception"
+      ],
+      "methods": [
+        "__init__"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "RateLimitError",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 298,
+      "language": "python",
+      "docstring": "Rate limit exceeded error.\n\nAttributes:\n    retry_after: Seconds to wait before retrying",
+      "bases": [
+        "LLMError"
+      ],
+      "methods": [
+        "__init__"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "AuthenticationError",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 316,
+      "language": "python",
+      "docstring": "Authentication failed error.",
+      "bases": [
+        "LLMError"
+      ],
+      "methods": [
+        "__init__"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "InvalidRequestError",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 328,
+      "language": "python",
+      "docstring": "Invalid request error (bad parameters, etc.).",
+      "bases": [
+        "LLMError"
+      ],
+      "methods": [
+        "__init__"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [
+        {
+          "instantiator": "validate_request",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 516,
+          "context": [
+            "LLMProvider",
+            "validate_request"
+          ]
+        },
+        {
+          "instantiator": "validate_request",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 518,
+          "context": [
+            "LLMProvider",
+            "validate_request"
+          ]
+        },
+        {
+          "instantiator": "validate_request",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 522,
+          "context": [
+            "LLMProvider",
+            "validate_request"
+          ]
+        },
+        {
+          "instantiator": "validate_request",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 524,
+          "context": [
+            "LLMProvider",
+            "validate_request"
+          ]
+        },
+        {
+          "instantiator": "validate_request",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 528,
+          "context": [
+            "LLMProvider",
+            "validate_request"
+          ]
+        }
+      ],
+      "imported_by": [],
+      "instantiation_count": 5
+    },
+    {
+      "name": "ModelNotFoundError",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 342,
+      "language": "python",
+      "docstring": "Requested model not found or not accessible.",
+      "bases": [
+        "LLMError"
+      ],
+      "methods": [
+        "__init__"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "ContentFilterError",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 356,
+      "language": "python",
+      "docstring": "Content was filtered due to policy violation.",
+      "bases": [
+        "LLMError"
+      ],
+      "methods": [
+        "__init__"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "LLMProvider",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 373,
+      "language": "python",
+      "docstring": "Abstract base class for LLM providers.\n\nDefines the interface that all LLM provider implementations must follow.\nProvides consistent methods for completion, chat, and embedding operations.\n\nAttributes:\n    name: Provider name (e.g., 'openai', 'anthropic', 'local')\n    default_model: Default model to use if not specified in requests\n\nExample:\n    class OpenAIProvider(LLMProvider):\n        name = \"openai\"\n        default_model = \"gpt-4\"\n\n        async def complete(self, request: CompletionRequest) -> CompletionResponse:\n            # Call OpenAI API\n            pass",
+      "bases": [
+        "ABC"
+      ],
+      "methods": [
+        "complete",
+        "chat",
+        "embed",
+        "stream_chat",
+        "stream_complete",
+        "count_tokens",
+        "validate_request",
+        "get_model",
+        "health_check"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
       "name": "MetricType",
       "file": "src/foundry_mcp/core/observability.py",
       "line": 206,
@@ -5616,7 +6024,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 771,
           "call_type": "method_call"
         },
@@ -5634,13 +6042,13 @@
         },
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 785,
           "call_type": "method_call"
         },
         {
           "name": "result",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 787,
           "call_type": "method_call"
         },
@@ -7788,7 +8196,7 @@
         },
         {
           "name": "write",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 535,
           "call_type": "method_call"
         },
@@ -27646,6 +28054,20 @@
       "typing.List",
       "typing.Optional",
       "typing.TypeVar",
+      "typing.Union"
+    ],
+    "src/foundry_mcp/core/llm_provider.py": [
+      "logging",
+      "abc.ABC",
+      "abc.abstractmethod",
+      "dataclasses.dataclass",
+      "dataclasses.field",
+      "enum.Enum",
+      "typing.Any",
+      "typing.AsyncIterator",
+      "typing.Dict",
+      "typing.List",
+      "typing.Optional",
       "typing.Union"
     ],
     "src/foundry_mcp/core/naming.py": [

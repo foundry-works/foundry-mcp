@@ -560,6 +560,338 @@ class LLMProvider(ABC):
 
 
 # =============================================================================
+# OpenAI Provider Implementation
+# =============================================================================
+
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI API provider implementation.
+
+    Supports GPT-4, GPT-3.5-turbo, and embedding models via the OpenAI API.
+
+    Attributes:
+        name: Provider identifier ('openai')
+        default_model: Default chat model ('gpt-4')
+        default_embedding_model: Default embedding model
+        api_key: OpenAI API key
+        organization: Optional organization ID
+        base_url: API base URL (for proxies/Azure)
+
+    Example:
+        provider = OpenAIProvider(api_key="sk-...")
+        response = await provider.chat(ChatRequest(
+            messages=[ChatMessage(role=ChatRole.USER, content="Hello!")]
+        ))
+    """
+
+    name: str = "openai"
+    default_model: str = "gpt-4"
+    default_embedding_model: str = "text-embedding-3-small"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        organization: Optional[str] = None,
+        base_url: Optional[str] = None,
+        default_model: Optional[str] = None,
+        default_embedding_model: Optional[str] = None,
+    ):
+        """Initialize the OpenAI provider.
+
+        Args:
+            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
+            organization: Optional organization ID
+            base_url: API base URL (defaults to OpenAI's API)
+            default_model: Override default chat model
+            default_embedding_model: Override default embedding model
+        """
+        import os
+
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.organization = organization or os.environ.get("OPENAI_ORGANIZATION")
+        self.base_url = base_url or "https://api.openai.com/v1"
+
+        if default_model:
+            self.default_model = default_model
+        if default_embedding_model:
+            self.default_embedding_model = default_embedding_model
+
+        self._client: Optional[Any] = None
+
+    def _get_client(self) -> Any:
+        """Get or create the OpenAI client (lazy initialization)."""
+        if self._client is None:
+            try:
+                from openai import AsyncOpenAI
+            except ImportError:
+                raise LLMError(
+                    "openai package not installed. Install with: pip install openai",
+                    provider=self.name,
+                )
+
+            if not self.api_key:
+                raise AuthenticationError(
+                    "OpenAI API key not provided. Set OPENAI_API_KEY or pass api_key.",
+                    provider=self.name,
+                )
+
+            self._client = AsyncOpenAI(
+                api_key=self.api_key,
+                organization=self.organization,
+                base_url=self.base_url,
+            )
+
+        return self._client
+
+    def _handle_api_error(self, error: Exception) -> None:
+        """Convert OpenAI errors to LLMError types."""
+        error_str = str(error)
+        error_type = type(error).__name__
+
+        if "rate_limit" in error_str.lower() or error_type == "RateLimitError":
+            # Try to extract retry-after
+            retry_after = None
+            if hasattr(error, "response"):
+                retry_after = getattr(error.response.headers, "get", lambda x: None)(
+                    "retry-after"
+                )
+                if retry_after:
+                    try:
+                        retry_after = float(retry_after)
+                    except ValueError:
+                        retry_after = None
+            raise RateLimitError(error_str, provider=self.name, retry_after=retry_after)
+
+        if "authentication" in error_str.lower() or error_type == "AuthenticationError":
+            raise AuthenticationError(error_str, provider=self.name)
+
+        if "invalid" in error_str.lower() or error_type == "BadRequestError":
+            raise InvalidRequestError(error_str, provider=self.name)
+
+        if "not found" in error_str.lower() or error_type == "NotFoundError":
+            raise ModelNotFoundError(error_str, provider=self.name)
+
+        if "content_filter" in error_str.lower():
+            raise ContentFilterError(error_str, provider=self.name)
+
+        # Generic error
+        raise LLMError(error_str, provider=self.name, retryable=True)
+
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Generate a text completion using OpenAI's API.
+
+        Note: Uses chat completions API internally as legacy completions
+        are deprecated for most models.
+        """
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            # Use chat completions API (legacy completions deprecated)
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": request.prompt}],
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                stop=request.stop,
+            )
+
+            choice = response.choices[0]
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                completion_tokens=response.usage.completion_tokens if response.usage else 0,
+                total_tokens=response.usage.total_tokens if response.usage else 0,
+            )
+
+            return CompletionResponse(
+                text=choice.message.content or "",
+                finish_reason=self._map_finish_reason(choice.finish_reason),
+                usage=usage,
+                model=response.model,
+                raw_response=response.model_dump() if hasattr(response, "model_dump") else None,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise  # Unreachable but keeps type checker happy
+
+    async def chat(self, request: ChatRequest) -> ChatResponse:
+        """Generate a chat completion using OpenAI's API."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            # Convert messages to OpenAI format
+            messages = [msg.to_dict() for msg in request.messages]
+
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+            }
+
+            if request.stop:
+                kwargs["stop"] = request.stop
+            if request.tools:
+                kwargs["tools"] = request.tools
+            if request.tool_choice:
+                kwargs["tool_choice"] = request.tool_choice
+
+            response = await client.chat.completions.create(**kwargs)
+
+            choice = response.choices[0]
+            message = choice.message
+
+            # Parse tool calls if present
+            tool_calls = None
+            if message.tool_calls:
+                tool_calls = [
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=tc.function.arguments,
+                    )
+                    for tc in message.tool_calls
+                ]
+
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                completion_tokens=response.usage.completion_tokens if response.usage else 0,
+                total_tokens=response.usage.total_tokens if response.usage else 0,
+            )
+
+            return ChatResponse(
+                message=ChatMessage(
+                    role=ChatRole.ASSISTANT,
+                    content=message.content,
+                    tool_calls=tool_calls,
+                ),
+                finish_reason=self._map_finish_reason(choice.finish_reason),
+                usage=usage,
+                model=response.model,
+                raw_response=response.model_dump() if hasattr(response, "model_dump") else None,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
+        """Generate embeddings using OpenAI's API."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = request.model or self.default_embedding_model
+
+        try:
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "input": request.texts,
+            }
+
+            if request.dimensions:
+                kwargs["dimensions"] = request.dimensions
+
+            response = await client.embeddings.create(**kwargs)
+
+            embeddings = [item.embedding for item in response.data]
+
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                total_tokens=response.usage.total_tokens if response.usage else 0,
+            )
+
+            return EmbeddingResponse(
+                embeddings=embeddings,
+                usage=usage,
+                model=response.model,
+                dimensions=len(embeddings[0]) if embeddings else None,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def stream_chat(self, request: ChatRequest) -> AsyncIterator[ChatResponse]:
+        """Stream chat completion tokens from OpenAI."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            messages = [msg.to_dict() for msg in request.messages]
+
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+                "stream": True,
+            }
+
+            if request.stop:
+                kwargs["stop"] = request.stop
+
+            stream = await client.chat.completions.create(**kwargs)
+
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+
+                choice = chunk.choices[0]
+                delta = choice.delta
+
+                if delta.content:
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=ChatRole.ASSISTANT,
+                            content=delta.content,
+                        ),
+                        finish_reason=self._map_finish_reason(choice.finish_reason) if choice.finish_reason else FinishReason.STOP,
+                        model=chunk.model,
+                    )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    def _map_finish_reason(self, reason: Optional[str]) -> FinishReason:
+        """Map OpenAI finish reason to FinishReason enum."""
+        if reason is None:
+            return FinishReason.STOP
+
+        mapping = {
+            "stop": FinishReason.STOP,
+            "length": FinishReason.LENGTH,
+            "tool_calls": FinishReason.TOOL_CALL,
+            "function_call": FinishReason.TOOL_CALL,
+            "content_filter": FinishReason.CONTENT_FILTER,
+        }
+        return mapping.get(reason, FinishReason.STOP)
+
+    def count_tokens(self, text: str, model: Optional[str] = None) -> int:
+        """Count tokens using tiktoken (if available)."""
+        try:
+            import tiktoken
+
+            model_name = model or self.default_model
+            try:
+                encoding = tiktoken.encoding_for_model(model_name)
+            except KeyError:
+                encoding = tiktoken.get_encoding("cl100k_base")
+
+            return len(encoding.encode(text))
+        except ImportError:
+            # Fall back to rough estimate
+            return super().count_tokens(text, model)
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -586,4 +918,6 @@ __all__ = [
     "ContentFilterError",
     # Provider ABC
     "LLMProvider",
+    # Providers
+    "OpenAIProvider",
 ]
