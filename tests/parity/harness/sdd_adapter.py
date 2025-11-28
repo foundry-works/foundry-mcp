@@ -423,3 +423,667 @@ class SddToolkitAdapter(SpecToolAdapter):
     def move_spec(self, spec_id: str, target_status: str) -> Dict[str, Any]:
         """Move spec to a specific status folder."""
         return self._run_sdd("move-spec", spec_id, target_status)
+
+    # =========================================================================
+    # Authoring Operations
+    # =========================================================================
+
+    def add_task(
+        self,
+        spec_id: str,
+        parent: str,
+        title: str,
+        description: Optional[str] = None,
+        task_type: str = "task",
+        hours: Optional[float] = None,
+        position: Optional[int] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Add a new task to a specification."""
+        args = ["add-task", spec_id, "--parent", parent, "--title", title]
+
+        if description:
+            args.extend(["--description", description])
+        if task_type != "task":
+            args.extend(["--type", task_type])
+        if hours is not None:
+            args.extend(["--hours", str(hours)])
+        if position is not None:
+            args.extend(["--position", str(position)])
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "task_id": result.get("task_id"),
+                "parent": parent,
+                "title": title,
+                "type": task_type,
+                "dry_run": dry_run,
+            }
+        return result
+
+    def remove_task(
+        self,
+        spec_id: str,
+        task_id: str,
+        cascade: bool = False,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Remove a task from a specification."""
+        args = ["remove-task", spec_id, task_id]
+
+        if cascade:
+            args.append("--cascade")
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "task_id": task_id,
+                "spec_id": spec_id,
+                "cascade": cascade,
+                "children_removed": result.get("children_removed", 0),
+                "dry_run": dry_run,
+            }
+        return result
+
+    def add_assumption(
+        self,
+        spec_id: str,
+        text: str,
+        assumption_type: str = "constraint",
+        author: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Add an assumption to a specification."""
+        args = ["add-assumption", spec_id, "--text", text]
+
+        if assumption_type != "constraint":
+            args.extend(["--type", assumption_type])
+        if author:
+            args.extend(["--author", author])
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "assumption_id": result.get("assumption_id"),
+                "text": text,
+                "type": assumption_type,
+                "dry_run": dry_run,
+            }
+        return result
+
+    def list_assumptions(
+        self,
+        spec_id: str,
+        assumption_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List assumptions from a specification."""
+        args = ["list-assumptions", spec_id]
+
+        if assumption_type:
+            args.extend(["--type", assumption_type])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            assumptions = result.get("assumptions", [])
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "assumptions": assumptions,
+                "total_count": result.get("total_count", len(assumptions)),
+                "filter_type": assumption_type,
+            }
+        return result
+
+    def add_revision(
+        self,
+        spec_id: str,
+        version: str,
+        changes: str,
+        author: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Add a revision history entry."""
+        args = ["add-revision", spec_id, "--version", version, "--changes", changes]
+
+        if author:
+            args.extend(["--author", author])
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "version": version,
+                "changes": changes,
+                "dry_run": dry_run,
+            }
+        return result
+
+    def update_estimate(
+        self,
+        spec_id: str,
+        task_id: str,
+        hours: Optional[float] = None,
+        complexity: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Update task estimate."""
+        args = ["update-estimate", spec_id, task_id]
+
+        if hours is not None:
+            args.extend(["--hours", str(hours)])
+        if complexity:
+            args.extend(["--complexity", complexity])
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            response = {
+                "success": True,
+                "spec_id": spec_id,
+                "task_id": task_id,
+                "dry_run": dry_run,
+            }
+            if hours is not None:
+                response["hours"] = hours
+            if complexity:
+                response["complexity"] = complexity
+            if result.get("previous_hours") is not None:
+                response["previous_hours"] = result["previous_hours"]
+            if result.get("previous_complexity") is not None:
+                response["previous_complexity"] = result["previous_complexity"]
+            return response
+        return result
+
+    def update_task_metadata(
+        self,
+        spec_id: str,
+        task_id: str,
+        file_path: Optional[str] = None,
+        description: Optional[str] = None,
+        actual_hours: Optional[float] = None,
+        status_note: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Update task metadata fields."""
+        args = ["update-task-metadata", spec_id, task_id]
+
+        fields_updated = []
+        if file_path:
+            args.extend(["--file-path", file_path])
+            fields_updated.append("file_path")
+        if description:
+            args.extend(["--description", description])
+            fields_updated.append("description")
+        if actual_hours is not None:
+            args.extend(["--actual-hours", str(actual_hours)])
+            fields_updated.append("actual_hours")
+        if status_note:
+            args.extend(["--status-note", status_note])
+            fields_updated.append("status_note")
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "task_id": task_id,
+                "fields_updated": fields_updated,
+                "dry_run": dry_run,
+            }
+        return result
+
+    def task_list(
+        self,
+        spec_id: str,
+        status_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List all tasks in a specification."""
+        args = ["task-list", spec_id]
+
+        if status_filter:
+            args.extend(["--status", status_filter])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            tasks = result.get("tasks", [])
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "tasks": tasks,
+                "count": len(tasks),
+            }
+        return result
+
+    # =========================================================================
+    # Analysis Operations
+    # =========================================================================
+
+    def analyze_deps(
+        self,
+        spec_id: str,
+        bottleneck_threshold: int = 3,
+    ) -> Dict[str, Any]:
+        """Analyze dependency graph for bottlenecks and critical path."""
+        args = ["analyze-deps", spec_id, "--bottleneck-threshold", str(bottleneck_threshold)]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "dependency_count": result.get("dependency_count", 0),
+                "bottlenecks": result.get("bottlenecks", []),
+                "critical_path_length": result.get("critical_path_length", 0),
+                "has_bottlenecks": result.get("has_bottlenecks", False),
+            }
+        return result
+
+    def detect_cycles(
+        self,
+        spec_id: str,
+    ) -> Dict[str, Any]:
+        """Detect circular dependencies in task graph."""
+        args = ["find-circular-deps", spec_id]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            cycles = result.get("cycles", [])
+            affected_tasks = result.get("affected_tasks", [])
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "has_cycles": len(cycles) > 0,
+                "cycles": cycles,
+                "cycle_count": len(cycles),
+                "affected_tasks": affected_tasks,
+            }
+        return result
+
+    def find_patterns(
+        self,
+        spec_id: str,
+        pattern: str,
+    ) -> Dict[str, Any]:
+        """Find tasks with file_path matching pattern."""
+        args = ["find-pattern", spec_id, pattern]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            matches = result.get("matches", [])
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "pattern": pattern,
+                "matches": matches,
+                "total_count": len(matches),
+            }
+        return result
+
+    # =========================================================================
+    # Verification Operations
+    # =========================================================================
+
+    def add_verification(
+        self,
+        spec_id: str,
+        verify_id: str,
+        result: str,
+        command: Optional[str] = None,
+        output: Optional[str] = None,
+        issues: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Add verification result to verify node."""
+        args = ["add-verification", spec_id, verify_id, result]
+
+        if command:
+            args.extend(["--command", command])
+        if output:
+            args.extend(["--output", output])
+        if issues:
+            args.extend(["--issues", issues])
+        if notes:
+            args.extend(["--notes", notes])
+
+        cli_result = self._run_sdd(*args)
+
+        if isinstance(cli_result, dict) and cli_result.get("success", True) and "error" not in cli_result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "verify_id": verify_id,
+                "result": result,
+                "command": command,
+            }
+        return cli_result
+
+    def get_verification_results(
+        self,
+        spec_id: str,
+    ) -> Dict[str, Any]:
+        """Get all verification results from spec."""
+        # Use task-list and filter verify nodes
+        args = ["task-list", spec_id]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            tasks = result.get("tasks", [])
+            results = []
+            for task in tasks:
+                if task.get("type") == "verify" and task.get("result"):
+                    results.append({
+                        "verify_id": task.get("task_id"),
+                        "title": task.get("title"),
+                        "result": task.get("result"),
+                        "command": task.get("command"),
+                        "output": task.get("output"),
+                        "issues": task.get("issues", []),
+                        "executed_at": task.get("executed_at"),
+                    })
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "results": results,
+                "count": len(results),
+            }
+        return result
+
+    def format_verification_summary(
+        self,
+        spec_id: str,
+    ) -> Dict[str, Any]:
+        """Format summary of verification results."""
+        args = ["format-verification-summary", spec_id]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "summary": result.get("summary", ""),
+                "total_verifications": result.get("total_verifications", 0),
+                "passed": result.get("passed", 0),
+                "failed": result.get("failed", 0),
+                "partial": result.get("partial", 0),
+            }
+        return result
+
+    # =========================================================================
+    # Rendering & Reporting Operations
+    # =========================================================================
+
+    def render_spec(
+        self,
+        spec_id: str,
+        mode: str = "basic",
+        include_journal: bool = False,
+        max_depth: int = 0,
+    ) -> Dict[str, Any]:
+        """Render spec to markdown."""
+        args = ["render", spec_id, "--mode", mode]
+
+        if include_journal:
+            args.append("--include-journal")
+        if max_depth > 0:
+            args.extend(["--max-depth", str(max_depth)])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "title": result.get("title", ""),
+                "markdown": result.get("markdown", ""),
+                "total_sections": result.get("total_sections", 0),
+                "total_tasks": result.get("total_tasks", 0),
+                "completed_tasks": result.get("completed_tasks", 0),
+                "progress_percentage": result.get("progress_percentage", 0),
+            }
+        return result
+
+    def render_progress(
+        self,
+        spec_id: str,
+        bar_width: int = 20,
+    ) -> Dict[str, Any]:
+        """Get visual progress summary for a spec."""
+        args = ["render-progress", spec_id, "--bar-width", str(bar_width)]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "title": result.get("title", ""),
+                "overall": result.get("overall", {}),
+                "phases": result.get("phases", []),
+            }
+        return result
+
+    def spec_report(
+        self,
+        spec_id: str,
+        format: str = "markdown",
+        sections: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate comprehensive report for a spec."""
+        args = ["report", spec_id, "--format", format]
+
+        if sections:
+            args.extend(["--sections", sections])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "report": result.get("report", ""),
+                "format": format,
+                "sections": result.get("sections", []),
+                "summary": result.get("summary", {}),
+            }
+        return result
+
+    def spec_report_summary(
+        self,
+        spec_id: str,
+    ) -> Dict[str, Any]:
+        """Generate quick summary report for a spec."""
+        args = ["report-summary", spec_id]
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "title": result.get("title", ""),
+                "status": result.get("status", ""),
+                "validation": result.get("validation", {}),
+                "progress": result.get("progress", {}),
+                "health": result.get("health", {}),
+            }
+        return result
+
+    # =========================================================================
+    # Authoring Extensions
+    # =========================================================================
+
+    def update_frontmatter(
+        self,
+        spec_id: str,
+        key: str,
+        value: str,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Update spec frontmatter/metadata."""
+        args = ["update-frontmatter", spec_id, key, value]
+
+        if dry_run:
+            args.append("--dry-run")
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "key": key,
+                "value": value,
+                "previous_value": result.get("previous_value"),
+                "dry_run": dry_run,
+            }
+        return result
+
+    # =========================================================================
+    # File Operations
+    # =========================================================================
+
+    def find_related_files(
+        self,
+        file_path: str,
+        spec_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Find files related to a source file."""
+        args = ["find-related-files", file_path]
+
+        if spec_id:
+            args.extend(["--spec-id", spec_id])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "file_path": file_path,
+                "related_files": result.get("related_files", []),
+                "spec_references": result.get("spec_references", []),
+                "total_count": result.get("total_count", 0),
+            }
+        return result
+
+    def validate_paths(
+        self,
+        paths: list,
+        base_directory: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Validate that file paths exist on disk."""
+        args = ["validate-paths"] + paths
+
+        if base_directory:
+            args.extend(["--base-directory", base_directory])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "paths_checked": len(paths),
+                "valid_paths": result.get("valid_paths", []),
+                "invalid_paths": result.get("invalid_paths", []),
+                "all_valid": result.get("all_valid", False),
+                "valid_count": result.get("valid_count", 0),
+                "invalid_count": result.get("invalid_count", 0),
+            }
+        return result
+
+    # =========================================================================
+    # Pagination Operations
+    # =========================================================================
+
+    def task_query(
+        self,
+        spec_id: str,
+        status: Optional[str] = None,
+        parent: Optional[str] = None,
+        limit: int = 100,
+        cursor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Query tasks with pagination."""
+        args = ["task-query", spec_id, "--limit", str(limit)]
+
+        if status:
+            args.extend(["--status", status])
+        if parent:
+            args.extend(["--parent", parent])
+        if cursor:
+            args.extend(["--cursor", cursor])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "tasks": result.get("tasks", []),
+                "count": result.get("count", 0),
+                "total": result.get("total", 0),
+                "cursor": result.get("cursor"),
+                "has_more": result.get("has_more", False),
+            }
+        return result
+
+    def journal_list_paginated(
+        self,
+        spec_id: str,
+        entry_type: Optional[str] = None,
+        task_id: Optional[str] = None,
+        limit: int = 100,
+        cursor: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List journal entries with pagination."""
+        args = ["journal-list", spec_id, "--limit", str(limit)]
+
+        if entry_type:
+            args.extend(["--entry-type", entry_type])
+        if task_id:
+            args.extend(["--task-id", task_id])
+        if cursor:
+            args.extend(["--cursor", cursor])
+
+        result = self._run_sdd(*args)
+
+        if isinstance(result, dict) and result.get("success", True) and "error" not in result:
+            return {
+                "success": True,
+                "spec_id": spec_id,
+                "entries": result.get("entries", []),
+                "count": result.get("count", 0),
+                "total": result.get("total", 0),
+                "cursor": result.get("cursor"),
+                "has_more": result.get("has_more", False),
+            }
+        return result

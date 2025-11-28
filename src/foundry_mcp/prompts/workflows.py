@@ -41,7 +41,9 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         specs_dir = config.specs_dir or find_specs_directory()
         return str(specs_dir) if specs_dir else None
 
-    @mcp.prompt()
+    @mcp.prompt(
+        description='{"desc": "Start a new feature spec with phases and tasks", "args": {"feature_name": "Name of feature", "description": "Optional description", "template": "basic|feature|bugfix"}, "returns": "Formatted prompt"}'
+    )
     def start_feature(
         feature_name: str, description: Optional[str] = None, template: str = "feature"
     ) -> str:
@@ -157,7 +159,9 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
 
         return "\n".join(prompt_parts)
 
-    @mcp.prompt()
+    @mcp.prompt(
+        description='{"desc": "Debug a failing test systematically", "args": {"test_name": "Failing test name (optional)", "error_message": "Error output (optional)", "spec_id": "Related spec ID (optional)"}, "returns": "Debugging workflow prompt"}'
+    )
     def debug_test(
         test_name: Optional[str] = None,
         error_message: Optional[str] = None,
@@ -264,7 +268,9 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
 
         return "\n".join(prompt_parts)
 
-    @mcp.prompt()
+    @mcp.prompt(
+        description='{"desc": "Complete all tasks in a phase and move to next", "args": {"spec_id": "Specification ID", "phase_id": "Phase ID (optional, uses current)"}, "returns": "Phase completion checklist"}'
+    )
     def complete_phase(spec_id: str, phase_id: Optional[str] = None) -> str:
         """
         Complete a phase in a specification.
@@ -390,7 +396,9 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
 
         return "\n".join(prompt_parts)
 
-    @mcp.prompt()
+    @mcp.prompt(
+        description='{"desc": "Review spec status, progress, and journal", "args": {"spec_id": "Specification ID to review"}, "returns": "Spec overview with actions"}'
+    )
     def review_spec(spec_id: str) -> str:
         """
         Review a specification's status and progress.

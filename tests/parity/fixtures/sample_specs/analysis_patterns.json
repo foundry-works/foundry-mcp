@@ -1,0 +1,118 @@
+{
+  "spec_id": "parity-test-patterns",
+  "title": "Pattern Analysis Test Spec",
+  "metadata": {
+    "title": "Pattern Analysis Test Spec",
+    "description": "Spec with file_path metadata for testing find-patterns and find-related-files operations",
+    "created_at": "2025-01-01T00:00:00Z",
+    "version": "1.0.0"
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Pattern Analysis Test Spec",
+      "status": "in_progress",
+      "parent": null,
+      "children": ["phase-1"],
+      "total_tasks": 6,
+      "completed_tasks": 2,
+      "metadata": {}
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Implementation Phase",
+      "status": "in_progress",
+      "parent": "spec-root",
+      "children": ["task-1-1", "task-1-2", "task-1-3", "task-1-4", "task-1-5", "task-1-6"],
+      "total_tasks": 6,
+      "completed_tasks": 2,
+      "metadata": {}
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Core module implementation",
+      "description": "Implement core module functionality",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "file_path": "src/core/module.py",
+        "completed_at": "2025-01-02T10:00:00Z"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Helper utilities",
+      "description": "Implement utility helper functions",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "file_path": "src/utils/helpers.py",
+        "completed_at": "2025-01-02T11:00:00Z"
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Unit tests for module",
+      "description": "Write unit tests for core module",
+      "status": "in_progress",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/test_module.py",
+        "started_at": "2025-01-02T12:00:00Z"
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "Unit tests for helpers",
+      "description": "Write unit tests for helper utilities",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/test_helpers.py"
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "Documentation",
+      "description": "Write project documentation",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "docs/README.md"
+      }
+    },
+    "task-1-6": {
+      "type": "task",
+      "title": "Configuration",
+      "description": "Set up project configuration",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "config.json"
+      }
+    }
+  },
+  "assumptions": [],
+  "revision_history": [],
+  "journal": [],
+  "generated": "2025-01-01T00:00:00Z",
+  "last_updated": "2025-01-01T00:00:00Z"
+}

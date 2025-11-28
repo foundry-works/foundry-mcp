@@ -1,0 +1,135 @@
+{
+  "spec_id": "parity-test-deep",
+  "title": "Deep Nesting Edge Case Spec",
+  "metadata": {
+    "title": "Deep Nesting Edge Case Spec",
+    "description": "Spec with 4-level deep task nesting for hierarchy traversal testing",
+    "created_at": "2025-01-01T00:00:00Z",
+    "version": "1.0.0"
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Deep Nesting Edge Case Spec",
+      "status": "in_progress",
+      "parent": null,
+      "children": ["phase-1", "phase-2"],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Deep Nesting Phase",
+      "status": "in_progress",
+      "parent": "spec-root",
+      "children": ["task-1-1"],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Separate Branch Phase",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": ["task-2-1", "task-2-2"],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Level 1 task",
+      "description": "Top-level task with deep children",
+      "status": "in_progress",
+      "parent": "phase-1",
+      "children": ["subtask-1-1-1", "subtask-1-1-2"],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "subtask-1-1-1": {
+      "type": "subtask",
+      "title": "Level 2 subtask (main branch)",
+      "description": "Subtask with deeper children",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": ["deep-1-1-1-1"],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "subtask-1-1-2": {
+      "type": "subtask",
+      "title": "Level 2 subtask (sibling)",
+      "description": "Sibling subtask at level 2",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "deep-1-1-1-1": {
+      "type": "subtask",
+      "title": "Level 3 subtask",
+      "description": "Third level nesting",
+      "status": "pending",
+      "parent": "subtask-1-1-1",
+      "children": ["deeper-1-1-1-1-1", "deeper-1-1-1-1-2"],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "deeper-1-1-1-1-1": {
+      "type": "subtask",
+      "title": "Level 4 subtask (leaf A)",
+      "description": "Fourth level - deepest leaf node A",
+      "status": "pending",
+      "parent": "deep-1-1-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "deeper-1-1-1-1-2": {
+      "type": "subtask",
+      "title": "Level 4 subtask (leaf B)",
+      "description": "Fourth level - deepest leaf node B",
+      "status": "pending",
+      "parent": "deep-1-1-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Separate branch task 1",
+      "description": "Task in separate phase for cross-phase testing",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Separate branch task 2",
+      "description": "Another task in separate phase",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    }
+  },
+  "assumptions": [],
+  "revision_history": [],
+  "journal": [],
+  "generated": "2025-01-01T00:00:00Z",
+  "last_updated": "2025-01-01T00:00:00Z"
+}

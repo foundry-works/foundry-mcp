@@ -1,0 +1,27 @@
+{
+  "spec_id": "parity-test-empty",
+  "title": "Empty Spec Edge Case",
+  "metadata": {
+    "title": "Empty Spec Edge Case",
+    "description": "Minimal spec with only spec-root, no phases or tasks for empty handling testing",
+    "created_at": "2025-01-01T00:00:00Z",
+    "version": "1.0.0"
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Empty Spec Edge Case",
+      "status": "pending",
+      "parent": null,
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {}
+    }
+  },
+  "assumptions": [],
+  "revision_history": [],
+  "journal": [],
+  "generated": "2025-01-01T00:00:00Z",
+  "last_updated": "2025-01-01T00:00:00Z"
+}
