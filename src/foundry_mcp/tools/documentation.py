@@ -2,8 +2,9 @@
 Documentation generation tools for foundry-mcp.
 
 Provides MCP tools for generating human-facing documentation bundles
-from SDD specifications. Wraps the `sdd doc` CLI to produce markdown
-and HTML documentation artifacts.
+from SDD specifications. Wraps the `sdd render` CLI to produce markdown
+documentation artifacts, `sdd llm-doc-gen` for AI-enhanced documentation,
+and `sdd fidelity-review` for specification compliance checking.
 """
 
 import logging
