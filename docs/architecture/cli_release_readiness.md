@@ -249,6 +249,142 @@ TELEMETRY_EVENTS = [
 ]
 ```
 
+## Release Checklist
+
+### Pre-Release Enablement Checklist
+
+#### Code Quality
+- [ ] All Tier 1 (Critical) commands implemented and tested
+- [ ] Unit test coverage ≥80% for CLI modules
+- [ ] Integration tests passing for all command groups
+- [ ] No critical or high-severity bugs open
+- [ ] Static analysis (mypy, ruff) passing
+- [ ] Security audit completed for input handling
+
+#### Documentation
+- [ ] CLI command reference generated (`sdd --help` output)
+- [ ] Migration guide from claude_skills.cli.sdd published
+- [ ] CHANGELOG updated with CLI additions
+- [ ] README updated with CLI installation instructions
+- [ ] Architecture ADR reviewed and approved
+
+#### Performance
+- [ ] Benchmark results meet targets (P95 < 500ms)
+- [ ] Memory usage within acceptable limits
+- [ ] No memory leaks detected in long-running sessions
+- [ ] Startup time < 200ms
+
+#### Compatibility
+- [ ] Python 3.10+ compatibility verified
+- [ ] macOS, Linux tested
+- [ ] Windows compatibility verified (or documented limitations)
+- [ ] Works with existing MCP server (no conflicts)
+
+### Communication Plan
+
+#### Internal Communication
+| Milestone | Audience | Channel | Content |
+|-----------|----------|---------|---------|
+| Alpha Start | Dev team | Slack #foundry-dev | Feature flag instructions, feedback form |
+| Beta Start | All engineers | Email + Slack | Opt-in instructions, known limitations |
+| GA Announce | All users | Blog + Email | Feature highlights, migration guide |
+| Deprecation | claude_skills users | Email + Docs | Timeline, migration steps |
+
+#### External Communication
+- [ ] Blog post drafted for GA announcement
+- [ ] Twitter/social media posts scheduled
+- [ ] Community Discord announcement prepared
+- [ ] Documentation site updated
+
+### Readiness Signals
+
+#### Go/No-Go Criteria
+
+**GO Signals (all must be true):**
+- [ ] All Pre-Release Checklist items complete
+- [ ] Error rate < 1% in beta testing
+- [ ] No critical bugs for 7 consecutive days
+- [ ] Positive feedback from ≥5 beta testers
+- [ ] Performance targets met
+- [ ] Security review signed off
+
+**NO-GO Signals (any blocks release):**
+- [ ] Critical bug discovered in core functionality
+- [ ] Security vulnerability identified
+- [ ] Performance regression > 20%
+- [ ] Data corruption or loss reported
+- [ ] Blocking dependency issue
+
+#### Readiness Review Meeting
+
+Before each phase transition, conduct readiness review:
+
+1. **Participants:** Tech Lead, QA, DevOps, Product
+2. **Agenda:**
+   - Review checklist completion
+   - Discuss open issues
+   - Review metrics from previous phase
+   - Vote on proceeding to next phase
+3. **Outcomes:**
+   - Document decision and rationale
+   - Assign owners for any blocking items
+   - Set date for next review
+
+### Post-Release Checklist
+
+#### Immediate (Day 1)
+- [ ] Monitor error rates and latency
+- [ ] Check support channels for issues
+- [ ] Verify telemetry is flowing
+- [ ] Confirm feature flags working correctly
+
+#### Short-term (Week 1)
+- [ ] Review user feedback
+- [ ] Address critical bugs
+- [ ] Publish FAQ based on common questions
+- [ ] Update documentation based on feedback
+
+#### Medium-term (Month 1)
+- [ ] Analyze adoption metrics
+- [ ] Plan Tier 2 command implementations
+- [ ] Gather enhancement requests
+- [ ] Schedule claude_skills deprecation timeline
+
+### Rollback Procedure
+
+If rollback is needed:
+
+1. **Immediate Actions:**
+   ```bash
+   # Disable CLI feature flag globally
+   export FOUNDRY_CLI_ENABLED=false
+
+   # Or update config
+   foundry config set feature_flags.native_cli false
+   ```
+
+2. **Communication:**
+   - Post to #foundry-status: "CLI temporarily disabled due to [issue]"
+   - Email affected users with workaround (use claude_skills.cli.sdd)
+
+3. **Investigation:**
+   - Gather logs and telemetry
+   - Identify root cause
+   - Document in incident report
+
+4. **Recovery:**
+   - Fix issue in hotfix branch
+   - Test thoroughly
+   - Gradual re-enablement starting at 10%
+
+### Version History
+
+| Version | Date | Status | Notes |
+|---------|------|--------|-------|
+| 0.1.0-alpha | TBD | Planned | Internal testing |
+| 0.1.0-beta | TBD | Planned | Opt-in beta |
+| 0.1.0 | TBD | Planned | General availability |
+
 ## Related Documents
 
 - [CLI Runtime Architecture](sdd_cli_runtime.md) - Package structure and design
