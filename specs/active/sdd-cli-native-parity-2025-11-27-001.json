@@ -2,7 +2,7 @@
   "spec_id": "sdd-cli-native-parity-2025-11-27-001",
   "title": "SDD CLI Native Re-Implementation - Foundry MCP",
   "generated": "2025-11-27T20:25:00Z",
-  "last_updated": "2025-11-28T18:17:45.747139Z",
+  "last_updated": "2025-11-28T18:18:12.761916Z",
   "metadata": {
     "description": "Re-implement the Spec-Driven Development CLI inside foundry-mcp (Option A) so that MCP tools and the CLI share the same service layer, contracts, and resilience/observability guardrails.",
     "objectives": [
@@ -192,7 +192,10 @@
       "metadata": {
         "task_category": "decision",
         "file_path": "docs/architecture/sdd_cli_runtime.md",
-        "details": "Document module layout, dependency graph, and CLI vs MCP execution model"
+        "details": "Document module layout, dependency graph, and CLI vs MCP execution model",
+        "completed_at": "2025-11-28T18:18:12.759886Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-28T18:18:12.761891Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1457,6 +1460,15 @@
       "content": "Added comprehensive Shared Helper Strategy section to docs/architecture/sdd_cli_runtime.md documenting: (1) Core Helper Modules table mapping responses, validation, security, observability, resilience, and pagination to CLI usage patterns; (2) Response Adaptation Pattern showing how CLI adapts MCP response envelopes for JSON and human-readable modes; (3) Validation Helper Usage examples for sdd validate/fix commands; (4) Security Helpers showing shared limits (MAX_INPUT_SIZE, MAX_ARRAY_LENGTH, etc.) used by both MCP and CLI; (5) Pagination in CLI adapting core cursor-based pagination; (6) Resilience Patterns for file operations with retry logic; (7) CLI-Only Helpers table identifying cli/output.py, cli/config.py, cli/context.py, cli/progress.py as CLI-specific; (8) Helper Selection Criteria decision tree for choosing between core and CLI modules. This completes the shared helper documentation for the runtime ADR.",
       "metadata": {},
       "task_id": "task-1-2-2"
+    },
+    {
+      "timestamp": "2025-11-28T18:18:12.761886Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Author runtime ADR",
+      "author": "claude-code",
+      "content": "Authored comprehensive runtime ADR in docs/architecture/sdd_cli_runtime.md with both subtasks completed: (1) task-1-2-1 defined package boundaries - foundry_mcp.core (transport-agnostic), foundry_mcp.tools (MCP), foundry_mcp.cli (CLI runtime), foundry_mcp.cli.commands (Click groups), with dependency graph and entry point examples; (2) task-1-2-2 described shared helper strategy - core modules (responses, validation, security, observability, resilience, pagination) usage patterns, response adaptation for CLI, security limits, pagination, resilience patterns, CLI-only helpers, and selection criteria. ADR includes context, decision rationale, alternatives considered (flat module, separate package, MCP wrapper - all rejected), and consequences analysis. This provides the architectural foundation for CLI implementation.",
+      "metadata": {},
+      "task_id": "task-1-2"
     }
   ]
 }
