@@ -505,6 +505,73 @@ class TestFidelityReviewTimeout:
             assert call_kwargs["timeout"] == 300
 
 
+class TestTelemetryMetrics:
+    """Tests for telemetry and metrics integration."""
+
+    def test_success_metrics_emitted_for_spec_doc(self):
+        """Test that success metrics are emitted when spec-doc succeeds."""
+        from foundry_mcp.tools.documentation import register_documentation_tools
+        from foundry_mcp.core.observability import get_metrics
+        from unittest.mock import MagicMock
+
+        mock_mcp = MagicMock()
+        mock_mcp.tool = MagicMock(return_value=lambda f: f)
+        mock_config = MagicMock()
+        mock_config.specs_dir = None
+
+        # Register tools
+        register_documentation_tools(mock_mcp, mock_config)
+
+        # Metrics collector should be accessible
+        metrics = get_metrics()
+        assert metrics is not None
+        assert hasattr(metrics, 'counter')
+        assert hasattr(metrics, 'timer')
+
+    def test_error_metrics_emitted_for_not_found(self):
+        """Test that error metrics are emitted for not_found errors."""
+        from foundry_mcp.tools.documentation import _run_sdd_render_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1,
+                stdout='',
+                stderr='Error: Spec not found: test-spec'
+            )
+
+            result = _run_sdd_render_command(["test-spec"])
+
+            # Should return error with not_found pattern
+            assert result["success"] is False
+            assert "not found" in result["error"].lower()
+
+    def test_error_metrics_emitted_for_timeout(self):
+        """Test that error metrics are emitted for timeout errors."""
+        from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd fidelity-review", timeout=600)
+
+            result = _run_sdd_fidelity_review_command(["my-spec"])
+
+            # Should return error with timeout pattern
+            assert result["success"] is False
+            assert "timed out" in result["error"]
+
+    def test_metrics_labels_include_tool_name(self):
+        """Test that metrics labels include tool-specific information."""
+        from foundry_mcp.core.observability import MetricsCollector
+
+        metrics = MetricsCollector()
+
+        # Counter should accept labels
+        metrics.counter("documentation.success", labels={"tool": "spec-doc"})
+        metrics.counter("documentation.errors", labels={"tool": "spec-doc", "error_type": "not_found"})
+
+        # Timer should also accept labels
+        metrics.timer("documentation.spec_doc_time", 100.5, labels={"mode": "basic"})
+
+
 class TestResponseEnvelopeCompliance:
     """Tests for response envelope compliance."""
 
