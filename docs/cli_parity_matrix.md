@@ -405,6 +405,111 @@ These CLI commands have no MCP equivalent and may not need one:
    - `bulk-journal`
    - `check-complete`
 
+## Migration Priority Tiers
+
+Commands and tools are grouped by migration priority to guide implementation efforts.
+
+### Tier 1: Critical (Core Workflows)
+
+Must-have functionality for basic SDD operations. Migration blockers if missing.
+
+**Gap Commands to Implement:**
+| Command | Status | Rationale |
+|---------|--------|-----------|
+| `check-complete` | Not Implemented | Required for lifecycle transitions - blocks spec completion workflow |
+| `create-task-commit` | Not Implemented | Essential for git integration in task workflows |
+
+**Partial Commands to Enhance:**
+| Command | Current MCP | Enhancement Needed |
+|---------|-------------|-------------------|
+| `list-phases` | `spec-get-hierarchy` | Add progress % calculation in MCP response |
+
+**Already Wrapped - Critical:**
+- All Task Operations (16 commands) - ✅ Full parity
+- All Core Spec Operations (5 commands) - ✅ Full parity
+- All Lifecycle Operations except `check-complete` - ✅ Full parity
+- All Validation Operations (6 commands) - ✅ Full parity
+
+### Tier 2: Important (Documentation & Testing)
+
+Important for documentation, testing, and productivity but not blocking core workflows.
+
+**Gap Commands to Implement:**
+| Command | Status | Rationale |
+|---------|--------|-----------|
+| `bulk-journal` | Not Implemented | Productivity improvement for batch task completion |
+| `find-tests` | Not Implemented | Test discovery utility for verification tasks |
+
+**Partial Commands to Enhance:**
+| Command | Current MCP | Enhancement Needed |
+|---------|-------------|-------------------|
+| `doc scope` | `code-find-*` | Add `--plan` and `--implement` mode flags |
+| `status-report` | `spec-report-summary` | Add formatting options (markdown, JSON, brief) |
+
+**Already Wrapped - Important:**
+- All Documentation Operations (3 commands) - ✅ Full parity
+- All Testing Operations (2 commands, 5 MCP tools) - ✅ Full parity
+- All Journal Operations except `bulk-journal` - ✅ Full parity
+- All Verification Operations (3 commands) - ✅ Full parity
+- All Review Operations (5 commands) - ✅ Full parity
+
+### Tier 3: Advanced (AI Rendering & Analysis)
+
+Nice-to-have features for advanced users. Can be deferred.
+
+**Gap Commands to Implement:**
+| Command | Status | Rationale |
+|---------|--------|-----------|
+| `time-report` | Not Implemented | Time tracking report generation |
+| `phase-time` | Not Implemented | Time breakdown per phase |
+| `audit-spec` | Not Implemented | Deep spec analysis |
+| `reconcile-state` | Not Implemented | State repair utility |
+| `format-plan` | Not Implemented | Display formatting for plans |
+
+**Already Wrapped - Advanced:**
+- All Schema/Discovery Operations (8 MCP tools) - ✅ Full parity
+- All Code Query Operations (6 MCP tools) - ✅ Full parity
+- All PR Workflow Operations (2 MCP tools) - ✅ Full parity
+- Cache Management - ✅ Full parity
+
+### CLI-Specific (No Migration Needed)
+
+These commands are specific to Claude Code integration and don't need MCP equivalents:
+
+| Command | Reason |
+|---------|--------|
+| `context` | Requires Claude Code transcript access |
+| `session-marker` | Claude Code session identification |
+| `get-work-mode` | Local config file access |
+
+### Migration Effort Summary
+
+| Tier | Gap Commands | Partial Enhancements | Total Effort |
+|------|--------------|---------------------|--------------|
+| Tier 1 (Critical) | 2 | 1 | 3 items |
+| Tier 2 (Important) | 2 | 2 | 4 items |
+| Tier 3 (Advanced) | 5 | 0 | 5 items |
+| CLI-Specific | 0 | 0 | N/A |
+| **Total** | **9** | **3** | **12 items** |
+
+### Recommended Implementation Order
+
+1. **Phase 1 - Critical Gaps** (Tier 1):
+   - `check-complete` → New MCP tool
+   - `create-task-commit` → New MCP tool
+   - `list-phases` enhancement → Update `spec-get-hierarchy` or add `spec-list-phases`
+
+2. **Phase 2 - Important Gaps** (Tier 2):
+   - `bulk-journal` → New MCP tool
+   - `find-tests` → New MCP tool
+   - `doc scope` enhancement → Add mode flags to `code-find-*` or new tool
+   - `status-report` enhancement → Update `spec-report-summary`
+
+3. **Phase 3 - Advanced Gaps** (Tier 3, optional):
+   - Time tracking tools
+   - Audit/reconciliation tools
+   - Format utilities
+
 ## Summary
 
 | Category | Total CLI Commands | MCP Implemented | Coverage |

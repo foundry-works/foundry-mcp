@@ -2,7 +2,7 @@
   "spec_id": "sdd-cli-native-parity-2025-11-27-001",
   "title": "SDD CLI Native Re-Implementation - Foundry MCP",
   "generated": "2025-11-27T20:25:00Z",
-  "last_updated": "2025-11-28T17:29:59.723826Z",
+  "last_updated": "2025-11-28T18:14:06.630018Z",
   "metadata": {
     "description": "Re-implement the Spec-Driven Development CLI inside foundry-mcp (Option A) so that MCP tools and the CLI share the same service layer, contracts, and resilience/observability guardrails.",
     "objectives": [
@@ -20,7 +20,7 @@
     ],
     "status": "active",
     "owner": "foundry-mcp core",
-    "progress_percentage": 4,
+    "progress_percentage": 6,
     "current_phase": "phase-1"
   },
   "progress_percentage": 0,
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 50,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Deliver first-party SDD CLI runtime with shared MCP tooling"
       },
@@ -60,7 +60,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 8,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Establish scope, parity matrix, and architecture for Option A CLI",
         "risk_level": "medium",
@@ -85,7 +85,7 @@
         "task-1-3"
       ],
       "total_tasks": 7,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -98,7 +98,7 @@
     "task-1-1": {
       "type": "task",
       "title": "Build command parity matrix",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-1-planning",
       "children": [
         "task-1-1-1",
@@ -106,7 +106,7 @@
         "task-1-1-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "task_category": "investigation",
         "file_path": "docs/command_parity_matrix.md",
@@ -160,13 +160,19 @@
     "task-1-1-3": {
       "type": "subtask",
       "title": "Define migration priority tiers",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-1-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Group commands into critical (core workflows), important (doc/test), and advanced (AI rendering)"
+        "details": "Group commands into critical (core workflows), important (doc/test), and advanced (AI rendering)",
+        "started_at": "2025-11-28T18:05:00.548106Z",
+        "status_note": "Starting migration priority tier classification",
+        "completed_at": "2025-11-28T18:14:06.625405Z",
+        "needs_journaling": false,
+        "actual_hours": 0.152,
+        "journaled_at": "2025-11-28T18:14:06.628818Z"
       }
     },
     "task-1-2": {
@@ -1400,6 +1406,15 @@
       "content": "Added comprehensive 'Overlap Classification' section to docs/cli_parity_matrix.md with: (1) Already Wrapped - 50+ CLI commands with full MCP parity organized by category, (2) Partial Implementation - 3 commands needing enhancement (list-phases, doc scope, status-report), (3) Gaps - 9 CLI commands with no MCP equivalent prioritized by importance, (4) CLI-Specific - 3 commands that don't need MCP equivalents (context, session-marker, get-work-mode), (5) MCP-Only Tools - 20 tools that extend beyond CLI capabilities.",
       "metadata": {},
       "task_id": "task-1-1-2"
+    },
+    {
+      "timestamp": "2025-11-28T18:14:06.628813Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define migration priority tiers",
+      "author": "claude-code",
+      "content": "Added comprehensive Migration Priority Tiers section to docs/cli_parity_matrix.md with: (1) Tier 1 Critical - 2 gap commands (check-complete, create-task-commit) plus 1 partial enhancement (list-phases), essential for core workflows; (2) Tier 2 Important - 2 gap commands (bulk-journal, find-tests) plus 2 partial enhancements (doc scope, status-report), for documentation and testing; (3) Tier 3 Advanced - 5 deferred commands (time-report, phase-time, audit-spec, reconcile-state, format-plan) for AI rendering and analysis; (4) CLI-Specific - 3 commands that don't need migration (context, session-marker, get-work-mode); (5) Migration Effort Summary table showing 12 total items across tiers; (6) Recommended Implementation Order with phased approach. This completes the command parity matrix investigation phase.",
+      "metadata": {},
+      "task_id": "task-1-1-3"
     }
   ]
 }
