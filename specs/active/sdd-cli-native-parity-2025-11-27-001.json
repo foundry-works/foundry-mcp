@@ -2,7 +2,7 @@
   "spec_id": "sdd-cli-native-parity-2025-11-27-001",
   "title": "SDD CLI Native Re-Implementation - Foundry MCP",
   "generated": "2025-11-27T20:25:00Z",
-  "last_updated": "2025-11-28T18:21:00.165986Z",
+  "last_updated": "2025-11-28T18:21:27.889672Z",
   "metadata": {
     "description": "Re-implement the Spec-Driven Development CLI inside foundry-mcp (Option A) so that MCP tools and the CLI share the same service layer, contracts, and resilience/observability guardrails.",
     "objectives": [
@@ -258,7 +258,10 @@
       "completed_tasks": 2,
       "metadata": {
         "task_category": "decision",
-        "details": "Outline release sequencing, feature flags, and readiness criteria for enabling the native CLI"
+        "details": "Outline release sequencing, feature flags, and readiness criteria for enabling the native CLI",
+        "completed_at": "2025-11-28T18:21:27.887593Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-28T18:21:27.889647Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1512,6 +1515,15 @@
       "content": "All child tasks in group phase-1-planning have been completed.",
       "metadata": {},
       "task_id": "phase-1-planning"
+    },
+    {
+      "timestamp": "2025-11-28T18:21:27.889642Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define release readiness plan",
+      "author": "claude-code",
+      "content": "Completed release readiness plan with both subtasks: (1) task-1-3-1 drafted feature-flag controls including native_cli discovery flag with EXPERIMENTAL\u2192BETA\u2192STABLE lifecycle, 7 command group flags with depends_on relationships, capabilities manifest switches, configuration overrides (env vars and config file), and CLI entry point guard; (2) task-1-3-2 documented release checklist with pre-release enablement (19 items across code quality, documentation, performance, compatibility), communication plan (internal/external), readiness signals (go/no-go criteria, review meeting process), post-release checklist (day 1/week 1/month 1), rollback procedure, and version history. Full documentation in docs/architecture/cli_release_readiness.md provides complete blueprint for CLI release process.",
+      "metadata": {},
+      "task_id": "task-1-3"
     }
   ]
 }
