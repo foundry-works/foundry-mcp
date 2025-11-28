@@ -2,7 +2,7 @@
   "spec_id": "sdd-llm-features-2025-11-27-001",
   "title": "SDD LLM-Powered Features - AI Integration",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-28T14:00:21.956943Z",
+  "last_updated": "2025-11-28T14:02:58.550066Z",
   "metadata": {
     "description": "Implement LLM-powered SDD operations including provider abstraction, review workflows, PR creation, and AI-enhanced documentation. Requires configurable LLM provider support with graceful degradation.",
     "objectives": [
@@ -24,7 +24,7 @@
     ],
     "status": "active",
     "activated_date": "2025-11-28T00:02:09.184712Z",
-    "progress_percentage": 61,
+    "progress_percentage": 64,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-4"
       ],
       "total_tasks": 42,
-      "completed_tasks": 26,
+      "completed_tasks": 27,
       "metadata": {}
     },
     "phase-1": {
@@ -832,7 +832,7 @@
         ]
       },
       "total_tasks": 9,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "AI-enhanced documentation generation capabilities",
         "risk_level": "high"
@@ -849,7 +849,7 @@
         "task-3-3"
       ],
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -871,7 +871,7 @@
         "task-3-1-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/documentation.py",
         "task_category": "implementation",
@@ -908,13 +908,19 @@
     "task-3-1-2": {
       "type": "subtask",
       "title": "Implement spec-doc-llm - LLM-powered doc generation suite",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-3-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd llm-doc-gen, use LLM to enhance documentation with context and explanations"
+        "details": "Wrap sdd llm-doc-gen, use LLM to enhance documentation with context and explanations",
+        "started_at": "2025-11-28T14:00:52.108380Z",
+        "status_note": "Starting implementation of spec-doc-llm tool",
+        "completed_at": "2025-11-28T14:02:58.544957Z",
+        "needs_journaling": false,
+        "actual_hours": 0.035,
+        "journaled_at": "2025-11-28T14:02:58.548646Z"
       }
     },
     "task-3-1-3": {
@@ -1505,6 +1511,15 @@
       "content": "Implemented spec-doc tool in src/foundry_mcp/tools/documentation.py. The tool wraps sdd render CLI to generate human-facing markdown documentation bundles from SDD specifications.\n\nKey features implemented:\n- Wraps sdd render command with proper error handling\n- Supports markdown output format (md/markdown)\n- Two rendering modes: basic (fast) and enhanced (AI features)\n- Circuit breaker for resilience (3 failures, 60s recovery)\n- Full response-v2 envelope compliance with proper error codes\n- Telemetry/metrics integration via observability module\n\nFiles created/modified:\n- src/foundry_mcp/tools/documentation.py (new, ~270 lines)\n- src/foundry_mcp/tools/__init__.py (added export)\n- src/foundry_mcp/server.py (added import and registration)\n- tests/unit/test_documentation.py (new, 15 unit tests)\n\nAll 15 unit tests passing. Tool properly registered and ready for use.",
       "metadata": {},
       "task_id": "task-3-1-1"
+    },
+    {
+      "timestamp": "2025-11-28T14:02:58.548642Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement spec-doc-llm - LLM-powered doc generation suite",
+      "author": "claude-code",
+      "content": "Implemented spec-doc-llm tool in src/foundry_mcp/tools/documentation.py. The tool wraps sdd llm-doc-gen CLI to generate comprehensive LLM-powered documentation for codebases.\n\nFeatures implemented:\n- Wraps sdd llm-doc-gen generate command with proper error handling\n- Supports project documentation with directory input\n- Configurable batch size (1-10) for shard processing\n- Cache support (use_cache, clear_cache) for faster subsequent runs\n- Resume capability for interrupted generation\n- Extended timeout (600s) for LLM processing\n- Timeout-specific error messaging with resume hint\n- Circuit breaker resilience (shared with spec-doc)\n- Full response-v2 envelope compliance with proper error codes\n- Telemetry/metrics integration\n\nImplementation details:\n- Added helper function _run_sdd_llm_doc_gen_command() with proper subprocess handling\n- Defined constant LLM_DOC_GENERATION_TIMEOUT = 600\n- Approximately 220 lines added for tool implementation\n\nTesting:\n- 8 additional unit tests added to tests/unit/test_documentation.py\n- All 23 tests passing\n- Comprehensive coverage for batch sizes, cache modes, resume, timeout, and error scenarios\n\nFiles modified:\n- src/foundry_mcp/tools/documentation.py (added spec-doc-llm tool)\n- tests/unit/test_documentation.py (added 8 new test cases)",
+      "metadata": {},
+      "task_id": "task-3-1-2"
     }
   ]
 }

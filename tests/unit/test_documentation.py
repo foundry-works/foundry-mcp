@@ -219,6 +219,140 @@ class TestCircuitBreaker:
         assert status is not None
 
 
+class TestRunSddLlmDocGenCommand:
+    """Tests for _run_sdd_llm_doc_gen_command helper."""
+
+    def test_successful_llm_generation(self):
+        """Test successful LLM doc generation returns parsed JSON."""
+        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"output_dir": "./docs", "files_generated": 10, "project_name": "Test"}',
+                stderr=''
+            )
+
+            result = _run_sdd_llm_doc_gen_command(["generate", "."])
+
+            assert result["success"] is True
+            assert result["data"]["output_dir"] == "./docs"
+            assert result["data"]["files_generated"] == 10
+
+    def test_llm_command_failure(self):
+        """Test handling of LLM command failure."""
+        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1,
+                stdout='',
+                stderr='Error: No files to process'
+            )
+
+            result = _run_sdd_llm_doc_gen_command(["generate", "."])
+
+            assert result["success"] is False
+            assert "No files to process" in result["error"]
+
+    def test_llm_command_timeout(self):
+        """Test handling of LLM command timeout."""
+        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd llm-doc-gen", timeout=600)
+
+            result = _run_sdd_llm_doc_gen_command(["generate", "."])
+
+            assert result["success"] is False
+            assert "timed out" in result["error"]
+            assert "resume" in result["error"].lower()
+
+    def test_llm_sdd_not_found(self):
+        """Test handling when sdd CLI is not found."""
+        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.side_effect = FileNotFoundError()
+
+            result = _run_sdd_llm_doc_gen_command(["generate", "."])
+
+            assert result["success"] is False
+            assert "sdd CLI not found" in result["error"]
+
+
+class TestSpecDocLlmTool:
+    """Tests for spec-doc-llm tool functionality."""
+
+    @pytest.fixture
+    def mock_mcp(self):
+        """Create a mock FastMCP instance."""
+        mock = MagicMock()
+        mock.tool = MagicMock(return_value=lambda f: f)
+        return mock
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a mock server config."""
+        config = MagicMock()
+        config.specs_dir = None
+        return config
+
+    def test_tool_registration(self, mock_mcp, mock_config):
+        """Test that spec-doc-llm tool registers without error."""
+        from foundry_mcp.tools.documentation import register_documentation_tools
+
+        # Should not raise any exceptions
+        register_documentation_tools(mock_mcp, mock_config)
+
+        # Verify tool was registered (canonical_tool was called)
+        assert mock_mcp.tool.called
+
+    def test_llm_doc_gen_returns_formatted_response(self):
+        """Test that llm doc gen returns properly formatted response."""
+        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{"output_dir": "./docs", "files_generated": 5, "total_shards": 20}',
+                stderr=''
+            )
+
+            result = _run_sdd_llm_doc_gen_command(["generate", ".", "--cache"])
+
+            assert result["success"] is True
+            assert "output_dir" in result["data"]
+            assert "files_generated" in result["data"]
+
+
+class TestLlmDocGenTimeout:
+    """Tests for LLM doc gen timeout handling."""
+
+    def test_timeout_constant_is_defined(self):
+        """Test that LLM timeout constant is defined correctly."""
+        from foundry_mcp.tools.documentation import LLM_DOC_GENERATION_TIMEOUT
+
+        assert LLM_DOC_GENERATION_TIMEOUT == 600
+
+    def test_custom_timeout_works(self):
+        """Test that custom timeout is passed to subprocess."""
+        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+
+        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout='{}',
+                stderr=''
+            )
+
+            _run_sdd_llm_doc_gen_command(["generate", "."], timeout=300)
+
+            # Verify timeout was passed
+            call_kwargs = mock_run.call_args[1]
+            assert call_kwargs["timeout"] == 300
+
+
 class TestResponseEnvelopeCompliance:
     """Tests for response envelope compliance."""
 
