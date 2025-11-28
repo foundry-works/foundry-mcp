@@ -2,7 +2,7 @@
   "spec_id": "sdd-llm-features-2025-11-27-001",
   "title": "SDD LLM-Powered Features - AI Integration",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-28T14:58:33.489437Z",
+  "last_updated": "2025-11-28T15:00:59.657770Z",
   "metadata": {
     "description": "Implement LLM-powered SDD operations including provider abstraction, review workflows, PR creation, and AI-enhanced documentation. Requires configurable LLM provider support with graceful degradation.",
     "objectives": [
@@ -24,7 +24,7 @@
     ],
     "status": "active",
     "activated_date": "2025-11-28T00:02:09.184712Z",
-    "progress_percentage": 83,
+    "progress_percentage": 85,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-4"
       ],
       "total_tasks": 42,
-      "completed_tasks": 35,
+      "completed_tasks": 36,
       "metadata": {}
     },
     "phase-1": {
@@ -1132,7 +1132,7 @@
         "blocks": []
       },
       "total_tasks": 8,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "End-to-end integration testing and documentation",
         "risk_level": "medium"
@@ -1151,7 +1151,7 @@
         "task-4-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1185,16 +1185,22 @@
     "task-4-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/discovery.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/discovery.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "changes": "Add discovery metadata for all LLM-powered tools including capability negotiation"
+        "changes": "Add discovery metadata for all LLM-powered tools including capability negotiation",
+        "started_at": "2025-11-28T14:59:05.883030Z",
+        "status_note": "Adding discovery metadata for LLM tools",
+        "completed_at": "2025-11-28T15:00:59.652167Z",
+        "needs_journaling": false,
+        "actual_hours": 0.032,
+        "journaled_at": "2025-11-28T15:00:59.656219Z"
       }
     },
     "task-4-3": {
@@ -1696,6 +1702,15 @@
       "content": "Created tests/integration/test_llm_tools.py with 32 comprehensive integration tests for all LLM-powered tools. Tests cover: data-only fallback paths, multi-provider matrix support, circuit breaker integration, response envelope compliance, timeout handling with recovery guidance, error handling and validation, LLM configuration status reporting, tool registration verification, security validation (prompt injection/path traversal), metrics emission, and CLI not found graceful handling. All 32 tests pass.",
       "metadata": {},
       "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2025-11-28T15:00:59.656214Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/discovery.py",
+      "author": "claude-code",
+      "content": "Added comprehensive discovery metadata for all 6 LLM-powered tools to discovery.py: spec-review, review-list-tools, review-list-plan-tools, spec-doc, spec-doc-llm, spec-review-fidelity. Each tool has full parameter metadata with types, descriptions, constraints, examples, related tools, and tags. Added 5 LLM feature flags for capability negotiation (llm_tools, llm_multi_provider, llm_fidelity_review, llm_doc_generation, llm_data_only_fallback). Implemented helper functions: register_llm_tools(), get_llm_capabilities(), is_llm_tool(), get_llm_tool_metadata(). All imports and functions verified working.",
+      "metadata": {},
+      "task_id": "task-4-2"
     }
   ]
 }
