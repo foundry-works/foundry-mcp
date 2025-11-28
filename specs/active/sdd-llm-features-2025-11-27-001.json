@@ -2,7 +2,7 @@
   "spec_id": "sdd-llm-features-2025-11-27-001",
   "title": "SDD LLM-Powered Features - AI Integration",
   "generated": "2025-11-27T12:00:00Z",
-  "last_updated": "2025-11-28T12:01:14.247881Z",
+  "last_updated": "2025-11-28T12:01:40.744905Z",
   "metadata": {
     "description": "Implement LLM-powered SDD operations including provider abstraction, review workflows, PR creation, and AI-enhanced documentation. Requires configurable LLM provider support with graceful degradation.",
     "objectives": [
@@ -24,7 +24,7 @@
     ],
     "status": "active",
     "activated_date": "2025-11-28T00:02:09.184712Z",
-    "progress_percentage": 38,
+    "progress_percentage": 40,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-4"
       ],
       "total_tasks": 42,
-      "completed_tasks": 16,
+      "completed_tasks": 17,
       "metadata": {}
     },
     "phase-1": {
@@ -512,7 +512,7 @@
         ]
       },
       "total_tasks": 10,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "AI-enhanced review sessions and PR creation capabilities",
         "risk_level": "high"
@@ -529,7 +529,7 @@
         "task-2-3"
       ],
       "total_tasks": 7,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -551,7 +551,7 @@
         "task-2-1-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/review.py",
         "task_category": "implementation",
@@ -598,13 +598,16 @@
     "task-2-1-3": {
       "type": "subtask",
       "title": "Implement review-list-tools - list available review pipelines",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "details": "Wrap sdd list-review-tools, return non-plan-focused review options"
+        "details": "Wrap sdd list-review-tools, return non-plan-focused review options",
+        "completed_at": "2025-11-28T12:01:40.741544Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-11-28T12:01:40.743457Z"
       }
     },
     "task-2-1-4": {
@@ -1358,6 +1361,15 @@
       "content": "Implemented spec-review MCP tool in src/foundry_mcp/tools/review.py. Features:\n- Wraps sdd review CLI command with --type quick/full/security/feasibility options\n- Supports external AI tools (cursor-agent, gemini, codex) via --tools flag\n- Configurable model via --model flag\n- Dry-run mode for testing\n- LLM status reporting (shows configured/unconfigured state)\n- Circuit breaker protection (5 failures, 30s recovery)\n- Timing metrics for observability\n- Graceful error handling with structured responses",
       "metadata": {},
       "task_id": "task-2-1-1"
+    },
+    {
+      "timestamp": "2025-11-28T12:01:40.743449Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement review-list-tools - list available review pipelines",
+      "author": "claude-code",
+      "content": "Implemented review-list-tools MCP tool in src/foundry_mcp/tools/review.py. Features:\n- Lists available external AI review tools (cursor-agent, gemini, codex)\n- Checks tool availability via --version command\n- Reports version information when available\n- Shows LLM configuration status\n- Lists all supported review types (quick, full, security, feasibility)\n- Includes timing metrics for observability",
+      "metadata": {},
+      "task_id": "task-2-1-3"
     }
   ]
 }
