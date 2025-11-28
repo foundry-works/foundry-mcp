@@ -636,6 +636,69 @@
         ]
       }
     ],
+    "documentation_tools": [
+      {
+        "name": "spec-doc",
+        "description": "Generate human-facing documentation bundle from a specification - renders specs to markdown for stakeholders and progress tracking",
+        "auth_required": false,
+        "rate_limit": null,
+        "feature_flag": "documentation_tools",
+        "parameters": [
+          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID to document"},
+          {"name": "output_format", "type": "string", "required": false, "default": "markdown", "enum": ["markdown", "md"], "description": "Output format"},
+          {"name": "output_path", "type": "string", "required": false, "description": "Custom output path"},
+          {"name": "include_progress", "type": "boolean", "required": false, "default": true, "description": "Include visual progress bars"},
+          {"name": "include_journal", "type": "boolean", "required": false, "default": false, "description": "Include journal entries"},
+          {"name": "mode", "type": "string", "required": false, "default": "basic", "enum": ["basic", "enhanced"], "description": "Rendering mode"},
+          {"name": "workspace", "type": "string", "required": false, "description": "Workspace path"}
+        ]
+      },
+      {
+        "name": "spec-doc-llm",
+        "description": "Generate comprehensive LLM-powered documentation for a project - uses AI to create rich, context-aware developer guides",
+        "auth_required": false,
+        "rate_limit": {
+          "requests_per_minute": 5,
+          "reason": "AI-intensive operation with external model calls"
+        },
+        "feature_flag": "documentation_tools",
+        "parameters": [
+          {"name": "directory", "type": "string", "required": true, "description": "Project directory to document"},
+          {"name": "output_dir", "type": "string", "required": false, "description": "Output directory for documentation"},
+          {"name": "name", "type": "string", "required": false, "description": "Project name"},
+          {"name": "description", "type": "string", "required": false, "description": "Project description"},
+          {"name": "batch_size", "type": "integer", "required": false, "default": 3, "min": 1, "max": 10, "description": "Shards per batch"},
+          {"name": "use_cache", "type": "boolean", "required": false, "default": true, "description": "Enable caching"},
+          {"name": "resume", "type": "boolean", "required": false, "default": false, "description": "Resume from checkpoint"},
+          {"name": "clear_cache", "type": "boolean", "required": false, "default": false, "description": "Clear cache first"},
+          {"name": "workspace", "type": "string", "required": false, "description": "Workspace path"}
+        ]
+      },
+      {
+        "name": "spec-review-fidelity",
+        "description": "Compare implementation against specification and identify deviations - uses AI consultation for comprehensive fidelity analysis",
+        "auth_required": false,
+        "rate_limit": {
+          "requests_per_minute": 5,
+          "reason": "AI-intensive operation with multi-model consultation"
+        },
+        "feature_flag": "documentation_tools",
+        "parameters": [
+          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID to review"},
+          {"name": "task_id", "type": "string", "required": false, "description": "Review specific task (mutually exclusive with phase_id)"},
+          {"name": "phase_id", "type": "string", "required": false, "description": "Review entire phase (mutually exclusive with task_id)"},
+          {"name": "files", "type": "array", "required": false, "description": "Review specific files only"},
+          {"name": "use_ai", "type": "boolean", "required": false, "default": true, "description": "Enable AI consultation"},
+          {"name": "ai_tools", "type": "array", "required": false, "description": "Specific AI tools to consult"},
+          {"name": "model", "type": "string", "required": false, "description": "Specific model for AI consultation"},
+          {"name": "consensus_threshold", "type": "integer", "required": false, "default": 2, "min": 1, "max": 5, "description": "Minimum models that must agree"},
+          {"name": "incremental", "type": "boolean", "required": false, "default": false, "description": "Only review changed files"},
+          {"name": "include_tests", "type": "boolean", "required": false, "default": true, "description": "Include test results"},
+          {"name": "base_branch", "type": "string", "required": false, "default": "main", "description": "Base branch for diff"},
+          {"name": "workspace", "type": "string", "required": false, "description": "Workspace path"}
+        ]
+      }
+    ],
     "discovery_tools": [
       {
         "name": "tool_list",
@@ -885,6 +948,16 @@
         "dependencies": [],
         "created_at": "2025-11-27T00:00:00Z",
         "expires_at": null
+      },
+      "documentation_tools": {
+        "description": "LLM-powered documentation tools for spec rendering, code documentation, and fidelity reviews (spec-doc, spec-doc-llm, spec-review-fidelity)",
+        "state": "beta",
+        "default_enabled": true,
+        "percentage_rollout": 100,
+        "owner": "spec-team",
+        "dependencies": [],
+        "created_at": "2025-11-28T00:00:00Z",
+        "expires_at": null
       }
     },
     "lifecycle_states": {
@@ -971,6 +1044,11 @@
         "supported": true,
         "description": "Utility tools for cache management and schema exports",
         "tools": ["sdd-cache-manage", "spec-schema-export"]
+      },
+      "documentation_tools": {
+        "supported": true,
+        "description": "LLM-powered documentation tools for spec rendering, code documentation, and fidelity reviews",
+        "tools": ["spec-doc", "spec-doc-llm", "spec-review-fidelity"]
       }
     },
     "api_version": "2024-11-01"

@@ -29,6 +29,11 @@ from foundry_mcp.core.observability import (
     get_audit_logger,
     mcp_tool,
 )
+from foundry_mcp.core.security import (
+    is_prompt_injection,
+    validate_size,
+    MAX_STRING_LENGTH,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +344,26 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     )
                 )
 
+            # Input validation: check for prompt injection in user-controlled fields
+            for field_name, field_value in [
+                ("spec_id", spec_id),
+                ("output_path", output_path),
+                ("workspace", workspace),
+            ]:
+                if field_value and is_prompt_injection(field_value):
+                    metrics.counter(
+                        "documentation.security_blocked",
+                        labels={"tool": "spec-doc", "reason": "prompt_injection"},
+                    )
+                    return asdict(
+                        error_response(
+                            f"Input validation failed for {field_name}",
+                            error_code="VALIDATION_ERROR",
+                            error_type="security",
+                            remediation="Remove special characters or instruction-like patterns from input.",
+                        )
+                    )
+
             # Build command arguments for sdd render
             cmd_args = [spec_id, "--format", output_format, "--mode", mode]
 
@@ -550,6 +575,43 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         remediation="Use a batch_size between 1 and 10.",
                     )
                 )
+
+            # Input validation: check for prompt injection in user-controlled fields
+            for field_name, field_value in [
+                ("directory", directory),
+                ("output_dir", output_dir),
+                ("name", name),
+                ("description", description),
+                ("workspace", workspace),
+            ]:
+                if field_value and is_prompt_injection(field_value):
+                    metrics.counter(
+                        "documentation.security_blocked",
+                        labels={"tool": "spec-doc-llm", "reason": "prompt_injection"},
+                    )
+                    return asdict(
+                        error_response(
+                            f"Input validation failed for {field_name}",
+                            error_code="VALIDATION_ERROR",
+                            error_type="security",
+                            remediation="Remove special characters or instruction-like patterns from input.",
+                        )
+                    )
+
+            # Validate description size (can be longer than other fields)
+            if description:
+                size_result = validate_size(
+                    description, "description", max_string_length=MAX_STRING_LENGTH
+                )
+                if not size_result.is_valid:
+                    return asdict(
+                        error_response(
+                            f"Description too long: {size_result.violations[0][1]}",
+                            error_code="VALIDATION_ERROR",
+                            error_type="validation",
+                            remediation=f"Limit description to {MAX_STRING_LENGTH} characters.",
+                        )
+                    )
 
             # Build command arguments for sdd llm-doc-gen generate
             cmd_args = ["generate", directory]
@@ -810,6 +872,46 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         remediation="Use a consensus_threshold between 1 and 5.",
                     )
                 )
+
+            # Input validation: check for prompt injection in user-controlled fields
+            for field_name, field_value in [
+                ("spec_id", spec_id),
+                ("task_id", task_id),
+                ("phase_id", phase_id),
+                ("model", model),
+                ("base_branch", base_branch),
+                ("workspace", workspace),
+            ]:
+                if field_value and is_prompt_injection(field_value):
+                    metrics.counter(
+                        "documentation.security_blocked",
+                        labels={"tool": "spec-review-fidelity", "reason": "prompt_injection"},
+                    )
+                    return asdict(
+                        error_response(
+                            f"Input validation failed for {field_name}",
+                            error_code="VALIDATION_ERROR",
+                            error_type="security",
+                            remediation="Remove special characters or instruction-like patterns from input.",
+                        )
+                    )
+
+            # Validate files array for injection
+            if files:
+                for idx, file_path in enumerate(files):
+                    if is_prompt_injection(file_path):
+                        metrics.counter(
+                            "documentation.security_blocked",
+                            labels={"tool": "spec-review-fidelity", "reason": "prompt_injection"},
+                        )
+                        return asdict(
+                            error_response(
+                                f"Input validation failed for files[{idx}]",
+                                error_code="VALIDATION_ERROR",
+                                error_type="security",
+                                remediation="Remove special characters or instruction-like patterns from file paths.",
+                            )
+                        )
 
             # Build command arguments
             cmd_args = [spec_id]
