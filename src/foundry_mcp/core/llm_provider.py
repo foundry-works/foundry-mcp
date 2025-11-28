@@ -1247,6 +1247,295 @@ class AnthropicProvider(LLMProvider):
 
 
 # =============================================================================
+# Local Provider Implementation (Ollama/llama.cpp)
+# =============================================================================
+
+
+class LocalProvider(LLMProvider):
+    """Local LLM provider using Ollama or llama.cpp compatible API.
+
+    Supports local models via Ollama's OpenAI-compatible API endpoint.
+
+    Attributes:
+        name: Provider identifier ('local')
+        default_model: Default model ('llama3.2')
+        base_url: Local API endpoint (default: http://localhost:11434/v1)
+
+    Example:
+        # Using Ollama (default)
+        provider = LocalProvider()
+        response = await provider.chat(ChatRequest(
+            messages=[ChatMessage(role=ChatRole.USER, content="Hello!")]
+        ))
+
+        # Custom endpoint
+        provider = LocalProvider(base_url="http://localhost:8080/v1")
+    """
+
+    name: str = "local"
+    default_model: str = "llama3.2"
+    default_embedding_model: str = "nomic-embed-text"
+
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        default_model: Optional[str] = None,
+        default_embedding_model: Optional[str] = None,
+        api_key: Optional[str] = None,
+    ):
+        """Initialize the local provider.
+
+        Args:
+            base_url: API base URL (defaults to Ollama's OpenAI-compatible endpoint)
+            default_model: Override default chat model
+            default_embedding_model: Override default embedding model
+            api_key: Optional API key (some local servers may require it)
+        """
+        self.base_url = base_url or "http://localhost:11434/v1"
+        self.api_key = api_key or "ollama"  # Ollama accepts any key
+
+        if default_model:
+            self.default_model = default_model
+        if default_embedding_model:
+            self.default_embedding_model = default_embedding_model
+
+        self._client: Optional[Any] = None
+
+    def _get_client(self) -> Any:
+        """Get or create the OpenAI-compatible client for local server."""
+        if self._client is None:
+            try:
+                from openai import AsyncOpenAI
+            except ImportError:
+                raise LLMError(
+                    "openai package not installed. Install with: pip install openai",
+                    provider=self.name,
+                )
+
+            self._client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
+
+        return self._client
+
+    def _handle_api_error(self, error: Exception) -> None:
+        """Convert API errors to LLMError types."""
+        error_str = str(error)
+
+        if "connection" in error_str.lower() or "refused" in error_str.lower():
+            raise LLMError(
+                f"Cannot connect to local server at {self.base_url}. "
+                "Ensure Ollama is running: ollama serve",
+                provider=self.name,
+                retryable=True,
+            )
+
+        if "model" in error_str.lower() and "not found" in error_str.lower():
+            raise ModelNotFoundError(
+                f"Model not found. Pull it first: ollama pull {self.default_model}",
+                provider=self.name,
+            )
+
+        raise LLMError(error_str, provider=self.name, retryable=True)
+
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Generate a text completion using local model."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": request.prompt}],
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                stop=request.stop,
+            )
+
+            choice = response.choices[0]
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                completion_tokens=response.usage.completion_tokens if response.usage else 0,
+                total_tokens=response.usage.total_tokens if response.usage else 0,
+            )
+
+            return CompletionResponse(
+                text=choice.message.content or "",
+                finish_reason=self._map_finish_reason(choice.finish_reason),
+                usage=usage,
+                model=response.model,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def chat(self, request: ChatRequest) -> ChatResponse:
+        """Generate a chat completion using local model."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            messages = [msg.to_dict() for msg in request.messages]
+
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+            }
+
+            if request.stop:
+                kwargs["stop"] = request.stop
+            if request.tools:
+                kwargs["tools"] = request.tools
+            if request.tool_choice:
+                kwargs["tool_choice"] = request.tool_choice
+
+            response = await client.chat.completions.create(**kwargs)
+
+            choice = response.choices[0]
+            message = choice.message
+
+            tool_calls = None
+            if message.tool_calls:
+                tool_calls = [
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=tc.function.arguments,
+                    )
+                    for tc in message.tool_calls
+                ]
+
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                completion_tokens=response.usage.completion_tokens if response.usage else 0,
+                total_tokens=response.usage.total_tokens if response.usage else 0,
+            )
+
+            return ChatResponse(
+                message=ChatMessage(
+                    role=ChatRole.ASSISTANT,
+                    content=message.content,
+                    tool_calls=tool_calls,
+                ),
+                finish_reason=self._map_finish_reason(choice.finish_reason),
+                usage=usage,
+                model=response.model,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
+        """Generate embeddings using local model."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = request.model or self.default_embedding_model
+
+        try:
+            response = await client.embeddings.create(
+                model=model,
+                input=request.texts,
+            )
+
+            embeddings = [item.embedding for item in response.data]
+
+            usage = TokenUsage(
+                prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+                total_tokens=response.usage.total_tokens if response.usage else 0,
+            )
+
+            return EmbeddingResponse(
+                embeddings=embeddings,
+                usage=usage,
+                model=response.model,
+                dimensions=len(embeddings[0]) if embeddings else None,
+            )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    async def stream_chat(self, request: ChatRequest) -> AsyncIterator[ChatResponse]:
+        """Stream chat completion tokens from local model."""
+        self.validate_request(request)
+        client = self._get_client()
+        model = self.get_model(request.model)
+
+        try:
+            messages = [msg.to_dict() for msg in request.messages]
+
+            kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "top_p": request.top_p,
+                "stream": True,
+            }
+
+            if request.stop:
+                kwargs["stop"] = request.stop
+
+            stream = await client.chat.completions.create(**kwargs)
+
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+
+                choice = chunk.choices[0]
+                delta = choice.delta
+
+                if delta.content:
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=ChatRole.ASSISTANT,
+                            content=delta.content,
+                        ),
+                        finish_reason=self._map_finish_reason(choice.finish_reason) if choice.finish_reason else FinishReason.STOP,
+                        model=chunk.model,
+                    )
+
+        except Exception as e:
+            self._handle_api_error(e)
+            raise
+
+    def _map_finish_reason(self, reason: Optional[str]) -> FinishReason:
+        """Map finish reason to FinishReason enum."""
+        if reason is None:
+            return FinishReason.STOP
+
+        mapping = {
+            "stop": FinishReason.STOP,
+            "length": FinishReason.LENGTH,
+            "tool_calls": FinishReason.TOOL_CALL,
+        }
+        return mapping.get(reason, FinishReason.STOP)
+
+    async def health_check(self) -> bool:
+        """Check if local server is accessible."""
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                # Check Ollama-style health endpoint
+                response = await client.get(
+                    self.base_url.replace("/v1", "") + "/api/tags",
+                    timeout=5.0,
+                )
+                return response.status_code == 200
+        except Exception:
+            return False
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -1276,4 +1565,5 @@ __all__ = [
     # Providers
     "OpenAIProvider",
     "AnthropicProvider",
+    "LocalProvider",
 ]

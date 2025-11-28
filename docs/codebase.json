@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-28T00:07:08.823547Z",
-    "generated_at_commit": "4a6a9ddad1558fc84beef5bbe2d79e70466b37d3",
+    "generated_at": "2025-11-28T00:08:54.899735Z",
+    "generated_at_commit": "410931544d1605284e914c768da843016d564b39",
     "languages": [
       "python"
     ],
@@ -11,8 +11,8 @@
   },
   "statistics": {
     "total_files": 49,
-    "total_lines": 25643,
-    "total_classes": 91,
+    "total_lines": 25999,
+    "total_classes": 92,
     "total_functions": 223,
     "avg_complexity": 8.91,
     "max_complexity": 160,
@@ -26,8 +26,8 @@
     "by_language": {
       "python": {
         "files": 49,
-        "lines": 25643,
-        "classes": 91,
+        "lines": 25999,
+        "classes": 92,
         "functions": 223,
         "avg_complexity": 8.91
       }
@@ -489,7 +489,8 @@
         "ModelNotFoundError",
         "ContentFilterError",
         "LLMProvider",
-        "OpenAIProvider"
+        "OpenAIProvider",
+        "AnthropicProvider"
       ],
       "functions": [],
       "imports": [
@@ -507,7 +508,7 @@
         "typing.Union"
       ],
       "exports": [],
-      "lines": 923
+      "lines": 1279
     },
     {
       "name": "naming",
@@ -3308,10 +3309,19 @@
             "OpenAIProvider",
             "chat"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1132,
+          "context": [
+            "AnthropicProvider",
+            "chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 2
     },
     {
       "name": "ChatMessage",
@@ -3353,10 +3363,28 @@
             "OpenAIProvider",
             "stream_chat"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1145,
+          "context": [
+            "AnthropicProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "stream_chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1197,
+          "context": [
+            "AnthropicProvider",
+            "stream_chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 3
+      "instantiation_count": 5
     },
     {
       "name": "CompletionRequest",
@@ -3449,10 +3477,28 @@
             "OpenAIProvider",
             "embed"
           ]
+        },
+        {
+          "instantiator": "complete",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1078,
+          "context": [
+            "AnthropicProvider",
+            "complete"
+          ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1138,
+          "context": [
+            "AnthropicProvider",
+            "chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 3
+      "instantiation_count": 5
     },
     {
       "name": "CompletionResponse",
@@ -3474,10 +3520,19 @@
             "OpenAIProvider",
             "complete"
           ]
+        },
+        {
+          "instantiator": "complete",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1084,
+          "context": [
+            "AnthropicProvider",
+            "complete"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 2
     },
     {
       "name": "ChatResponse",
@@ -3508,10 +3563,28 @@
             "OpenAIProvider",
             "stream_chat"
           ]
+        },
+        {
+          "instantiator": "chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1144,
+          "context": [
+            "AnthropicProvider",
+            "chat"
+          ]
+        },
+        {
+          "instantiator": "stream_chat",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1196,
+          "context": [
+            "AnthropicProvider",
+            "stream_chat"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 2
+      "instantiation_count": 4
     },
     {
       "name": "EmbeddingResponse",
@@ -3571,10 +3644,37 @@
             "OpenAIProvider",
             "_handle_api_error"
           ]
+        },
+        {
+          "instantiator": "_get_client",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 959,
+          "context": [
+            "AnthropicProvider",
+            "_get_client"
+          ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1004,
+          "context": [
+            "AnthropicProvider",
+            "_handle_api_error"
+          ]
+        },
+        {
+          "instantiator": "embed",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1166,
+          "context": [
+            "AnthropicProvider",
+            "embed"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 2
+      "instantiation_count": 5
     },
     {
       "name": "RateLimitError",
@@ -3600,10 +3700,19 @@
             "OpenAIProvider",
             "_handle_api_error"
           ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 992,
+          "context": [
+            "AnthropicProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 2
     },
     {
       "name": "AuthenticationError",
@@ -3638,10 +3747,28 @@
             "OpenAIProvider",
             "_handle_api_error"
           ]
+        },
+        {
+          "instantiator": "_get_client",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 965,
+          "context": [
+            "AnthropicProvider",
+            "_get_client"
+          ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 995,
+          "context": [
+            "AnthropicProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 2
+      "instantiation_count": 4
     },
     {
       "name": "InvalidRequestError",
@@ -3712,10 +3839,19 @@
             "OpenAIProvider",
             "_handle_api_error"
           ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 998,
+          "context": [
+            "AnthropicProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 6
+      "instantiation_count": 7
     },
     {
       "name": "ModelNotFoundError",
@@ -3741,10 +3877,19 @@
             "OpenAIProvider",
             "_handle_api_error"
           ]
+        },
+        {
+          "instantiator": "_handle_api_error",
+          "file": "src/foundry_mcp/core/llm_provider.py",
+          "line": 1001,
+          "context": [
+            "AnthropicProvider",
+            "_handle_api_error"
+          ]
         }
       ],
       "imported_by": [],
-      "instantiation_count": 1
+      "instantiation_count": 2
     },
     {
       "name": "ContentFilterError",
@@ -3819,6 +3964,34 @@
         "embed",
         "stream_chat",
         "_map_finish_reason",
+        "count_tokens"
+      ],
+      "properties": [],
+      "is_exported": false,
+      "is_public": true,
+      "instantiated_by": [],
+      "imported_by": []
+    },
+    {
+      "name": "AnthropicProvider",
+      "file": "src/foundry_mcp/core/llm_provider.py",
+      "line": 899,
+      "language": "python",
+      "docstring": "Anthropic API provider implementation.\n\nSupports Claude 3 models (opus, sonnet, haiku) via the Anthropic API.\n\nAttributes:\n    name: Provider identifier ('anthropic')\n    default_model: Default chat model ('claude-3-sonnet-20240229')\n    api_key: Anthropic API key\n    base_url: API base URL (for proxies)\n    max_tokens_default: Default max tokens for responses\n\nExample:\n    provider = AnthropicProvider(api_key=\"sk-ant-...\")\n    response = await provider.chat(ChatRequest(\n        messages=[ChatMessage(role=ChatRole.USER, content=\"Hello!\")]\n    ))\n\nNote:\n    Anthropic does not support embeddings. The embed() method will raise\n    an error if called.",
+      "bases": [
+        "LLMProvider"
+      ],
+      "methods": [
+        "__init__",
+        "_get_client",
+        "_handle_api_error",
+        "_convert_messages",
+        "complete",
+        "chat",
+        "embed",
+        "stream_chat",
+        "_convert_tools",
+        "_map_stop_reason",
         "count_tokens"
       ],
       "properties": [],
@@ -6233,7 +6406,7 @@
       "calls": [
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 771,
           "call_type": "method_call"
         },
@@ -6251,13 +6424,13 @@
         },
         {
           "name": "done",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 785,
           "call_type": "method_call"
         },
         {
           "name": "result",
-          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
+          "file": "unknown",
           "line": 787,
           "call_type": "method_call"
         },
@@ -8393,7 +8566,7 @@
         },
         {
           "name": "read",
-          "file": "/opt/anaconda3/lib/python3.13/typing.py",
+          "file": "built-in",
           "line": 533,
           "call_type": "method_call"
         },
