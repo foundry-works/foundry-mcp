@@ -1,0 +1,1370 @@
+{
+  "spec_id": "sdd-cli-native-parity-2025-11-27-001",
+  "title": "SDD CLI Native Re-Implementation - Foundry MCP",
+  "generated": "2025-11-27T20:25:00Z",
+  "last_updated": "2025-11-27T20:25:00Z",
+  "metadata": {
+    "description": "Re-implement the Spec-Driven Development CLI inside foundry-mcp (Option A) so that MCP tools and the CLI share the same service layer, contracts, and resilience/observability guardrails.",
+    "objectives": [
+      "Achieve full parity with claude_skills SDD CLI commands without shelling out",
+      "Share response helpers, validation, observability, and feature flags between CLI and MCP adapters",
+      "Keep specs, docs, fixtures, and manifests in sync while introducing the native CLI"
+    ],
+    "complexity": "high",
+    "estimated_hours": 180,
+    "assumptions": [
+      "Option A selected: native CLI package lives under src/foundry_mcp/sdd_cli and is the source of truth for both CLI and MCP tool behavior",
+      "Best-practices consulted prior to authoring: docs/mcp_best_practices/01-versioned-contracts.md, 02-envelopes-metadata.md, 03-serialization-helpers.md, 04-validation-input-hygiene.md, 05-observability-telemetry.md, 06-pagination-streaming.md, 07-error-semantics.md, 08-security-trust-boundaries.md, 09-spec-driven-development.md, 10-testing-fixtures.md, 11-ai-llm-integration.md, 12-timeout-resilience.md, 13-tool-discovery.md, 14-feature-flags.md, 15-concurrency-patterns.md",
+      "User-facing output consolidates on JSON (with optional plain-text/markdown summaries) \u2014 no bespoke rich UI or pretty-print layers",
+      "New CLI must expose readiness/status via mcp/capabilities_manifest.json and discovery helpers before rollout"
+    ],
+    "status": "draft",
+    "owner": "foundry-mcp core"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": "phase-1",
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "SDD CLI Native Re-Implementation",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5"
+      ],
+      "total_tasks": 55,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Deliver first-party SDD CLI runtime with shared MCP tooling"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Discovery & Architecture",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-1-planning",
+        "phase-1-verify"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Establish scope, parity matrix, and architecture for Option A CLI",
+        "risk_level": "medium",
+        "estimated_hours": 30
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-planning": {
+      "type": "group",
+      "title": "Planning & Documentation",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-1-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Build command parity matrix",
+      "status": "pending",
+      "parent": "phase-1-planning",
+      "children": [
+        "task-1-1-1",
+        "task-1-1-2",
+        "task-1-1-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "investigation",
+        "file_path": "docs/command_parity_matrix.md",
+        "details": "Inventory every sdd/sdd doc/sdd test/sdd skills-dev command and map to foundry_mcp modules"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-2",
+          "task-1-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1-1": {
+      "type": "subtask",
+      "title": "Export claude_skills CLI registry",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Capture claude_skills/claude_skills/cli/sdd/registry.py outputs for doc-query, run-tests, plan, etc."
+      }
+    },
+    "task-1-1-2": {
+      "type": "subtask",
+      "title": "Classify overlap with existing MCP adapters",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Mark commands already wrapped (environment, plan, next) vs gaps"
+      }
+    },
+    "task-1-1-3": {
+      "type": "subtask",
+      "title": "Define migration priority tiers",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Group commands into critical (core workflows), important (doc/test), and advanced (AI rendering)"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Author runtime ADR",
+      "status": "pending",
+      "parent": "phase-1-planning",
+      "children": [
+        "task-1-2-1",
+        "task-1-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "decision",
+        "file_path": "docs/architecture/sdd_cli_runtime.md",
+        "details": "Document module layout, dependency graph, and CLI vs MCP execution model"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-2-1": {
+      "type": "subtask",
+      "title": "Define package boundaries",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Choose namespace structure (sdd_cli/runtime, sdd_cli/commands, shared services)"
+      }
+    },
+    "task-1-2-2": {
+      "type": "subtask",
+      "title": "Describe shared helper strategy",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Reference core responses, validation, observability, and resilience helpers"
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Define release readiness plan",
+      "status": "pending",
+      "parent": "phase-1-planning",
+      "children": [
+        "task-1-3-1",
+        "task-1-3-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "decision",
+        "details": "Outline release sequencing, feature flags, and readiness criteria for enabling the native CLI"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-3-1": {
+      "type": "subtask",
+      "title": "Draft feature-flag controls",
+      "status": "pending",
+      "parent": "task-1-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Specify discovery + capabilities manifest switches for native CLI"
+      }
+    },
+    "task-1-3-2": {
+      "type": "subtask",
+      "title": "Document release checklist",
+      "status": "pending",
+      "parent": "task-1-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Capture enablement checklist, communication notes, and readiness signals for launch"
+      }
+    },
+    "phase-1-verify": {
+      "type": "group",
+      "title": "Discovery Verification",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "verify-1-1"
+      ],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-1-planning"
+        ],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Architecture review sign-off",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "Pariry matrix + ADR reviewed by maintainers",
+        "command": "review docs/command_parity_matrix.md and docs/architecture/sdd_cli_runtime.md"
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Runtime & Shared Services",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-2-implementation",
+        "phase-2-verify"
+      ],
+      "total_tasks": 11,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Create native CLI runtime, printers, config loading, and entry points",
+        "risk_level": "medium",
+        "estimated_hours": 35
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-2-implementation": {
+      "type": "group",
+      "title": "Runtime Implementation",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-2-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Scaffold sdd_cli runtime package",
+      "status": "pending",
+      "parent": "phase-2-implementation",
+      "children": [
+        "task-2-1-1",
+        "task-2-1-2",
+        "task-2-1-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/runtime/__init__.py",
+        "details": "Create argparse scaffolding, shared options, and CLI context objects"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-2",
+          "task-2-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1-1": {
+      "type": "subtask",
+      "title": "Implement argument parser + registry",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Port claude_skills CLI global options (verbosity, json, specs-dir)"
+      }
+    },
+    "task-2-1-2": {
+      "type": "subtask",
+      "title": "Create printer/json output helpers",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Map claude_skills.common PrettyPrinter behavior onto observability helpers"
+      }
+    },
+    "task-2-1-3": {
+      "type": "subtask",
+      "title": "Wire configuration + workspace detection",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Leverage foundry_mcp.config + path helpers for specs directory"
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Expose console entry point",
+      "status": "pending",
+      "parent": "phase-2-implementation",
+      "children": [
+        "task-2-2-1",
+        "task-2-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "pyproject.toml",
+        "details": "Add console script (sdd-native) referencing foundry_mcp.sdd_cli.__main__"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-2-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-2-1": {
+      "type": "subtask",
+      "title": "Create __main__ launcher",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Initialize FastMCP config, metrics, and event loop"
+      }
+    },
+    "task-2-2-2": {
+      "type": "subtask",
+      "title": "Update packaging + entry points",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Add console_scripts and ensure dependencies vendored"
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Resilience & telemetry scaffolding",
+      "status": "pending",
+      "parent": "phase-2-implementation",
+      "children": [
+        "task-2-3-1",
+        "task-2-3-2",
+        "task-2-3-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/runtime/resilience.py",
+        "details": "Integrate core/resilience, observability, concurrency, and tracing helpers"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-2-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-3-1": {
+      "type": "subtask",
+      "title": "Timeout + cancellation wrappers",
+      "status": "pending",
+      "parent": "task-2-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Expose decorators for CLI commands using core/resilience FAST_TIMEOUT + SAFE_TIMEOUT"
+      }
+    },
+    "task-2-3-2": {
+      "type": "subtask",
+      "title": "Structured logging hooks",
+      "status": "pending",
+      "parent": "task-2-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Emit context IDs + metrics per docs/mcp_best_practices/05"
+      }
+    },
+    "task-2-3-3": {
+      "type": "subtask",
+      "title": "Feature-flag bootstrap",
+      "status": "pending",
+      "parent": "task-2-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Add shared flag registry bridging CLI options and discovery manifest"
+      }
+    },
+    "phase-2-verify": {
+      "type": "group",
+      "title": "Runtime Verification",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "verify-2-1",
+        "verify-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2-implementation"
+        ],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Runtime unit tests",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_sdd_cli_runtime.py -v",
+        "expected": "Parsers, printers, and config helpers covered"
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Console entry smoke test",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "sdd-native --help succeeds and shows global options"
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Core Operations Migration",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-3-implementation",
+        "phase-3-testing"
+      ],
+      "total_tasks": 14,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Port planning, next-task, update/progress, context, and validation commands",
+        "risk_level": "high",
+        "estimated_hours": 45
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "phase-3-implementation": {
+      "type": "group",
+      "title": "Core Command Ports",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-3-testing"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Port planning commands",
+      "status": "pending",
+      "parent": "phase-3-implementation",
+      "children": [
+        "task-3-1-1",
+        "task-3-1-2",
+        "task-3-1-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/plan.py",
+        "details": "Port create/analyze/template commands leveraging existing MCP planning helpers"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1-1": {
+      "type": "subtask",
+      "title": "sdd create",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Map spec templates to pending specs directory"
+      }
+    },
+    "task-3-1-2": {
+      "type": "subtask",
+      "title": "sdd analyze",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Integrate doc-query stats + workspace detection"
+      }
+    },
+    "task-3-1-3": {
+      "type": "subtask",
+      "title": "sdd template commands",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "List/show templates with verbosity filtering"
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Port next-task & preparation workflows",
+      "status": "pending",
+      "parent": "phase-3-implementation",
+      "children": [
+        "task-3-2-1",
+        "task-3-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/next.py",
+        "details": "Implement next-task, prepare-task, task-info, dependency checks"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2-1": {
+      "type": "subtask",
+      "title": "sdd next-task",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Reuse existing MCP next-task logic"
+      }
+    },
+    "task-3-2-2": {
+      "type": "subtask",
+      "title": "sdd prepare-task/task-info",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure envelope + pagination semantics"
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Port update/status/context commands",
+      "status": "pending",
+      "parent": "phase-3-implementation",
+      "children": [
+        "task-3-3-1",
+        "task-3-3-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/update.py",
+        "details": "Implement status updates, journaling, context tracker"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3-1": {
+      "type": "subtask",
+      "title": "Progress updates",
+      "status": "pending",
+      "parent": "task-3-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "sdd update-status, mark-blocked, activate/complete spec"
+      }
+    },
+    "task-3-3-2": {
+      "type": "subtask",
+      "title": "Context tracker/limits",
+      "status": "pending",
+      "parent": "task-3-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Integrate consultation limits + session markers"
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Port validation + fix/report commands",
+      "status": "pending",
+      "parent": "phase-3-implementation",
+      "children": [
+        "task-3-4-1",
+        "task-3-4-2",
+        "task-3-4-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/validate.py",
+        "details": "sdd validate, fix, report, stats, analyze-deps"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-4-1": {
+      "type": "subtask",
+      "title": "Validation command",
+      "status": "pending",
+      "parent": "task-3-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Wire schema validation + error semantics"
+      }
+    },
+    "task-3-4-2": {
+      "type": "subtask",
+      "title": "Auto-fix + diff",
+      "status": "pending",
+      "parent": "task-3-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Implement fix/report commands with resilience"
+      }
+    },
+    "task-3-4-3": {
+      "type": "subtask",
+      "title": "Stats + deps",
+      "status": "pending",
+      "parent": "task-3-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Expose stats/analyze-deps outputs with pagination"
+      }
+    },
+    "phase-3-testing": {
+      "type": "group",
+      "title": "Core Testing",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "verify-3-1",
+        "verify-3-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-3-implementation"
+        ],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Core CLI unit tests",
+      "status": "pending",
+      "parent": "phase-3-testing",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/unit/test_sdd_cli_core.py -v",
+        "expected": "Planning/next/update/validate commands covered"
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "Spec fixture parity",
+      "status": "pending",
+      "parent": "phase-3-testing",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "Compare CLI output vs claude_skills for representative fixtures"
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Advanced Workflows",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-4-implementation",
+        "phase-4-testing"
+      ],
+      "total_tasks": 12,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Port AI-assisted workflows (render, plan review, PR, spec modifications, doc-query, run-tests)",
+        "risk_level": "high",
+        "estimated_hours": 45
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "phase-4-implementation": {
+      "type": "group",
+      "title": "Advanced Command Ports",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-4-testing"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Port sdd render",
+      "status": "pending",
+      "parent": "phase-4-implementation",
+      "children": [
+        "task-4-1-1",
+        "task-4-1-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/render.py",
+        "details": "Integrate AI rendering with observability + concurrency guards"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1-1": {
+      "type": "subtask",
+      "title": "Rendering pipeline",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Port orchestrator + prompt selection"
+      }
+    },
+    "task-4-1-2": {
+      "type": "subtask",
+      "title": "Feature flags + rate limits",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Ensure render modes gated by capability flags"
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Port plan review & PR helpers",
+      "status": "pending",
+      "parent": "phase-4-implementation",
+      "children": [
+        "task-4-2-1",
+        "task-4-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/plan_review.py",
+        "details": "sdd plan-review, sdd pr commands with AI prompts"
+      }
+    },
+    "task-4-2-1": {
+      "type": "subtask",
+      "title": "Plan review",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Integrate review templates + fidelity hooks"
+      }
+    },
+    "task-4-2-2": {
+      "type": "subtask",
+      "title": "PR tooling",
+      "status": "pending",
+      "parent": "task-4-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "sdd pr context, creation, and metadata"
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Port spec modifications + doc-query",
+      "status": "pending",
+      "parent": "phase-4-implementation",
+      "children": [
+        "task-4-3-1",
+        "task-4-3-2",
+        "task-4-3-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/spec_mod.py",
+        "details": "Port spec modifications, doc-query workflows, and tooling"
+      }
+    },
+    "task-4-3-1": {
+      "type": "subtask",
+      "title": "Spec modifications",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Apply modifications schema + helper diffing"
+      }
+    },
+    "task-4-3-2": {
+      "type": "subtask",
+      "title": "Doc-query workflows",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Port doc-query CLI and integrate with runtime"
+      }
+    },
+    "task-4-3-3": {
+      "type": "subtask",
+      "title": "Run-tests integration",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Expose sdd test run/check-tools/consult commands"
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Port llm doc gen + skills dev CLI",
+      "status": "pending",
+      "parent": "phase-4-implementation",
+      "children": [
+        "task-4-4-1",
+        "task-4-4-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/sdd_cli/commands/doc_cli.py",
+        "details": "Bring over llm doc gen commands and skills-dev helpers for completeness"
+      }
+    },
+    "task-4-4-1": {
+      "type": "subtask",
+      "title": "LLM doc generation",
+      "status": "pending",
+      "parent": "task-4-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Integrate AI doc gen pipelines with concurrency controls"
+      }
+    },
+    "task-4-4-2": {
+      "type": "subtask",
+      "title": "Skills-dev utilities",
+      "status": "pending",
+      "parent": "task-4-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Port gendocs/install helper/start helper"
+      }
+    },
+    "phase-4-testing": {
+      "type": "group",
+      "title": "Advanced Testing",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "verify-4-1",
+        "verify-4-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-4-implementation"
+        ],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Advanced workflow tests",
+      "status": "pending",
+      "parent": "phase-4-testing",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_sdd_cli_advanced.py -v",
+        "expected": "Render/doc-query/spec-mod/run-tests flows validated"
+      }
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "AI workflow review",
+      "status": "pending",
+      "parent": "phase-4-testing",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-4"
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "Parity Validation & Rollout",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-5-delivery",
+        "phase-5-verify"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Validate parity vs legacy CLI, update manifest/docs, plan rollout",
+        "risk_level": "medium",
+        "estimated_hours": 30
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": []
+      }
+    },
+    "phase-5-delivery": {
+      "type": "group",
+      "title": "Rollout Tasks",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "task-5-1",
+        "task-5-2",
+        "task-5-3"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-5-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "Parity regression harness",
+      "status": "pending",
+      "parent": "phase-5-delivery",
+      "children": [
+        "task-5-1-1",
+        "task-5-1-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "tests/integration/test_sdd_cli_parity.py",
+        "details": "Compare native CLI output to claude_skills reference via fixtures"
+      }
+    },
+    "task-5-1-1": {
+      "type": "subtask",
+      "title": "Golden fixture capture",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Record baseline outputs for representative commands"
+      }
+    },
+    "task-5-1-2": {
+      "type": "subtask",
+      "title": "Diff harness",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Automate CLI vs reference comparisons in CI"
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "Docs + manifest updates",
+      "status": "pending",
+      "parent": "phase-5-delivery",
+      "children": [
+        "task-5-2-1",
+        "task-5-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "docs/mcp_best_practices/README.md",
+        "details": "Update docs, changelog, half_baked_plans, and capabilities manifest"
+      }
+    },
+    "task-5-2-1": {
+      "type": "subtask",
+      "title": "Capabilities manifest",
+      "status": "pending",
+      "parent": "task-5-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Expose CLI feature readiness + flags"
+      }
+    },
+    "task-5-2-2": {
+      "type": "subtask",
+      "title": "Docs + backlog",
+      "status": "pending",
+      "parent": "task-5-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Update docs/mcp_best_practices/README.md and half_baked_plans/OPERATIONS_TO_ADD.md"
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "Release enablement",
+      "status": "pending",
+      "parent": "phase-5-delivery",
+      "children": [
+        "task-5-3-1",
+        "task-5-3-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "details": "Stage rollout plans, feature flags, and launch communications"
+      }
+    },
+    "task-5-3-1": {
+      "type": "subtask",
+      "title": "Feature-flag rollout",
+      "status": "pending",
+      "parent": "task-5-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Enable native CLI via discovery flags and progressive rollout"
+      }
+    },
+    "task-5-3-2": {
+      "type": "subtask",
+      "title": "Launch communication",
+      "status": "pending",
+      "parent": "task-5-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "Publish launch notes and guidance for early adopters"
+      }
+    },
+    "phase-5-verify": {
+      "type": "group",
+      "title": "Rollout Verification",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "verify-5-1",
+        "verify-5-2",
+        "verify-5-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-5-delivery"
+        ],
+        "depends": []
+      }
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "Parity regression suite",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "pytest tests/integration/test_sdd_cli_parity.py -v",
+        "expected": "Legacy vs native outputs match for golden fixtures"
+      }
+    },
+    "verify-5-2": {
+      "type": "verify",
+      "title": "Docs + manifest review",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "expected": "Docs, backlog, and capabilities manifest reflect native CLI status"
+      }
+    },
+    "verify-5-3": {
+      "type": "verify",
+      "title": "Rollout readiness gate",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-5"
+      }
+    }
+  }
+}

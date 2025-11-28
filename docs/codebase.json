@@ -2,8 +2,8 @@
   "metadata": {
     "project_name": "src",
     "version": "1.0.0",
-    "generated_at": "2025-11-28T15:10:05.565031Z",
-    "generated_at_commit": "ae5b2fef1be6a20631a846b9e6c1f91a9d588c14",
+    "generated_at": "2025-11-28T17:25:21.758732Z",
+    "generated_at_commit": "c32786f853877285f7c55d0e480261807d014011",
     "languages": [
       "python"
     ],
@@ -11,7 +11,7 @@
   },
   "statistics": {
     "total_files": 54,
-    "total_lines": 29845,
+    "total_lines": 29853,
     "total_classes": 97,
     "total_functions": 251,
     "avg_complexity": 8.93,
@@ -26,7 +26,7 @@
     "by_language": {
       "python": {
         "files": 54,
-        "lines": 29845,
+        "lines": 29853,
         "classes": 97,
         "functions": 251,
         "avg_complexity": 8.93
@@ -1053,7 +1053,7 @@
         "foundry_mcp.core.task.prepare_task"
       ],
       "exports": [],
-      "lines": 520
+      "lines": 528
     },
     {
       "name": "__init__",
@@ -7156,7 +7156,7 @@
         },
         {
           "name": "cancel",
-          "file": "src/foundry_mcp/core/concurrency.py",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/tasks.py",
           "line": 772,
           "call_type": "method_call"
         },
@@ -7174,7 +7174,7 @@
         },
         {
           "name": "result",
-          "file": "unknown",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 787,
           "call_type": "method_call"
         },
@@ -7210,7 +7210,7 @@
         },
         {
           "name": "cancel",
-          "file": "src/foundry_mcp/core/concurrency.py",
+          "file": "/opt/anaconda3/lib/python3.13/asyncio/futures.py",
           "line": 799,
           "call_type": "method_call"
         },
@@ -9449,7 +9449,7 @@
         },
         {
           "name": "read",
-          "file": "built-in",
+          "file": "/opt/anaconda3/lib/python3.13/typing.py",
           "line": 533,
           "call_type": "method_call"
         },
@@ -13421,13 +13421,13 @@
         {
           "name": "complete_phase",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 300,
+          "line": 306,
           "call_type": "function_call"
         },
         {
           "name": "review_spec",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 452,
+          "line": 460,
           "call_type": "function_call"
         },
         {
@@ -13590,13 +13590,13 @@
         {
           "name": "complete_phase",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 301,
+          "line": 307,
           "call_type": "function_call"
         },
         {
           "name": "review_spec",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 464,
+          "line": 472,
           "call_type": "function_call"
         },
         {
@@ -20843,13 +20843,13 @@
         {
           "name": "complete_phase",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 297,
+          "line": 303,
           "call_type": "function_call"
         },
         {
           "name": "review_spec",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 418,
+          "line": 426,
           "call_type": "function_call"
         },
         {
@@ -21351,7 +21351,7 @@
         {
           "name": "start_feature",
           "file": "src/foundry_mcp/prompts/workflows.py",
-          "line": 69,
+          "line": 71,
           "call_type": "function_call"
         },
         {
@@ -26061,7 +26061,7 @@
         {
           "name": "debug",
           "file": "/opt/anaconda3/lib/python3.13/logging/__init__.py",
-          "line": 518,
+          "line": 526,
           "call_type": "method_call"
         }
       ],
