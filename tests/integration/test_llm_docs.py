@@ -6,6 +6,7 @@ emit actionable results with proper data-only fallback behavior.
 """
 
 import json
+import shutil
 import pytest
 import subprocess
 from pathlib import Path
@@ -15,6 +16,10 @@ from unittest.mock import patch, MagicMock
 class TestSpecDocIntegration:
     """Integration tests for spec-doc tool."""
 
+    @pytest.mark.skipif(
+        shutil.which("foundry-cli") is None,
+        reason="foundry-cli not installed"
+    )
     def test_spec_doc_returns_actionable_output(self, tmp_path):
         """Test that spec-doc produces actionable output with proper schema."""
         # Create a minimal spec file
@@ -46,7 +51,7 @@ class TestSpecDocIntegration:
 
         # Run sdd render command
         result = subprocess.run(
-            ["sdd", "render", "test-spec-001", "--path", str(tmp_path), "--json"],
+            ["foundry-cli", "render", "test-spec-001", "--path", str(tmp_path), "--json"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -129,7 +134,7 @@ class TestSpecDocLlmIntegration:
         from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=600)
 
             result = _run_sdd_llm_doc_gen_command(["generate", "/path"], timeout=600)
 
@@ -222,7 +227,7 @@ class TestSpecReviewFidelityIntegration:
         from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=600)
 
             result = _run_sdd_fidelity_review_command(["test-spec-001"], timeout=600)
 
@@ -289,7 +294,7 @@ class TestDocToolsResponseEnvelope:
         )
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             # All should return actionable error
             for runner, args in [
@@ -300,8 +305,8 @@ class TestDocToolsResponseEnvelope:
             ]:
                 result = runner(args)
                 assert result["success"] is False
-                assert "sdd CLI not found" in result["error"]
-                assert "sdd-toolkit" in result["error"]  # Installation guidance
+                assert "foundry-cli not found" in result["error"]
+                assert "foundry-mcp" in result["error"]  # Installation guidance
 
 
 class TestFidelityReviewActionableOutput:

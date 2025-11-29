@@ -50,6 +50,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
         fail_fast: bool = False,
         markers: Optional[str] = None,
         workspace: Optional[str] = None,
+        include_passed: bool = False,
     ) -> dict:
         """
         Run tests using pytest.
@@ -65,6 +66,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             fail_fast: Stop on first failure (default: False)
             markers: Pytest markers expression (e.g., "not slow")
             workspace: Optional workspace path (defaults to config)
+            include_passed: Include passed tests in response (default: False for concise output)
 
         Returns:
             JSON object with test results
@@ -80,13 +82,26 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 markers=markers,
             )
 
-            if not result.success:
+            # Only return error for actual errors (not test failures)
+            # Test failures are reported in the success response with tests_passed=False
+            if result.error:
                 return asdict(error_response(result.error))
+
+            # Filter tests for concise response - only failures/errors by default
+            # This keeps responses small for LLM context windows
+            if include_passed:
+                filtered_tests = result.tests
+            else:
+                filtered_tests = [
+                    t for t in result.tests
+                    if t.outcome in ("failed", "error")
+                ]
 
             return asdict(
                 success_response(
                     execution_id=result.execution_id,
                     timestamp=result.timestamp,
+                    tests_passed=result.success,  # True if all tests passed
                     summary={
                         "total": result.total,
                         "passed": result.passed,
@@ -101,8 +116,9 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
                             "duration": t.duration,
                             "message": t.message,
                         }
-                        for t in result.tests
+                        for t in filtered_tests
                     ],
+                    filtered=not include_passed,  # Indicate if results were filtered
                     command=result.command,
                     duration=result.duration,
                     metadata=result.metadata,
@@ -139,7 +155,8 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             runner = _get_runner(workspace)
             result = runner.discover_tests(target=target, pattern=pattern)
 
-            if not result.success:
+            # Only return error for actual errors
+            if result.error:
                 return asdict(error_response(result.error))
 
             return asdict(
@@ -211,12 +228,14 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             runner = _get_runner(workspace)
             result = runner.run_tests(target=target, preset="quick")
 
-            if not result.success:
+            # Only return error for actual errors (not test failures)
+            if result.error:
                 return asdict(error_response(result.error))
 
             return asdict(
                 success_response(
                     execution_id=result.execution_id,
+                    tests_passed=result.success,
                     summary={
                         "total": result.total,
                         "passed": result.passed,
@@ -253,12 +272,14 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             runner = _get_runner(workspace)
             result = runner.run_tests(target=target, preset="unit")
 
-            if not result.success:
+            # Only return error for actual errors (not test failures)
+            if result.error:
                 return asdict(error_response(result.error))
 
             return asdict(
                 success_response(
                     execution_id=result.execution_id,
+                    tests_passed=result.success,
                     summary={
                         "total": result.total,
                         "passed": result.passed,

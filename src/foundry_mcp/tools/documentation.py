@@ -70,7 +70,7 @@ def _run_sdd_doc_command(
     """
     try:
         result = subprocess.run(
-            ["sdd", "doc"] + args + ["--json"],
+            ["foundry-cli", "doc"] + args + ["--json"],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -96,7 +96,7 @@ def _run_sdd_doc_command(
     except FileNotFoundError:
         return {
             "success": False,
-            "error": "sdd CLI not found. Ensure sdd-toolkit is installed.",
+            "error": "foundry-cli not found. Ensure foundry-mcp is installed.",
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -117,7 +117,7 @@ def _run_sdd_render_command(
     """
     try:
         result = subprocess.run(
-            ["sdd", "render"] + args + ["--json"],
+            ["foundry-cli", "render"] + args + ["--json"],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -143,7 +143,7 @@ def _run_sdd_render_command(
     except FileNotFoundError:
         return {
             "success": False,
-            "error": "sdd CLI not found. Ensure sdd-toolkit is installed.",
+            "error": "foundry-cli not found. Ensure foundry-mcp is installed.",
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -164,7 +164,7 @@ def _run_sdd_llm_doc_gen_command(
     """
     try:
         result = subprocess.run(
-            ["sdd", "llm-doc-gen"] + args + ["--json"],
+            ["foundry-cli", "llm-doc-gen"] + args + ["--json"],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -191,7 +191,7 @@ def _run_sdd_llm_doc_gen_command(
     except FileNotFoundError:
         return {
             "success": False,
-            "error": "sdd CLI not found. Ensure sdd-toolkit is installed.",
+            "error": "foundry-cli not found. Ensure foundry-mcp is installed.",
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -212,7 +212,7 @@ def _run_sdd_fidelity_review_command(
     """
     try:
         result = subprocess.run(
-            ["sdd", "fidelity-review"] + args + ["--json"],
+            ["foundry-cli", "fidelity-review"] + args + ["--json"],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -239,7 +239,7 @@ def _run_sdd_fidelity_review_command(
     except FileNotFoundError:
         return {
             "success": False,
-            "error": "sdd CLI not found. Ensure sdd-toolkit is installed.",
+            "error": "foundry-cli not found. Ensure foundry-mcp is installed.",
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

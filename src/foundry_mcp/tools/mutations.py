@@ -179,7 +179,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "apply-modifications", spec_id, "--from", modifications_file, "--json"]
+            cmd = ["foundry-cli", "apply-modifications", spec_id, "--from", modifications_file, "--json"]
 
             if dry_run:
                 cmd.append("--dry-run")
@@ -397,7 +397,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "add-verification", spec_id, verify_id, result, "--json"]
+            cmd = ["foundry-cli", "add-verification", spec_id, verify_id, result, "--json"]
 
             if command:
                 cmd.extend(["--command", command])
@@ -577,7 +577,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "execute-verify", spec_id, verify_id, "--json"]
+            cmd = ["foundry-cli", "execute-verify", spec_id, verify_id, "--json"]
 
             if record:
                 cmd.append("--record")
@@ -756,7 +756,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "format-verification-summary", "--json"]
+            cmd = ["foundry-cli", "format-verification-summary", "--json"]
 
             if json_file:
                 cmd.extend(["--json-file", json_file])
@@ -950,7 +950,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "update-estimate", spec_id, task_id, "--json"]
+            cmd = ["foundry-cli", "update-estimate", spec_id, task_id, "--json"]
 
             if hours is not None:
                 cmd.extend(["--hours", str(hours)])
@@ -1164,7 +1164,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "update-task-metadata", spec_id, task_id, "--json"]
+            cmd = ["foundry-cli", "update-task-metadata", spec_id, task_id, "--json"]
 
             fields_updated = []
             if file_path:
@@ -1354,7 +1354,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "sync-metadata", spec_id, "--json"]
+            cmd = ["foundry-cli", "sync-metadata", spec_id, "--json"]
 
             if dry_run:
                 cmd.append("--dry-run")

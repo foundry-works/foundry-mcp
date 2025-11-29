@@ -1,45 +1,51 @@
 # foundry-mcp
 
-MCP server for SDD toolkit spec management - query, navigate, and manage specification files through the Model Context Protocol.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io/)
+[![Development Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://pypi.org/project/foundry-mcp/)
 
-## Overview
+**An MCP server that brings spec-driven development to your AI assistant.**
 
-foundry-mcp provides a comprehensive MCP (Model Context Protocol) server that enables AI assistants to interact with SDD (Spec-Driven Development) specifications. It provides 40+ tools, resources, and prompts for:
+Query, navigate, and manage specification files through the Model Context Protocol. Build features methodically with structured tasks, automated validation, and intelligent code analysis.
 
-- **Spec Management**: List, find, and navigate specifications
-- **Task Operations**: Track progress, manage dependencies, prepare task context
-- **Validation & Fixes**: Validate specs and auto-fix common issues
-- **Journaling**: Track decisions, blockers, and status changes
-- **Lifecycle Management**: Move specs through pending → active → completed → archived
-- **Code Documentation**: Query codebase docs, trace call graphs, analyze impact
-- **Testing**: Run pytest with presets, discover tests, track results
-- **Resources & Prompts**: Access specs via URIs, use workflow prompts
+## Why foundry-mcp?
 
-## Installation
+- 🎯 **Structured Development** — Break down features into trackable tasks with dependencies, phases, and verification steps
+- 🤖 **AI-Native** — 40+ MCP tools designed for AI assistants to query specs, track progress, and validate work
+- 🔍 **Code Intelligence** — Trace call graphs, analyze impact, and search codebase documentation
+- ✅ **Built-in Quality** — Auto-validation, fidelity reviews, and comprehensive test integration
+- 📝 **Full Traceability** — Journal decisions, track blockers, and document everything
 
-### Using pip
+## Quick Start
 
-```bash
-pip install foundry-mcp
-```
+### Prerequisites
 
-### Using uvx (recommended for Claude Desktop)
+- Python 3.10 or higher
+- An MCP-compatible client (Claude Desktop, Claude Code, etc.)
 
+### Installation
+
+**Option 1: Using uvx (recommended for Claude Desktop)**
 ```bash
 uvx foundry-mcp
 ```
 
-### From source
+**Option 2: Using pip**
+```bash
+pip install foundry-mcp
+```
 
+**Option 3: From source**
 ```bash
 git clone https://github.com/tylerburleigh/foundry-mcp.git
 cd foundry-mcp
 pip install -e .
 ```
 
-## Claude Desktop Configuration
+### Claude Desktop Setup
 
-Add foundry-mcp to your Claude Desktop configuration file:
+Add foundry-mcp to your Claude Desktop configuration:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -58,7 +64,8 @@ Add foundry-mcp to your Claude Desktop configuration file:
 }
 ```
 
-Or if installed via pip:
+<details>
+<summary>Using pip installation instead?</summary>
 
 ```json
 {
@@ -72,146 +79,101 @@ Or if installed via pip:
   }
 }
 ```
+</details>
 
-## Tools Reference
+## Features
 
-Tool names follow the [Tool Naming Conventions](docs/codebase_standards/naming-conventions.md); consult that guide before adding or renaming MCP operations.
+### 📋 Spec Management
 
-### Spec Management
+Create and manage specifications through their full lifecycle:
 
-| Tool | Description |
-|------|-------------|
-| `list_specs` | List all specs with optional status filtering |
-| `get_spec` | Get summary info about a specification |
-| `get_spec_hierarchy` | Get full task hierarchy |
-| `get_task` | Get details about a specific task |
+```
+specs/
+├── pending/      # New specs awaiting activation
+├── active/       # Currently being worked on
+├── completed/    # Finished specs
+└── archived/     # Historical reference
+```
 
-### Query Tools
+| Tool | What it does |
+|------|--------------|
+| `spec-create` | Scaffold a new specification from templates |
+| `spec-validate` | Check structure and return diagnostics |
+| `spec-fix` | Auto-fix common issues with dry-run support |
+| `spec-lifecycle-*` | Move specs between status folders |
 
-| Tool | Description |
-|------|-------------|
-| `task_query` | Query tasks by status, type, or parent |
+### ✅ Task Operations
 
-### Task Operations
+Track progress from start to finish:
 
-| Tool | Description |
-|------|-------------|
-| `task_prepare` | Prepare task with full context (dependencies, sibling info, phase) |
-| `task_next` | Find next actionable task based on status and dependencies |
-| `task_info` | Get detailed task information |
-| `task_check_deps` | Check dependency status for a task |
-| `task_update_status` | Update task status (pending, in_progress, completed, blocked) |
-| `task_complete` | Mark task complete with journal entry |
-| `task_start` | Start working on a task |
-| `task_progress` | Get spec/phase progress summary |
+| Tool | What it does |
+|------|--------------|
+| `task-next` | Find the next actionable task |
+| `task-prepare` | Get full context (dependencies, siblings, phase) |
+| `task-start` | Mark a task as in-progress |
+| `task-complete` | Mark complete with journal entry |
+| `task-block` / `task-unblock` | Manage blockers with metadata |
 
-### Validation Tools
+### 🤖 LLM-Powered Analysis
 
-| Tool | Description |
-|------|-------------|
-| `spec_validate` | Validate spec and return structured diagnostics |
-| `spec_fix` | Apply auto-fixes with dry-run support |
-| `spec_stats` | Get comprehensive spec statistics |
-| `spec_validate_fix` | Combined validation and fix in one operation |
+Intelligent features that gracefully degrade when LLM is unavailable:
 
-### Journal Tools
+| Tool | What it does |
+|------|--------------|
+| `spec-review` | Get AI-powered improvement suggestions |
+| `spec-review-fidelity` | Verify implementation matches spec |
+| `spec-doc-llm` | Generate comprehensive documentation |
+| `pr-create-with-spec` | Create PRs with AI-enhanced descriptions |
 
-| Tool | Description |
-|------|-------------|
-| `journal_add` | Add journal entries with optional task association |
-| `journal_list` | Retrieve journal entries with filtering |
-| `task_block` | Mark tasks as blocked with metadata |
-| `task_unblock` | Unblock tasks and track resolution |
-| `task_list_blocked` | List all blocked tasks |
-| `journal_list_unjournaled` | Find tasks needing journal entries |
+### 🔍 Code Intelligence
 
-### Rendering Tools
+Query your codebase documentation:
 
-| Tool | Description |
-|------|-------------|
-| `spec_render` | Render spec to markdown with mode options |
-| `spec_render_progress` | ASCII progress bars for spec and phases |
-| `task_list` | Flat task list with filtering |
+| Tool | What it does |
+|------|--------------|
+| `code-find-class` / `code-find-function` | Search definitions |
+| `code-trace-calls` | Trace caller/callee relationships |
+| `code-impact-analysis` | Analyze change impact |
+| `doc-stats` | Get documentation statistics |
 
-### Lifecycle Tools
+### 🧪 Testing Integration
 
-| Tool | Description |
-|------|-------------|
-| `spec_lifecycle_move` | Move spec between folders |
-| `spec_lifecycle_activate` | Activate pending spec (pending → active) |
-| `spec_lifecycle_complete` | Mark spec completed (active → completed) |
-| `spec_lifecycle_archive` | Archive spec (completed → archived) |
-| `spec_lifecycle_state` | Get lifecycle state and transition eligibility |
-| `spec_list_by_folder` | List specs organized by folder |
+Run and discover tests with pytest presets:
 
-### Documentation Tools
+| Tool | What it does |
+|------|--------------|
+| `test-run` | Execute tests with configurable options |
+| `test-run-quick` | Fast tests with fail-fast enabled |
+| `test-discover` | Find tests without running them |
+| `test-presets` | List available preset configurations |
 
-| Tool | Description |
-|------|-------------|
-| `code_find_class` | Find class in codebase documentation |
-| `code_find_function` | Find function in documentation |
-| `code_trace_calls` | Trace call graph (callers/callees) with depth |
-| `code_impact_analysis` | Analyze change impact across codebase |
-| `code_get_callers` | Get caller functions |
-| `code_get_callees` | Get callee functions |
-| `doc_stats` | Get documentation statistics |
+### 📊 Resources & Prompts
 
-### Testing Tools
+Access data through MCP resources and use workflow prompts:
 
-| Tool | Description |
-|------|-------------|
-| `test_run` | Full-featured test execution with presets |
-| `test_discover` | Test discovery without execution |
-| `test_presets` | List available test presets |
-| `test_run_quick` | Quick test preset (60s timeout, fail-fast) |
-| `test_run_unit` | Unit test preset |
+**Resources:**
+- `foundry://specs/` — List all specifications
+- `foundry://specs/{status}/{spec_id}` — Get specific spec with hierarchy
+- `foundry://templates/` — List available templates
 
-## Resources
-
-Access spec data through MCP resources:
-
-| Resource URI | Description |
-|--------------|-------------|
-| `foundry://specs/` | List all specifications |
-| `foundry://specs/{status}/` | List specs by status (active, pending, completed, archived) |
-| `foundry://specs/{status}/{spec_id}` | Get specific spec with full hierarchy |
-| `foundry://specs/{spec_id}/journal` | Get journal entries for a spec |
-| `foundry://templates/` | List available spec templates |
-| `foundry://templates/{template_id}` | Get specific template |
-
-### Built-in Templates
-
-- **basic**: Minimal spec with single phase
-- **feature**: Standard feature with design, implementation, verification phases
-- **bugfix**: Bug investigation, fix, and verification
-
-## Prompts
-
-Workflow prompts for common operations:
-
-| Prompt | Description |
-|--------|-------------|
-| `start_feature` | Guide new feature setup with template selection |
-| `debug_test` | Systematic test debugging workflow |
-| `complete_phase` | Phase completion checklist and guidance |
-| `review_spec` | Comprehensive spec status review |
+**Prompts:**
+- `start_feature` — Guide new feature setup
+- `debug_test` — Systematic test debugging
+- `complete_phase` — Phase completion checklist
 
 ## Configuration
-
-foundry-mcp can be configured via environment variables or a TOML config file.
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `FOUNDRY_MCP_SPECS_DIR` | Path to specs directory | Auto-detected |
-| `FOUNDRY_MCP_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | INFO |
-| `FOUNDRY_MCP_API_KEYS` | Comma-separated API keys for authentication | None |
-| `FOUNDRY_MCP_REQUIRE_AUTH` | Require API key authentication | false |
+| `FOUNDRY_MCP_LOG_LEVEL` | Logging level | INFO |
+| `FOUNDRY_MCP_WORKFLOW_MODE` | Execution mode: `single`, `autonomous`, `batch` | single |
 
 ### TOML Configuration
 
-Create a `foundry-mcp.toml` file:
+Create `foundry-mcp.toml` for advanced configuration:
 
 ```toml
 [workspace]
@@ -221,96 +183,48 @@ specs_dir = "/path/to/specs"
 level = "INFO"
 structured = true
 
-[auth]
-require_auth = false
-api_keys = ["key1", "key2"]
-
-[server]
-name = "foundry-mcp"
-version = "0.2.0"
-```
-
-### LLM Configuration
-
-Configure LLM providers for AI-powered features in the `[llm]` section:
-
-```toml
-[llm]
-provider = "openai"           # "openai", "anthropic", or "local"
-api_key = "sk-..."            # Optional: falls back to env var
-model = "gpt-4"               # Optional: uses provider default
-timeout = 30                  # Request timeout in seconds
-base_url = "https://..."      # Optional: custom API endpoint
-max_tokens = 1024             # Default max tokens for responses
-temperature = 0.7             # Default temperature (0-2)
-```
-
-**LLM Environment Variables:**
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `FOUNDRY_MCP_LLM_PROVIDER` | LLM provider type | openai |
-| `FOUNDRY_MCP_LLM_API_KEY` | Unified API key (overrides provider-specific) | None |
-| `FOUNDRY_MCP_LLM_MODEL` | Model identifier | Provider default |
-| `FOUNDRY_MCP_LLM_TIMEOUT` | Request timeout in seconds | 30 |
-| `FOUNDRY_MCP_LLM_BASE_URL` | Custom API base URL | Provider default |
-| `FOUNDRY_MCP_LLM_MAX_TOKENS` | Default max tokens | 1024 |
-| `FOUNDRY_MCP_LLM_TEMPERATURE` | Default temperature | 0.7 |
-
-Provider-specific API key fallbacks (used if `FOUNDRY_MCP_LLM_API_KEY` not set):
-- `OPENAI_API_KEY` for OpenAI provider
-- `ANTHROPIC_API_KEY` for Anthropic provider
-
-### Workflow Configuration
-
-Configure workflow execution modes in the `[workflow]` section:
-
-```toml
 [workflow]
-mode = "single"               # "single", "autonomous", or "batch"
-auto_validate = true          # Auto-validate after task completion
-journal_enabled = true        # Enable task journaling
-batch_size = 5                # Tasks per batch (batch mode)
-context_threshold = 85        # Context usage threshold (%)
+mode = "single"
+auto_validate = true
+journal_enabled = true
+
+[llm]
+provider = "openai"        # or "anthropic", "local"
+model = "gpt-4"            # optional
+timeout = 30
 ```
 
-**Workflow Modes:**
-- `single`: Execute one task at a time with user approval
-- `autonomous`: Execute all phase tasks automatically until completion or blocker
-- `batch`: Execute a batch of tasks, then pause for review
+### LLM Provider Setup
 
-**Workflow Environment Variables:**
+foundry-mcp supports multiple LLM providers for AI-powered features:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `FOUNDRY_MCP_WORKFLOW_MODE` | Execution mode | single |
-| `FOUNDRY_MCP_WORKFLOW_AUTO_VALIDATE` | Enable auto-validation | true |
-| `FOUNDRY_MCP_WORKFLOW_JOURNAL_ENABLED` | Enable journaling | true |
-| `FOUNDRY_MCP_WORKFLOW_BATCH_SIZE` | Batch size | 5 |
-| `FOUNDRY_MCP_WORKFLOW_CONTEXT_THRESHOLD` | Context threshold (%) | 85 |
+| Provider | API Key Variable | Models |
+|----------|-----------------|--------|
+| OpenAI | `OPENAI_API_KEY` | gpt-4.1, gpt-5.1-codex |
+| Anthropic | `ANTHROPIC_API_KEY` | claude-sonnet-4-5, claude-opus-4-5 |
+| Local (Ollama) | None required | Any Ollama model |
 
-## Spec Directory Structure
+LLM features degrade gracefully — specs work fine without an LLM configured.
 
-foundry-mcp expects specs organized in status folders:
+## Documentation
 
-```
-specs/
-├── pending/      # New specs awaiting activation
-├── active/       # Currently being worked on
-├── completed/    # Finished specs
-├── archived/     # Historical specs
-└── templates/    # Custom spec templates (optional)
-```
+| Guide | Description |
+|-------|-------------|
+| [SDD Philosophy](docs/concepts/sdd-philosophy.md) | What is spec-driven development and why use it |
+| [Development Guide](docs/guides/development-guide.md) | Setup, architecture, and contributing |
+| [Testing Guide](docs/guides/testing.md) | Running and debugging tests |
+| [LLM Configuration](docs/guides/llm-configuration.md) | Setting up LLM providers |
+| [MCP Best Practices](docs/mcp_best_practices/README.md) | Industry patterns for reliable MCP tools |
+| [Response Schema](docs/codebase_standards/mcp_response_schema.md) | Canonical response contract |
+| [Tool Naming](docs/codebase_standards/naming-conventions.md) | Naming conventions for MCP operations |
 
 ## Development
 
 ```bash
-# Clone the repository
+# Clone and install
 git clone https://github.com/tylerburleigh/foundry-mcp.git
 cd foundry-mcp
-
-# Install in development mode
-pip install -e .
+pip install -e ".[test]"
 
 # Run tests
 pytest
@@ -319,13 +233,18 @@ pytest
 foundry-mcp
 ```
 
-### Developer Documentation
+### Project Status
 
-| Document | Description |
-|----------|-------------|
-| [MCP Best Practices](docs/mcp_best_practices/README.md) | Comprehensive guide for building reliable MCP tools |
-| [Response Schema Guide](docs/codebase_standards/mcp_response_schema.md) | Canonical response contract and helper usage |
+foundry-mcp is in **alpha** development. APIs may change between versions. It's suitable for early adopters building spec-driven workflows. Feedback and contributions are welcome!
+
+## Contributing
+
+Contributions are welcome! Please read the [MCP Best Practices](docs/mcp_best_practices/README.md) before submitting PRs to understand the response contract and testing expectations.
 
 ## License
 
-MIT
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+**Built by [Tyler Burleigh](https://github.com/tylerburleigh)** · [Report an Issue](https://github.com/tylerburleigh/foundry-mcp/issues) · [View on GitHub](https://github.com/tylerburleigh/foundry-mcp)

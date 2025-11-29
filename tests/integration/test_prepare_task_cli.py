@@ -17,7 +17,7 @@ REQUIRED_SPEC_ID = "prepare-task-default-context-2025-11-23-001"
 
 def _check_spec_exists() -> bool:
     """Check if the required test fixture spec exists."""
-    cmd = ["sdd", "find-specs", "--json"]
+    cmd = ["foundry-cli", "find-specs", "--json"]
     try:
         result = subprocess.run(
             cmd,
@@ -45,7 +45,7 @@ pytestmark = pytest.mark.skipif(
 
 def run_prepare_task_command(spec_id: str, *args) -> dict:
     """Run sdd prepare-task command and return parsed JSON output."""
-    cmd = ["sdd", "prepare-task", spec_id] + list(args)
+    cmd = ["foundry-cli", "prepare-task", spec_id] + list(args)
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -321,7 +321,7 @@ def test_task_info_redundant_with_prepare_task():
 
     # Get task-info output for comparison
     task_id = prepare_result["task_id"]
-    task_info_cmd = ["sdd", "task-info", spec_id, task_id, "--json"]
+    task_info_cmd = ["foundry-cli", "task-info", spec_id, task_id, "--json"]
     task_info_result = subprocess.run(
         task_info_cmd,
         capture_output=True,
@@ -360,7 +360,7 @@ def test_check_deps_redundant_with_prepare_task():
 
     # Get check-deps output for comparison
     task_id = prepare_result["task_id"]
-    check_deps_cmd = ["sdd", "check-deps", spec_id, task_id, "--json"]
+    check_deps_cmd = ["foundry-cli", "check-deps", spec_id, task_id, "--json"]
     check_deps_result = subprocess.run(
         check_deps_cmd,
         capture_output=True,

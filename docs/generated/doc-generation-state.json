@@ -1,0 +1,20 @@
+{
+  "project_root": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp",
+  "output_folder": "/Users/tylerburleigh/Documents/GitHub/foundry-mcp/docs/generated",
+  "started_at": "2025-11-28T18:42:39.199181",
+  "last_updated": "2025-11-28T18:43:58.390541",
+  "completed_shards": [
+    "project_overview",
+    "architecture",
+    "component_inventory",
+    "index"
+  ],
+  "failed_shards": [],
+  "pending_shards": [],
+  "shard_summaries": {
+    "project_overview": "project_overview generated: 72 lines, ~1590 tokens",
+    "architecture": "architecture generated: 57 lines, ~1103 tokens",
+    "component_inventory": "component_inventory generated: 270 lines, ~6218 tokens",
+    "index": "index generated: 62 lines, ~415 tokens"
+  }
+}

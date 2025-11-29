@@ -59,13 +59,13 @@ class TestAnalysisRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=0,
                 stdout='{"result": "success"}',
                 stderr="",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 0
             assert '{"result": "success"}' in result.stdout
@@ -83,7 +83,7 @@ class TestAnalysisRunSddCommand:
         assert _sdd_cli_breaker.state == CircuitState.OPEN
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_sdd_command(["sdd", "test"], "test_tool")
+            _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
         assert exc_info.value.breaker_name == "sdd_cli_analysis"
         _sdd_cli_breaker.reset()
@@ -106,7 +106,7 @@ class TestSpecAnalyze:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze"],
+                args=["foundry-cli", "analyze"],
                 returncode=0,
                 stdout=json.dumps({
                     "has_specs": True,
@@ -132,7 +132,7 @@ class TestSpecAnalyze:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze"],
+                args=["foundry-cli", "analyze"],
                 returncode=0,
                 stdout=json.dumps({"has_specs": True}),
                 stderr="",
@@ -156,7 +156,7 @@ class TestSpecAnalyze:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze"],
+                args=["foundry-cli", "analyze"],
                 returncode=1,
                 stdout="",
                 stderr="Directory not found",
@@ -187,7 +187,7 @@ class TestReviewParseFeedback:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "parse-review"],
+                args=["foundry-cli", "parse-review"],
                 returncode=0,
                 stdout=json.dumps({
                     "suggestions_count": 3,
@@ -244,7 +244,7 @@ class TestReviewParseFeedback:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "parse-review"],
+                args=["foundry-cli", "parse-review"],
                 returncode=1,
                 stdout="",
                 stderr="Parse error: invalid format",
@@ -278,7 +278,7 @@ class TestSpecAnalyzeDeps:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze-deps"],
+                args=["foundry-cli", "analyze-deps"],
                 returncode=0,
                 stdout=json.dumps({
                     "dependency_count": 15,
@@ -319,7 +319,7 @@ class TestSpecAnalyzeDeps:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze-deps"],
+                args=["foundry-cli", "analyze-deps"],
                 returncode=0,
                 stdout=json.dumps({"dependency_count": 10}),
                 stderr="",
@@ -344,7 +344,7 @@ class TestSpecAnalyzeDeps:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze-deps"],
+                args=["foundry-cli", "analyze-deps"],
                 returncode=1,
                 stdout="",
                 stderr="Circular dependency detected: task-1 -> task-2 -> task-1",
@@ -366,7 +366,7 @@ class TestSpecAnalyzeDeps:
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "analyze-deps"],
+                args=["foundry-cli", "analyze-deps"],
                 returncode=1,
                 stdout="",
                 stderr="Spec not found: nonexistent-spec",
@@ -441,7 +441,7 @@ class TestAnalysisErrorHandling:
         register_analysis_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["sdd"], timeout=30)
+            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["foundry-cli"], timeout=30)
 
             spec_analyze = mock_mcp._tools["spec_analyze"]
             result = spec_analyze()
@@ -458,7 +458,7 @@ class TestAnalysisErrorHandling:
         register_analysis_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.analysis._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = FileNotFoundError("sdd not found")
+            mock_cmd.side_effect = FileNotFoundError("foundry-cli not found")
 
             spec_analyze = mock_mcp._tools["spec_analyze"]
             result = spec_analyze()

@@ -47,7 +47,7 @@ def _run_sdd_command(args: list) -> Dict[str, Any]:
     """
     try:
         result = subprocess.run(
-            ["sdd"] + args + ["--json"],
+            ["foundry-cli"] + args + ["--json"],
             capture_output=True,
             text=True,
             timeout=30,
@@ -67,7 +67,7 @@ def _run_sdd_command(args: list) -> Dict[str, Any]:
     except subprocess.TimeoutExpired:
         return {"success": False, "error": "Command timed out after 30 seconds"}
     except FileNotFoundError:
-        return {"success": False, "error": "sdd CLI not found. Ensure sdd-toolkit is installed."}
+        return {"success": False, "error": "foundry-cli not found. Ensure foundry-mcp is installed."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

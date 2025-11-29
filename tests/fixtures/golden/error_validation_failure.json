@@ -1,0 +1,31 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {
+    "error_code": "VALIDATION_ERROR",
+    "error_type": "validation",
+    "remediation": "Fix the validation errors listed in diagnostics",
+    "details": {
+      "spec_id": "invalid-spec",
+      "error_count": 2,
+      "diagnostics": [
+        {
+          "code": "MISSING_REQUIRED_FIELD",
+          "severity": "error",
+          "message": "Missing required field: title",
+          "path": "$.hierarchy.task-1"
+        },
+        {
+          "code": "INVALID_STATUS",
+          "severity": "error",
+          "message": "Invalid status value: 'unknown'",
+          "path": "$.hierarchy.task-2.status"
+        }
+      ]
+    }
+  },
+  "error": "Specification validation failed with 2 errors",
+  "meta": {
+    "version": "response-v2"
+  }
+}

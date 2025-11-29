@@ -175,7 +175,7 @@ def register_git_integration_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "create-task-commit", spec_id, task_id, "--json"]
+            cmd = ["foundry-cli", "create-task-commit", spec_id, task_id, "--json"]
 
             if skip_status_check:
                 cmd.append("--skip-status-check")
@@ -388,7 +388,7 @@ def register_git_integration_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "bulk-journal", spec_id, "--json"]
+            cmd = ["foundry-cli", "bulk-journal", spec_id, "--json"]
 
             if tasks:
                 cmd.extend(["--tasks", tasks])

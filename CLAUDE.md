@@ -19,6 +19,7 @@ You are operating inside the `foundry-mcp` repository, which adheres to the MCP 
 
 - **Specs + docs + tests together** – Any contract-impacting change MUST update specs ([docs/mcp_best_practices/09-spec-driven-development.md#L11-L214](docs/mcp_best_practices/09-spec-driven-development.md#L11-L214)), documentation, and fixtures/tests ([docs/mcp_best_practices/10-testing-fixtures.md#L10-L335](docs/mcp_best_practices/10-testing-fixtures.md#L10-L335)) in the same change set.
 - **Testing guidance** – Before adjusting or regenerating fixtures/tests, reopen [docs/mcp_best_practices/10-testing-fixtures.md](docs/mcp_best_practices/10-testing-fixtures.md) to confirm freshness checks, schema alignment, and helper coverage expectations.
+- **Running tests** – For test commands, presets, debugging strategies, and test suite structure, see [docs/guides/testing.md](docs/guides/testing.md).
 - **Security-sensitive work** – If touching trust boundaries, re-read [docs/mcp_best_practices/04-validation-input-hygiene.md](docs/mcp_best_practices/04-validation-input-hygiene.md), [docs/mcp_best_practices/07-error-semantics.md](docs/mcp_best_practices/07-error-semantics.md), [docs/mcp_best_practices/08-security-trust-boundaries.md](docs/mcp_best_practices/08-security-trust-boundaries.md), and [docs/mcp_best_practices/11-ai-llm-integration.md](docs/mcp_best_practices/11-ai-llm-integration.md) in full and document the applied mitigations in commit/PR notes.
 
 ## 3. Code Review Checklist Alignment

@@ -170,7 +170,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "format-plan", spec_id, task_id, "--json"]
+            cmd = ["foundry-cli", "format-plan", spec_id, task_id, "--json"]
 
             if path:
                 cmd.extend(["--path", path])
@@ -312,7 +312,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "list-phases", spec_id, "--json"]
+            cmd = ["foundry-cli", "list-phases", spec_id, "--json"]
 
             if path:
                 cmd.extend(["--path", path])
@@ -466,7 +466,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "check-complete", spec_id, "--json"]
+            cmd = ["foundry-cli", "check-complete", spec_id, "--json"]
 
             if phase_id:
                 cmd.extend(["--phase", phase_id])
@@ -652,7 +652,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "phase-time", spec_id, phase_id, "--json"]
+            cmd = ["foundry-cli", "phase-time", spec_id, phase_id, "--json"]
 
             if path:
                 cmd.extend(["--path", path])
@@ -807,7 +807,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "reconcile-state", spec_id, "--json"]
+            cmd = ["foundry-cli", "reconcile-state", spec_id, "--json"]
 
             if dry_run:
                 cmd.append("--dry-run")
@@ -971,7 +971,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "time-report", spec_id, "--json"]
+            cmd = ["foundry-cli", "time-report", spec_id, "--json"]
 
             if path:
                 cmd.extend(["--path", path])
@@ -1131,7 +1131,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "audit-spec", spec_id, "--json"]
+            cmd = ["foundry-cli", "audit-spec", spec_id, "--json"]
 
             if path:
                 cmd.extend(["--path", path])

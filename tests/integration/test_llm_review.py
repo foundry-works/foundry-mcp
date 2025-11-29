@@ -251,7 +251,7 @@ class TestSpecReviewDataOnlyFallback:
         assert result["success"] is True
         assert result["data"]["dry_run"] is True
         assert "command" in result["data"]
-        assert "sdd" in result["data"]["command"]
+        assert "foundry-cli" in result["data"]["command"]
 
     def test_review_list_tools_shows_llm_unconfigured(self, mock_mcp, mock_config):
         """Test review_list_tools shows unconfigured LLM status."""
@@ -473,7 +473,7 @@ class TestPRCreateDataOnlyFallback:
         register_pr_workflow_tools(mock_mcp, mock_config)
 
         with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             pr_create = mock_mcp._tools["pr_create_with_spec"]
             result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
@@ -496,7 +496,7 @@ class TestCircuitBreakerIntegration:
         register_review_tools(mock_mcp, mock_config)
 
         with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             spec_review = mock_mcp._tools["spec_review"]
 
@@ -520,7 +520,7 @@ class TestCircuitBreakerIntegration:
         register_pr_workflow_tools(mock_mcp, mock_config)
 
         with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             pr_create = mock_mcp._tools["pr_create_with_spec"]
 
@@ -545,7 +545,7 @@ class TestCircuitBreakerIntegration:
 
         # First, trip the breaker
         with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             spec_review = mock_mcp._tools["spec_review"]
             for _ in range(_review_breaker.failure_threshold + 1):
@@ -646,7 +646,7 @@ class TestTimeoutHandling:
         register_review_tools(mock_mcp, mock_config)
 
         with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=REVIEW_TIMEOUT)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=REVIEW_TIMEOUT)
 
             spec_review = mock_mcp._tools["spec_review"]
             result = spec_review.fn(spec_id="test-spec-001")
@@ -665,7 +665,7 @@ class TestTimeoutHandling:
         register_pr_workflow_tools(mock_mcp, mock_config)
 
         with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=PR_TIMEOUT)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=PR_TIMEOUT)
 
             pr_create = mock_mcp._tools["pr_create_with_spec"]
             result = pr_create.fn(spec_id="test-spec-001", dry_run=True)

@@ -143,14 +143,14 @@ class TestRunReviewCommand:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=0,
                 stdout='{"status": "ok"}',
                 stderr="",
             )
 
             result = _run_review_command(
-                ["sdd", "review", "spec-id"],
+                ["foundry-cli", "review", "spec-id"],
                 "spec-review",
             )
 
@@ -163,7 +163,7 @@ class TestRunReviewCommand:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=1,
                 stdout="",
                 stderr="Error",
@@ -171,7 +171,7 @@ class TestRunReviewCommand:
 
             # Execute multiple failures
             for _ in range(3):
-                _run_review_command(["sdd", "review"], "spec-review")
+                _run_review_command(["foundry-cli", "review"], "spec-review")
 
         assert _review_breaker.failure_count == 3
 
@@ -180,10 +180,10 @@ class TestRunReviewCommand:
         from foundry_mcp.tools.review import _run_review_command, _review_breaker
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=120)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=120)
 
             with pytest.raises(subprocess.TimeoutExpired):
-                _run_review_command(["sdd", "review"], "spec-review")
+                _run_review_command(["foundry-cli", "review"], "spec-review")
 
         assert _review_breaker.failure_count == 1
 
@@ -192,10 +192,10 @@ class TestRunReviewCommand:
         from foundry_mcp.tools.review import _run_review_command, _review_breaker
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             with pytest.raises(FileNotFoundError):
-                _run_review_command(["sdd", "review"], "spec-review")
+                _run_review_command(["foundry-cli", "review"], "spec-review")
 
         assert _review_breaker.failure_count == 1
 
@@ -210,7 +210,7 @@ class TestRunReviewCommand:
         assert _review_breaker.state == CircuitState.OPEN
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_review_command(["sdd", "review"], "spec-review")
+            _run_review_command(["foundry-cli", "review"], "spec-review")
 
         assert "circuit breaker is open" in str(exc_info.value).lower()
 
@@ -269,7 +269,7 @@ class TestSpecReviewTool:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=0,
                 stdout=json.dumps({
                     "findings": ["Finding 1", "Finding 2"],
@@ -280,7 +280,7 @@ class TestSpecReviewTool:
             )
 
             result = _run_review_command(
-                ["sdd", "review", "my-spec", "--type", "quick", "--json"],
+                ["foundry-cli", "review", "my-spec", "--type", "quick", "--json"],
                 "spec-review",
             )
 
@@ -295,14 +295,14 @@ class TestSpecReviewTool:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=1,
                 stdout="",
                 stderr="Spec not found: invalid-spec",
             )
 
             result = _run_review_command(
-                ["sdd", "review", "invalid-spec"],
+                ["foundry-cli", "review", "invalid-spec"],
                 "spec-review",
             )
 
@@ -315,14 +315,14 @@ class TestSpecReviewTool:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=0,
                 stdout='{"status": "ok"}',
                 stderr="",
             )
 
             # Command should include tools parameter
-            cmd = ["sdd", "review", "spec-id", "--tools", "cursor-agent,gemini"]
+            cmd = ["foundry-cli", "review", "spec-id", "--tools", "cursor-agent,gemini"]
             result = _run_review_command(cmd, "spec-review")
 
             # Verify subprocess was called with correct args
@@ -414,14 +414,14 @@ class TestRunPRCommand:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-pr"],
+                args=["foundry-cli", "create-pr"],
                 returncode=0,
                 stdout=json.dumps({"pr_url": "https://github.com/org/repo/pull/123"}),
                 stderr="",
             )
 
             result = _run_pr_command(
-                ["sdd", "create-pr", "spec-id"],
+                ["foundry-cli", "create-pr", "spec-id"],
                 "pr-create-with-spec",
             )
 
@@ -446,10 +446,10 @@ class TestRunPRCommand:
         from foundry_mcp.tools.pr_workflow import _run_pr_command, _pr_breaker
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=120)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=120)
 
             with pytest.raises(subprocess.TimeoutExpired):
-                _run_pr_command(["sdd", "create-pr"], "pr-create-with-spec")
+                _run_pr_command(["foundry-cli", "create-pr"], "pr-create-with-spec")
 
         assert _pr_breaker.failure_count == 1
 
@@ -468,7 +468,7 @@ class TestPRCreateWithSpec:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-pr"],
+                args=["foundry-cli", "create-pr"],
                 returncode=0,
                 stdout=json.dumps({
                     "title": "feat: implement new feature",
@@ -479,7 +479,7 @@ class TestPRCreateWithSpec:
             )
 
             result = _run_pr_command(
-                ["sdd", "create-pr", "spec-id", "--dry-run", "--json"],
+                ["foundry-cli", "create-pr", "spec-id", "--dry-run", "--json"],
                 "pr-create-with-spec",
             )
 
@@ -494,7 +494,7 @@ class TestPRCreateWithSpec:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-pr"],
+                args=["foundry-cli", "create-pr"],
                 returncode=0,
                 stdout=json.dumps({
                     "pr_url": "https://github.com/org/repo/pull/456",
@@ -505,7 +505,7 @@ class TestPRCreateWithSpec:
             )
 
             result = _run_pr_command(
-                ["sdd", "create-pr", "spec-id", "--json"],
+                ["foundry-cli", "create-pr", "spec-id", "--json"],
                 "pr-create-with-spec",
             )
 
@@ -519,14 +519,14 @@ class TestPRCreateWithSpec:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-pr"],
+                args=["foundry-cli", "create-pr"],
                 returncode=1,
                 stdout="",
                 stderr="Error: No commits to create PR from",
             )
 
             result = _run_pr_command(
-                ["sdd", "create-pr", "spec-id"],
+                ["foundry-cli", "create-pr", "spec-id"],
                 "pr-create-with-spec",
             )
 
@@ -539,13 +539,13 @@ class TestPRCreateWithSpec:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-pr"],
+                args=["foundry-cli", "create-pr"],
                 returncode=0,
                 stdout='{"status": "ok"}',
                 stderr="",
             )
 
-            cmd = ["sdd", "create-pr", "spec-id", "--include-journals", "--json"]
+            cmd = ["foundry-cli", "create-pr", "spec-id", "--include-journals", "--json"]
             result = _run_pr_command(cmd, "pr-create-with-spec")
 
             mock_run.assert_called_once()
@@ -567,7 +567,7 @@ class TestPRGetSpecContext:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "progress"],
+                args=["foundry-cli", "progress"],
                 returncode=0,
                 stdout=json.dumps({
                     "spec_id": "my-spec",
@@ -580,7 +580,7 @@ class TestPRGetSpecContext:
             )
 
             result = _run_pr_command(
-                ["sdd", "progress", "my-spec", "--json"],
+                ["foundry-cli", "progress", "my-spec", "--json"],
                 "pr-get-spec-context",
             )
 
@@ -595,14 +595,14 @@ class TestPRGetSpecContext:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "progress"],
+                args=["foundry-cli", "progress"],
                 returncode=1,
                 stdout="",
                 stderr="Spec not found: nonexistent-spec",
             )
 
             result = _run_pr_command(
-                ["sdd", "progress", "nonexistent-spec"],
+                ["foundry-cli", "progress", "nonexistent-spec"],
                 "pr-get-spec-context",
             )
 
@@ -628,13 +628,13 @@ class TestCircuitBreakerIntegration:
 
             # Execute until threshold (5 failures)
             for i in range(5):
-                _run_review_command(["sdd", "review"], "spec-review")
+                _run_review_command(["foundry-cli", "review"], "spec-review")
 
         assert _review_breaker.state == CircuitState.OPEN
 
         # Next call should raise CircuitBreakerError
         with pytest.raises(CircuitBreakerError):
-            _run_review_command(["sdd", "review"], "spec-review")
+            _run_review_command(["foundry-cli", "review"], "spec-review")
 
     def test_pr_breaker_opens_after_threshold(self, reset_breakers):
         """Test PR circuit breaker opens after failure threshold."""
@@ -647,13 +647,13 @@ class TestCircuitBreakerIntegration:
 
             # Execute until threshold (5 failures)
             for i in range(5):
-                _run_pr_command(["sdd", "create-pr"], "pr-create-with-spec")
+                _run_pr_command(["foundry-cli", "create-pr"], "pr-create-with-spec")
 
         assert _pr_breaker.state == CircuitState.OPEN
 
         # Next call should raise CircuitBreakerError
         with pytest.raises(CircuitBreakerError):
-            _run_pr_command(["sdd", "create-pr"], "pr-create-with-spec")
+            _run_pr_command(["foundry-cli", "create-pr"], "pr-create-with-spec")
 
     def test_breaker_recovery_after_timeout(self, reset_breakers):
         """Test circuit breaker recovery after timeout."""
@@ -704,7 +704,7 @@ class TestDataOnlyFallback:
         # Progress command doesn't need LLM
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "progress"],
+                args=["foundry-cli", "progress"],
                 returncode=0,
                 stdout=json.dumps({
                     "spec_id": "my-spec",
@@ -716,7 +716,7 @@ class TestDataOnlyFallback:
             )
 
             result = _run_pr_command(
-                ["sdd", "progress", "my-spec", "--json"],
+                ["foundry-cli", "progress", "my-spec", "--json"],
                 "pr-get-spec-context",
             )
 
@@ -760,14 +760,14 @@ class TestMetricsIntegration:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=0,
                 stdout='{}',
                 stderr="",
             )
 
             with patch.object(_metrics, "timer") as mock_timer:
-                _run_review_command(["sdd", "review"], "spec-review")
+                _run_review_command(["foundry-cli", "review"], "spec-review")
 
                 # Timer should have been called
                 mock_timer.assert_called_once()
@@ -780,14 +780,14 @@ class TestMetricsIntegration:
 
         with patch("foundry_mcp.tools.pr_workflow.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-pr"],
+                args=["foundry-cli", "create-pr"],
                 returncode=0,
                 stdout='{}',
                 stderr="",
             )
 
             with patch.object(_metrics, "timer") as mock_timer:
-                _run_pr_command(["sdd", "create-pr"], "pr-create-with-spec")
+                _run_pr_command(["foundry-cli", "create-pr"], "pr-create-with-spec")
 
                 # Timer should have been called
                 mock_timer.assert_called_once()
@@ -843,13 +843,13 @@ class TestJSONParsing:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=0,
                 stdout=json.dumps(expected_data),
                 stderr="",
             )
 
-            result = _run_review_command(["sdd", "review"], "spec-review")
+            result = _run_review_command(["foundry-cli", "review"], "spec-review")
 
         parsed = json.loads(result.stdout)
         assert parsed == expected_data
@@ -860,13 +860,13 @@ class TestJSONParsing:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "review"],
+                args=["foundry-cli", "review"],
                 returncode=0,
                 stdout="Not valid JSON {",
                 stderr="",
             )
 
-            result = _run_review_command(["sdd", "review"], "spec-review")
+            result = _run_review_command(["foundry-cli", "review"], "spec-review")
 
         # Should return raw output, parsing happens at tool level
         assert result.stdout == "Not valid JSON {"
@@ -893,7 +893,7 @@ class TestErrorMessages:
             _review_breaker.record_failure()
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_review_command(["sdd", "review"], "spec-review")
+            _run_review_command(["foundry-cli", "review"], "spec-review")
 
         error = exc_info.value
         assert error.breaker_name == "sdd_cli_review"
@@ -906,10 +906,10 @@ class TestErrorMessages:
 
         with patch("foundry_mcp.tools.review.subprocess.run") as mock_run:
             mock_run.side_effect = subprocess.TimeoutExpired(
-                cmd="sdd review", timeout=REVIEW_TIMEOUT
+                cmd="foundry-cli review", timeout=REVIEW_TIMEOUT
             )
 
             with pytest.raises(subprocess.TimeoutExpired) as exc_info:
-                _run_review_command(["sdd", "review"], "spec-review")
+                _run_review_command(["foundry-cli", "review"], "spec-review")
 
             assert exc_info.value.timeout == REVIEW_TIMEOUT

@@ -7,7 +7,7 @@ TOML Configuration Example:
     [llm]
     provider = "openai"           # Required: "openai", "anthropic", or "local"
     api_key = "sk-..."            # Optional: defaults to env var based on provider
-    model = "gpt-4"               # Optional: provider-specific default
+    model = "gpt-4.1"             # Optional: provider-specific default
     timeout = 30                  # Optional: request timeout in seconds (default: 30)
 
 Environment Variables (fallback if not in TOML):
@@ -51,9 +51,9 @@ class LLMProviderType(str, Enum):
 
 # Default models per provider
 DEFAULT_MODELS: Dict[LLMProviderType, str] = {
-    LLMProviderType.OPENAI: "gpt-4",
-    LLMProviderType.ANTHROPIC: "claude-sonnet-4-20250514",
-    LLMProviderType.LOCAL: "llama3.2",
+    LLMProviderType.OPENAI: "gpt-4.1",
+    LLMProviderType.ANTHROPIC: "claude-sonnet-4-5",
+    LLMProviderType.LOCAL: "llama4",
 }
 
 # Environment variable names for API keys
@@ -122,7 +122,7 @@ class LLMConfig:
         if self.model:
             return self.model
 
-        return DEFAULT_MODELS.get(self.provider, "gpt-4")
+        return DEFAULT_MODELS.get(self.provider, "gpt-4.1")
 
     def validate(self) -> None:
         """Validate the configuration.

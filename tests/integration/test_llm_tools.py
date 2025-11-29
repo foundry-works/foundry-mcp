@@ -136,11 +136,11 @@ class TestCircuitBreakerIntegration:
 
         # Simulate failures up to threshold
         with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             for i in range(_review_breaker.failure_threshold):
                 try:
-                    _run_review_command(["sdd", "review", "test"], "test-tool")
+                    _run_review_command(["foundry-cli", "review", "test"], "test-tool")
                 except (FileNotFoundError, CircuitBreakerError):
                     pass
 
@@ -196,10 +196,10 @@ class TestTimeoutHandling:
         _review_breaker.reset()
 
         with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=REVIEW_TIMEOUT)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=REVIEW_TIMEOUT)
 
             with pytest.raises(subprocess.TimeoutExpired):
-                _run_review_command(["sdd", "review", "test"], "test-tool")
+                _run_review_command(["foundry-cli", "review", "test"], "test-tool")
 
         _review_breaker.reset()
 
@@ -208,7 +208,7 @@ class TestTimeoutHandling:
         from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=600)
 
             result = _run_sdd_llm_doc_gen_command(["generate", "/path"])
 
@@ -221,7 +221,7 @@ class TestTimeoutHandling:
         from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=600)
 
             result = _run_sdd_fidelity_review_command(["test-spec"])
 
@@ -449,7 +449,7 @@ class TestDataOnlyFallbackPaths:
                 stderr="",
             )
 
-            result = _run_review_command(["sdd", "review", "test"], "test-tool")
+            result = _run_review_command(["foundry-cli", "review", "test"], "test-tool")
 
             # Should complete successfully
             assert result.returncode == 0
@@ -465,46 +465,46 @@ class TestCLINotFoundHandling:
         from foundry_mcp.tools.documentation import _run_sdd_doc_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             result = _run_sdd_doc_command(["test-spec"])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
-            assert "sdd-toolkit" in result["error"]
+            assert "foundry-cli not found" in result["error"]
+            assert "foundry-mcp" in result["error"]
 
     def test_render_command_cli_not_found(self):
         """Test render command handles missing CLI."""
         from foundry_mcp.tools.documentation import _run_sdd_render_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             result = _run_sdd_render_command(["test-spec"])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
+            assert "foundry-cli not found" in result["error"]
 
     def test_llm_doc_gen_cli_not_found(self):
         """Test LLM doc gen handles missing CLI."""
         from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             result = _run_sdd_llm_doc_gen_command(["generate", "/path"])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
+            assert "foundry-cli not found" in result["error"]
 
     def test_fidelity_review_cli_not_found(self):
         """Test fidelity review handles missing CLI."""
         from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             result = _run_sdd_fidelity_review_command(["test-spec"])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
+            assert "foundry-cli not found" in result["error"]

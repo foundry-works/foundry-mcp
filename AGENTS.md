@@ -25,6 +25,7 @@ This repository follows the MCP Tool Industry Best Practices located under [docs
 
 - Follow [docs/mcp_best_practices/09-spec-driven-development.md#L11-L214](docs/mcp_best_practices/09-spec-driven-development.md#L11-L214): specs are the source of truth. Update specs, implementation, and documentation in the *same* PR, including changelog entries.
 - Align fixtures/tests with [docs/mcp_best_practices/10-testing-fixtures.md#L10-L335](docs/mcp_best_practices/10-testing-fixtures.md#L10-L335). Regenerate fixtures whenever schema versions or helpers change, and re-run the freshness checks described there.
+- For running tests, debugging failures, and understanding the test suite structure, see [docs/guides/testing.md](docs/guides/testing.md).
 
 ## Mandatory Review Checklist
 

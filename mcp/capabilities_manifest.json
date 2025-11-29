@@ -958,6 +958,26 @@
         "dependencies": [],
         "created_at": "2025-11-28T00:00:00Z",
         "expires_at": null
+      },
+      "native_cli": {
+        "description": "Native SDD CLI with JSON-only output for AI coding assistants. 39 commands across specs, tasks, lifecycle, session, render, review, pr, modify, doc-query, test, llm-doc, and dev groups.",
+        "state": "beta",
+        "default_enabled": true,
+        "percentage_rollout": 100,
+        "owner": "cli-team",
+        "dependencies": [],
+        "created_at": "2025-11-28T00:00:00Z",
+        "expires_at": null
+      },
+      "enhanced_render": {
+        "description": "Enhanced rendering mode with AI-generated insights for spec visualization",
+        "state": "beta",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "cli-team",
+        "dependencies": ["native_cli"],
+        "created_at": "2025-11-28T00:00:00Z",
+        "expires_at": null
       }
     },
     "lifecycle_states": {

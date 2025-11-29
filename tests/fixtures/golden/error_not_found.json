@@ -1,0 +1,13 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {
+    "error_code": "SPEC_NOT_FOUND",
+    "error_type": "not_found",
+    "remediation": "Verify the spec_id exists in active, pending, completed, or archived folders"
+  },
+  "error": "Specification not found: nonexistent-spec",
+  "meta": {
+    "version": "response-v2"
+  }
+}

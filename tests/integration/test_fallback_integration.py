@@ -1,6 +1,15 @@
-import pytest
+import shutil
 import subprocess
 import os
+
+import pytest
+
+
+# Skip all tests in this module if foundry-cli is not installed
+pytestmark = pytest.mark.skipif(
+    shutil.which("foundry-cli") is None,
+    reason="foundry-cli not installed"
+)
 
 
 def test_run_tests_fallback_gemini_to_cursor():
@@ -9,7 +18,7 @@ def test_run_tests_fallback_gemini_to_cursor():
     # (This is a simplified example - actual test would need proper setup)
 
     result = subprocess.run(
-        ["sdd", "test", "consult", "assertion", "--error", "Test failed", "--hypothesis", "Root cause unknown"],
+        ["foundry-cli", "test", "consult", "assertion", "--error", "Test failed", "--hypothesis", "Root cause unknown"],
         capture_output=True,
         text=True
     )
@@ -26,7 +35,7 @@ def test_sdd_plan_review_with_limits():
     env = os.environ.copy()
     env["HOME"] = "/tmp/test_home"
     result = subprocess.run(
-        ["sdd", "plan-review", "test-spec-id"],
+        ["foundry-cli", "plan-review", "test-spec-id"],
         capture_output=True,
         text=True,
         env=env  # Use test config
@@ -41,7 +50,7 @@ def test_fidelity_review_retry_on_timeout():
     """Test fidelity review retries on timeout."""
     # Set very short timeout to force timeout
     result = subprocess.run(
-        ["sdd", "fidelity-review", "test-spec-id",
+        ["foundry-cli", "fidelity-review", "test-spec-id",
          "--timeout", "1"],  # 1 second timeout
         capture_output=True,
         text=True

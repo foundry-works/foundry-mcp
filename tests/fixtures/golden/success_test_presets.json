@@ -1,0 +1,45 @@
+{
+  "fixture_version": "1.0.0",
+  "success": true,
+  "data": {
+    "presets": {
+      "quick": {
+        "description": "Fast test run with fail-fast",
+        "timeout": 60,
+        "markers": "not slow",
+        "fail_fast": true
+      },
+      "full": {
+        "description": "Complete test suite",
+        "timeout": 300,
+        "markers": null,
+        "fail_fast": false
+      },
+      "unit": {
+        "description": "Unit tests only",
+        "timeout": 120,
+        "markers": "unit",
+        "fail_fast": false
+      },
+      "integration": {
+        "description": "Integration tests only",
+        "timeout": 300,
+        "markers": "integration",
+        "fail_fast": false
+      },
+      "smoke": {
+        "description": "Critical path smoke tests",
+        "timeout": 30,
+        "markers": "smoke",
+        "fail_fast": true
+      }
+    },
+    "telemetry": {
+      "duration_ms": 1.5
+    }
+  },
+  "error": null,
+  "meta": {
+    "version": "response-v2"
+  }
+}

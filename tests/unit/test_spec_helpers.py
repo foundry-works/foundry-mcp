@@ -203,7 +203,7 @@ class TestSpecFindRelatedFiles:
 
     def test_find_related_files_cli_not_found(self):
         """Test find-related-files when SDD CLI is not available."""
-        with patch("subprocess.run", side_effect=FileNotFoundError("sdd")):
+        with patch("subprocess.run", side_effect=FileNotFoundError("foundry-cli")):
             from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
 
             mock_mcp = MagicMock()
@@ -850,7 +850,7 @@ class TestResilienceFeatures:
             _sdd_cli_breaker.reset()
 
             with patch.object(_metrics, "timer") as mock_timer:
-                _run_sdd_command(["sdd", "test"], "test_tool")
+                _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
                 # Timer should be called with duration
                 mock_timer.assert_called_once()

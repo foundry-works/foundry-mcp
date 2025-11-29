@@ -115,6 +115,60 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     return mcp
 
 
+def _filter_hierarchy(
+    hierarchy: dict,
+    max_depth: int,
+    include_metadata: bool,
+    current_depth: int = 0,
+) -> dict:
+    """Filter hierarchy to reduce response size.
+
+    Args:
+        hierarchy: Full hierarchy dict
+        max_depth: Maximum depth (0=unlimited)
+        include_metadata: Whether to include full metadata
+        current_depth: Current traversal depth
+
+    Returns:
+        Filtered hierarchy dict
+    """
+    result = {}
+
+    for node_id, node_data in hierarchy.items():
+        # Calculate node depth from ID (spec-root=0, phase-N=1, task-N-N=2, etc.)
+        node_depth = node_id.count("-") if node_id != "spec-root" else 0
+
+        # Skip nodes beyond max_depth
+        if max_depth > 0 and node_depth > max_depth:
+            continue
+
+        # Build filtered node
+        filtered_node = {
+            "type": node_data.get("type"),
+            "title": node_data.get("title"),
+            "status": node_data.get("status"),
+        }
+
+        # Include children refs (but they'll be filtered by depth)
+        if "children" in node_data:
+            filtered_node["children"] = node_data["children"]
+
+        # Include parent ref
+        if "parent" in node_data:
+            filtered_node["parent"] = node_data["parent"]
+
+        # Optionally include full metadata
+        if include_metadata:
+            if "metadata" in node_data:
+                filtered_node["metadata"] = node_data["metadata"]
+            if "dependencies" in node_data:
+                filtered_node["dependencies"] = node_data["dependencies"]
+
+        result[node_id] = filtered_node
+
+    return result
+
+
 def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
     """Register all MCP tools with the server."""
 
@@ -239,26 +293,64 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         mcp,
         canonical_name="spec-get-hierarchy",
     )
-    def spec_get_hierarchy(spec_id: str) -> dict:
+    def spec_get_hierarchy(
+        spec_id: str,
+        max_depth: int = 2,
+        include_metadata: bool = False,
+    ) -> dict:
         """
         Get the full hierarchy of a specification.
 
         Args:
             spec_id: Specification ID
+            max_depth: Maximum depth to traverse (0=unlimited, default=2 for phases+tasks)
+            include_metadata: Include full metadata for each node (default=False for compact output)
 
         Returns:
             Dict with hierarchy data
         """
+        # Input validation per MCP best practices
+        if max_depth < 0 or max_depth > 10:
+            return asdict(
+                error_response(
+                    "max_depth must be between 0 and 10",
+                    code="VALIDATION_ERROR",
+                    details={"field": "max_depth", "received": max_depth, "valid_range": "0-10"},
+                )
+            )
+
         specs_dir = config.specs_dir or find_specs_directory()
         spec_data = load_spec(spec_id, specs_dir)
 
         if spec_data is None:
             return asdict(error_response(f"Spec not found: {spec_id}"))
 
+        full_hierarchy = spec_data.get("hierarchy", {})
+        full_node_count = len(full_hierarchy)
+
+        # Apply depth and metadata filtering for compact output
+        warnings = []
+        if max_depth > 0 or not include_metadata:
+            hierarchy = _filter_hierarchy(full_hierarchy, max_depth, include_metadata)
+            filtered_count = len(hierarchy)
+            if filtered_count < full_node_count:
+                warnings.append(
+                    f"Response filtered: {filtered_count}/{full_node_count} nodes returned "
+                    f"(max_depth={max_depth}). Use max_depth=0 for full hierarchy."
+                )
+        else:
+            hierarchy = full_hierarchy
+
         return asdict(
             success_response(
                 spec_id=spec_id,
-                hierarchy=spec_data.get("hierarchy", {}),
+                hierarchy=hierarchy,
+                node_count=len(hierarchy),
+                filters_applied={
+                    "max_depth": max_depth,
+                    "include_metadata": include_metadata,
+                },
+                warnings=warnings if warnings else None,
             )
         )
 

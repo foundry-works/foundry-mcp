@@ -162,7 +162,7 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
             llm_status = _get_llm_status()
 
             # Build command
-            cmd = ["sdd", "create-pr", spec_id, "--json"]
+            cmd = ["foundry-cli", "create-pr", spec_id, "--json"]
 
             if title:
                 cmd.extend(["--title", title])
@@ -267,7 +267,7 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except FileNotFoundError:
             return asdict(
                 error_response(
-                    "SDD CLI not found. Ensure 'sdd' is installed and in PATH.",
+                    "foundry-cli not found. Ensure foundry-mcp is installed and in PATH.",
                     data={"spec_id": spec_id},
                 )
             )
@@ -323,7 +323,7 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         try:
             # Build command to get spec info
-            cmd = ["sdd", "progress", spec_id, "--json"]
+            cmd = ["foundry-cli", "progress", spec_id, "--json"]
             if path:
                 cmd.extend(["--path", path])
 
@@ -357,7 +357,7 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             # Get journal entries if requested
             if include_journals:
-                journal_cmd = ["sdd", "get-journal", spec_id, "--json"]
+                journal_cmd = ["foundry-cli", "get-journal", spec_id, "--json"]
                 if path:
                     journal_cmd.extend(["--path", path])
 

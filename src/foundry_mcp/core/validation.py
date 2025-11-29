@@ -181,6 +181,21 @@ def validate_spec_input(
         ))
         return None, error_result
 
+    # Spec data must be a dict
+    if not isinstance(spec_data, dict):
+        error_result = ValidationResult(
+            spec_id="unknown",
+            is_valid=False,
+            error_count=1,
+        )
+        error_result.diagnostics.append(Diagnostic(
+            code="INVALID_SPEC_TYPE",
+            message=f"Spec must be a JSON object, got {type(spec_data).__name__}",
+            severity="error",
+            category="structure",
+        ))
+        return None, error_result
+
     return spec_data, None
 
 

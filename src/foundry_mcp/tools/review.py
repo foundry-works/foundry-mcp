@@ -212,7 +212,7 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             llm_status = _get_llm_status()
 
             # Build command
-            cmd = ["sdd", "review", spec_id, "--type", review_type, "--json"]
+            cmd = ["foundry-cli", "review", spec_id, "--type", review_type, "--json"]
 
             if tools:
                 cmd.extend(["--tools", tools])

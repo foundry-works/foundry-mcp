@@ -89,7 +89,7 @@ class TestSddCacheManage:
         import subprocess
 
         with patch('foundry_mcp.tools.utilities.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd", timeout=30)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=30)
 
             result = _run_sdd_command(["cache", "info"])
 
@@ -191,7 +191,7 @@ class TestSpecSchemaExport:
 
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
-            assert "sdd" in call_args
+            assert "foundry-cli" in call_args
             assert "schema" in call_args
             assert "--json" in call_args
 

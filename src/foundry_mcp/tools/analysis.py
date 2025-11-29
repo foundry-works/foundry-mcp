@@ -151,7 +151,7 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
         tool_name = "spec_analyze"
         try:
             # Build command
-            cmd = ["sdd", "analyze", "--json"]
+            cmd = ["foundry-cli", "analyze", "--json"]
 
             if directory:
                 cmd.append(directory)
@@ -295,7 +295,7 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "parse-review", spec_id, "--review", review_path, "--json"]
+            cmd = ["foundry-cli", "parse-review", spec_id, "--review", review_path, "--json"]
 
             if output_path:
                 cmd.extend(["--output", output_path])
@@ -434,7 +434,7 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "analyze-deps", spec_id, "--json"]
+            cmd = ["foundry-cli", "analyze-deps", spec_id, "--json"]
 
             if bottleneck_threshold is not None:
                 cmd.extend(["--bottleneck-threshold", str(bottleneck_threshold)])

@@ -154,7 +154,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
         tool_name = "find_related_files"
         try:
             # Build command
-            cmd = ["sdd", "find-related-files", file_path, "--json"]
+            cmd = ["foundry-cli", "find-related-files", file_path, "--json"]
 
             if spec_id:
                 cmd.extend(["--spec-id", spec_id])
@@ -279,7 +279,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
         tool_name = "find_patterns"
         try:
             # Build command
-            cmd = ["sdd", "find-pattern", pattern, "--json"]
+            cmd = ["foundry-cli", "find-pattern", pattern, "--json"]
 
             if directory:
                 cmd.extend(["--directory", directory])
@@ -405,7 +405,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
         tool_name = "detect_cycles"
         try:
             # Build command
-            cmd = ["sdd", "find-circular-deps", spec_id, "--json"]
+            cmd = ["foundry-cli", "find-circular-deps", spec_id, "--json"]
 
             # Log the operation
             audit_log(
@@ -537,7 +537,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
         tool_name = "validate_paths"
         try:
             # Build command
-            cmd = ["sdd", "validate-paths", "--json"] + paths
+            cmd = ["foundry-cli", "validate-paths", "--json"] + paths
 
             if base_directory:
                 cmd.extend(["--base-directory", base_directory])

@@ -59,13 +59,13 @@ class TestMutationsRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=0,
                 stdout='{"result": "success"}',
                 stderr="",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 0
             assert '{"result": "success"}' in result.stdout
@@ -83,7 +83,7 @@ class TestMutationsRunSddCommand:
         assert _sdd_cli_breaker.state == CircuitState.OPEN
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_sdd_command(["sdd", "test"], "test_tool")
+            _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
         assert exc_info.value.breaker_name == "sdd_cli_mutations"
         _sdd_cli_breaker.reset()
@@ -106,7 +106,7 @@ class TestSpecApplyPlan:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "apply-modifications"],
+                args=["foundry-cli", "apply-modifications"],
                 returncode=0,
                 stdout=json.dumps({
                     "modifications_applied": 5,
@@ -171,7 +171,7 @@ class TestVerificationAdd:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-verification"],
+                args=["foundry-cli", "add-verification"],
                 returncode=0,
                 stdout=json.dumps({"added": True}),
                 stderr="",
@@ -224,7 +224,7 @@ class TestVerificationExecute:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "execute-verify"],
+                args=["foundry-cli", "execute-verify"],
                 returncode=0,
                 stdout=json.dumps({
                     "result": "PASSED",
@@ -262,7 +262,7 @@ class TestVerificationFormatSummary:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "format-verification-summary"],
+                args=["foundry-cli", "format-verification-summary"],
                 returncode=0,
                 stdout=json.dumps({
                     "summary": "5 verifications: 4 passed, 1 failed",
@@ -290,7 +290,7 @@ class TestVerificationFormatSummary:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "format-verification-summary"],
+                args=["foundry-cli", "format-verification-summary"],
                 returncode=0,
                 stdout=json.dumps({
                     "summary": "3 verifications: 3 passed",
@@ -357,7 +357,7 @@ class TestTaskUpdateEstimate:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-estimate"],
+                args=["foundry-cli", "update-estimate"],
                 returncode=0,
                 stdout=json.dumps({"updated": True}),
                 stderr="",
@@ -408,7 +408,7 @@ class TestTaskUpdateMetadata:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-task-metadata"],
+                args=["foundry-cli", "update-task-metadata"],
                 returncode=0,
                 stdout=json.dumps({"updated": True}),
                 stderr="",
@@ -443,7 +443,7 @@ class TestSpecSyncMetadata:
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "sync-metadata"],
+                args=["foundry-cli", "sync-metadata"],
                 returncode=0,
                 stdout=json.dumps({"synced": True, "changes": ["title", "status"]}),
                 stderr="",
@@ -473,13 +473,13 @@ class TestGitIntegrationRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=0,
                 stdout='{"result": "success"}',
                 stderr="",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 0
             mock_run.assert_called_once()
@@ -496,7 +496,7 @@ class TestGitIntegrationRunSddCommand:
         assert _sdd_cli_breaker.state == CircuitState.OPEN
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_sdd_command(["sdd", "test"], "test_tool")
+            _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
         assert exc_info.value.breaker_name == "sdd_cli_git_integration"
         _sdd_cli_breaker.reset()
@@ -519,7 +519,7 @@ class TestTaskCreateCommit:
 
         with patch("foundry_mcp.tools.git_integration._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-task-commit"],
+                args=["foundry-cli", "create-task-commit"],
                 returncode=0,
                 stdout=json.dumps({
                     "commit_hash": "abc123",
@@ -562,7 +562,7 @@ class TestTaskCreateCommit:
 
         with patch("foundry_mcp.tools.git_integration._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create-task-commit"],
+                args=["foundry-cli", "create-task-commit"],
                 returncode=1,
                 stdout="",
                 stderr="Task 'task-1-1' is not completed",
@@ -596,7 +596,7 @@ class TestJournalBulkAdd:
 
         with patch("foundry_mcp.tools.git_integration._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "bulk-journal"],
+                args=["foundry-cli", "bulk-journal"],
                 returncode=0,
                 stdout=json.dumps({
                     "tasks_journaled": 3,
@@ -621,7 +621,7 @@ class TestJournalBulkAdd:
 
         with patch("foundry_mcp.tools.git_integration._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "bulk-journal"],
+                args=["foundry-cli", "bulk-journal"],
                 returncode=0,
                 stdout=json.dumps({"tasks_journaled": 2}),
                 stderr="",
@@ -741,7 +741,7 @@ class TestErrorHandling:
         register_mutation_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["sdd"], timeout=30)
+            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["foundry-cli"], timeout=30)
 
             spec_sync_metadata = mock_mcp._tools["spec_sync_metadata"]
             result = spec_sync_metadata(spec_id="test-spec")
@@ -758,7 +758,7 @@ class TestErrorHandling:
         register_mutation_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.mutations._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = FileNotFoundError("sdd not found")
+            mock_cmd.side_effect = FileNotFoundError("foundry-cli not found")
 
             spec_sync_metadata = mock_mcp._tools["spec_sync_metadata"]
             result = spec_sync_metadata(spec_id="test-spec")

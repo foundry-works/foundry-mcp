@@ -157,7 +157,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         tool_name = "spec_create"
         try:
             # Build command
-            cmd = ["sdd", "create", name, "--json"]
+            cmd = ["foundry-cli", "create", name, "--json"]
 
             if template:
                 if template not in ("simple", "medium", "complex", "security"):
@@ -335,7 +335,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "template", action, "--json"]
+            cmd = ["foundry-cli", "template", action, "--json"]
 
             if template_name:
                 cmd.append(template_name)
@@ -521,7 +521,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "add-task", spec_id, "--parent", parent, "--title", title, "--json"]
+            cmd = ["foundry-cli", "add-task", spec_id, "--parent", parent, "--title", title, "--json"]
 
             if description:
                 cmd.extend(["--description", description])
@@ -704,7 +704,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "remove-task", spec_id, task_id, "--json"]
+            cmd = ["foundry-cli", "remove-task", spec_id, task_id, "--json"]
 
             if cascade:
                 cmd.append("--cascade")
@@ -892,7 +892,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "add-assumption", spec_id, text, "--json"]
+            cmd = ["foundry-cli", "add-assumption", spec_id, text, "--json"]
 
             if assumption_type:
                 cmd.extend(["--type", assumption_type])
@@ -1049,7 +1049,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "list-assumptions", spec_id, "--json"]
+            cmd = ["foundry-cli", "list-assumptions", spec_id, "--json"]
 
             if assumption_type:
                 cmd.extend(["--type", assumption_type])
@@ -1210,7 +1210,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Provide a changes summary",
                 ))
 
-            cmd = ["sdd", "add-revision", spec_id, version, changes, "--json"]
+            cmd = ["foundry-cli", "add-revision", spec_id, version, changes, "--json"]
 
             if author:
                 cmd.extend(["--author", author])
@@ -1370,7 +1370,7 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 ))
 
             # Build command
-            cmd = ["sdd", "update-frontmatter", spec_id, key, value, "--json"]
+            cmd = ["foundry-cli", "update-frontmatter", spec_id, key, value, "--json"]
 
             if dry_run:
                 cmd.append("--dry-run")

@@ -75,13 +75,13 @@ class TestRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=0,
                 stdout='{"result": "success"}',
                 stderr="",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 0
             assert '{"result": "success"}' in result.stdout
@@ -96,13 +96,13 @@ class TestRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=1,
                 stdout="",
                 stderr="Error occurred",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 1
             assert _sdd_cli_breaker.failure_count == initial_failures + 1
@@ -120,7 +120,7 @@ class TestRunSddCommand:
         assert _sdd_cli_breaker.state == CircuitState.OPEN
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_sdd_command(["sdd", "test"], "test_tool")
+            _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
         assert exc_info.value.breaker_name == "sdd_cli_authoring"
 
@@ -134,10 +134,10 @@ class TestRunSddCommand:
         _sdd_cli_breaker.reset()
 
         with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["sdd"], timeout=30)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd=["foundry-cli"], timeout=30)
 
             with pytest.raises(subprocess.TimeoutExpired):
-                _run_sdd_command(["sdd", "test"], "test_tool")
+                _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert _sdd_cli_breaker.failure_count == 1
 
@@ -150,10 +150,10 @@ class TestRunSddCommand:
         _sdd_cli_breaker.reset()
 
         with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError("sdd not found")
+            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
 
             with pytest.raises(FileNotFoundError):
-                _run_sdd_command(["sdd", "test"], "test_tool")
+                _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert _sdd_cli_breaker.failure_count == 1
 
@@ -177,7 +177,7 @@ class TestSpecCreate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create"],
+                args=["foundry-cli", "create"],
                 returncode=0,
                 stdout=json.dumps({
                     "spec_id": "test-spec-2025-01-01-001",
@@ -204,7 +204,7 @@ class TestSpecCreate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create"],
+                args=["foundry-cli", "create"],
                 returncode=0,
                 stdout=json.dumps({
                     "spec_id": "complex-spec-001",
@@ -265,7 +265,7 @@ class TestSpecCreate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create"],
+                args=["foundry-cli", "create"],
                 returncode=1,
                 stdout="",
                 stderr="Spec 'existing-spec' already exists",
@@ -308,7 +308,7 @@ class TestSpecCreate:
         register_authoring_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["sdd"], timeout=30)
+            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["foundry-cli"], timeout=30)
 
             spec_create = mock_mcp._tools["spec_create"]
             result = spec_create(name="test")
@@ -325,7 +325,7 @@ class TestSpecCreate:
         register_authoring_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = FileNotFoundError("sdd not found")
+            mock_cmd.side_effect = FileNotFoundError("foundry-cli not found")
 
             spec_create = mock_mcp._tools["spec_create"]
             result = spec_create(name="test")
@@ -352,7 +352,7 @@ class TestSpecTemplate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "template", "list"],
+                args=["foundry-cli", "template", "list"],
                 returncode=0,
                 stdout=json.dumps({
                     "templates": [
@@ -381,7 +381,7 @@ class TestSpecTemplate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "template", "show"],
+                args=["foundry-cli", "template", "show"],
                 returncode=0,
                 stdout=json.dumps({
                     "content": {"phases": [], "metadata": {}},
@@ -407,7 +407,7 @@ class TestSpecTemplate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "template", "apply"],
+                args=["foundry-cli", "template", "apply"],
                 returncode=0,
                 stdout=json.dumps({
                     "generated": {"phases": [{"id": "phase-1"}]},
@@ -460,7 +460,7 @@ class TestSpecTemplate:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "template", "show"],
+                args=["foundry-cli", "template", "show"],
                 returncode=1,
                 stdout="",
                 stderr="Template 'unknown' not found",
@@ -491,7 +491,7 @@ class TestTaskAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-task"],
+                args=["foundry-cli", "add-task"],
                 returncode=0,
                 stdout=json.dumps({"task_id": "task-1-3"}),
                 stderr="",
@@ -520,7 +520,7 @@ class TestTaskAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-task"],
+                args=["foundry-cli", "add-task"],
                 returncode=0,
                 stdout=json.dumps({"task_id": "task-1-2-1"}),
                 stderr="",
@@ -615,7 +615,7 @@ class TestTaskAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-task"],
+                args=["foundry-cli", "add-task"],
                 returncode=1,
                 stdout="",
                 stderr="Spec 'unknown-spec' not found",
@@ -641,7 +641,7 @@ class TestTaskAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-task"],
+                args=["foundry-cli", "add-task"],
                 returncode=1,
                 stdout="",
                 stderr="Parent 'unknown-phase' not found in spec",
@@ -676,7 +676,7 @@ class TestTaskRemove:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "remove-task"],
+                args=["foundry-cli", "remove-task"],
                 returncode=0,
                 stdout=json.dumps({"removed": True}),
                 stderr="",
@@ -700,7 +700,7 @@ class TestTaskRemove:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "remove-task"],
+                args=["foundry-cli", "remove-task"],
                 returncode=0,
                 stdout=json.dumps({"removed": True, "children_removed": 3}),
                 stderr="",
@@ -727,7 +727,7 @@ class TestTaskRemove:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "remove-task"],
+                args=["foundry-cli", "remove-task"],
                 returncode=0,
                 stdout=json.dumps({"would_remove": True}),
                 stderr="",
@@ -781,7 +781,7 @@ class TestTaskRemove:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "remove-task"],
+                args=["foundry-cli", "remove-task"],
                 returncode=1,
                 stdout="",
                 stderr="Task has children. Use cascade to remove.",
@@ -812,7 +812,7 @@ class TestAssumptionAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-assumption"],
+                args=["foundry-cli", "add-assumption"],
                 returncode=0,
                 stdout=json.dumps({"assumption_id": "assumption-1"}),
                 stderr="",
@@ -839,7 +839,7 @@ class TestAssumptionAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-assumption"],
+                args=["foundry-cli", "add-assumption"],
                 returncode=0,
                 stdout=json.dumps({"assumption_id": "assumption-2"}),
                 stderr="",
@@ -924,7 +924,7 @@ class TestAssumptionList:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "list-assumptions"],
+                args=["foundry-cli", "list-assumptions"],
                 returncode=0,
                 stdout=json.dumps({
                     "assumptions": [
@@ -952,7 +952,7 @@ class TestAssumptionList:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "list-assumptions"],
+                args=["foundry-cli", "list-assumptions"],
                 returncode=0,
                 stdout=json.dumps({
                     "assumptions": [
@@ -1017,7 +1017,7 @@ class TestRevisionAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-revision"],
+                args=["foundry-cli", "add-revision"],
                 returncode=0,
                 stdout=json.dumps({"added": True}),
                 stderr="",
@@ -1044,7 +1044,7 @@ class TestRevisionAdd:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "add-revision"],
+                args=["foundry-cli", "add-revision"],
                 returncode=0,
                 stdout=json.dumps({"added": True}),
                 stderr="",
@@ -1124,7 +1124,7 @@ class TestSpecUpdateFrontmatter:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-frontmatter"],
+                args=["foundry-cli", "update-frontmatter"],
                 returncode=0,
                 stdout=json.dumps({
                     "updated": True,
@@ -1155,7 +1155,7 @@ class TestSpecUpdateFrontmatter:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-frontmatter"],
+                args=["foundry-cli", "update-frontmatter"],
                 returncode=0,
                 stdout=json.dumps({"updated": True, "old_value": "draft"}),
                 stderr="",
@@ -1181,7 +1181,7 @@ class TestSpecUpdateFrontmatter:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-frontmatter"],
+                args=["foundry-cli", "update-frontmatter"],
                 returncode=0,
                 stdout=json.dumps({"would_update": True}),
                 stderr="",
@@ -1236,7 +1236,7 @@ class TestSpecUpdateFrontmatter:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-frontmatter"],
+                args=["foundry-cli", "update-frontmatter"],
                 returncode=1,
                 stdout="",
                 stderr="Invalid key 'invalid_key' not found",
@@ -1262,7 +1262,7 @@ class TestSpecUpdateFrontmatter:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "update-frontmatter"],
+                args=["foundry-cli", "update-frontmatter"],
                 returncode=1,
                 stdout="",
                 stderr="Invalid value 'bad' for key 'status'",
@@ -1337,7 +1337,7 @@ class TestResponseContractCompliance:
 
         with patch("foundry_mcp.tools.authoring._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "create"],
+                args=["foundry-cli", "create"],
                 returncode=0,
                 stdout=json.dumps({"spec_id": "test-001"}),
                 stderr="",

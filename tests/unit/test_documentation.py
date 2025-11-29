@@ -46,7 +46,7 @@ class TestRunSddDocCommand:
         from foundry_mcp.tools.documentation import _run_sdd_doc_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd doc", timeout=120)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli doc", timeout=120)
 
             result = _run_sdd_doc_command(["generate"])
 
@@ -63,7 +63,7 @@ class TestRunSddDocCommand:
             result = _run_sdd_doc_command(["generate"])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
+            assert "foundry-cli not found" in result["error"]
 
     def test_json_decode_fallback(self):
         """Test fallback when output is not valid JSON."""
@@ -107,7 +107,7 @@ class TestRunSddRenderCommand:
         from foundry_mcp.tools.documentation import _run_sdd_render_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd render", timeout=120)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli render", timeout=120)
 
             result = _run_sdd_render_command(["my-spec"])
 
@@ -260,7 +260,7 @@ class TestRunSddLlmDocGenCommand:
         from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd llm-doc-gen", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli llm-doc-gen", timeout=600)
 
             result = _run_sdd_llm_doc_gen_command(["generate", "."])
 
@@ -278,7 +278,7 @@ class TestRunSddLlmDocGenCommand:
             result = _run_sdd_llm_doc_gen_command(["generate", "."])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
+            assert "foundry-cli not found" in result["error"]
 
 
 class TestSpecDocLlmTool:
@@ -412,7 +412,7 @@ class TestRunSddFidelityReviewCommand:
         from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd fidelity-review", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli fidelity-review", timeout=600)
 
             result = _run_sdd_fidelity_review_command(["my-spec"])
 
@@ -430,7 +430,7 @@ class TestRunSddFidelityReviewCommand:
             result = _run_sdd_fidelity_review_command(["my-spec"])
 
             assert result["success"] is False
-            assert "sdd CLI not found" in result["error"]
+            assert "foundry-cli not found" in result["error"]
 
 
 class TestSpecReviewFidelityTool:
@@ -550,7 +550,7 @@ class TestTelemetryMetrics:
         from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
 
         with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="sdd fidelity-review", timeout=600)
+            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli fidelity-review", timeout=600)
 
             result = _run_sdd_fidelity_review_command(["my-spec"])
 

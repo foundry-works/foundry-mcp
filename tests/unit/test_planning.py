@@ -67,13 +67,13 @@ class TestPlanningRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=0,
                 stdout='{"result": "success"}',
                 stderr="",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 0
             assert '{"result": "success"}' in result.stdout
@@ -87,13 +87,13 @@ class TestPlanningRunSddCommand:
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = subprocess.CompletedProcess(
-                args=["sdd", "test"],
+                args=["foundry-cli", "test"],
                 returncode=1,
                 stdout="",
                 stderr="Error message",
             )
 
-            result = _run_sdd_command(["sdd", "test"], "test_tool")
+            result = _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
             assert result.returncode == 1
             # Failure was recorded (public attribute, no underscore prefix)
@@ -114,7 +114,7 @@ class TestPlanningRunSddCommand:
         assert _sdd_cli_breaker.state == CircuitState.OPEN
 
         with pytest.raises(CircuitBreakerError) as exc_info:
-            _run_sdd_command(["sdd", "test"], "test_tool")
+            _run_sdd_command(["foundry-cli", "test"], "test_tool")
 
         assert exc_info.value.breaker_name == "sdd_cli_planning"
         _sdd_cli_breaker.reset()
@@ -137,7 +137,7 @@ class TestPlanFormat:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "format-plan"],
+                args=["foundry-cli", "format-plan"],
                 returncode=0,
                 stdout=json.dumps({
                     "formatted": "# Task 1-1: Implement feature\n\n## Description\n...",
@@ -196,7 +196,7 @@ class TestPlanFormat:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "format-plan"],
+                args=["foundry-cli", "format-plan"],
                 returncode=1,
                 stdout="",
                 stderr="Spec 'test-spec' not found",
@@ -227,7 +227,7 @@ class TestPhaseList:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "list-phases"],
+                args=["foundry-cli", "list-phases"],
                 returncode=0,
                 stdout=json.dumps({
                     "phases": [
@@ -271,7 +271,7 @@ class TestPhaseList:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "list-phases"],
+                args=["foundry-cli", "list-phases"],
                 returncode=0,
                 stdout=json.dumps({"phases": []}),
                 stderr="",
@@ -303,7 +303,7 @@ class TestPhaseCheckComplete:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "check-complete"],
+                args=["foundry-cli", "check-complete"],
                 returncode=0,
                 stdout=json.dumps({
                     "is_complete": True,
@@ -333,7 +333,7 @@ class TestPhaseCheckComplete:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "check-complete"],
+                args=["foundry-cli", "check-complete"],
                 returncode=0,
                 stdout=json.dumps({
                     "is_complete": False,
@@ -391,7 +391,7 @@ class TestPhaseReportTime:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "phase-time"],
+                args=["foundry-cli", "phase-time"],
                 returncode=0,
                 stdout=json.dumps({
                     "estimated_hours": 20,
@@ -436,7 +436,7 @@ class TestPhaseReportTime:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "phase-time"],
+                args=["foundry-cli", "phase-time"],
                 returncode=0,
                 stdout=json.dumps({
                     "estimated_hours": 0,
@@ -472,7 +472,7 @@ class TestSpecReconcileState:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "reconcile-state"],
+                args=["foundry-cli", "reconcile-state"],
                 returncode=0,
                 stdout=json.dumps({
                     "modified_files": [],
@@ -499,7 +499,7 @@ class TestSpecReconcileState:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "reconcile-state"],
+                args=["foundry-cli", "reconcile-state"],
                 returncode=0,
                 stdout=json.dumps({
                     "modified_files": ["src/module.py"],
@@ -531,7 +531,7 @@ class TestSpecReconcileState:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "reconcile-state"],
+                args=["foundry-cli", "reconcile-state"],
                 returncode=0,
                 stdout=json.dumps({"modified_files": [], "new_files": [], "missing_files": []}),
                 stderr="",
@@ -566,7 +566,7 @@ class TestPlanReportTime:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "time-report"],
+                args=["foundry-cli", "time-report"],
                 returncode=0,
                 stdout=json.dumps({
                     "total_estimated_hours": 100,
@@ -604,7 +604,7 @@ class TestPlanReportTime:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "time-report"],
+                args=["foundry-cli", "time-report"],
                 returncode=0,
                 stdout=json.dumps({
                     "total_estimated_hours": 0,
@@ -640,7 +640,7 @@ class TestSpecAudit:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "audit-spec"],
+                args=["foundry-cli", "audit-spec"],
                 returncode=0,
                 stdout=json.dumps({
                     "passed": True,
@@ -673,7 +673,7 @@ class TestSpecAudit:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "audit-spec"],
+                args=["foundry-cli", "audit-spec"],
                 returncode=0,
                 stdout=json.dumps({
                     "passed": False,
@@ -780,7 +780,7 @@ class TestErrorHandling:
         register_planning_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["sdd"], timeout=30)
+            mock_cmd.side_effect = subprocess.TimeoutExpired(cmd=["foundry-cli"], timeout=30)
 
             plan_report_time = mock_mcp._tools["plan_report_time"]
             result = plan_report_time(spec_id="test-spec")
@@ -797,7 +797,7 @@ class TestErrorHandling:
         register_planning_tools(mock_mcp, mock_config)
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
-            mock_cmd.side_effect = FileNotFoundError("sdd not found")
+            mock_cmd.side_effect = FileNotFoundError("foundry-cli not found")
 
             spec_audit = mock_mcp._tools["spec_audit"]
             result = spec_audit(spec_id="test-spec")
@@ -841,7 +841,7 @@ class TestPathParameter:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "format-plan"],
+                args=["foundry-cli", "format-plan"],
                 returncode=0,
                 stdout=json.dumps({"formatted": "test"}),
                 stderr="",
@@ -863,7 +863,7 @@ class TestPathParameter:
 
         with patch("foundry_mcp.tools.planning._run_sdd_command") as mock_cmd:
             mock_cmd.return_value = subprocess.CompletedProcess(
-                args=["sdd", "list-phases"],
+                args=["foundry-cli", "list-phases"],
                 returncode=0,
                 stdout=json.dumps({"phases": []}),
                 stderr="",

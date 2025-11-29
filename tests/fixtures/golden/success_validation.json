@@ -1,0 +1,18 @@
+{
+  "fixture_version": "1.0.0",
+  "success": true,
+  "data": {
+    "spec_id": "example-spec",
+    "is_valid": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "diagnostics": [],
+    "telemetry": {
+      "duration_ms": 12.5
+    }
+  },
+  "error": null,
+  "meta": {
+    "version": "response-v2"
+  }
+}
