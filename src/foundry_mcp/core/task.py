@@ -805,3 +805,222 @@ def add_task(
         "type": task_type,
         "position": position if position is not None else len(existing_children) - 1,
     }, None
+
+
+def _collect_descendants(hierarchy: Dict[str, Any], node_id: str) -> List[str]:
+    """
+    Recursively collect all descendant node IDs for a given node.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        node_id: Starting node ID
+
+    Returns:
+        List of all descendant node IDs (not including the starting node)
+    """
+    descendants = []
+    node = hierarchy.get(node_id)
+    if not node:
+        return descendants
+
+    children = node.get("children", [])
+    if not isinstance(children, list):
+        return descendants
+
+    for child_id in children:
+        descendants.append(child_id)
+        descendants.extend(_collect_descendants(hierarchy, child_id))
+
+    return descendants
+
+
+def _count_tasks_in_subtree(hierarchy: Dict[str, Any], node_ids: List[str]) -> Tuple[int, int]:
+    """
+    Count total and completed tasks in a list of nodes.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        node_ids: List of node IDs to count
+
+    Returns:
+        Tuple of (total_count, completed_count)
+    """
+    total = 0
+    completed = 0
+
+    for node_id in node_ids:
+        node = hierarchy.get(node_id)
+        if not node:
+            continue
+        node_type = node.get("type")
+        if node_type in ("task", "subtask", "verify"):
+            total += 1
+            if node.get("status") == "completed":
+                completed += 1
+
+    return total, completed
+
+
+def _decrement_ancestor_counts(
+    hierarchy: Dict[str, Any],
+    node_id: str,
+    total_delta: int,
+    completed_delta: int,
+) -> None:
+    """
+    Walk up the hierarchy and decrement task counts for all ancestors.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        node_id: Starting node ID (the parent of the removed node)
+        total_delta: Amount to subtract from total_tasks
+        completed_delta: Amount to subtract from completed_tasks
+    """
+    current_id = node_id
+    visited = set()
+
+    while current_id:
+        if current_id in visited:
+            break
+        visited.add(current_id)
+
+        node = hierarchy.get(current_id)
+        if not node:
+            break
+
+        # Decrement counts
+        current_total = node.get("total_tasks", 0)
+        current_completed = node.get("completed_tasks", 0)
+        node["total_tasks"] = max(0, current_total - total_delta)
+        node["completed_tasks"] = max(0, current_completed - completed_delta)
+
+        # Move to parent
+        current_id = node.get("parent")
+
+
+def _remove_dependency_references(hierarchy: Dict[str, Any], removed_ids: List[str]) -> None:
+    """
+    Remove references to deleted nodes from all dependency lists.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        removed_ids: List of node IDs being removed
+    """
+    removed_set = set(removed_ids)
+
+    for node_id, node in hierarchy.items():
+        deps = node.get("dependencies")
+        if not deps or not isinstance(deps, dict):
+            continue
+
+        for key in ("blocks", "blocked_by", "depends"):
+            dep_list = deps.get(key)
+            if isinstance(dep_list, list):
+                deps[key] = [d for d in dep_list if d not in removed_set]
+
+
+def remove_task(
+    spec_id: str,
+    task_id: str,
+    cascade: bool = False,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Remove a task from a specification's hierarchy.
+
+    Removes the specified task and optionally all its descendants.
+    Updates ancestor task counts and cleans up dependency references.
+
+    Args:
+        spec_id: Specification ID containing the task.
+        task_id: Task ID to remove.
+        cascade: If True, also remove all child tasks recursively.
+                 If False and task has children, returns an error.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"task_id": ..., "children_removed": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    # Validate task exists
+    task = hierarchy.get(task_id)
+    if task is None:
+        return None, f"Task '{task_id}' not found"
+
+    # Validate task type (can only remove task, subtask, verify)
+    task_type = task.get("type")
+    if task_type not in ("task", "subtask", "verify"):
+        return None, f"Cannot remove node type '{task_type}'. Only task, subtask, or verify nodes can be removed."
+
+    # Check for children
+    children = task.get("children", [])
+    if isinstance(children, list) and len(children) > 0 and not cascade:
+        return None, f"Task '{task_id}' has {len(children)} children. Use cascade=True to remove them."
+
+    # Collect all nodes to remove
+    nodes_to_remove = [task_id]
+    if cascade:
+        nodes_to_remove.extend(_collect_descendants(hierarchy, task_id))
+
+    # Count tasks being removed (including the target node itself)
+    total_removed, completed_removed = _count_tasks_in_subtree(hierarchy, nodes_to_remove)
+    # The target node itself
+    if task_type in ("task", "subtask", "verify"):
+        total_removed += 1
+        if task.get("status") == "completed":
+            completed_removed += 1
+
+    # Get parent before removing
+    parent_id = task.get("parent")
+
+    # Remove nodes from hierarchy
+    for node_id in nodes_to_remove:
+        if node_id in hierarchy:
+            del hierarchy[node_id]
+
+    # Update parent's children list
+    if parent_id:
+        parent = hierarchy.get(parent_id)
+        if parent:
+            parent_children = parent.get("children", [])
+            if isinstance(parent_children, list) and task_id in parent_children:
+                parent_children.remove(task_id)
+                parent["children"] = parent_children
+
+            # Update ancestor task counts
+            _decrement_ancestor_counts(hierarchy, parent_id, total_removed, completed_removed)
+
+    # Clean up dependency references
+    _remove_dependency_references(hierarchy, nodes_to_remove)
+
+    # Save the spec
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "task_id": task_id,
+        "spec_id": spec_id,
+        "cascade": cascade,
+        "children_removed": len(nodes_to_remove) - 1,  # Exclude the target itself
+        "total_tasks_removed": total_removed,
+    }, None
