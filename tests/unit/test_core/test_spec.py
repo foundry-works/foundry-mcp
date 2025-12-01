@@ -15,6 +15,7 @@ from foundry_mcp.core.spec import (
     get_node,
     update_node,
     add_revision,
+    update_frontmatter,
 )
 
 
@@ -335,3 +336,219 @@ class TestAddRevision:
         assert revision["version"] == "1.0"
         assert revision["changelog"] == "Test changelog"
         assert revision["author"] == "Author"
+
+
+class TestUpdateFrontmatter:
+    """Tests for update_frontmatter function."""
+
+    def test_update_frontmatter_success(self, temp_specs_dir, sample_spec):
+        """Should update metadata field successfully."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="description",
+            value="Updated description",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["spec_id"] == "test-spec-001"
+        assert result["key"] == "description"
+        assert result["value"] == "Updated description"
+        assert result["previous_value"] is None  # Was not set before
+
+        # Verify persisted
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        assert spec_data["metadata"]["description"] == "Updated description"
+
+    def test_update_frontmatter_with_previous_value(self, temp_specs_dir, sample_spec):
+        """Should return previous value when updating existing field."""
+        sample_spec["metadata"]["owner"] = "Original Owner"
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="owner",
+            value="New Owner",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["previous_value"] == "Original Owner"
+        assert result["value"] == "New Owner"
+
+    def test_update_frontmatter_top_level_sync(self, temp_specs_dir, sample_spec):
+        """Should sync title/status to top-level fields."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="title",
+            value="New Title",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        # Both metadata and top-level should be updated
+        assert spec_data["metadata"]["title"] == "New Title"
+        assert spec_data["title"] == "New Title"
+
+    def test_update_frontmatter_numeric_value(self, temp_specs_dir, sample_spec):
+        """Should handle numeric values."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="estimated_hours",
+            value=42,
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["value"] == 42
+
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        assert spec_data["metadata"]["estimated_hours"] == 42
+
+    def test_update_frontmatter_list_value(self, temp_specs_dir, sample_spec):
+        """Should handle list values for objectives."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="objectives",
+            value=["Objective 1", "Objective 2"],
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        assert spec_data["metadata"]["objectives"] == ["Objective 1", "Objective 2"]
+
+    def test_update_frontmatter_spec_not_found(self, temp_specs_dir):
+        """Should return error for nonexistent spec."""
+        result, error = update_frontmatter(
+            "nonexistent-spec",
+            key="title",
+            value="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "not found" in error
+
+    def test_update_frontmatter_empty_key(self, temp_specs_dir, sample_spec):
+        """Should reject empty key."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="",
+            value="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Key is required" in error
+
+    def test_update_frontmatter_none_value(self, temp_specs_dir, sample_spec):
+        """Should reject None value."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="description",
+            value=None,
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Value cannot be None" in error
+
+    def test_update_frontmatter_blocks_assumptions(self, temp_specs_dir, sample_spec):
+        """Should block direct update of assumptions array."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="assumptions",
+            value=["new assumption"],
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "dedicated function" in error
+
+    def test_update_frontmatter_blocks_revision_history(self, temp_specs_dir, sample_spec):
+        """Should block direct update of revision_history array."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="revision_history",
+            value=[{"version": "1.0"}],
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "dedicated function" in error
+
+    def test_update_frontmatter_strips_whitespace(self, temp_specs_dir, sample_spec):
+        """Should strip whitespace from string values."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="  description  ",
+            value="  Trimmed value  ",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["key"] == "description"
+        assert result["value"] == "Trimmed value"
+
+    def test_update_frontmatter_allows_empty_string(self, temp_specs_dir, sample_spec):
+        """Should allow empty string as value (to clear a field)."""
+        sample_spec["metadata"]["description"] = "Original"
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="description",
+            value="",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["value"] == ""
+        assert result["previous_value"] == "Original"
+
+    def test_update_frontmatter_allows_zero(self, temp_specs_dir, sample_spec):
+        """Should allow zero as numeric value."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = update_frontmatter(
+            "test-spec-001",
+            key="progress_percentage",
+            value=0,
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["value"] == 0

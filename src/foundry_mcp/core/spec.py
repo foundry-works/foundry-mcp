@@ -1012,3 +1012,102 @@ def list_assumptions(
         "total_count": len(assumption_list),
         "filter_type": assumption_type,
     }, None
+
+
+# Valid frontmatter keys that can be updated
+# Note: assumptions and revision_history have dedicated functions
+FRONTMATTER_KEYS = (
+    "title", "description", "objectives", "complexity",
+    "estimated_hours", "owner", "status", "category",
+    "progress_percentage", "current_phase"
+)
+
+
+def update_frontmatter(
+    spec_id: str,
+    key: str,
+    value: Any,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Update a top-level metadata field in a specification.
+
+    Updates fields in the spec's metadata block. For arrays like assumptions
+    or revision_history, use the dedicated add_assumption() and add_revision()
+    functions instead.
+
+    Args:
+        spec_id: Specification ID to update.
+        key: Metadata key to update (e.g., "title", "status", "description").
+        value: New value for the key.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "key": ..., "value": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate key
+    if not key or not key.strip():
+        return None, "Key is required"
+
+    key = key.strip()
+
+    # Block array fields that have dedicated functions
+    if key in ("assumptions", "revision_history"):
+        return None, f"Use dedicated function for '{key}' (add_assumption or add_revision)"
+
+    # Validate value is not None (but allow empty string, 0, False, etc.)
+    if value is None:
+        return None, "Value cannot be None"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    # Ensure metadata exists
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+
+    # Get previous value for result
+    previous_value = spec_data["metadata"].get(key)
+
+    # Process value based on type
+    if isinstance(value, str):
+        value = value.strip() if value else value
+
+    # Update the metadata field
+    spec_data["metadata"][key] = value
+
+    # Also update top-level fields if they exist (for backward compatibility)
+    # Some fields like title, status, progress_percentage exist at both levels
+    if key in ("title", "status", "progress_percentage", "current_phase"):
+        spec_data[key] = value
+
+    # Update last_updated
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    spec_data["last_updated"] = now
+
+    # Save the spec
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "spec_id": spec_id,
+        "key": key,
+        "value": value,
+        "previous_value": previous_value,
+    }, None

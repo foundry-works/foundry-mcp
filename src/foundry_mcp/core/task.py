@@ -3,12 +3,16 @@ Task discovery and dependency operations for SDD workflows.
 Provides finding next tasks, dependency checking, and task preparation.
 """
 
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
-from foundry_mcp.core.spec import load_spec, find_spec_file, get_node
+from foundry_mcp.core.spec import load_spec, save_spec, find_spec_file, find_specs_directory, get_node
 from foundry_mcp.core.responses import success_response, error_response
+
+# Valid task types for add_task
+TASK_TYPES = ("task", "subtask", "verify")
 
 
 def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, Any]) -> bool:
@@ -595,3 +599,209 @@ def prepare_task(
         spec_complete=False,
         context=context
     ))
+
+
+def _generate_task_id(parent_id: str, existing_children: List[str], task_type: str) -> str:
+    """
+    Generate a new task ID based on parent and existing siblings.
+
+    For task IDs:
+    - If parent is phase-N, generate task-N-M where M is next available
+    - If parent is task-N-M, generate task-N-M-P where P is next available
+
+    For verify IDs:
+    - Same pattern but with "verify-" prefix
+
+    Args:
+        parent_id: Parent node ID
+        existing_children: List of existing child IDs
+        task_type: Type of task (task, subtask, verify)
+
+    Returns:
+        New task ID string
+    """
+    prefix = "verify" if task_type == "verify" else "task"
+
+    # Extract numeric parts from parent
+    if parent_id.startswith("phase-"):
+        # Parent is phase-N, new task is task-N-1, task-N-2, etc.
+        phase_num = parent_id.replace("phase-", "")
+        base = f"{prefix}-{phase_num}"
+    elif parent_id.startswith("task-") or parent_id.startswith("verify-"):
+        # Parent is task-N-M or verify-N-M, new task appends next number
+        # Remove the prefix (task- or verify-) to get the numeric path
+        if parent_id.startswith("task-"):
+            base = f"{prefix}-{parent_id[5:]}"  # len("task-") = 5
+        else:
+            base = f"{prefix}-{parent_id[7:]}"  # len("verify-") = 7
+    else:
+        # Unknown parent type, generate based on existing children count
+        base = f"{prefix}-1"
+
+    # Find the next available index
+    pattern = re.compile(rf"^{re.escape(base)}-(\d+)$")
+    max_index = 0
+    for child_id in existing_children:
+        match = pattern.match(child_id)
+        if match:
+            index = int(match.group(1))
+            max_index = max(max_index, index)
+
+    return f"{base}-{max_index + 1}"
+
+
+def _update_ancestor_counts(hierarchy: Dict[str, Any], node_id: str, delta: int = 1) -> None:
+    """
+    Walk up the hierarchy and increment total_tasks for all ancestors.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        node_id: Starting node ID
+        delta: Amount to add to total_tasks (default 1)
+    """
+    current_id = node_id
+    visited = set()
+
+    while current_id:
+        if current_id in visited:
+            break
+        visited.add(current_id)
+
+        node = hierarchy.get(current_id)
+        if not node:
+            break
+
+        # Increment total_tasks
+        current_total = node.get("total_tasks", 0)
+        node["total_tasks"] = current_total + delta
+
+        # Move to parent
+        current_id = node.get("parent")
+
+
+def add_task(
+    spec_id: str,
+    parent_id: str,
+    title: str,
+    description: Optional[str] = None,
+    task_type: str = "task",
+    estimated_hours: Optional[float] = None,
+    position: Optional[int] = None,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add a new task to a specification's hierarchy.
+
+    Creates a new task, subtask, or verify node under the specified parent.
+    Automatically generates the task ID and updates ancestor task counts.
+
+    Args:
+        spec_id: Specification ID to add task to.
+        parent_id: Parent node ID (phase or task).
+        title: Task title.
+        description: Optional task description.
+        task_type: Type of task (task, subtask, verify). Default: task.
+        estimated_hours: Optional estimated hours.
+        position: Optional position in parent's children list (0-based).
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"task_id": ..., "parent": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate task_type
+    if task_type not in TASK_TYPES:
+        return None, f"Invalid task_type '{task_type}'. Must be one of: {', '.join(TASK_TYPES)}"
+
+    # Validate title
+    if not title or not title.strip():
+        return None, "Title is required"
+
+    title = title.strip()
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    # Validate parent exists
+    parent = hierarchy.get(parent_id)
+    if parent is None:
+        return None, f"Parent node '{parent_id}' not found"
+
+    # Validate parent type (can add tasks to phases, groups, or tasks)
+    parent_type = parent.get("type")
+    if parent_type not in ("phase", "group", "task"):
+        return None, f"Cannot add tasks to node type '{parent_type}'. Parent must be a phase, group, or task."
+
+    # Get existing children
+    existing_children = parent.get("children", [])
+    if not isinstance(existing_children, list):
+        existing_children = []
+
+    # Generate task ID
+    task_id = _generate_task_id(parent_id, existing_children, task_type)
+
+    # Build metadata
+    metadata: Dict[str, Any] = {}
+    if description:
+        metadata["description"] = description.strip()
+    if estimated_hours is not None:
+        metadata["estimated_hours"] = estimated_hours
+
+    # Create the task node
+    task_node = {
+        "type": task_type,
+        "title": title,
+        "status": "pending",
+        "parent": parent_id,
+        "children": [],
+        "total_tasks": 1,  # Counts itself
+        "completed_tasks": 0,
+        "metadata": metadata,
+        "dependencies": {
+            "blocks": [],
+            "blocked_by": [],
+            "depends": [],
+        },
+    }
+
+    # Add to hierarchy
+    hierarchy[task_id] = task_node
+
+    # Update parent's children list
+    if position is not None and 0 <= position <= len(existing_children):
+        existing_children.insert(position, task_id)
+    else:
+        existing_children.append(task_id)
+    parent["children"] = existing_children
+
+    # Update ancestor task counts
+    _update_ancestor_counts(hierarchy, parent_id, delta=1)
+
+    # Save the spec
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "task_id": task_id,
+        "parent": parent_id,
+        "title": title,
+        "type": task_type,
+        "position": position if position is not None else len(existing_children) - 1,
+    }, None

@@ -16,7 +16,9 @@ from foundry_mcp.core.task import (
     get_phase_context,
     get_task_journal_summary,
     prepare_task,
+    add_task,
 )
+from foundry_mcp.core.spec import load_spec
 
 
 @pytest.fixture
@@ -378,3 +380,234 @@ class TestPrepareTask:
         result = prepare_task("test-spec-001", temp_specs_dir)
         assert result["success"] is True
         assert result["data"]["spec_complete"] is True
+
+
+class TestAddTask:
+    """Tests for add_task function."""
+
+    def test_add_task_to_phase(self, temp_specs_dir, sample_spec):
+        """Should add task to a phase."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="New Task",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["task_id"] == "task-1-3"
+        assert result["parent"] == "phase-1"
+        assert result["title"] == "New Task"
+        assert result["type"] == "task"
+
+        # Verify persisted
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        assert "task-1-3" in spec_data["hierarchy"]
+        new_task = spec_data["hierarchy"]["task-1-3"]
+        assert new_task["title"] == "New Task"
+        assert new_task["status"] == "pending"
+        assert new_task["parent"] == "phase-1"
+
+    def test_add_task_to_task(self, temp_specs_dir, sample_spec):
+        """Should add subtask to existing task."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="task-1-1",
+            title="Subtask",
+            task_type="subtask",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["task_id"] == "task-1-1-1"
+        assert result["type"] == "subtask"
+
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        assert "task-1-1-1" in spec_data["hierarchy"]
+        assert "task-1-1-1" in spec_data["hierarchy"]["task-1-1"]["children"]
+
+    def test_add_verify_task(self, temp_specs_dir, sample_spec):
+        """Should add verify task with correct ID prefix."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="Run Tests",
+            task_type="verify",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["task_id"] == "verify-1-1"
+        assert result["type"] == "verify"
+
+    def test_add_task_with_description(self, temp_specs_dir, sample_spec):
+        """Should include description in metadata."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="Documented Task",
+            description="This is the task description",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        new_task = spec_data["hierarchy"][result["task_id"]]
+        assert new_task["metadata"]["description"] == "This is the task description"
+
+    def test_add_task_with_estimated_hours(self, temp_specs_dir, sample_spec):
+        """Should include estimated_hours in metadata."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="Estimated Task",
+            estimated_hours=4.5,
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        new_task = spec_data["hierarchy"][result["task_id"]]
+        assert new_task["metadata"]["estimated_hours"] == 4.5
+
+    def test_add_task_at_position(self, temp_specs_dir, sample_spec):
+        """Should insert task at specified position."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="Inserted Task",
+            position=0,
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["position"] == 0
+
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        phase = spec_data["hierarchy"]["phase-1"]
+        assert phase["children"][0] == result["task_id"]
+
+    def test_add_task_updates_ancestor_counts(self, temp_specs_dir, sample_spec):
+        """Should update total_tasks for ancestors."""
+        # Add required fields to make valid spec
+        sample_spec["hierarchy"]["phase-1"]["total_tasks"] = 2
+        sample_spec["hierarchy"]["spec-root"]["total_tasks"] = 3
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="New Task",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        assert spec_data["hierarchy"]["phase-1"]["total_tasks"] == 3
+        assert spec_data["hierarchy"]["spec-root"]["total_tasks"] == 4
+
+    def test_add_task_spec_not_found(self, temp_specs_dir):
+        """Should return error for nonexistent spec."""
+        result, error = add_task(
+            "nonexistent-spec",
+            parent_id="phase-1",
+            title="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "not found" in error
+
+    def test_add_task_parent_not_found(self, temp_specs_dir, sample_spec):
+        """Should return error for nonexistent parent."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="nonexistent-parent",
+            title="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "not found" in error
+
+    def test_add_task_invalid_parent_type(self, temp_specs_dir, sample_spec):
+        """Should reject adding task to invalid parent type."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="spec-root",  # Root is not a valid parent
+            title="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Cannot add tasks" in error
+
+    def test_add_task_empty_title(self, temp_specs_dir, sample_spec):
+        """Should reject empty title."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Title is required" in error
+
+    def test_add_task_invalid_type(self, temp_specs_dir, sample_spec):
+        """Should reject invalid task type."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_task(
+            "test-spec-001",
+            parent_id="phase-1",
+            title="Test",
+            task_type="invalid",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Invalid task_type" in error
+
+    def test_add_multiple_tasks_sequential_ids(self, temp_specs_dir, sample_spec):
+        """Should generate sequential IDs for multiple tasks."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result1, _ = add_task("test-spec-001", "phase-1", "Task A", specs_dir=temp_specs_dir)
+        result2, _ = add_task("test-spec-001", "phase-1", "Task B", specs_dir=temp_specs_dir)
+        result3, _ = add_task("test-spec-001", "phase-1", "Task C", specs_dir=temp_specs_dir)
+
+        assert result1["task_id"] == "task-1-3"
+        assert result2["task_id"] == "task-1-4"
+        assert result3["task_id"] == "task-1-5"
