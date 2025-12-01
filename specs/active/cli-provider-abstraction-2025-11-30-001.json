@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T21:26:37.298279Z",
+  "last_updated": "2025-12-01T21:35:19.495753Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -20,7 +20,7 @@
         "task-3-1-3"
       ],
       "total_tasks": 67,
-      "completed_tasks": 47,
+      "completed_tasks": 48,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
         "objectives": [
@@ -1358,7 +1358,7 @@
         "depends": []
       },
       "total_tasks": 11,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Create MCP tools for provider access",
         "risk_level": "low",
@@ -1385,7 +1385,7 @@
         "task-4-3"
       ],
       "total_tasks": 9,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1504,7 +1504,7 @@
     "task-4-2": {
       "type": "task",
       "title": "Update src/foundry_mcp/server.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [],
       "dependencies": {
@@ -1515,12 +1515,18 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/server.py",
         "task_category": "implementation",
         "estimated_hours": 0.25,
-        "description": "Register provider tools in server initialization"
+        "description": "Register provider tools in server initialization",
+        "started_at": "2025-12-01T21:34:35.312064Z",
+        "status_note": "Starting server.py provider tool registration",
+        "completed_at": "2025-12-01T21:35:19.487168Z",
+        "needs_journaling": false,
+        "actual_hours": 0.012,
+        "journaled_at": "2025-12-01T21:35:19.493493Z"
       }
     },
     "task-4-3": {
@@ -2048,7 +2054,7 @@
   "metadata": {
     "status": "active",
     "activated_date": "2025-12-01T15:49:52.907043Z",
-    "progress_percentage": 70,
+    "progress_percentage": 71,
     "current_phase": "phase-4"
   },
   "journal": [
@@ -2430,6 +2436,15 @@
       "content": "Added comprehensive tool metadata and discovery schema to src/foundry_mcp/core/discovery.py:\n\n**PROVIDER_TOOL_METADATA dict** with ToolMetadata for each tool:\n- provider-list: Full parameter metadata, examples with input/output\n- provider-status: Required provider_id parameter with examples\n- provider-execute: All 6 parameters documented with constraints (max_tokens min/max, temperature 0.0-2.0, timeout 1-3600), rate_limit=\"60/minute\"\n\n**PROVIDER_FEATURE_FLAGS dict** with FeatureFlagDescriptor:\n- provider_tools: stable, enabled by default\n- provider_multi_model: stable, enabled by default\n- provider_streaming: beta, disabled (not exposed via MCP)\n- provider_rate_limiting: stable, enabled by default\n\n**Helper functions**:\n- register_provider_tools_discovery(): Registers all tools in global registry\n- get_provider_capabilities(): Returns capabilities for negotiation\n- is_provider_tool(): Check if tool name is a provider tool\n- get_provider_tool_metadata(): Get metadata for specific tool\n\nAll imports verified successful.",
       "metadata": {},
       "task_id": "task-4-1-5"
+    },
+    {
+      "timestamp": "2025-12-01T21:35:19.493482Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update src/foundry_mcp/server.py",
+      "author": "claude-code",
+      "content": "Provider tools already registered in server.py. Verified: 1) Import statement exists at line 65 (from foundry_mcp.tools.providers import register_provider_tools), 2) Registration call exists at line 115 (register_provider_tools(mcp, config)), 3) Import test passes, 4) Server creation test succeeds with provider tools. Task was previously completed as part of task-4-1 implementation.",
+      "metadata": {},
+      "task_id": "task-4-2"
     }
   ]
 }
