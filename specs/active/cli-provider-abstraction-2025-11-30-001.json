@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T21:02:42.896282Z",
+  "last_updated": "2025-12-01T21:04:53.165356Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -942,7 +942,11 @@
       "metadata": {
         "file_path": "src/foundry_mcp/core/providers/cursor_agent.py",
         "task_category": "implementation",
-        "estimated_hours": 1.5
+        "estimated_hours": 1.5,
+        "started_at": "2025-12-01T21:03:00.085705Z",
+        "status_note": "Starting Cursor Agent provider implementation",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-01T21:04:53.165322Z"
       }
     },
     "task-3-3-1": {
@@ -2205,6 +2209,15 @@
       "content": "Created src/foundry_mcp/core/providers/codex.py with full Codex CLI provider implementation. Features OS-level sandboxing via --sandbox read-only flag, JSONL event parsing for streaming responses, SANDBOX_ALLOWED_OPERATIONS and SANDBOX_BLOCKED_OPERATIONS lists for documentation. Includes CodexProvider class, CODEX_MODELS with 3 model descriptors, CODEX_METADATA, event processing logic for thread.started/item.delta/response.completed events, and automatic registration. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-3-2"
+    },
+    {
+      "timestamp": "2025-12-01T21:04:53.165310Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/providers/cursor_agent.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/core/providers/cursor_agent.py with full Cursor Agent CLI provider implementation. Features config-based permission system via ~/.cursor/cli-config.json with backup/restore logic for thread safety. Includes CursorAgentProvider class, CURSOR_MODELS with 2 model descriptors, CURSOR_METADATA, ALLOWED_TOOLS and DISALLOWED_TOOLS lists, _create_readonly_config and _cleanup_config_file methods for safe config management, fallback mode for CLIs without JSON support, and automatic registration. Verified imports work correctly.",
+      "metadata": {},
+      "task_id": "task-3-3"
     }
   ]
 }
