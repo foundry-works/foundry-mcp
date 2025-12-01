@@ -767,19 +767,23 @@ def add_assumption(
     """
     Add an assumption to a specification's assumptions array.
 
+    The schema expects assumptions to be stored as strings. The assumption_type
+    and author are included in the returned result for API compatibility but
+    are not stored in the spec (the text itself should be descriptive).
+
     Args:
         spec_id: Specification ID to add assumption to.
         text: Assumption text/description.
-        assumption_type: Type of assumption (constraint, requirement). Default: constraint.
-        author: Optional author who added the assumption.
+        assumption_type: Type of assumption (constraint, requirement). For API compatibility.
+        author: Optional author. For API compatibility.
         specs_dir: Path to specs directory (auto-detected if not provided).
 
     Returns:
         Tuple of (result_dict, error_message).
-        On success: ({"spec_id": ..., "assumption_id": ..., ...}, None)
+        On success: ({"spec_id": ..., "text": ..., ...}, None)
         On failure: (None, "error message")
     """
-    # Validate assumption_type
+    # Validate assumption_type (for API compatibility)
     if assumption_type not in ASSUMPTION_TYPES:
         return None, f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}"
 
@@ -811,34 +815,18 @@ def add_assumption(
 
     assumptions = spec_data["metadata"]["assumptions"]
 
-    # Generate assumption ID (a-1, a-2, etc.)
-    existing_ids = []
-    for a in assumptions:
-        if isinstance(a, dict) and "id" in a:
-            try:
-                # Extract number from "a-N" format
-                num = int(a["id"].split("-")[1])
-                existing_ids.append(num)
-            except (IndexError, ValueError):
-                pass
-    next_num = max(existing_ids, default=0) + 1
-    assumption_id = f"a-{next_num}"
+    # Schema expects strings, so store text directly
+    assumption_text = text.strip()
 
-    # Create assumption entry
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    assumption = {
-        "id": assumption_id,
-        "text": text.strip(),
-        "type": assumption_type,
-        "added": now,
-    }
-    if author:
-        assumption["author"] = author
+    # Check for duplicates
+    if assumption_text in assumptions:
+        return None, f"Assumption already exists: {assumption_text[:50]}..."
 
-    # Add to assumptions array
-    assumptions.append(assumption)
+    # Add to assumptions array (as string per schema)
+    assumptions.append(assumption_text)
 
     # Update last_updated
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     spec_data["last_updated"] = now
 
     # Save the spec
@@ -846,11 +834,84 @@ def add_assumption(
     if not success:
         return None, "Failed to save specification"
 
+    # Return index as "ID" for API compatibility
+    assumption_index = len(assumptions)
+
     return {
         "spec_id": spec_id,
-        "assumption_id": assumption_id,
-        "text": text.strip(),
+        "assumption_id": f"a-{assumption_index}",
+        "text": assumption_text,
         "type": assumption_type,
         "author": author,
-        "added": now,
+        "index": assumption_index,
+    }, None
+
+
+def list_assumptions(
+    spec_id: str,
+    assumption_type: Optional[str] = None,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    List assumptions from a specification.
+
+    Args:
+        spec_id: Specification ID to list assumptions from.
+        assumption_type: Optional filter by type (constraint, requirement).
+            Note: Since assumptions are stored as strings, this filter is
+            provided for API compatibility but has no effect.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "assumptions": [...], ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate assumption_type if provided
+    if assumption_type and assumption_type not in ASSUMPTION_TYPES:
+        return None, f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    # Get assumptions from metadata
+    assumptions = spec_data.get("metadata", {}).get("assumptions", [])
+
+    # Build assumption list with indices
+    assumption_list = []
+    for i, assumption in enumerate(assumptions, 1):
+        if isinstance(assumption, str):
+            assumption_list.append({
+                "id": f"a-{i}",
+                "text": assumption,
+                "index": i,
+            })
+        elif isinstance(assumption, dict):
+            # Handle legacy object format
+            assumption_list.append({
+                "id": assumption.get("id", f"a-{i}"),
+                "text": assumption.get("text", str(assumption)),
+                "type": assumption.get("type"),
+                "author": assumption.get("author"),
+                "index": i,
+            })
+
+    return {
+        "spec_id": spec_id,
+        "assumptions": assumption_list,
+        "total_count": len(assumption_list),
+        "filter_type": assumption_type,
     }, None
