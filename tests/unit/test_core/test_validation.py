@@ -11,6 +11,8 @@ from foundry_mcp.core.validation import (
     get_fix_actions,
     apply_fixes,
     calculate_stats,
+    add_verification,
+    execute_verification,
     Diagnostic,
     ValidationResult,
     FixAction,
@@ -18,6 +20,7 @@ from foundry_mcp.core.validation import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_VERIFICATION_TYPES,
+    VERIFICATION_RESULTS,
 )
 
 
@@ -379,3 +382,282 @@ class TestValidationConstants:
         assert "auto" in VALID_VERIFICATION_TYPES
         assert "manual" in VALID_VERIFICATION_TYPES
         assert "fidelity" in VALID_VERIFICATION_TYPES
+
+
+class TestAddVerification:
+    """Tests for add_verification function."""
+
+    @pytest.fixture
+    def spec_with_verify_node(self):
+        """Return a spec with a verify node for testing."""
+        return {
+            "spec_id": "test-spec-2025-01-01-001",
+            "generated": "2025-01-01T00:00:00Z",
+            "last_updated": "2025-01-01T00:00:00Z",
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Test Spec",
+                    "status": "pending",
+                    "parent": None,
+                    "children": ["verify-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                },
+                "verify-1": {
+                    "type": "verify",
+                    "title": "Test Verification",
+                    "status": "pending",
+                    "parent": "spec-root",
+                    "children": [],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {"verification_type": "auto", "command": "echo test"},
+                },
+            },
+        }
+
+    def test_add_verification_success(self, spec_with_verify_node):
+        """Test successful verification result addition."""
+        success, error = add_verification(
+            spec_data=spec_with_verify_node,
+            verify_id="verify-1",
+            result="PASSED",
+            command="echo test",
+            output="test output",
+        )
+        assert success is True
+        assert error is None
+
+        # Check metadata was updated
+        metadata = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"]
+        assert metadata["last_result"] == "PASSED"
+        assert "last_verified_at" in metadata
+        assert len(metadata["verification_history"]) == 1
+
+    def test_add_verification_invalid_result(self, spec_with_verify_node):
+        """Test that invalid result values are rejected."""
+        success, error = add_verification(
+            spec_data=spec_with_verify_node,
+            verify_id="verify-1",
+            result="INVALID",
+        )
+        assert success is False
+        assert "Invalid result" in error
+
+    def test_add_verification_node_not_found(self, spec_with_verify_node):
+        """Test error when verify node doesn't exist."""
+        success, error = add_verification(
+            spec_data=spec_with_verify_node,
+            verify_id="nonexistent",
+            result="PASSED",
+        )
+        assert success is False
+        assert "not found" in error
+
+    def test_add_verification_wrong_node_type(self, spec_with_verify_node):
+        """Test error when node is not a verify type."""
+        spec_with_verify_node["hierarchy"]["verify-1"]["type"] = "task"
+        success, error = add_verification(
+            spec_data=spec_with_verify_node,
+            verify_id="verify-1",
+            result="PASSED",
+        )
+        assert success is False
+        assert "expected 'verify'" in error
+
+    def test_add_verification_history_limit(self, spec_with_verify_node):
+        """Test that verification history is limited to 10 entries."""
+        for i in range(15):
+            add_verification(
+                spec_data=spec_with_verify_node,
+                verify_id="verify-1",
+                result="PASSED",
+            )
+
+        metadata = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"]
+        assert len(metadata["verification_history"]) == 10
+
+    def test_add_verification_with_all_fields(self, spec_with_verify_node):
+        """Test verification with all optional fields."""
+        success, error = add_verification(
+            spec_data=spec_with_verify_node,
+            verify_id="verify-1",
+            result="PARTIAL",
+            command="pytest tests/",
+            output="5 passed, 2 failed",
+            issues="Test failures in auth module",
+            notes="Needs investigation",
+        )
+        assert success is True
+
+        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"]["verification_history"]
+        entry = history[0]
+        assert entry["result"] == "PARTIAL"
+        assert entry["command"] == "pytest tests/"
+        assert entry["output"] == "5 passed, 2 failed"
+        assert entry["issues"] == "Test failures in auth module"
+        assert entry["notes"] == "Needs investigation"
+
+
+class TestExecuteVerification:
+    """Tests for execute_verification function."""
+
+    @pytest.fixture
+    def spec_with_echo_command(self):
+        """Return a spec with a verify node that echoes a message."""
+        return {
+            "spec_id": "test-spec-2025-01-01-001",
+            "generated": "2025-01-01T00:00:00Z",
+            "last_updated": "2025-01-01T00:00:00Z",
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Test Spec",
+                    "status": "pending",
+                    "parent": None,
+                    "children": ["verify-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                },
+                "verify-1": {
+                    "type": "verify",
+                    "title": "Echo Verification",
+                    "status": "pending",
+                    "parent": "spec-root",
+                    "children": [],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {"verification_type": "auto", "command": "echo hello world"},
+                },
+            },
+        }
+
+    @pytest.fixture
+    def spec_with_failing_command(self):
+        """Return a spec with a verify node that has a failing command."""
+        return {
+            "spec_id": "test-spec-2025-01-01-001",
+            "generated": "2025-01-01T00:00:00Z",
+            "last_updated": "2025-01-01T00:00:00Z",
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Test Spec",
+                    "status": "pending",
+                    "parent": None,
+                    "children": ["verify-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                },
+                "verify-1": {
+                    "type": "verify",
+                    "title": "Failing Verification",
+                    "status": "pending",
+                    "parent": "spec-root",
+                    "children": [],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {"verification_type": "auto", "command": "exit 1"},
+                },
+            },
+        }
+
+    def test_execute_verification_success(self, spec_with_echo_command):
+        """Test successful command execution."""
+        result = execute_verification(spec_with_echo_command, "verify-1")
+        assert result["success"] is True
+        assert result["result"] == "PASSED"
+        assert result["exit_code"] == 0
+        assert "hello world" in result["output"]
+        assert result["command"] == "echo hello world"
+
+    def test_execute_verification_failing_command(self, spec_with_failing_command):
+        """Test execution of a failing command."""
+        result = execute_verification(spec_with_failing_command, "verify-1")
+        assert result["success"] is True  # Execution completed, even if result is FAILED
+        assert result["result"] == "FAILED"
+        assert result["exit_code"] == 1
+
+    def test_execute_verification_node_not_found(self, spec_with_echo_command):
+        """Test error when verify node doesn't exist."""
+        result = execute_verification(spec_with_echo_command, "nonexistent")
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
+    def test_execute_verification_wrong_node_type(self, spec_with_echo_command):
+        """Test error when node is not a verify type."""
+        spec_with_echo_command["hierarchy"]["verify-1"]["type"] = "task"
+        result = execute_verification(spec_with_echo_command, "verify-1")
+        assert result["success"] is False
+        assert "expected 'verify'" in result["error"]
+
+    def test_execute_verification_no_command(self, spec_with_echo_command):
+        """Test error when no command is defined."""
+        del spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"]
+        result = execute_verification(spec_with_echo_command, "verify-1")
+        assert result["success"] is False
+        assert "No command defined" in result["error"]
+
+    def test_execute_verification_with_record(self, spec_with_echo_command):
+        """Test that results are recorded when record=True."""
+        result = execute_verification(spec_with_echo_command, "verify-1", record=True)
+        assert result["success"] is True
+        assert result["recorded"] is True
+
+        # Check the verification was recorded
+        metadata = spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]
+        assert metadata["last_result"] == "PASSED"
+        assert len(metadata["verification_history"]) == 1
+
+    def test_execute_verification_without_record(self, spec_with_echo_command):
+        """Test that results are not recorded when record=False."""
+        result = execute_verification(spec_with_echo_command, "verify-1", record=False)
+        assert result["success"] is True
+        assert result["recorded"] is False
+
+        # Check no verification was recorded
+        metadata = spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]
+        assert "last_result" not in metadata
+        assert "verification_history" not in metadata
+
+    def test_execute_verification_timeout(self, spec_with_echo_command):
+        """Test command timeout handling."""
+        # Change command to sleep longer than timeout
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "sleep 5"
+        result = execute_verification(spec_with_echo_command, "verify-1", timeout=1)
+        assert "timed out" in result["error"]
+        assert result["result"] == "FAILED"
+        assert result["exit_code"] == -1
+
+    def test_execute_verification_invalid_hierarchy(self):
+        """Test error with invalid hierarchy."""
+        result = execute_verification({"spec_id": "test"}, "verify-1")
+        assert result["success"] is False
+        assert "missing or invalid hierarchy" in result["error"]
+
+    def test_execute_verification_returns_spec_id(self, spec_with_echo_command):
+        """Test that result includes spec_id."""
+        result = execute_verification(spec_with_echo_command, "verify-1")
+        assert result["spec_id"] == "test-spec-2025-01-01-001"
+
+    def test_execute_verification_captures_stderr(self, spec_with_echo_command):
+        """Test that stderr is captured."""
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "echo error >&2"
+        result = execute_verification(spec_with_echo_command, "verify-1")
+        assert result["success"] is True
+        assert "[stderr]" in result["output"]
+        assert "error" in result["output"]
+
+
+class TestVerificationConstants:
+    """Tests for verification constants."""
+
+    def test_verification_results_constant(self):
+        """Test that verification results constant is defined."""
+        assert "PASSED" in VERIFICATION_RESULTS
+        assert "FAILED" in VERIFICATION_RESULTS
+        assert "PARTIAL" in VERIFICATION_RESULTS

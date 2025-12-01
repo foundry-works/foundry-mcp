@@ -1638,3 +1638,157 @@ def add_verification(
     metadata["last_verified_at"] = verification_entry["timestamp"]
 
     return True, None
+
+
+def execute_verification(
+    spec_data: Dict[str, Any],
+    verify_id: str,
+    record: bool = False,
+    timeout: int = 300,
+    cwd: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Execute verification command and capture results.
+
+    Runs the verification command defined in a verify node's metadata
+    and captures output, exit code, and result status.
+
+    Args:
+        spec_data: The loaded spec data dict.
+        verify_id: Verification node ID (e.g., verify-1-1).
+        record: If True, automatically record result to spec using add_verification().
+        timeout: Command timeout in seconds (default: 300).
+        cwd: Working directory for command execution (default: current directory).
+
+    Returns:
+        Dict with execution results:
+        - success: Whether execution completed (not result status)
+        - spec_id: The specification ID
+        - verify_id: The verification ID
+        - result: Execution result (PASSED, FAILED, PARTIAL)
+        - command: Command that was executed
+        - output: Combined stdout/stderr output
+        - exit_code: Command exit code
+        - recorded: Whether result was recorded to spec
+        - error: Error message if execution failed
+
+    Example:
+        >>> result = execute_verification(spec_data, "verify-1-1", record=True)
+        >>> if result["success"]:
+        ...     print(f"Verification {result['result']}: {result['exit_code']}")
+    """
+    import subprocess
+
+    response: Dict[str, Any] = {
+        "success": False,
+        "spec_id": spec_data.get("spec_id", "unknown"),
+        "verify_id": verify_id,
+        "result": None,
+        "command": None,
+        "output": None,
+        "exit_code": None,
+        "recorded": False,
+        "error": None,
+    }
+
+    # Get hierarchy
+    hierarchy = spec_data.get("hierarchy")
+    if not hierarchy or not isinstance(hierarchy, dict):
+        response["error"] = "Invalid spec data: missing or invalid hierarchy"
+        return response
+
+    # Find the verify node
+    node = hierarchy.get(verify_id)
+    if node is None:
+        response["error"] = f"Verification node '{verify_id}' not found"
+        return response
+
+    # Validate node type
+    node_type = node.get("type")
+    if node_type != "verify":
+        response["error"] = f"Node '{verify_id}' is type '{node_type}', expected 'verify'"
+        return response
+
+    # Get command from metadata
+    metadata = node.get("metadata", {})
+    command = metadata.get("command")
+
+    if not command:
+        response["error"] = f"No command defined in verify node '{verify_id}' metadata"
+        return response
+
+    response["command"] = command
+
+    # Execute the command
+    try:
+        proc = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd,
+        )
+
+        exit_code = proc.returncode
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+
+        # Combine output
+        output_parts = []
+        if stdout.strip():
+            output_parts.append(stdout.strip())
+        if stderr.strip():
+            output_parts.append(f"[stderr]\n{stderr.strip()}")
+        output = "\n".join(output_parts) if output_parts else "(no output)"
+
+        # Truncate if too long
+        if len(output) > MAX_STRING_LENGTH:
+            output = output[:MAX_STRING_LENGTH] + "\n... (truncated)"
+
+        response["exit_code"] = exit_code
+        response["output"] = output
+
+        # Determine result based on exit code
+        if exit_code == 0:
+            result = "PASSED"
+        else:
+            result = "FAILED"
+
+        response["result"] = result
+        response["success"] = True
+
+        # Optionally record result to spec
+        if record:
+            record_success, record_error = add_verification(
+                spec_data=spec_data,
+                verify_id=verify_id,
+                result=result,
+                command=command,
+                output=output,
+            )
+            if record_success:
+                response["recorded"] = True
+            else:
+                response["recorded"] = False
+                # Don't fail the whole operation, just note the recording failed
+                if response.get("error"):
+                    response["error"] += f"; Recording failed: {record_error}"
+                else:
+                    response["error"] = f"Recording failed: {record_error}"
+
+    except subprocess.TimeoutExpired:
+        response["error"] = f"Command timed out after {timeout} seconds"
+        response["result"] = "FAILED"
+        response["exit_code"] = -1
+        response["output"] = f"Command timed out after {timeout} seconds"
+
+    except subprocess.SubprocessError as e:
+        response["error"] = f"Command execution failed: {e}"
+        response["result"] = "FAILED"
+
+    except Exception as e:
+        response["error"] = f"Unexpected error: {e}"
+        response["result"] = "FAILED"
+
+    return response
