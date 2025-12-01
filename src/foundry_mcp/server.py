@@ -14,6 +14,15 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import get_config, ServerConfig
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.pagination import (
+    encode_cursor,
+    decode_cursor,
+    paginated_response,
+    normalize_page_size,
+    CursorError,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+)
 from foundry_mcp.core.discovery import get_capabilities, get_tool_registry
 from foundry_mcp.core.feature_flags import get_flag_service
 from foundry_mcp.core.naming import canonical_tool
@@ -297,6 +306,8 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         spec_id: str,
         max_depth: int = 2,
         include_metadata: bool = False,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
     ) -> dict:
         """
         Get the full hierarchy of a specification.
@@ -305,6 +316,8 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             spec_id: Specification ID
             max_depth: Maximum depth to traverse (0=unlimited, default=2 for phases+tasks)
             include_metadata: Include full metadata for each node (default=False for compact output)
+            limit: Number of nodes per page (default: 100, max: 1000)
+            cursor: Pagination cursor from previous response
 
         Returns:
             Dict with hierarchy data
@@ -319,6 +332,24 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 )
             )
 
+        # Normalize page size
+        page_size = normalize_page_size(limit)
+
+        # Decode cursor if provided
+        start_after_id = None
+        if cursor:
+            try:
+                cursor_data = decode_cursor(cursor)
+                start_after_id = cursor_data.get("last_id")
+            except CursorError as e:
+                return asdict(
+                    error_response(
+                        f"Invalid cursor: {e.reason}",
+                        code="INVALID_CURSOR",
+                        details={"cursor": cursor},
+                    )
+                )
+
         specs_dir = config.specs_dir or find_specs_directory()
         spec_data = load_spec(spec_id, specs_dir)
 
@@ -329,29 +360,54 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
         full_node_count = len(full_hierarchy)
 
         # Apply depth and metadata filtering for compact output
-        warnings = []
         if max_depth > 0 or not include_metadata:
-            hierarchy = _filter_hierarchy(full_hierarchy, max_depth, include_metadata)
-            filtered_count = len(hierarchy)
-            if filtered_count < full_node_count:
-                warnings.append(
-                    f"Response filtered: {filtered_count}/{full_node_count} nodes returned "
-                    f"(max_depth={max_depth}). Use max_depth=0 for full hierarchy."
-                )
+            filtered_hierarchy = _filter_hierarchy(full_hierarchy, max_depth, include_metadata)
         else:
-            hierarchy = full_hierarchy
+            filtered_hierarchy = full_hierarchy
 
-        return asdict(
-            success_response(
-                spec_id=spec_id,
-                hierarchy=hierarchy,
-                node_count=len(hierarchy),
-                filters_applied={
+        filtered_count = len(filtered_hierarchy)
+
+        # Sort node IDs for consistent pagination order
+        sorted_ids = sorted(filtered_hierarchy.keys())
+
+        # Find starting position from cursor
+        start_index = 0
+        if start_after_id:
+            try:
+                start_index = sorted_ids.index(start_after_id) + 1
+            except ValueError:
+                # Cursor points to non-existent node (maybe filtered out)
+                start_index = 0
+
+        # Get page of nodes (fetch one extra to detect has_more)
+        page_ids = sorted_ids[start_index : start_index + page_size + 1]
+        has_more = len(page_ids) > page_size
+        if has_more:
+            page_ids = page_ids[:page_size]
+
+        # Build paginated hierarchy
+        hierarchy = {node_id: filtered_hierarchy[node_id] for node_id in page_ids}
+
+        # Build next cursor if more pages exist
+        next_cursor = None
+        if has_more and page_ids:
+            next_cursor = encode_cursor({"last_id": page_ids[-1]})
+
+        return paginated_response(
+            data={
+                "spec_id": spec_id,
+                "hierarchy": hierarchy,
+                "node_count": len(hierarchy),
+                "total_nodes": filtered_count,
+                "filters_applied": {
                     "max_depth": max_depth,
                     "include_metadata": include_metadata,
                 },
-                warnings=warnings if warnings else None,
-            )
+            },
+            cursor=next_cursor,
+            has_more=has_more,
+            page_size=page_size,
+            total_count=filtered_count,
         )
 
     @canonical_tool(

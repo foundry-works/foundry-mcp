@@ -258,6 +258,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         function_name: str,
         direction: str = "both",
         max_depth: int = 3,
+        max_results: int = 100,
         workspace: Optional[str] = None,
     ) -> dict:
         """
@@ -269,12 +270,16 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
             function_name: Function to trace from
             direction: "callers" (who calls this), "callees" (what this calls), or "both"
             max_depth: Maximum traversal depth (default: 3)
+            max_results: Maximum number of call graph entries to return (default: 100)
             workspace: Optional workspace path (defaults to config)
 
         Returns:
             JSON object with call graph entries
         """
         try:
+            # Validate and cap max_results
+            max_results = min(max(1, max_results), 1000)
+
             query = _get_query(workspace)
             if not query.load():
                 return asdict(
@@ -288,10 +293,18 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error))
 
+            # Limit results
+            all_results = result.results
+            total_count = len(all_results)
+            truncated = total_count > max_results
+            limited_results = all_results[:max_results]
+
             return asdict(
                 success_response(
                     query_type=result.query_type,
-                    count=result.count,
+                    count=len(limited_results),
+                    total_count=total_count,
+                    truncated=truncated,
                     results=[
                         {
                             "caller": entry.caller,
@@ -299,7 +312,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
                             "caller_file": entry.caller_file,
                             "callee_file": entry.callee_file,
                         }
-                        for entry in result.results
+                        for entry in limited_results
                     ],
                     metadata=result.metadata,
                 )
@@ -317,6 +330,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         target: str,
         target_type: str = "auto",
         max_depth: int = 3,
+        max_impacts: int = 100,
         workspace: Optional[str] = None,
     ) -> dict:
         """
@@ -329,12 +343,16 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
             target: Name of class or function to analyze
             target_type: "class", "function", or "auto" (detect from name)
             max_depth: Maximum depth for impact propagation (default: 3)
+            max_impacts: Maximum number of impacts to return in each category (default: 100)
             workspace: Optional workspace path (defaults to config)
 
         Returns:
             JSON object with impact analysis
         """
         try:
+            # Validate and cap max_impacts
+            max_impacts = min(max(1, max_impacts), 1000)
+
             query = _get_query(workspace)
             if not query.load():
                 return asdict(
@@ -347,15 +365,31 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if result.success and result.results:
                 impact = result.results[0]
+
+                # Limit impact lists
+                direct = impact.direct_impacts or []
+                indirect = impact.indirect_impacts or []
+                files = impact.affected_files or []
+
+                direct_truncated = len(direct) > max_impacts
+                indirect_truncated = len(indirect) > max_impacts
+                files_truncated = len(files) > max_impacts
+
                 return asdict(
                     success_response(
                         query_type=result.query_type,
                         target=impact.target,
                         target_type=impact.target_type,
                         impact_score=impact.impact_score,
-                        direct_impacts=impact.direct_impacts,
-                        indirect_impacts=impact.indirect_impacts,
-                        affected_files=impact.affected_files,
+                        direct_impacts=direct[:max_impacts],
+                        direct_impacts_total=len(direct),
+                        direct_impacts_truncated=direct_truncated,
+                        indirect_impacts=indirect[:max_impacts],
+                        indirect_impacts_total=len(indirect),
+                        indirect_impacts_truncated=indirect_truncated,
+                        affected_files=files[:max_impacts],
+                        affected_files_total=len(files),
+                        affected_files_truncated=files_truncated,
                         metadata=result.metadata,
                     )
                 )
@@ -373,19 +407,25 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         canonical_name="code-get-callers",
     )
     def code_get_callers(
-        function_name: str, workspace: Optional[str] = None
+        function_name: str,
+        max_results: int = 100,
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Get functions that call the specified function.
 
         Args:
             function_name: Function to find callers for
+            max_results: Maximum number of callers to return (default: 100)
             workspace: Optional workspace path (defaults to config)
 
         Returns:
             JSON object with caller functions
         """
         try:
+            # Validate and cap max_results
+            max_results = min(max(1, max_results), 1000)
+
             query = _get_query(workspace)
             if not query.load():
                 return asdict(
@@ -399,17 +439,25 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error))
 
+            # Limit results
+            all_results = result.results
+            total_count = len(all_results)
+            truncated = total_count > max_results
+            limited_results = all_results[:max_results]
+
             return asdict(
                 success_response(
                     query_type=result.query_type,
-                    count=result.count,
-                    callers=[r.name for r in result.results],
+                    count=len(limited_results),
+                    total_count=total_count,
+                    truncated=truncated,
+                    callers=[r.name for r in limited_results],
                     results=[
                         {
                             "name": r.name,
                             "file_path": r.file_path,
                         }
-                        for r in result.results
+                        for r in limited_results
                     ],
                     metadata=result.metadata,
                 )
@@ -424,19 +472,25 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
         canonical_name="code-get-callees",
     )
     def code_get_callees(
-        function_name: str, workspace: Optional[str] = None
+        function_name: str,
+        max_results: int = 100,
+        workspace: Optional[str] = None,
     ) -> dict:
         """
         Get functions called by the specified function.
 
         Args:
             function_name: Function to find callees for
+            max_results: Maximum number of callees to return (default: 100)
             workspace: Optional workspace path (defaults to config)
 
         Returns:
             JSON object with callee functions
         """
         try:
+            # Validate and cap max_results
+            max_results = min(max(1, max_results), 1000)
+
             query = _get_query(workspace)
             if not query.load():
                 return asdict(
@@ -450,17 +504,25 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not result.success:
                 return asdict(error_response(result.error))
 
+            # Limit results
+            all_results = result.results
+            total_count = len(all_results)
+            truncated = total_count > max_results
+            limited_results = all_results[:max_results]
+
             return asdict(
                 success_response(
                     query_type=result.query_type,
-                    count=result.count,
-                    callees=[r.name for r in result.results],
+                    count=len(limited_results),
+                    total_count=total_count,
+                    truncated=truncated,
+                    callees=[r.name for r in limited_results],
                     results=[
                         {
                             "name": r.name,
                             "file_path": r.file_path,
                         }
-                        for r in result.results
+                        for r in limited_results
                     ],
                     metadata=result.metadata,
                 )

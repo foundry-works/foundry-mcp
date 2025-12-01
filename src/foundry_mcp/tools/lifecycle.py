@@ -12,6 +12,13 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.pagination import (
+    encode_cursor,
+    decode_cursor,
+    paginated_response,
+    normalize_page_size,
+    CursorError,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.lifecycle import (
@@ -273,7 +280,10 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         canonical_name="spec-list-by-folder",
     )
     def spec_list_by_folder(
-        folder: Optional[str] = None, workspace: Optional[str] = None
+        folder: Optional[str] = None,
+        workspace: Optional[str] = None,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
     ) -> dict:
         """
         List specifications organized by folder.
@@ -281,6 +291,8 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Args:
             folder: Optional filter to specific folder (pending, active, completed, archived)
             workspace: Optional workspace path
+            limit: Number of specs per page (default: 100, max: 1000)
+            cursor: Pagination cursor from previous response
 
         Returns:
             JSON object with specs organized by folder
@@ -301,16 +313,64 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     )
                 )
 
+            # Normalize page size
+            page_size = normalize_page_size(limit)
+
+            # Decode cursor if provided
+            start_after_id = None
+            if cursor:
+                try:
+                    cursor_data = decode_cursor(cursor)
+                    start_after_id = cursor_data.get("last_id")
+                except CursorError as e:
+                    return asdict(
+                        error_response(
+                            f"Invalid cursor: {e.reason}",
+                            code="INVALID_CURSOR",
+                            details={"cursor": cursor},
+                        )
+                    )
+
             result = list_specs_by_folder(specs_dir, folder)
 
-            # Calculate totals
-            total_specs = sum(len(specs) for specs in result.values())
+            # Flatten specs with folder info for pagination
+            all_specs = []
+            for folder_name, specs in result.items():
+                for spec in specs:
+                    all_specs.append({**spec, "folder": folder_name})
 
-            return asdict(
-                success_response(
-                    total_specs=total_specs,
-                    folders=result,
-                )
+            # Sort for consistent pagination
+            all_specs.sort(key=lambda s: s.get("spec_id", ""))
+            total_count = len(all_specs)
+
+            # Find starting position from cursor
+            start_index = 0
+            if start_after_id:
+                for i, spec in enumerate(all_specs):
+                    if spec.get("spec_id") == start_after_id:
+                        start_index = i + 1
+                        break
+
+            # Get page of specs (fetch one extra to detect has_more)
+            page_specs = all_specs[start_index : start_index + page_size + 1]
+            has_more = len(page_specs) > page_size
+            if has_more:
+                page_specs = page_specs[:page_size]
+
+            # Build next cursor if more pages exist
+            next_cursor = None
+            if has_more and page_specs:
+                next_cursor = encode_cursor({"last_id": page_specs[-1].get("spec_id")})
+
+            return paginated_response(
+                data={
+                    "specs": page_specs,
+                    "filter": {"folder": folder} if folder else None,
+                },
+                cursor=next_cursor,
+                has_more=has_more,
+                page_size=page_size,
+                total_count=total_count,
             )
 
         except Exception as e:

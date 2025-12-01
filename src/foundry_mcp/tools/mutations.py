@@ -29,6 +29,8 @@ from foundry_mcp.core.resilience import (
     CircuitBreakerError,
     MEDIUM_TIMEOUT,
 )
+from foundry_mcp.core.modifications import apply_modifications, load_modifications_file
+from foundry_mcp.core.spec import find_specs_directory
 
 logger = logging.getLogger(__name__)
 
@@ -178,18 +180,6 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Provide a path to the modifications JSON file",
                 ))
 
-            # Build command
-            cmd = ["foundry-cli", "apply-modifications", spec_id, "--from", modifications_file, "--json"]
-
-            if dry_run:
-                cmd.append("--dry-run")
-
-            if output_file:
-                cmd.extend(["--output", output_file])
-
-            if path:
-                cmd.extend(["--path", path])
-
             # Log the operation
             audit_log(
                 "tool_invocation",
@@ -200,117 +190,79 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 dry_run=dry_run,
             )
 
-            # Execute the command with resilience
-            result = _run_sdd_command(cmd, tool_name)
-
-            # Parse the JSON output
-            if result.returncode == 0:
-                try:
-                    output_data = json.loads(result.stdout) if result.stdout.strip() else {}
-                except json.JSONDecodeError:
-                    output_data = {}
-
-                # Build response data
-                data: Dict[str, Any] = {
-                    "spec_id": spec_id,
-                    "modifications_applied": output_data.get("modifications_applied", output_data.get("applied", 0)),
-                    "modifications_skipped": output_data.get("modifications_skipped", output_data.get("skipped", 0)),
-                    "dry_run": dry_run,
-                }
-
-                # Include changes array if available
-                if "changes" in output_data:
-                    data["changes"] = output_data["changes"]
-                elif "modifications" in output_data:
-                    data["changes"] = output_data["modifications"]
-
-                # Include output path
-                if output_file:
-                    data["output_path"] = output_file
-                elif "output_path" in output_data:
-                    data["output_path"] = output_data["output_path"]
-
-                # Include any warnings
-                warnings = []
-                if output_data.get("warnings"):
-                    warnings = output_data["warnings"]
-                if output_data.get("modifications_skipped", 0) > 0:
-                    warnings.append(f"{output_data.get('modifications_skipped', 0)} modifications were skipped")
-
-                # Track metrics
-                _metrics.counter(f"mutations.{tool_name}", labels={"status": "success", "dry_run": str(dry_run)})
-
-                if warnings:
-                    return asdict(success_response(data, warnings=warnings))
-                return asdict(success_response(data))
-            else:
-                # Command failed
-                error_msg = result.stderr.strip() if result.stderr else "Command failed"
-                _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
-
-                # Check for common errors
-                if "not found" in error_msg.lower():
-                    if "spec" in error_msg.lower():
-                        return asdict(error_response(
-                            f"Specification '{spec_id}' not found",
-                            error_code="SPEC_NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the spec ID exists using spec-list",
-                        ))
-                    elif "modifications" in error_msg.lower() or "file" in error_msg.lower():
-                        return asdict(error_response(
-                            f"Modifications file not found: {modifications_file}",
-                            error_code="FILE_NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the modifications file path exists",
-                        ))
-
-                if "invalid" in error_msg.lower() and "json" in error_msg.lower():
-                    return asdict(error_response(
-                        "Invalid modifications JSON format",
-                        error_code="VALIDATION_ERROR",
-                        error_type="validation",
-                        remediation="Ensure the modifications file contains valid JSON",
-                    ))
-
-                if "schema" in error_msg.lower() or "validation" in error_msg.lower():
-                    return asdict(error_response(
-                        f"Modifications file failed validation: {error_msg}",
-                        error_code="SCHEMA_ERROR",
-                        error_type="validation",
-                        remediation="Check that modifications follow the expected schema",
-                    ))
-
+            # Load modifications from file
+            try:
+                modifications = load_modifications_file(modifications_file)
+            except FileNotFoundError:
+                _metrics.counter(f"mutations.{tool_name}", labels={"status": "file_not_found"})
                 return asdict(error_response(
-                    f"Failed to apply modifications: {error_msg}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec exists and modifications file is valid",
+                    f"Modifications file not found: {modifications_file}",
+                    error_code="FILE_NOT_FOUND",
+                    error_type="not_found",
+                    remediation="Verify the modifications file path exists",
+                ))
+            except json.JSONDecodeError as e:
+                _metrics.counter(f"mutations.{tool_name}", labels={"status": "invalid_json"})
+                return asdict(error_response(
+                    f"Invalid modifications JSON format: {str(e)}",
+                    error_code="VALIDATION_ERROR",
+                    error_type="validation",
+                    remediation="Ensure the modifications file contains valid JSON",
                 ))
 
-        except CircuitBreakerError as e:
-            return asdict(error_response(
-                str(e),
-                error_code="CIRCUIT_OPEN",
-                error_type="unavailable",
-                remediation=f"SDD CLI has failed repeatedly. Wait {e.retry_after:.0f}s before retrying.",
-            ))
-        except subprocess.TimeoutExpired:
-            _metrics.counter(f"mutations.{tool_name}", labels={"status": "timeout"})
-            return asdict(error_response(
-                f"Command timed out after {CLI_TIMEOUT} seconds",
-                error_code="TIMEOUT",
-                error_type="unavailable",
-                remediation="Try again or check system resources",
-            ))
-        except FileNotFoundError:
-            _metrics.counter(f"mutations.{tool_name}", labels={"status": "cli_not_found"})
-            return asdict(error_response(
-                "SDD CLI not found in PATH",
-                error_code="CLI_NOT_FOUND",
-                error_type="internal",
-                remediation="Ensure SDD CLI is installed and available in PATH",
-            ))
+            # Find specs directory
+            specs_dir = find_specs_directory(path)
+            if not specs_dir:
+                _metrics.counter(f"mutations.{tool_name}", labels={"status": "specs_not_found"})
+                return asdict(error_response(
+                    "Could not find specs directory",
+                    error_code="SPECS_NOT_FOUND",
+                    error_type="not_found",
+                    remediation="Ensure you are in a project with a specs/ directory",
+                ))
+
+            # Apply modifications using direct Python API
+            try:
+                applied, skipped, changes = apply_modifications(
+                    spec_id=spec_id,
+                    modifications=modifications,
+                    specs_dir=specs_dir,
+                    dry_run=dry_run,
+                )
+            except ValueError as e:
+                _metrics.counter(f"mutations.{tool_name}", labels={"status": "spec_not_found"})
+                return asdict(error_response(
+                    str(e),
+                    error_code="SPEC_NOT_FOUND",
+                    error_type="not_found",
+                    remediation="Verify the spec ID exists using spec-list",
+                ))
+
+            # Build response data
+            data: Dict[str, Any] = {
+                "spec_id": spec_id,
+                "modifications_applied": applied,
+                "modifications_skipped": skipped,
+                "changes": changes,
+                "dry_run": dry_run,
+            }
+
+            # Include output path if specified
+            if output_file:
+                data["output_path"] = output_file
+
+            # Include warnings if any modifications were skipped
+            warnings = []
+            if skipped > 0:
+                warnings.append(f"{skipped} modifications were skipped")
+
+            # Track metrics
+            _metrics.counter(f"mutations.{tool_name}", labels={"status": "success", "dry_run": str(dry_run)})
+
+            if warnings:
+                return asdict(success_response(data, warnings=warnings))
+            return asdict(success_response(data))
+
         except Exception as e:
             logger.exception("Unexpected error in spec-apply-plan")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})

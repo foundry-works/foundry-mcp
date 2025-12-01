@@ -1,0 +1,968 @@
+{
+  "spec_id": "internal-cli-elimination-2025-12-01-001",
+  "generated": "2025-12-01T12:00:00Z",
+  "last_updated": "2025-12-01T12:00:00Z",
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Internal CLI Subprocess Elimination",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3"
+      ],
+      "total_tasks": 31,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove foundry-cli subprocess calls from MCP tools by using direct Python APIs. This eliminates process overhead, PATH dependencies, fragile CLI output parsing, and simplifies testing.",
+        "objectives": [
+          "Extend core Python APIs to support all operations currently done via CLI",
+          "Refactor 7 tool files to use direct APIs instead of subprocess calls",
+          "Remove 27 subprocess calls to foundry-cli",
+          "Maintain backward compatibility and test coverage"
+        ],
+        "best_practice_refs": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/codebase_standards/cli-output.md",
+          "docs/cli_best_practices/README.md",
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/mcp_best_practices/13-tool-discovery.md"
+        ],
+        "assumptions": [
+          "CLI and MCP outputs stay JSON-first per docs/codebase_standards/cli-output.md.",
+          "Specs, docs, and tests must ship together as described in docs/mcp_best_practices/09-spec-driven-development.md.",
+          "All new APIs enforce validation and security boundaries up front per docs/mcp_best_practices/04-validation-input-hygiene.md and docs/mcp_best_practices/08-security-trust-boundaries.md."
+        ],
+        "revision_history": [
+          {
+            "version": "0.2.0",
+            "date": "2025-12-01T12:30:00Z",
+            "author": "spec-sync",
+            "changelog": "Expanded best-practice coverage, added rollout safeguards, and tightened verification commands."
+          }
+        ]
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Core API Extensions",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-1-files",
+        "phase-1-verify"
+      ],
+      "total_tasks": 16,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Extend existing core modules to support operations currently only available in CLI",
+        "risk_level": "medium",
+        "best_practice_refs": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5"
+      ],
+      "total_tasks": 14,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-1-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/spec.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-1-1",
+        "task-1-1-2",
+        "task-1-1-3",
+        "task-1-1-4",
+        "task-1-1-5"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/spec.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "description": "Add spec authoring APIs for create_spec, assumptions, revisions, and frontmatter",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1-1": {
+      "type": "subtask",
+      "title": "Add create_spec() function",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create new spec from template with generated spec_id"
+      }
+    },
+    "task-1-1-2": {
+      "type": "subtask",
+      "title": "Add add_assumption() function",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add assumption to spec's assumptions array"
+      }
+    },
+    "task-1-1-3": {
+      "type": "subtask",
+      "title": "Add list_assumptions() function",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "List assumptions from spec with optional type filter"
+      }
+    },
+    "task-1-1-4": {
+      "type": "subtask",
+      "title": "Add add_revision() function",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add revision entry to spec's revision_history array"
+      }
+    },
+    "task-1-1-5": {
+      "type": "subtask",
+      "title": "Add update_frontmatter() function",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update top-level metadata fields (title, status, version, etc.)"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/task.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-2-1",
+        "task-1-2-2",
+        "task-1-2-3",
+        "task-1-2-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/task.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "description": "Add task manipulation APIs for add, remove, and metadata updates",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-2-1": {
+      "type": "subtask",
+      "title": "Add add_task() function",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add new task to spec hierarchy under given parent"
+      }
+    },
+    "task-1-2-2": {
+      "type": "subtask",
+      "title": "Add remove_task() function",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove task from spec hierarchy with optional cascade"
+      }
+    },
+    "task-1-2-3": {
+      "type": "subtask",
+      "title": "Add update_estimate() function",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update task estimated_hours and complexity metadata"
+      }
+    },
+    "task-1-2-4": {
+      "type": "subtask",
+      "title": "Add update_task_metadata() function",
+      "status": "pending",
+      "parent": "task-1-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update arbitrary metadata fields on a task"
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/validation.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-3-1",
+        "task-1-3-2",
+        "task-1-3-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/validation.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "description": "Add verification management APIs",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3-1": {
+      "type": "subtask",
+      "title": "Add add_verification() function",
+      "status": "pending",
+      "parent": "task-1-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add verification result to a verify node"
+      }
+    },
+    "task-1-3-2": {
+      "type": "subtask",
+      "title": "Add execute_verification() function",
+      "status": "pending",
+      "parent": "task-1-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Execute verification command and capture results"
+      }
+    },
+    "task-1-3-3": {
+      "type": "subtask",
+      "title": "Add format_verification_summary() function",
+      "status": "pending",
+      "parent": "task-1-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Format verification results into human-readable summary"
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/journal.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/journal.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.5,
+        "description": "Add bulk_journal() function if not already present",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/rendering.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/rendering.py",
+        "task_category": "investigation",
+        "estimated_hours": 0.5,
+        "description": "Verify render_spec() is complete for documentation.py needs",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/cli_best_practices/README.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "verify-1-1",
+        "verify-1-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-1-files"
+        ],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Core APIs import without errors",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "PYTHONPATH=src python -c \"from foundry_mcp.core.spec import create_spec, add_assumption, list_assumptions, add_revision, update_frontmatter; from foundry_mcp.core.task import add_task, remove_task, update_estimate, update_task_metadata; print('All imports successful')\"",
+        "expected": "All imports successful",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/03-serialization-helpers.md"
+        ]
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Unit tests pass for new core APIs",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "PYTHONPATH=src pytest tests/unit/test_spec.py tests/unit/test_task.py tests/unit/test_validation.py -v --tb=short",
+        "expected": "All tests pass",
+        "best_practice_refs": [
+          "docs/guides/testing.md"
+        ]
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Tool Refactoring",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-2-files",
+        "phase-2-verify"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Replace subprocess calls with direct API calls in all 7 tool files",
+        "risk_level": "medium",
+        "best_practice_refs": [
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/13-tool-discovery.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-2-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "task-2-5",
+        "task-2-6",
+        "task-2-7"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-2-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/authoring.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/authoring.py",
+        "task_category": "refactoring",
+        "estimated_hours": 3,
+        "description": "Replace 8 subprocess calls: create, template, add-task, remove-task, add-assumption, list-assumptions, add-revision, update-frontmatter",
+        "best_practice_refs": [
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/13-tool-discovery.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/mutations.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/mutations.py",
+        "task_category": "refactoring",
+        "estimated_hours": 2.5,
+        "description": "Replace 6 subprocess calls: add-verification, execute-verify, format-verification-summary, update-estimate, update-task-metadata, sync-metadata",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/documentation.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/documentation.py",
+        "task_category": "refactoring",
+        "estimated_hours": 2,
+        "description": "Replace 4 subprocess calls: doc, render, llm-doc-gen, fidelity-review",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/13-tool-discovery.md",
+          "docs/cli_best_practices/README.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/pr_workflow.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/pr_workflow.py",
+        "task_category": "refactoring",
+        "estimated_hours": 1.5,
+        "description": "Replace 3 subprocess calls: create-pr, progress, get-journal",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/13-tool-discovery.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-5": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/analysis.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/analysis.py",
+        "task_category": "refactoring",
+        "estimated_hours": 1.5,
+        "description": "Replace 3 subprocess calls: analyze, parse-review, analyze-deps",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/13-tool-discovery.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-6": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/git_integration.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/git_integration.py",
+        "task_category": "refactoring",
+        "estimated_hours": 1,
+        "description": "Replace 2 subprocess calls: create-task-commit, bulk-journal",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/cli_best_practices/README.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-7": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/review.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/review.py",
+        "task_category": "refactoring",
+        "estimated_hours": 0.5,
+        "description": "Replace 1 subprocess call: review",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "verify-2-1",
+        "verify-2-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2-files"
+        ],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "No foundry-cli subprocess calls remain in tools",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "if rg -l 'foundry-cli' src/foundry_mcp/tools >/dev/null; then echo 'foundry-cli references remain'; exit 1; else echo 'no matches'; fi",
+        "expected": "no matches",
+        "best_practice_refs": [
+          "docs/cli_best_practices/README.md",
+          "docs/mcp_best_practices/07-error-semantics.md"
+        ]
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Tool tests pass",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "PYTHONPATH=src pytest tests/unit/test_authoring.py tests/unit/test_mutations.py tests/unit/test_analysis.py tests/unit/test_review.py -v --tb=short",
+        "expected": "All tests pass",
+        "best_practice_refs": [
+          "docs/guides/testing.md"
+        ]
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Cleanup & Testing",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-3-files",
+        "phase-3-verify"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Remove dead code, ensure full test coverage, verify no regressions",
+        "risk_level": "low",
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "phase-3-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-3-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Remove dead code and unused imports",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "refactoring",
+        "estimated_hours": 1,
+        "description": "Remove subprocess imports and any dead code from refactored tool files",
+        "file_path": "src/foundry_mcp/tools/",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Update/add unit tests for new core APIs",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "description": "Ensure all new core API functions have unit test coverage",
+        "file_path": "tests/unit/",
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "docs & changelog updates",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "description": "Update CLI + MCP documentation, changelog entries, and spec notes to reflect subprocess removal.",
+        "file_path": "docs/",
+        "best_practice_refs": [
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Refresh fixtures and parity assets",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "description": "Regenerate golden fixtures, parity specs, and capability manifests to match direct API usage.",
+        "file_path": "tests/fixtures/",
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "verify-3-1",
+        "verify-3-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-3-files"
+        ],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Full test suite passes",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "PYTHONPATH=src pytest tests/ -v --tb=short --ignore=tests/parity",
+        "expected": "All tests pass, no regressions",
+        "best_practice_refs": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md"
+        ]
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "No subprocess imports remain in tools",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "if rg -l 'import subprocess' src/foundry_mcp/tools >/dev/null; then echo 'subprocess imports remain'; exit 1; else echo 'no imports'; fi",
+        "expected": "no imports",
+        "best_practice_refs": [
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ]
+      }
+    }
+  },
+  "title": "Internal CLI Subprocess Elimination"
+}

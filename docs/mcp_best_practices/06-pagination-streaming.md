@@ -220,6 +220,128 @@ async def get_events_stream(
 }
 ```
 
+## Limit-Based Truncation vs Cursor Pagination
+
+Not all list operations require full cursor-based pagination. For some use cases, a simple `max_results` limit with truncation indicator is more appropriate.
+
+### Decision Matrix
+
+| Pattern | Use When | Example Tools |
+|---------|----------|---------------|
+| **Cursor pagination** | Sequential iteration needed, deterministic traversal, large ordered datasets | `spec-list`, `task-query`, `journal-list` |
+| **max_results limit** | Graph traversal, non-sequential data, "top N" use cases, bounded exploration | `code-trace-calls`, `code-impact-analysis` |
+
+### When to Use Limit-Based Truncation
+
+Choose `max_results` over cursor pagination when:
+
+1. **Graph/tree traversal** - Call graphs, dependency trees, impact analysis
+2. **Non-deterministic ordering** - Results don't have natural sort order
+3. **"Top N" queries** - User wants first N results, not iteration
+4. **Bounded exploration** - Finding enough results is sufficient (e.g., "find callers")
+
+### Limit-Based Implementation
+
+```python
+@mcp.tool()
+def trace_function_calls(
+    function_name: str,
+    direction: str = "both",
+    max_results: int = 100
+) -> dict:
+    """Trace function call relationships.
+
+    Args:
+        function_name: Function to trace from
+        direction: "callers", "callees", or "both"
+        max_results: Maximum call edges to return (default: 100, max: 1000)
+    """
+    # Validate and cap max_results
+    max_results = min(max(1, max_results), 1000)
+
+    # Get all results from underlying query
+    all_results = call_graph.trace(function_name, direction)
+
+    # Check if truncation needed
+    total_count = len(all_results)
+    truncated = total_count > max_results
+    results = all_results[:max_results]
+
+    return asdict(success_response(
+        data={
+            "function": function_name,
+            "results": results,
+            "count": len(results),
+            "total_count": total_count,
+            "truncated": truncated
+        }
+    ))
+```
+
+### Response Format with Truncation
+
+```json
+{
+    "success": true,
+    "data": {
+        "function": "process_order",
+        "results": [...],
+        "count": 100,
+        "total_count": 247,
+        "truncated": true
+    }
+}
+```
+
+Key differences from cursor pagination:
+- `truncated: true` instead of `has_more: true` (no cursor to continue)
+- `total_count` always provided (client knows how much was omitted)
+- No `cursor` field - results cannot be continued, only re-queried with higher limit
+
+### Hybrid: Limit + Cursor
+
+For graph data that may need iteration, combine both patterns:
+
+```python
+@mcp.tool()
+def list_file_dependencies(
+    file_path: str,
+    max_results: int = 100,
+    cursor: Optional[str] = None
+) -> dict:
+    """List files that depend on the given file.
+
+    Args:
+        file_path: File to find dependents for
+        max_results: Results per page (default: 100)
+        cursor: Continue from previous response
+    """
+    # Limit-based cap for response size
+    max_results = min(max(1, max_results), 1000)
+
+    # Cursor-based iteration for large result sets
+    start_after = decode_cursor(cursor) if cursor else None
+
+    deps = dependency_graph.get_dependents(
+        file_path,
+        start_after=start_after,
+        limit=max_results + 1
+    )
+
+    has_more = len(deps) > max_results
+    if has_more:
+        deps = deps[:max_results]
+
+    return asdict(success_response(
+        data={"file": file_path, "dependents": deps},
+        pagination={
+            "cursor": encode_cursor(deps[-1]) if has_more else None,
+            "has_more": has_more,
+            "page_size": max_results
+        }
+    ))
+```
+
 ## Idempotency
 
 ### Idempotency Levels

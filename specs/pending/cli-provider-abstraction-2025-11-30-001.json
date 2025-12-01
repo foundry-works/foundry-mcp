@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-11-30T12:00:00Z",
+  "last_updated": "2025-12-01T16:05:23.253089Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -14,9 +14,12 @@
         "phase-3",
         "phase-4",
         "phase-5",
-        "phase-6"
+        "phase-6",
+        "task-3-1-1",
+        "task-3-1-2",
+        "task-3-1-3"
       ],
-      "total_tasks": 65,
+      "total_tasks": 67,
       "completed_tasks": 0,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
@@ -58,9 +61,8 @@
         "phase-1-files",
         "phase-1-verify"
       ],
-      "total_tasks": 4,
+      "total_tasks": 9,
       "completed_tasks": 0,
-
       "metadata": {
         "purpose": "Create foundational dataclasses, enums, and base ProviderContext ABC",
         "risk_level": "low",
@@ -147,9 +149,8 @@
         ],
         "depends": []
       },
-      "total_tasks": 4,
+      "total_tasks": 5,
       "completed_tasks": 0,
-
       "metadata": {
         "file_path": "src/foundry_mcp/core/providers/base.py",
         "task_category": "implementation",
@@ -327,16 +328,15 @@
       "title": "File Modifications",
       "status": "pending",
       "parent": "phase-2",
-        "children": [
-          "task-2-0",
-          "task-2-1",
-          "task-2-2",
-          "task-2-3"
-        ],
-        "total_tasks": 8,
-        "completed_tasks": 0,
-        "metadata": {},
-
+      "children": [
+        "task-2-0",
+        "task-2-1",
+        "task-2-2",
+        "task-2-3"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {},
       "dependencies": {
         "blocks": [
           "phase-2-verify"
@@ -376,14 +376,13 @@
       "title": "src/foundry_mcp/core/providers/detectors.py",
       "status": "pending",
       "parent": "phase-2-files",
-        "children": [
-          "task-2-1-1",
-          "task-2-1-2",
-          "task-2-1-3",
-          "task-2-1-4"
-        ],
-        "dependencies": {
-
+      "children": [
+        "task-2-1-1",
+        "task-2-1-2",
+        "task-2-1-3",
+        "task-2-1-4"
+      ],
+      "dependencies": {
         "blocks": [
           "task-2-2"
         ],
@@ -550,12 +549,11 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "auto",
-          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import get_provider_statuses; print(get_provider_statuses())\"",
-          "expected": "Returns dict mapping provider IDs to boolean availability using mocked probes"
-        }
-
+      "metadata": {
+        "verification_type": "auto",
+        "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import get_provider_statuses; print(get_provider_statuses())\"",
+        "expected": "Returns dict mapping provider IDs to boolean availability using mocked probes"
+      }
     },
     "verify-2-2": {
       "type": "verify",
@@ -565,12 +563,11 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "auto",
-          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import register_provider, available_providers; print('Registry works')\"",
-          "expected": "No errors, registry functions accessible with test-mode registry"
-        }
-
+      "metadata": {
+        "verification_type": "auto",
+        "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import register_provider, available_providers; print('Registry works')\"",
+        "expected": "No errors, registry functions accessible with test-mode registry"
+      }
     },
     "phase-3": {
       "type": "phase",
@@ -590,7 +587,7 @@
         ],
         "depends": []
       },
-      "total_tasks": 22,
+      "total_tasks": 20,
       "completed_tasks": 0,
       "metadata": {
         "purpose": "Implement the 5 concrete CLI providers",
@@ -610,19 +607,18 @@
       "title": "File Modifications",
       "status": "pending",
       "parent": "phase-3",
-        "children": [
-          "task-3-0",
-          "task-3-1",
-          "task-3-2",
-          "task-3-3",
-          "task-3-4",
-          "task-3-5",
-          "task-3-6",
-          "task-3-7"
-        ],
-        "total_tasks": 20,
-        "completed_tasks": 0,
-
+      "children": [
+        "task-3-0",
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4",
+        "task-3-5",
+        "task-3-6",
+        "task-3-7"
+      ],
+      "total_tasks": 18,
+      "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -669,23 +665,18 @@
       "title": "src/foundry_mcp/core/providers/gemini.py",
       "status": "pending",
       "parent": "phase-3-files",
-        "children": [
-          "task-5-1-1",
-          "task-5-1-2",
-          "task-5-1-3",
-          "task-5-1-4"
-        ],
-
+      "children": [],
       "dependencies": {
         "blocks": [
-          "task-3-6"
+          "task-3-6",
+          "task-3-7"
         ],
         "blocked_by": [
           "task-3-0"
         ],
         "depends": []
       },
-      "total_tasks": 3,
+      "total_tasks": 1,
       "completed_tasks": 0,
       "metadata": {
         "file_path": "src/foundry_mcp/core/providers/gemini.py",
@@ -697,7 +688,7 @@
       "type": "subtask",
       "title": "Define GEMINI_METADATA constant",
       "status": "pending",
-      "parent": "task-3-1",
+      "parent": "spec-root",
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
@@ -707,7 +698,7 @@
       "type": "subtask",
       "title": "Implement GeminiProvider class",
       "status": "pending",
-      "parent": "task-3-1",
+      "parent": "spec-root",
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
@@ -719,7 +710,7 @@
       "type": "subtask",
       "title": "Add factory and auto-registration",
       "status": "pending",
-      "parent": "task-3-1",
+      "parent": "spec-root",
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
@@ -739,7 +730,8 @@
       ],
       "dependencies": {
         "blocks": [
-          "task-3-6"
+          "task-3-6",
+          "task-3-7"
         ],
         "blocked_by": [
           "task-3-0"
@@ -798,7 +790,8 @@
       ],
       "dependencies": {
         "blocks": [
-          "task-3-6"
+          "task-3-6",
+          "task-3-7"
         ],
         "blocked_by": [
           "task-3-0"
@@ -857,7 +850,8 @@
       ],
       "dependencies": {
         "blocks": [
-          "task-3-6"
+          "task-3-6",
+          "task-3-7"
         ],
         "blocked_by": [
           "task-3-0"
@@ -916,7 +910,8 @@
       ],
       "dependencies": {
         "blocks": [
-          "task-3-6"
+          "task-3-6",
+          "task-3-7"
         ],
         "blocked_by": [
           "task-3-0"
@@ -1002,7 +997,8 @@
       ],
       "dependencies": {
         "blocks": [
-          "phase-3-verify"
+          "phase-3-verify",
+          "task-3-6"
         ],
         "blocked_by": [
           "task-3-1",
@@ -1018,7 +1014,8 @@
       "metadata": {
         "task_category": "implementation",
         "estimated_hours": 1.5,
-        "description": "Centralize ProviderRequest validation, observability hooks, and rate limiting consistent with docs/mcp_best_practices/{04,05,12,15}."
+        "description": "Centralize ProviderRequest validation, observability hooks, and rate limiting consistent with docs/mcp_best_practices/{04,05,12,15}.",
+        "file_path": "task-3-7.py"
       }
     },
     "task-3-7-1": {
@@ -1069,7 +1066,8 @@
       "dependencies": {
         "blocks": [],
         "blocked_by": [
-          "phase-3-files"
+          "phase-3-files",
+          "task-3-7"
         ],
         "depends": []
       },
@@ -1085,12 +1083,11 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "auto",
-          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import available_providers; providers = available_providers(); print(f'Registered: {list(providers.keys())}')\"",
-          "expected": "Shows registered providers via mocked availability"
-        }
-
+      "metadata": {
+        "verification_type": "auto",
+        "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import available_providers; providers = available_providers(); print(f'Registered: {list(providers.keys())}')\"",
+        "expected": "Shows registered providers via mocked availability"
+      }
     },
     "verify-3-2": {
       "type": "verify",
@@ -1100,12 +1097,11 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "auto",
-          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import resolve_provider, check_provider_available; pid='gemini'; print(f'{pid} available: {check_provider_available(pid)}')\"",
-          "expected": "Shows availability status using mocked detectors without errors"
-        }
-
+      "metadata": {
+        "verification_type": "auto",
+        "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import resolve_provider, check_provider_available; pid='gemini'; print(f'{pid} available: {check_provider_available(pid)}')\"",
+        "expected": "Shows availability status using mocked detectors without errors"
+      }
     },
     "phase-4": {
       "type": "phase",
@@ -1125,7 +1121,7 @@
         ],
         "depends": []
       },
-      "total_tasks": 10,
+      "total_tasks": 11,
       "completed_tasks": 0,
       "metadata": {
         "purpose": "Create MCP tools for provider access",
@@ -1152,7 +1148,7 @@
         "task-4-2",
         "task-4-3"
       ],
-      "total_tasks": 8,
+      "total_tasks": 9,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -1177,7 +1173,8 @@
       ],
       "dependencies": {
         "blocks": [
-          "task-4-2"
+          "task-4-2",
+          "task-4-3"
         ],
         "blocked_by": [],
         "depends": []
@@ -1296,11 +1293,11 @@
       "metadata": {
         "task_category": "implementation",
         "estimated_hours": 1,
-        "description": "Keep docs, manifests, and discovery metadata in lockstep with new tools per docs/mcp_best_practices/09 and 13."
+        "description": "Keep docs, manifests, and discovery metadata in lockstep with new tools per docs/mcp_best_practices/09 and 13.",
+        "file_path": "task-4-3.py"
       }
     },
     "task-4-3-1": {
-
       "type": "subtask",
       "title": "Update CLI + MCP docs",
       "status": "pending",
@@ -1351,7 +1348,8 @@
       "dependencies": {
         "blocks": [],
         "blocked_by": [
-          "phase-4-files"
+          "phase-4-files",
+          "task-4-3"
         ],
         "depends": []
       },
@@ -1367,11 +1365,10 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "manual",
-          "description": "Check server exposes provider-list, provider-status, provider-execute tools with discovery metadata per docs/mcp_best_practices/13-tool-discovery.md"
-        }
-
+      "metadata": {
+        "verification_type": "manual",
+        "description": "Check server exposes provider-list, provider-status, provider-execute tools with discovery metadata per docs/mcp_best_practices/13-tool-discovery.md"
+      }
     },
     "verify-4-2": {
       "type": "verify",
@@ -1381,11 +1378,10 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "manual",
-          "description": "Verify all tool responses follow response-v2 envelope format with success/error/meta fields per docs/codebase_standards/mcp_response_schema.md"
-        }
-
+      "metadata": {
+        "verification_type": "manual",
+        "description": "Verify all tool responses follow response-v2 envelope format with success/error/meta fields per docs/codebase_standards/mcp_response_schema.md"
+      }
     },
     "phase-5": {
       "type": "phase",
@@ -1463,7 +1459,6 @@
       }
     },
     "task-5-1-1": {
-
       "type": "subtask",
       "title": "Replace REVIEW_TOOLS list with provider imports",
       "status": "pending",
@@ -1592,16 +1587,15 @@
       "title": "File Modifications",
       "status": "pending",
       "parent": "phase-6",
-        "children": [
-          "task-6-1",
-          "task-6-2",
-          "task-6-3",
-          "task-6-4",
-          "task-6-5",
-          "task-6-6"
-        ],
-        "total_tasks": 6,
-
+      "children": [
+        "task-6-1",
+        "task-6-2",
+        "task-6-3",
+        "task-6-4",
+        "task-6-5",
+        "task-6-6"
+      ],
+      "total_tasks": 6,
       "completed_tasks": 0,
       "metadata": {},
       "dependencies": {
@@ -1619,7 +1613,9 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-6"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1639,7 +1635,9 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-6"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1659,7 +1657,9 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-6"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1679,7 +1679,9 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-6"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1699,7 +1701,9 @@
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
-        "blocks": [],
+        "blocks": [
+          "task-6-6"
+        ],
         "blocked_by": [],
         "depends": []
       },
@@ -1766,12 +1770,11 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "auto",
-          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src pytest tests/unit/test_providers*.py tests/integration/test_provider_tools.py -v",
-          "expected": "All tests pass using mocked provider binaries"
-        }
-
+      "metadata": {
+        "verification_type": "auto",
+        "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src pytest tests/unit/test_providers*.py tests/integration/test_provider_tools.py -v",
+        "expected": "All tests pass using mocked provider binaries"
+      }
     },
     "verify-6-2": {
       "type": "verify",
@@ -1781,12 +1784,15 @@
       "children": [],
       "total_tasks": 1,
       "completed_tasks": 0,
-        "metadata": {
-          "verification_type": "auto",
-          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src pytest tests/ -v --ignore=tests/parity",
-          "expected": "No regressions - all existing tests still pass"
-        }
-
+      "metadata": {
+        "verification_type": "auto",
+        "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src pytest tests/ -v --ignore=tests/parity",
+        "expected": "No regressions - all existing tests still pass"
+      }
     }
+  },
+  "metadata": {
+    "status": "active",
+    "activated_date": "2025-12-01T15:49:52.907043Z"
   }
 }
