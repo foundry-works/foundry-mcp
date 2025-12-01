@@ -847,6 +847,103 @@ def add_assumption(
     }, None
 
 
+def add_revision(
+    spec_id: str,
+    version: str,
+    changelog: str,
+    author: Optional[str] = None,
+    modified_by: Optional[str] = None,
+    review_triggered_by: Optional[str] = None,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add a revision entry to a specification's revision_history array.
+
+    Args:
+        spec_id: Specification ID to add revision to.
+        version: Version number (e.g., "1.0", "1.1", "2.0").
+        changelog: Description of changes made in this revision.
+        author: Optional author who made the revision.
+        modified_by: Optional tool or command that made the modification.
+        review_triggered_by: Optional path to review report that triggered this revision.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "version": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate version
+    if not version or not version.strip():
+        return None, "Version is required"
+
+    # Validate changelog
+    if not changelog or not changelog.strip():
+        return None, "Changelog is required"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    # Ensure metadata.revision_history exists
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    if "revision_history" not in spec_data["metadata"]:
+        spec_data["metadata"]["revision_history"] = []
+
+    revision_history = spec_data["metadata"]["revision_history"]
+
+    # Create revision entry per schema
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    revision_entry = {
+        "version": version.strip(),
+        "date": now,
+        "changelog": changelog.strip(),
+    }
+
+    # Add optional fields if provided
+    if author:
+        revision_entry["author"] = author.strip()
+    if modified_by:
+        revision_entry["modified_by"] = modified_by.strip()
+    if review_triggered_by:
+        revision_entry["review_triggered_by"] = review_triggered_by.strip()
+
+    # Append to revision history
+    revision_history.append(revision_entry)
+
+    # Update last_updated
+    spec_data["last_updated"] = now
+
+    # Save the spec
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    return {
+        "spec_id": spec_id,
+        "version": revision_entry["version"],
+        "date": revision_entry["date"],
+        "changelog": revision_entry["changelog"],
+        "author": author,
+        "modified_by": modified_by,
+        "review_triggered_by": review_triggered_by,
+        "revision_index": len(revision_history),
+    }, None
+
+
 def list_assumptions(
     spec_id: str,
     assumption_type: Optional[str] = None,

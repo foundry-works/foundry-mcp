@@ -14,6 +14,7 @@ from foundry_mcp.core.spec import (
     list_specs,
     get_node,
     update_node,
+    add_revision,
 )
 
 
@@ -194,3 +195,143 @@ class TestUpdateNode:
         assert result is True
         assert sample_spec["hierarchy"]["task-1-1"]["title"] == "Task 1"
         assert sample_spec["hierarchy"]["task-1-1"]["parent"] == "phase-1"
+
+
+class TestAddRevision:
+    """Tests for add_revision function."""
+
+    def test_add_revision_success(self, temp_specs_dir, sample_spec):
+        """Should add revision entry successfully."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_revision(
+            "test-spec-001",
+            version="1.1",
+            changelog="Added new feature",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["spec_id"] == "test-spec-001"
+        assert result["version"] == "1.1"
+        assert result["changelog"] == "Added new feature"
+        assert result["revision_index"] == 1
+
+        # Verify it was persisted
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        revisions = spec_data["metadata"]["revision_history"]
+        assert len(revisions) == 1
+        assert revisions[0]["version"] == "1.1"
+        assert revisions[0]["changelog"] == "Added new feature"
+        assert "date" in revisions[0]
+
+    def test_add_revision_with_optional_fields(self, temp_specs_dir, sample_spec):
+        """Should include optional fields when provided."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_revision(
+            "test-spec-001",
+            version="2.0",
+            changelog="Major refactor",
+            author="Test Author",
+            modified_by="sdd-cli",
+            review_triggered_by="/path/to/review.md",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["author"] == "Test Author"
+        assert result["modified_by"] == "sdd-cli"
+        assert result["review_triggered_by"] == "/path/to/review.md"
+
+        # Verify persisted
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        revision = spec_data["metadata"]["revision_history"][0]
+        assert revision["author"] == "Test Author"
+        assert revision["modified_by"] == "sdd-cli"
+        assert revision["review_triggered_by"] == "/path/to/review.md"
+
+    def test_add_multiple_revisions(self, temp_specs_dir, sample_spec):
+        """Should append multiple revisions."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        add_revision("test-spec-001", "1.0", "Initial release", specs_dir=temp_specs_dir)
+        result, error = add_revision("test-spec-001", "1.1", "Bug fix", specs_dir=temp_specs_dir)
+
+        assert error is None
+        assert result["revision_index"] == 2
+
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        revisions = spec_data["metadata"]["revision_history"]
+        assert len(revisions) == 2
+        assert revisions[0]["version"] == "1.0"
+        assert revisions[1]["version"] == "1.1"
+
+    def test_add_revision_spec_not_found(self, temp_specs_dir):
+        """Should return error for nonexistent spec."""
+        result, error = add_revision(
+            "nonexistent-spec",
+            version="1.0",
+            changelog="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "not found" in error
+
+    def test_add_revision_empty_version(self, temp_specs_dir, sample_spec):
+        """Should reject empty version."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_revision(
+            "test-spec-001",
+            version="",
+            changelog="Test",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Version is required" in error
+
+    def test_add_revision_empty_changelog(self, temp_specs_dir, sample_spec):
+        """Should reject empty changelog."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_revision(
+            "test-spec-001",
+            version="1.0",
+            changelog="",
+            specs_dir=temp_specs_dir
+        )
+
+        assert result is None
+        assert "Changelog is required" in error
+
+    def test_add_revision_strips_whitespace(self, temp_specs_dir, sample_spec):
+        """Should strip whitespace from inputs."""
+        spec_file = temp_specs_dir / "active" / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec))
+
+        result, error = add_revision(
+            "test-spec-001",
+            version="  1.0  ",
+            changelog="  Test changelog  ",
+            author="  Author  ",
+            specs_dir=temp_specs_dir
+        )
+
+        assert error is None
+        assert result["version"] == "1.0"
+        assert result["changelog"] == "Test changelog"
+
+        spec_data = load_spec("test-spec-001", temp_specs_dir)
+        revision = spec_data["metadata"]["revision_history"][0]
+        assert revision["version"] == "1.0"
+        assert revision["changelog"] == "Test changelog"
+        assert revision["author"] == "Author"
