@@ -250,3 +250,227 @@ class ProviderMetadata:
     capabilities: Set[ProviderCapability] = field(default_factory=set)
     security_flags: Dict[str, Any] = field(default_factory=dict)
     extra: Dict[str, Any] = field(default_factory=dict)
+
+
+# =============================================================================
+# Error Hierarchy
+# =============================================================================
+
+
+class ProviderError(RuntimeError):
+    """Base exception for provider orchestration errors."""
+
+    def __init__(self, message: str, *, provider: Optional[str] = None):
+        self.provider = provider
+        super().__init__(message)
+
+
+class ProviderUnavailableError(ProviderError):
+    """Raised when a provider cannot be instantiated (binary missing, auth issues)."""
+
+
+class ProviderExecutionError(ProviderError):
+    """Raised when a provider command returns a non-retryable error."""
+
+
+class ProviderTimeoutError(ProviderError):
+    """Raised when a provider exceeds its allotted execution time."""
+
+
+# =============================================================================
+# Lifecycle Hooks
+# =============================================================================
+
+
+# Type aliases for hook callables
+StreamChunkCallback = Callable[["StreamChunk", ProviderMetadata], None]
+BeforeExecuteHook = Callable[[ProviderRequest, ProviderMetadata], None]
+AfterResultHook = Callable[[ProviderResult, ProviderMetadata], None]
+
+
+@dataclass(frozen=True)
+class StreamChunk:
+    """Represents a streamed fragment emitted by the provider."""
+
+    content: str
+    index: int
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ProviderHooks:
+    """
+    Optional lifecycle hooks wired by the registry.
+
+    Hooks default to None (no-ops) so providers can invoke them unconditionally.
+    Registries can wire hooks for observability, logging, or streaming.
+    """
+
+    before_execute: Optional[BeforeExecuteHook] = None
+    on_stream_chunk: Optional[StreamChunkCallback] = None
+    after_result: Optional[AfterResultHook] = None
+
+    def emit_before(self, request: ProviderRequest, metadata: ProviderMetadata) -> None:
+        """Emit before-execution hook if registered."""
+        if self.before_execute:
+            self.before_execute(request, metadata)
+
+    def emit_stream(self, chunk: StreamChunk, metadata: ProviderMetadata) -> None:
+        """Emit stream chunk hook if registered."""
+        if self.on_stream_chunk:
+            self.on_stream_chunk(chunk, metadata)
+
+    def emit_after(self, result: ProviderResult, metadata: ProviderMetadata) -> None:
+        """Emit after-result hook if registered."""
+        if self.after_result:
+            self.after_result(result, metadata)
+
+
+# =============================================================================
+# Abstract Base Class
+# =============================================================================
+
+
+class ProviderContext(ABC):
+    """
+    Base class for provider implementations.
+
+    Subclasses should:
+        * Resolve CLI/environment dependencies during initialization
+        * Implement `_execute()` to run the underlying provider
+        * Return a populated `ProviderResult` from `_execute()`
+        * Emit streaming chunks via `self._emit_stream_chunk()` when
+          `request.stream` is True and the provider supports streaming
+
+    The `generate()` method is a template method that:
+        1. Calls `_prepare_request()` for any request modifications
+        2. Emits the `before_execute` hook
+        3. Calls the abstract `_execute()` method
+        4. Normalizes exceptions into typed ProviderErrors
+        5. Emits the `after_result` hook
+        6. Returns the result
+    """
+
+    def __init__(
+        self,
+        metadata: ProviderMetadata,
+        hooks: Optional[ProviderHooks] = None,
+    ):
+        self._metadata = metadata
+        self._hooks = hooks or ProviderHooks()
+
+    @property
+    def metadata(self) -> ProviderMetadata:
+        """Return provider metadata."""
+        return self._metadata
+
+    def supports(self, capability: ProviderCapability) -> bool:
+        """Return True if any registered model advertises the capability."""
+        # Check provider-level capabilities first
+        if capability in self._metadata.capabilities:
+            return True
+        # Then check model-level capabilities
+        return any(capability in model.capabilities for model in self._metadata.models)
+
+    def generate(self, request: ProviderRequest) -> ProviderResult:
+        """
+        Execute the provider with the supplied request (template method).
+
+        Applies lifecycle hooks, normalizes errors, and ensures ProviderStatus
+        is consistent across implementations.
+
+        Args:
+            request: The generation request
+
+        Returns:
+            ProviderResult with the generation output
+
+        Raises:
+            ProviderUnavailableError: If provider binary/auth unavailable
+            ProviderTimeoutError: If request exceeds timeout
+            ProviderExecutionError: For other execution errors
+        """
+        normalized_request = self._prepare_request(request)
+        self._hooks.emit_before(normalized_request, self._metadata)
+
+        try:
+            result = self._execute(normalized_request)
+        except ProviderTimeoutError:
+            raise
+        except ProviderUnavailableError:
+            raise
+        except ProviderError:
+            raise
+        except FileNotFoundError as exc:
+            raise ProviderUnavailableError(
+                str(exc), provider=self._metadata.provider_id
+            ) from exc
+        except TimeoutError as exc:
+            raise ProviderTimeoutError(
+                str(exc), provider=self._metadata.provider_id
+            ) from exc
+        except Exception as exc:  # noqa: BLE001 - intentionally wrap all provider exceptions
+            raise ProviderExecutionError(
+                str(exc), provider=self._metadata.provider_id
+            ) from exc
+
+        self._hooks.emit_after(result, self._metadata)
+        return result
+
+    def _prepare_request(self, request: ProviderRequest) -> ProviderRequest:
+        """
+        Allow subclasses to adjust request metadata before execution.
+
+        The default implementation simply returns the request unchanged.
+        Subclasses can override to inject defaults, normalize parameters, etc.
+        """
+        return request
+
+    def _emit_stream_chunk(self, chunk: StreamChunk) -> None:
+        """Helper for subclasses to publish streaming output through hooks."""
+        self._hooks.emit_stream(chunk, self._metadata)
+
+    @abstractmethod
+    def _execute(self, request: ProviderRequest) -> ProviderResult:
+        """
+        Subclasses must implement the actual provider invocation.
+
+        Args:
+            request: The (possibly modified) generation request
+
+        Returns:
+            ProviderResult with generated content and metadata
+        """
+        raise NotImplementedError
+
+
+# =============================================================================
+# Module Exports
+# =============================================================================
+
+
+__all__ = [
+    # Enums
+    "ProviderCapability",
+    "ProviderStatus",
+    # Request/Response dataclasses
+    "ProviderRequest",
+    "ProviderResult",
+    "TokenUsage",
+    "StreamChunk",
+    # Metadata dataclasses
+    "ModelDescriptor",
+    "ProviderMetadata",
+    # Hooks
+    "ProviderHooks",
+    "StreamChunkCallback",
+    "BeforeExecuteHook",
+    "AfterResultHook",
+    # Errors
+    "ProviderError",
+    "ProviderUnavailableError",
+    "ProviderExecutionError",
+    "ProviderTimeoutError",
+    # ABC
+    "ProviderContext",
+]
