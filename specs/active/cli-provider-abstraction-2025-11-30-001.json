@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T22:41:55.277086Z",
+  "last_updated": "2025-12-01T23:11:49.376818Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -20,7 +20,7 @@
         "task-3-1-3"
       ],
       "total_tasks": 67,
-      "completed_tasks": 62,
+      "completed_tasks": 63,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
         "objectives": [
@@ -1918,7 +1918,7 @@
         "depends": []
       },
       "total_tasks": 8,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Comprehensive testing for all new components",
         "risk_level": "low",
@@ -1944,7 +1944,7 @@
         "task-6-6"
       ],
       "total_tasks": 6,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -2041,7 +2041,7 @@
     "task-6-4": {
       "type": "task",
       "title": "tests/unit/test_providers_implementations.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -2052,12 +2052,18 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/unit/test_providers_implementations.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "description": "Test each provider with mocked subprocess calls"
+        "description": "Test each provider with mocked subprocess calls",
+        "started_at": "2025-12-01T23:03:26.683741Z",
+        "status_note": "Starting provider implementation tests",
+        "completed_at": "2025-12-01T23:11:49.368159Z",
+        "needs_journaling": false,
+        "actual_hours": 0.14,
+        "journaled_at": "2025-12-01T23:11:49.374672Z"
       }
     },
     "task-6-5": {
@@ -2160,7 +2166,7 @@
   "metadata": {
     "status": "active",
     "activated_date": "2025-12-01T15:49:52.907043Z",
-    "progress_percentage": 92,
+    "progress_percentage": 94,
     "current_phase": "phase-6"
   },
   "journal": [
@@ -2731,6 +2737,15 @@
       "content": "Created tests/unit/test_providers_registry.py with 27 unit tests covering: ProviderRegistration dataclass (4 tests), register_provider function (5 tests), register_lazy_provider function (1 test), available_providers function (2 tests), check_provider_available function (3 tests), resolve_provider function (3 tests), get_provider_metadata function (2 tests), describe_providers function (2 tests), reset_registry function (1 test), get_registration function (2 tests), dependency resolver (2 tests). All 27 tests passing in 3.02s.",
       "metadata": {},
       "task_id": "task-6-3"
+    },
+    {
+      "timestamp": "2025-12-01T23:11:49.374667Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/unit/test_providers_implementations.py",
+      "author": "claude-code",
+      "content": "Created tests/unit/test_providers_implementations.py with 59 unit tests covering all five provider implementations (GeminiProvider, CodexProvider, CursorAgentProvider, ClaudeProvider, OpenCodeProvider). Tests cover: provider instantiation and default model selection (8 tests), model validation (5 tests), custom binary/configuration (2 tests), request validation for unsupported parameters (4 tests), command building with proper flags (4 tests), successful execution with mocked subprocess (5 tests), error handling for non-zero exit/empty output/invalid JSON (10 tests), timeout and unavailable error paths (3 tests), streaming chunk emission (5 tests), attachment handling (3 tests), availability check function delegation (5 tests), create_provider factory functions (6 tests), automatic provider registration (5 tests). All 59 tests passing in 3.33s.",
+      "metadata": {},
+      "task_id": "task-6-4"
     }
   ]
 }
