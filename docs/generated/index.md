@@ -1,36 +1,36 @@
-# Foundry MCP Documentation Index
+# foundry-mcp Documentation Index
 
 **Type:** monolith
 **Primary Language:** python
 **Architecture:** Modular
-**Last Updated:** 2025-11-28
+**Last Updated:** 2025-12-01
 
 ## Project Vital Signs
 
 | Metric | Value |
 |--------|-------|
-| **Lines of Code** | 38,359 |
-| **Total Files** | 82 |
+| **Lines of Code** | 79,853 |
+| **Total Files** | 181 |
 | **Top Languages** | python |
 
 ## Project Overview
 
-MCP server for spec-driven development workflows providing tools for specification management, task tracking, code analysis, testing, and documentation generation
+foundry-mcp documentation
 
 ## Quick Reference
 
 - **Tech Stack:** Python
 - **Entry Point:** main.py
 - **Architecture Pattern:** Layered
-
+## Generated Documentation
 
 ### Core Documentation
 
 - [Project Overview](./project-overview.md) - Executive summary and high-level architecture
+
 - [Architecture](./architecture.md) - Detailed technical architecture
 - [Component Inventory](./component-inventory.md) - Component inventory with directory structure and organization patterns
-- [Development Guide](../guides/development-guide.md) - Local setup and development workflow
-
+- [Development Guide](./development-guide.md) _(To be generated)_ - Local setup and development workflow
 ### Optional Documentation
 
 

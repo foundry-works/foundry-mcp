@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T21:40:10.565957Z",
+  "last_updated": "2025-12-01T21:56:28.834572Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -20,7 +20,7 @@
         "task-3-1-3"
       ],
       "total_tasks": 67,
-      "completed_tasks": 50,
+      "completed_tasks": 51,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
         "objectives": [
@@ -1358,7 +1358,7 @@
         "depends": []
       },
       "total_tasks": 11,
-      "completed_tasks": 8,
+      "completed_tasks": 9,
       "metadata": {
         "purpose": "Create MCP tools for provider access",
         "risk_level": "low",
@@ -1377,7 +1377,7 @@
     "phase-4-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "task-4-1",
@@ -1385,8 +1385,12 @@
         "task-4-3"
       ],
       "total_tasks": 9,
-      "completed_tasks": 8,
-      "metadata": {},
+      "completed_tasks": 9,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-01T21:56:28.813187Z",
+        "journaled_at": "2025-12-01T21:56:28.834528Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-4-verify"
@@ -1532,7 +1536,7 @@
     "task-4-3": {
       "type": "task",
       "title": "Docs & capabilities sync",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [
         "task-4-3-1",
@@ -1549,7 +1553,7 @@
         "depends": []
       },
       "total_tasks": 3,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "task_category": "implementation",
         "estimated_hours": 1,
@@ -1598,14 +1602,20 @@
     "task-4-3-3": {
       "type": "subtask",
       "title": "Regenerate generated docs",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-4-3",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "docs/generated/index.md",
-        "description": "Run doc-generation pipeline so architecture + inventory outputs describe provider abstraction changes (docs/mcp_best_practices/10-testing-fixtures.md)."
+        "description": "Run doc-generation pipeline so architecture + inventory outputs describe provider abstraction changes (docs/mcp_best_practices/10-testing-fixtures.md).",
+        "started_at": "2025-12-01T21:50:20.904332Z",
+        "status_note": "Starting doc regeneration for provider abstraction changes",
+        "completed_at": "2025-12-01T21:56:28.812957Z",
+        "needs_journaling": false,
+        "actual_hours": 0.102,
+        "journaled_at": "2025-12-01T21:56:28.828886Z"
       }
     },
     "phase-4-verify": {
@@ -2066,7 +2076,7 @@
   "metadata": {
     "status": "active",
     "activated_date": "2025-12-01T15:49:52.907043Z",
-    "progress_percentage": 74,
+    "progress_percentage": 76,
     "current_phase": "phase-4"
   },
   "journal": [
@@ -2475,6 +2485,24 @@
       "content": "Updated capabilities manifest (mcp/capabilities_manifest.json) with provider tools. Changes: 1) Added provider_tools section with provider-list, provider-status, and provider-execute tool definitions including parameters and rate limits. 2) Added provider_tools feature flag (beta, default enabled, 100% rollout). 3) Added provider_tools to server_capabilities features section. 4) Updated metadata timestamp. JSON validation passed. samples/foundry-mcp.toml does not require updates as it covers configuration options, not individual tool listings.",
       "metadata": {},
       "task_id": "task-4-3-2"
+    },
+    {
+      "timestamp": "2025-12-01T21:56:28.828871Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Regenerate generated docs",
+      "author": "claude-code",
+      "content": "Regenerated all documentation using doc-generation pipeline. Ran 'sdd doc generate' to update codebase.json with provider abstraction changes (provider_execute, provider_list, tools/providers.py). Ran 'sdd llm-doc-gen generate' to regenerate narrative docs (architecture.md, component-inventory.md, index.md). Verified all generated docs now reference provider abstraction: codebase.json contains provider tools, component-inventory.md shows providers.py in directory structure, architecture.md mentions providers.py as part of plugin architecture. All docs dated 2025-12-01.",
+      "metadata": {},
+      "task_id": "task-4-3-3"
+    },
+    {
+      "timestamp": "2025-12-01T21:56:28.834503Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-files"
     }
   ]
 }

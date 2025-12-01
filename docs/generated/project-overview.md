@@ -1,6 +1,6 @@
-# Foundry MCP - Project Overview
+# foundry-mcp - Project Overview
 
-**Date:** 2025-11-28
+**Date:** 2025-12-01
 **Type:** Software Project
 **Architecture:** monolith
 
@@ -16,47 +16,62 @@
 
 ---
 
+Here are the research findings for the `foundry-mcp` project overview:
+
 ### 1. Executive Summary
 
-The `foundry-mcp` project implements an MCP (Model Context Protocol) server and a native command-line interface (CLI) designed for managing Spec-Driven Development (SDD) specifications. It provides a comprehensive suite of tools that enable both AI coding assistants and human developers to query, navigate, and manage specification files, track task progress, validate specs, and analyze codebase documentation.
+`foundry-mcp` is an innovative MCP (Model Context Protocol) server designed to facilitate spec-driven development (SDD) for AI assistants. Its primary purpose is to provide a structured and intelligent framework for managing the entire lifecycle of software specifications, from creation and validation to task tracking and integration with AI-powered analysis tools. The project targets developers and AI agents seeking a methodical approach to feature implementation, offering capabilities like breaking down features into trackable tasks, automated validation, and advanced code analysis.
 
-The project primarily targets AI agents and developers engaged in SDD workflows. It addresses the challenge of reliably integrating AI tools into development processes by offering a structured, JSON-only output for its CLI, which is optimized for machine parsing. This approach ensures consistent and predictable interaction, making it a unique solution for facilitating AI-assisted software development by standardizing the way specifications and development tasks are accessed and managed.
+This project addresses the challenge of unstructured development in AI-assisted coding by offering a robust system for defining, managing, and verifying work against clear specifications. Its unique value lies in deeply integrating AI capabilities, such as AI-powered review suggestions and documentation generation, directly into the SDD workflow, enabling higher quality and more efficient development cycles.
 
 ### 2. Key Features
 
-*   **Spec Management**: Provides tools (`list_specs`, `get_spec`, `get_spec_hierarchy`) for listing, finding, and navigating SDD specifications. This enables users to efficiently locate and understand the structure of their project's requirements and designs.
-*   **Task Operations**: Offers capabilities (`task_prepare`, `task_next`, `task_update_status`) to manage individual development tasks, including tracking their status, dependencies, and overall progress within a specification's lifecycle. This automates workflow orchestration for developers and AI agents.
-*   **Validation & Fixes**: Includes tools (`spec_validate`, `spec_fix`) to validate specifications against predefined schemas and apply automated fixes for common issues. This ensures the integrity and adherence to standards of the SDD artifacts.
-*   **Journaling**: Features for adding journal entries (`journal_add`), marking tasks as blocked (`task_block`), and tracking status changes. This creates an auditable record of decisions, impediments, and resolutions throughout the development process.
-*   **Code Documentation**: Allows querying of codebase documentation (`code_find_class`, `code_trace_calls`), tracing call graphs, and performing impact analysis. This significantly assists in understanding code structure, dependencies, and the potential effects of changes.
+1.  **Spec Management**: Enables the creation, validation (`spec-validate`, `spec-fix`), and lifecycle management (`spec-lifecycle-*`) of specification files. Specifications move through `pending`, `active`, `completed`, and `archived` statuses, ensuring a clear, structured development progression.
+2.  **Task Operations**: Provides a suite of tools (`task-next`, `task-prepare`, `task-start`, `task-complete`, `task-block`/`task-unblock`) to track development progress on individual tasks within a specification. This facilitates detailed task management, dependency tracking, and status updates.
+3.  **LLM-Powered Analysis**: Integrates Large Language Models (LLMs) to offer intelligent features like `spec-review` for improvement suggestions, `spec-review-fidelity` to verify implementation against specs, `spec-doc-llm` for comprehensive documentation generation, and `pr-create-with-spec` for AI-enhanced pull request descriptions. These features augment developer capabilities and streamline workflows.
+4.  **Code Intelligence**: Offers tools (`code-find-class`, `code-find-function`, `code-trace-calls`, `code-impact-analysis`, `doc-stats`) for deep introspection of the codebase. These capabilities help users and AI agents understand code structure, dependencies, and potential impacts of changes.
+5.  **Testing Integration**: Facilitates the execution and discovery of tests using `pytest` with configurable options and presets (`test-run`, `test-run-quick`, `test-discover`, `test-presets`). This promotes a strong focus on quality assurance and streamlines the testing process within the SDD framework.
 
 ### 3. Architecture Highlights
 
-The `foundry-mcp` project employs a layered architectural pattern, emphasizing a clear separation of concerns.
+The `foundry-mcp` project employs a layered architecture with a strong emphasis on separation of concerns, as detailed in `docs/architecture/adr-001-cli-architecture.md`.
 
-*   **High-level architecture pattern**: It utilizes a core business logic layer (`foundry_mcp.core`) that is transport-agnostic, meaning it has no direct dependencies on either the MCP server (`foundry_mcp.tools`) or the native CLI (`foundry_mcp.cli`). Both the MCP server and the CLI act as separate interfaces that consume this shared core logic.
-*   **Key architectural decisions**:
-    *   **JSON-Only CLI Output**: As detailed in `docs/architecture/adr-001-cli-architecture.md`, the CLI exclusively outputs JSON. This design choice is critical for AI coding assistants, which are the primary consumers, ensuring consistent and reliable parsing of structured data without the complexities of human-readable formats or verbosity flags.
-    *   **Shared Core Logic**: The `foundry_mcp.core` module encapsulates all business logic, such as spec operations, task management, and validation. This shared foundation (referenced in `docs/architecture/adr-001-cli-architecture.md`) ensures consistent behavior and data handling across both the MCP server and the native CLI, reducing duplication and maintenance overhead.
-    *   **CLI as a Sibling to MCP Tools**: The `foundry_mcp.cli` package is structured to be an independent runtime that depends directly on the core logic, rather than wrapping the MCP tools. This allows for independent development and testing of the CLI without coupling it to the asynchronous and decorator-driven nature of the MCP tools.
-*   **Notable design patterns**:
-    *   **Decorator Pattern**: Extensively used in `src/foundry_mcp/config.py` for cross-cutting concerns like logging (`@log_call`), performance timing (`@timed`), and authentication (`@require_auth`).
-    *   **Configuration Management**: The `ServerConfig` class in `src/foundry_mcp/config.py` provides a robust configuration loading mechanism, prioritizing environment variables over TOML files (`foundry-mcp.toml`) and then default values, offering flexibility and explicit control over settings.
-    *   **Structured Response Envelope**: A consistent JSON response structure with `success`, `data`, `error`, and optional `meta` fields is employed for all outputs from both the MCP server and the CLI. This standardization, supported by helpers in `src/foundry_mcp/core/responses.py` and `src/foundry_mcp/cli/output.py`, ensures predictable data contracts for consuming applications.
+*   **MCP Server (`foundry_mcp.server`)**: This is the primary interface for MCP-compatible clients, built on `FastMCP` and exposing over 80 distinct tools and resources.
+*   **Core Logic (`foundry_mcp.core.*`)**: This layer contains the foundational business logic for specifications, tasks, journals, lifecycle management, validation, and standardized responses. Crucially, it is designed to be **transport-agnostic**, meaning it has no direct dependencies on either the MCP server or the native CLI, allowing for maximum reusability and independent testing.
+*   **MCP Tools (`foundry_mcp.tools.*`)**: These modules implement the specific MCP tools by calling functions within the `foundry_mcp.core` layer.
+*   **Native CLI (`foundry_mcp.cli.*`)**: A `Click`-based command-line interface provides a standalone execution surface. It also directly interacts with the `foundry_mcp.core` logic.
 
-### 4. Development Overview
+A notable architectural decision is the **JSON-only output** for the CLI. This choice, outlined in `ADR-001`, prioritizes machine readability for AI agents, streamlining integration and eliminating the complexities of managing multiple output formats or verbosity levels. The `cli/output.py` module is responsible for adapting core response envelopes into this consistent JSON format. The shared helper strategy ensures consistent behavior across both MCP and CLI surfaces for areas like validation (`core/validation.py`), security (`core/security.py`), and pagination (`core/pagination.py`).
 
-*   **Prerequisites needed**:
+### 5. Development Overview
+
+*   **Prerequisites**:
     *   Python 3.10 or higher.
-    *   Key Python dependencies as specified in `pyproject.toml` include `fastmcp>=0.1.0`, `mcp>=1.0.0`, `click>=8.0.0`, and `tomli>=2.0.0` (for Python < 3.11). Testing requires additional dependencies like `pytest` and `jsonschema`.
-*   **Key setup/installation steps**:
-    *   **Using pip**: Install directly via `pip install foundry-mcp`.
-    *   **From source**: Clone the GitHub repository (`git clone https://github.com/tylerburleigh/foundry-mcp.git`), navigate into the directory (`cd foundry-mcp`), and install in editable development mode (`pip install -e .`).
-*   **Primary development commands**:
-    *   **Install in development mode**: `pip install -e .`
+    *   An MCP-compatible client (e.g., Claude Desktop, Claude Code).
+*   **Key Setup/Installation Steps**:
+    *   **Installation (recommended for Claude Desktop)**: Use `uvx foundry-mcp`.
+    *   **Installation (via pip)**: `pip install foundry-mcp`.
+    *   **Installation (from source)**:
+        ```bash
+        git clone https://github.com/tylerburleigh/foundry-mcp.git
+        cd foundry-mcp
+        pip install -e .
+        ```
+    *   **Claude Desktop Setup**: Requires adding `foundry-mcp` to the `claude_desktop_config.json` file, specifying the command (`uvx foundry-mcp` or `foundry-mcp`) and optionally setting the `FOUNDRY_MCP_SPECS_DIR` environment variable.
+*   **Configuration**: The project's behavior can be customized through:
+    *   **Environment Variables**: (`FOUNDRY_MCP_SPECS_DIR`, `FOUNDRY_MCP_LOG_LEVEL`, `FOUNDRY_MCP_API_KEYS`, etc.), which take the highest precedence.
+    *   **TOML Configuration File**: `foundry-mcp.toml` allows for detailed settings across `[workspace]`, `[logging]`, `[workflow]`, and `[llm]` sections.
+    *   **LLM Provider Setup**: Supports OpenAI, Anthropic, and local Ollama models, configurable via environment variables (e.g., `OPENAI_API_KEY`) or the TOML file.
+*   **Primary Development Commands**:
+    *   **Install for development (with test dependencies)**:
+        ```bash
+        git clone https://github.com/tylerburleigh/foundry-mcp.git
+        cd foundry-mcp
+        pip install -e ".[test]"
+        ```
     *   **Run tests**: `pytest`
-    *   **Run the MCP server**: `foundry-mcp` (as defined in `pyproject.toml`)
-    *   **Run the native CLI**: `foundry-cli` (as defined in `pyproject.toml` for `foundry_mcp.cli.main:cli`)
+    *   **Run the MCP server**: `foundry-mcp`
+    *   **Run the native CLI**: `foundry-cli` (as defined in `pyproject.toml` and implemented in `src/foundry_mcp/cli/main.py`)
 
 ---
 
