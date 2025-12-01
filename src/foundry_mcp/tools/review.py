@@ -162,18 +162,33 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             llm_status = _get_llm_status()
 
-            # Return static tool information
-            # Actual availability checking requires subprocess calls to external tools
-            # which is outside the scope of direct core API integration
-            tools_info = [
-                {
-                    "name": tool,
-                    "available": None,  # Unknown - requires external check
-                    "version": None,
-                    "note": "Tool availability requires external shell integration",
-                }
-                for tool in REVIEW_TOOLS
-            ]
+            # Get provider statuses from the provider abstraction layer
+            provider_statuses = get_provider_statuses()
+
+            # Build tools info from provider statuses
+            tools_info = []
+            for provider_id, status in provider_statuses.items():
+                tools_info.append({
+                    "name": provider_id,
+                    "available": status.status.value == "available",
+                    "status": status.status.value,
+                    "reason": status.reason,
+                    "checked_at": (
+                        status.checked_at.isoformat() if status.checked_at else None
+                    ),
+                })
+
+            # Also include providers that are registered but not checked
+            all_providers = available_providers()
+            for provider_id in all_providers:
+                if provider_id not in provider_statuses:
+                    tools_info.append({
+                        "name": provider_id,
+                        "available": None,
+                        "status": "unknown",
+                        "reason": "Not yet checked",
+                        "checked_at": None,
+                    })
 
             duration_ms = (time.perf_counter() - start_time) * 1000
             _metrics.timer("review.review_list_tools.duration_ms", duration_ms)
@@ -183,9 +198,9 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     tools=tools_info,
                     llm_status=llm_status,
                     review_types=REVIEW_TYPES,
+                    available_count=sum(1 for t in tools_info if t.get("available")),
+                    total_count=len(tools_info),
                     duration_ms=round(duration_ms, 2),
-                    note="Tool availability status requires external shell integration. "
-                    "Use shell commands to verify tool installation.",
                 )
             )
 

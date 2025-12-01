@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T22:04:46.263293Z",
+  "last_updated": "2025-12-01T22:07:03.584109Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -20,7 +20,7 @@
         "task-3-1-3"
       ],
       "total_tasks": 67,
-      "completed_tasks": 54,
+      "completed_tasks": 55,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
         "objectives": [
@@ -1703,7 +1703,7 @@
         "depends": []
       },
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Refactor review.py to use new provider abstraction",
         "risk_level": "medium",
@@ -1725,7 +1725,7 @@
         "task-5-1"
       ],
       "total_tasks": 4,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1752,7 +1752,7 @@
         "depends": []
       },
       "total_tasks": 4,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "file_path": "src/foundry_mcp/tools/review.py",
         "task_category": "refactoring",
@@ -1780,13 +1780,19 @@
     "task-5-1-2": {
       "type": "subtask",
       "title": "Refactor review_list_tools to use provider system",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-5-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "description": "Replace raw subprocess version checks with get_provider_statuses()"
+        "description": "Replace raw subprocess version checks with get_provider_statuses()",
+        "started_at": "2025-12-01T22:05:36.788929Z",
+        "status_note": "Starting refactoring of review_list_tools to use provider system",
+        "completed_at": "2025-12-01T22:07:03.575724Z",
+        "needs_journaling": false,
+        "actual_hours": 0.024,
+        "journaled_at": "2025-12-01T22:07:03.582045Z"
       }
     },
     "task-5-1-3": {
@@ -2101,7 +2107,7 @@
   "metadata": {
     "status": "active",
     "activated_date": "2025-12-01T15:49:52.907043Z",
-    "progress_percentage": 80,
+    "progress_percentage": 82,
     "current_phase": "phase-5"
   },
   "journal": [
@@ -2573,6 +2579,15 @@
       "content": "Replaced REVIEW_TOOLS list with provider imports in src/foundry_mcp/tools/review.py. Added imports: from foundry_mcp.core.providers import (get_provider_statuses, available_providers) at lines 19-22. Commented out legacy REVIEW_TOOLS list at line 34 with note explaining it's replaced by provider abstraction. The actual function refactoring to use these imports is task-5-1-2.",
       "metadata": {},
       "task_id": "task-5-1-1"
+    },
+    {
+      "timestamp": "2025-12-01T22:07:03.582034Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Refactor review_list_tools to use provider system",
+      "author": "claude-code",
+      "content": "Refactored review_list_tools function to use provider system. Replaced hardcoded REVIEW_TOOLS iteration (lines 168-176) with: 1) get_provider_statuses() call to get actual provider availability, 2) Loop through provider statuses building tools_info with name, available (bool), status value, reason, and checked_at timestamp, 3) Additional loop through available_providers() to include registered but unchecked providers, 4) Response now includes available_count and total_count. Function now returns real-time provider availability data instead of static placeholder values.",
+      "metadata": {},
+      "task_id": "task-5-1-2"
     }
   ]
 }
