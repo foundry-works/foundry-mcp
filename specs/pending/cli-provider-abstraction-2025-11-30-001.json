@@ -1,0 +1,1792 @@
+{
+  "spec_id": "cli-provider-abstraction-2025-11-30-001",
+  "generated": "2025-11-30T12:00:00Z",
+  "last_updated": "2025-11-30T12:00:00Z",
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "CLI Provider Abstraction Adoption",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6"
+      ],
+      "total_tasks": 65,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
+        "objectives": [
+          "Unified abstraction for 5 CLI providers",
+          "MCP tool exposure (provider-list, provider-status, provider-execute)",
+          "Response envelope compliance with foundry-mcp standards",
+          "Integration with existing resilience patterns",
+          "Documented rollout plus discovery metadata across CLI + MCP"
+        ],
+        "best_practice_refs": [
+          "docs/mcp_best_practices/README.md#L24-L82",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/mcp_best_practices/13-tool-discovery.md",
+          "docs/mcp_best_practices/14-feature-flags.md",
+          "docs/mcp_best_practices/15-concurrency-patterns.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/naming-conventions.md",
+          "docs/codebase_standards/cli-output.md"
+        ]
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Core Provider Abstractions",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-1-files",
+        "phase-1-verify"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+
+      "metadata": {
+        "purpose": "Create foundational dataclasses, enums, and base ProviderContext ABC",
+        "risk_level": "low",
+        "reference_docs": [
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md"
+        ]
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "task-1-0",
+        "task-1-1",
+        "task-1-2"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-1-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-0": {
+      "type": "task",
+      "title": "Analyze sdd-toolkit provider base.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-1-1"
+        ],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "investigation",
+        "estimated_hours": 1,
+        "description": "Review sdd-toolkit's base.py to understand ProviderContext, GenerationRequest, GenerationResult, enums, and error hierarchy. Note adaptations needed for foundry-mcp conventions.",
+        "reference_docs": [
+          "claude-sdd-toolkit/common/providers/base.py (2025-11-25 tag)",
+          "docs/architecture/adr-001-cli-architecture.md"
+        ]
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/base.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-1-1",
+        "task-1-1-2",
+        "task-1-1-3",
+        "task-1-1-4",
+        "task-1-1-5"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-1-2"
+        ],
+        "blocked_by": [
+          "task-1-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 4,
+      "completed_tasks": 0,
+
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/base.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "description": "Create core provider abstractions adapted from sdd-toolkit"
+      }
+    },
+    "task-1-1-1": {
+      "type": "subtask",
+      "title": "Create ProviderCapability enum",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "TEXT, VISION, FUNCTION_CALLING, STREAMING capabilities"
+      }
+    },
+    "task-1-1-2": {
+      "type": "subtask",
+      "title": "Create ProviderStatus enum with to_error_type()",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "SUCCESS, TIMEOUT, NOT_FOUND, INVALID_OUTPUT, ERROR with is_retryable() and to_error_type() mapping to foundry-mcp ErrorType"
+      }
+    },
+    "task-1-1-3": {
+      "type": "subtask",
+      "title": "Create ProviderRequest dataclass",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "prompt, system_prompt, model, timeout, temperature, max_tokens, metadata fields"
+      }
+    },
+    "task-1-1-4": {
+      "type": "subtask",
+      "title": "Create ProviderResult and ProviderMetadata dataclasses",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "ProviderResult with content, provider_id, model_used, status, tokens, duration. ProviderMetadata with provider_id, display_name, default_model, capabilities, security_flags"
+      }
+    },
+    "task-1-1-5": {
+      "type": "subtask",
+      "title": "Create ProviderContext ABC",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Abstract base class with generate() template method and abstract _execute() method"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/__init__.py",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/__init__.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.25,
+        "description": "Export public API from base.py"
+      }
+    },
+    "phase-1-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "verify-1-1",
+        "verify-1-2"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-1-files"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Module imports without errors",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "python -c \"from foundry_mcp.core.providers import ProviderContext, ProviderRequest, ProviderResult, ProviderStatus, ProviderCapability, ProviderMetadata\"",
+        "expected": "No import errors"
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Type hints and dataclasses are valid",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "PYTHONPATH=src python -m py_compile src/foundry_mcp/core/providers/base.py",
+        "expected": "No syntax or type errors"
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Detection & Registry System",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-2-files",
+        "phase-2-verify"
+      ],
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      },
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Implement CLI availability detection and provider registration",
+        "risk_level": "low",
+        "reference_docs": [
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/07-error-semantics.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/mcp_best_practices/15-concurrency-patterns.md",
+          "docs/guides/testing.md"
+        ]
+      }
+    },
+    "phase-2-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-2",
+        "children": [
+          "task-2-0",
+          "task-2-1",
+          "task-2-2",
+          "task-2-3"
+        ],
+        "total_tasks": 8,
+        "completed_tasks": 0,
+        "metadata": {},
+
+      "dependencies": {
+        "blocks": [
+          "phase-2-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-0": {
+      "type": "task",
+      "title": "Analyze sdd-toolkit detectors.py and registry.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-2-1",
+          "task-2-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "investigation",
+        "estimated_hours": 0.5,
+        "description": "Review sdd-toolkit's detectors.py and registry.py patterns",
+        "reference_docs": [
+          "claude-sdd-toolkit/common/providers/detectors.py (2025-11-25 tag)",
+          "claude-sdd-toolkit/common/providers/registry.py (2025-11-25 tag)"
+        ]
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/detectors.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+        "children": [
+          "task-2-1-1",
+          "task-2-1-2",
+          "task-2-1-3",
+          "task-2-1-4"
+        ],
+        "dependencies": {
+
+        "blocks": [
+          "task-2-2"
+        ],
+        "blocked_by": [
+          "task-2-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/detectors.py",
+        "task_category": "implementation",
+        "estimated_hours": 1
+      }
+    },
+    "task-2-1-1": {
+      "type": "subtask",
+      "title": "Create ProviderDetector dataclass",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "provider_id, binary_name, probe_args, probe_timeout, binary_env_override fields with resolve_binary() and is_available() methods"
+      }
+    },
+    "task-2-1-2": {
+      "type": "subtask",
+      "title": "Create DETECTORS dict with all 5 providers",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Pre-configured detectors for gemini, codex, cursor-agent, claude, opencode with FOUNDRY_ env var prefix"
+      }
+    },
+    "task-2-1-3": {
+      "type": "subtask",
+      "title": "Create detection helper functions",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "detect_provider_availability() and get_provider_statuses() functions"
+      }
+    },
+    "task-2-1-4": {
+      "type": "subtask",
+      "title": "Add test-mode stubs for detectors",
+      "status": "pending",
+      "parent": "task-2-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Introduce FOUNDRY_PROVIDER_TEST_MODE to bypass real CLI probes via mocked subprocess responses for CI safety per docs/guides/testing.md",
+        "task_category": "implementation"
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/registry.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [
+        "task-2-2-1",
+        "task-2-2-2"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-2-3"
+        ],
+        "blocked_by": [
+          "task-2-1",
+          "task-2-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/registry.py",
+        "task_category": "implementation",
+        "estimated_hours": 1
+      }
+    },
+    "task-2-2-1": {
+      "type": "subtask",
+      "title": "Create ProviderRegistration and registry dict",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "ProviderRegistration dataclass with factory, metadata, availability_check. Global _REGISTRY dict."
+      }
+    },
+    "task-2-2-2": {
+      "type": "subtask",
+      "title": "Create registry functions",
+      "status": "pending",
+      "parent": "task-2-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "register_provider(), resolve_provider(), available_providers(), check_provider_available() functions"
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Update src/foundry_mcp/core/providers/__init__.py",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-2-2"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/__init__.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.25,
+        "description": "Export detectors and registry public APIs"
+      }
+    },
+    "phase-2-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "verify-2-1",
+        "verify-2-2"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2-files"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Detector returns correct availability",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "auto",
+          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import get_provider_statuses; print(get_provider_statuses())\"",
+          "expected": "Returns dict mapping provider IDs to boolean availability using mocked probes"
+        }
+
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Registry accepts provider registration",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "auto",
+          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import register_provider, available_providers; print('Registry works')\"",
+          "expected": "No errors, registry functions accessible with test-mode registry"
+        }
+
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "CLI Provider Implementations",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-3-files",
+        "phase-3-verify"
+      ],
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      },
+      "total_tasks": 22,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Implement the 5 concrete CLI providers",
+        "risk_level": "medium",
+        "reference_docs": [
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/mcp_best_practices/13-tool-discovery.md",
+          "docs/mcp_best_practices/15-concurrency-patterns.md"
+        ]
+      }
+    },
+    "phase-3-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-3",
+        "children": [
+          "task-3-0",
+          "task-3-1",
+          "task-3-2",
+          "task-3-3",
+          "task-3-4",
+          "task-3-5",
+          "task-3-6",
+          "task-3-7"
+        ],
+        "total_tasks": 20,
+        "completed_tasks": 0,
+
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-3-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-0": {
+      "type": "task",
+      "title": "Analyze sdd-toolkit provider implementations",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [
+          "task-3-1",
+          "task-3-2",
+          "task-3-3",
+          "task-3-4",
+          "task-3-5"
+        ],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "investigation",
+        "estimated_hours": 1,
+        "description": "Review all 5 provider implementations in sdd-toolkit",
+        "reference_docs": [
+          "claude-sdd-toolkit/common/providers/gemini.py (2025-11-25 tag)",
+          "claude-sdd-toolkit/common/providers/codex.py (2025-11-25 tag)",
+          "claude-sdd-toolkit/common/providers/cursor_agent.py (2025-11-25 tag)",
+          "claude-sdd-toolkit/common/providers/claude.py (2025-11-25 tag)",
+          "claude-sdd-toolkit/common/providers/opencode.py (2025-11-25 tag)"
+        ]
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/gemini.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+        "children": [
+          "task-5-1-1",
+          "task-5-1-2",
+          "task-5-1-3",
+          "task-5-1-4"
+        ],
+
+      "dependencies": {
+        "blocks": [
+          "task-3-6"
+        ],
+        "blocked_by": [
+          "task-3-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/gemini.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5
+      }
+    },
+    "task-3-1-1": {
+      "type": "subtask",
+      "title": "Define GEMINI_METADATA constant",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-1-2": {
+      "type": "subtask",
+      "title": "Implement GeminiProvider class",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Extend ProviderContext, implement _execute() with subprocess call, JSON parsing"
+      }
+    },
+    "task-3-1-3": {
+      "type": "subtask",
+      "title": "Add factory and auto-registration",
+      "status": "pending",
+      "parent": "task-3-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "create_provider() factory function and register_provider() call at module level"
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/codex.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-2-1",
+        "task-3-2-2",
+        "task-3-2-3"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-3-6"
+        ],
+        "blocked_by": [
+          "task-3-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/codex.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5
+      }
+    },
+    "task-3-2-1": {
+      "type": "subtask",
+      "title": "Define CODEX_METADATA constant",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-2-2": {
+      "type": "subtask",
+      "title": "Implement CodexProvider class",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Extend ProviderContext, implement _execute() with --sandbox read-only flag, JSONL parsing"
+      }
+    },
+    "task-3-2-3": {
+      "type": "subtask",
+      "title": "Add factory and auto-registration",
+      "status": "pending",
+      "parent": "task-3-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/cursor_agent.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-3-1",
+        "task-3-3-2",
+        "task-3-3-3"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-3-6"
+        ],
+        "blocked_by": [
+          "task-3-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/cursor_agent.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5
+      }
+    },
+    "task-3-3-1": {
+      "type": "subtask",
+      "title": "Define CURSOR_METADATA constant",
+      "status": "pending",
+      "parent": "task-3-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-3-2": {
+      "type": "subtask",
+      "title": "Implement CursorAgentProvider class",
+      "status": "pending",
+      "parent": "task-3-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Extend ProviderContext, implement _execute() with config file management for read-only"
+      }
+    },
+    "task-3-3-3": {
+      "type": "subtask",
+      "title": "Add factory and auto-registration",
+      "status": "pending",
+      "parent": "task-3-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/claude.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-4-1",
+        "task-3-4-2",
+        "task-3-4-3"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-3-6"
+        ],
+        "blocked_by": [
+          "task-3-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/claude.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5
+      }
+    },
+    "task-3-4-1": {
+      "type": "subtask",
+      "title": "Define CLAUDE_METADATA constant",
+      "status": "pending",
+      "parent": "task-3-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-4-2": {
+      "type": "subtask",
+      "title": "Implement ClaudeProvider class",
+      "status": "pending",
+      "parent": "task-3-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Extend ProviderContext, implement _execute() with read-only tool allowlisting"
+      }
+    },
+    "task-3-4-3": {
+      "type": "subtask",
+      "title": "Add factory and auto-registration",
+      "status": "pending",
+      "parent": "task-3-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-5": {
+      "type": "task",
+      "title": "src/foundry_mcp/core/providers/opencode.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-5-1",
+        "task-3-5-2",
+        "task-3-5-3"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-3-6"
+        ],
+        "blocked_by": [
+          "task-3-0"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/opencode.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5
+      }
+    },
+    "task-3-5-1": {
+      "type": "subtask",
+      "title": "Define OPENCODE_METADATA constant",
+      "status": "pending",
+      "parent": "task-3-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-5-2": {
+      "type": "subtask",
+      "title": "Implement OpenCodeProvider class",
+      "status": "pending",
+      "parent": "task-3-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Extend ProviderContext, implement _execute() with Node.js wrapper handling"
+      }
+    },
+    "task-3-5-3": {
+      "type": "subtask",
+      "title": "Add factory and auto-registration",
+      "status": "pending",
+      "parent": "task-3-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "task-3-6": {
+      "type": "task",
+      "title": "Update src/foundry_mcp/core/providers/__init__.py",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-3-1",
+          "task-3-2",
+          "task-3-3",
+          "task-3-4",
+          "task-3-5",
+          "task-3-7"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/providers/__init__.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.25,
+        "description": "Import provider modules to trigger auto-registration"
+      }
+    },
+    "task-3-7": {
+      "type": "task",
+      "title": "Cross-provider validation & resilience hooks",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [
+        "task-3-7-1",
+        "task-3-7-2",
+        "task-3-7-3"
+      ],
+      "dependencies": {
+        "blocks": [
+          "phase-3-verify"
+        ],
+        "blocked_by": [
+          "task-3-1",
+          "task-3-2",
+          "task-3-3",
+          "task-3-4",
+          "task-3-5"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "description": "Centralize ProviderRequest validation, observability hooks, and rate limiting consistent with docs/mcp_best_practices/{04,05,12,15}."
+      }
+    },
+    "task-3-7-1": {
+      "type": "subtask",
+      "title": "Input hygiene & allowlists",
+      "status": "pending",
+      "parent": "task-3-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Validate prompts/metadata, enforce UTF-8, strip ANSI, and block disallowed flags before subprocess exec per docs/mcp_best_practices/04-validation-input-hygiene.md."
+      }
+    },
+    "task-3-7-2": {
+      "type": "subtask",
+      "title": "Structured logging & metrics",
+      "status": "pending",
+      "parent": "task-3-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Emit provider execution spans w/ correlation IDs, timings, and ProviderStatus mapping via shared telemetry helpers (docs/mcp_best_practices/05-observability-telemetry.md)."
+      }
+    },
+    "task-3-7-3": {
+      "type": "subtask",
+      "title": "Timeout budgets & retries",
+      "status": "pending",
+      "parent": "task-3-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Wire ProviderContext to CircuitBreaker + concurrency limits, configure retry matrix per ProviderStatus.is_retryable() with docs/mcp_best_practices/12-timeout-resilience.md and 15-concurrency-patterns.md."
+      }
+    },
+    "phase-3-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "verify-3-1",
+        "verify-3-2"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-3-files"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "All providers register successfully",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "auto",
+          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import available_providers; providers = available_providers(); print(f'Registered: {list(providers.keys())}')\"",
+          "expected": "Shows registered providers via mocked availability"
+        }
+
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "Provider can be resolved and instantiated",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "auto",
+          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src python -c \"from foundry_mcp.core.providers import resolve_provider, check_provider_available; pid='gemini'; print(f'{pid} available: {check_provider_available(pid)}')\"",
+          "expected": "Shows availability status using mocked detectors without errors"
+        }
+
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "MCP Tool Exposure",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-4-files",
+        "phase-4-verify"
+      ],
+      "dependencies": {
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      },
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Create MCP tools for provider access",
+        "risk_level": "low",
+        "reference_docs": [
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/11-ai-llm-integration.md",
+          "docs/mcp_best_practices/13-tool-discovery.md",
+          "docs/codebase_standards/cli-output.md",
+          "docs/codebase_standards/naming-conventions.md",
+          "docs/cli_best_practices/README.md"
+        ]
+      }
+    },
+    "phase-4-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-4-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/providers.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [
+        "task-4-1-1",
+        "task-4-1-2",
+        "task-4-1-3",
+        "task-4-1-4",
+        "task-4-1-5"
+      ],
+      "dependencies": {
+        "blocks": [
+          "task-4-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/providers.py",
+        "task_category": "implementation",
+        "estimated_hours": 2
+      }
+    },
+    "task-4-1-1": {
+      "type": "subtask",
+      "title": "Create register_provider_tools() function",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Main registration function following foundry-mcp pattern"
+      }
+    },
+    "task-4-1-2": {
+      "type": "subtask",
+      "title": "Implement provider_list tool",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "List all CLI providers with availability status using success_response() per docs/mcp_best_practices/02-envelopes-metadata.md and 03-serialization-helpers.md"
+      }
+    },
+    "task-4-1-3": {
+      "type": "subtask",
+      "title": "Implement provider_status tool",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Get detailed status for specific provider with error_response() for not found, following docs/mcp_best_practices/02-envelopes-metadata.md and 03-serialization-helpers.md"
+      }
+    },
+    "task-4-1-4": {
+      "type": "subtask",
+      "title": "Implement provider_execute tool",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Execute prompt against provider with CircuitBreaker integration, ProviderRequest validation, and trust-boundary enforcement (docs/mcp_best_practices/01-versioned-contracts.md, 02-envelopes-metadata.md, 03-serialization-helpers.md, 04 & 08)."
+      }
+    },
+    "task-4-1-5": {
+      "type": "subtask",
+      "title": "Tool metadata & discovery schema",
+      "status": "pending",
+      "parent": "task-4-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Annotate provider tools with discovery tags, rate limits, and usage examples aligned with docs/mcp_best_practices/13-tool-discovery.md and docs/codebase_standards/naming-conventions.md."
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Update src/foundry_mcp/server.py",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-4-1"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/server.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.25,
+        "description": "Register provider tools in server initialization"
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Docs & capabilities sync",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [
+        "task-4-3-1",
+        "task-4-3-2",
+        "task-4-3-3"
+      ],
+      "dependencies": {
+        "blocks": [
+          "phase-4-verify"
+        ],
+        "blocked_by": [
+          "task-4-1"
+        ],
+        "depends": []
+      },
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "description": "Keep docs, manifests, and discovery metadata in lockstep with new tools per docs/mcp_best_practices/09 and 13."
+      }
+    },
+    "task-4-3-1": {
+
+      "type": "subtask",
+      "title": "Update CLI + MCP docs",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "docs/cli_best_practices/README.md",
+        "description": "Document provider-list/status/execute usage, JSON envelopes, and safety notes referencing docs/codebase_standards/cli-output.md and docs/codebase_standards/naming-conventions.md."
+      }
+    },
+    "task-4-3-2": {
+      "type": "subtask",
+      "title": "Update capabilities manifests",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "mcp/capabilities_manifest.json",
+        "description": "Expose provider tools, tags, rate limits, and discovery metadata; reflect same in samples/foundry-mcp.toml."
+      }
+    },
+    "task-4-3-3": {
+      "type": "subtask",
+      "title": "Regenerate generated docs",
+      "status": "pending",
+      "parent": "task-4-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "docs/generated/index.md",
+        "description": "Run doc-generation pipeline so architecture + inventory outputs describe provider abstraction changes (docs/mcp_best_practices/10-testing-fixtures.md)."
+      }
+    },
+    "phase-4-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "verify-4-1",
+        "verify-4-2"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-4-files"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "MCP tools are registered",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "manual",
+          "description": "Check server exposes provider-list, provider-status, provider-execute tools with discovery metadata per docs/mcp_best_practices/13-tool-discovery.md"
+        }
+
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "Response envelope compliance",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "manual",
+          "description": "Verify all tool responses follow response-v2 envelope format with success/error/meta fields per docs/codebase_standards/mcp_response_schema.md"
+        }
+
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "Review Integration & Refactoring",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-5-files",
+        "phase-5-verify"
+      ],
+      "dependencies": {
+        "blocks": [
+          "phase-6"
+        ],
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": []
+      },
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Refactor review.py to use new provider abstraction",
+        "risk_level": "medium",
+        "reference_docs": [
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/14-feature-flags.md",
+          "docs/codebase_standards/mcp_response_schema.md"
+        ]
+      }
+    },
+    "phase-5-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "task-5-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-5-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "src/foundry_mcp/tools/review.py",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [
+        "task-5-1-1",
+        "task-5-1-2",
+        "task-5-1-3",
+        "task-5-1-4"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/tools/review.py",
+        "task_category": "refactoring",
+        "estimated_hours": 2
+      }
+    },
+    "task-5-1-1": {
+
+      "type": "subtask",
+      "title": "Replace REVIEW_TOOLS list with provider imports",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Import get_provider_statuses, available_providers from core.providers"
+      }
+    },
+    "task-5-1-2": {
+      "type": "subtask",
+      "title": "Refactor review_list_tools to use provider system",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Replace raw subprocess version checks with get_provider_statuses()"
+      }
+    },
+    "task-5-1-3": {
+      "type": "subtask",
+      "title": "Remove redundant subprocess calls",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Clean up any remaining raw subprocess tool invocations that are now handled by providers"
+      }
+    },
+    "task-5-1-4": {
+      "type": "subtask",
+      "title": "Introduce review-provider feature flag",
+      "status": "pending",
+      "parent": "task-5-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add feature flag + rollout plan (docs/mcp_best_practices/14-feature-flags.md) with flag lifecycle notes and fallback path to legacy subprocess behavior."
+      }
+    },
+    "phase-5-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "verify-5-1",
+        "verify-5-2"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-5-files"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "review-list-tools returns same data format",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "manual",
+        "description": "Ensure backward compatibility - response structure unchanged"
+      }
+    },
+    "verify-5-2": {
+      "type": "verify",
+      "title": "Existing review functionality unaffected",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "command": "PYTHONPATH=src pytest tests/unit/test_review.py -v",
+        "expected": "All existing review tests pass"
+      }
+    },
+    "phase-6": {
+      "type": "phase",
+      "title": "Testing & Verification",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-6-files",
+        "phase-6-verify"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-5"
+        ],
+        "depends": []
+      },
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Comprehensive testing for all new components",
+        "risk_level": "low",
+        "reference_docs": [
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/guides/testing.md"
+        ]
+      }
+    },
+    "phase-6-files": {
+      "type": "group",
+      "title": "File Modifications",
+      "status": "pending",
+      "parent": "phase-6",
+        "children": [
+          "task-6-1",
+          "task-6-2",
+          "task-6-3",
+          "task-6-4",
+          "task-6-5",
+          "task-6-6"
+        ],
+        "total_tasks": 6,
+
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-6-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-1": {
+      "type": "task",
+      "title": "tests/unit/test_providers_base.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_providers_base.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "description": "Test ProviderStatus.is_retryable(), to_error_type(), dataclass creation"
+      }
+    },
+    "task-6-2": {
+      "type": "task",
+      "title": "tests/unit/test_providers_detectors.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_providers_detectors.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "description": "Test ProviderDetector PATH resolution, probe execution, env overrides"
+      }
+    },
+    "task-6-3": {
+      "type": "task",
+      "title": "tests/unit/test_providers_registry.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_providers_registry.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "description": "Test register_provider, resolve_provider, available_providers functions"
+      }
+    },
+    "task-6-4": {
+      "type": "task",
+      "title": "tests/unit/test_providers_implementations.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/unit/test_providers_implementations.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "description": "Test each provider with mocked subprocess calls"
+      }
+    },
+    "task-6-5": {
+      "type": "task",
+      "title": "tests/integration/test_provider_tools.py",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/integration/test_provider_tools.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "description": "Test MCP tools with mock server"
+      }
+    },
+    "task-6-6": {
+      "type": "task",
+      "title": "Regenerate provider fixtures",
+      "status": "pending",
+      "parent": "phase-6-files",
+      "children": [],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-6-1",
+          "task-6-2",
+          "task-6-3",
+          "task-6-4",
+          "task-6-5"
+        ],
+        "depends": []
+      },
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "tests/fixtures/golden",
+        "task_category": "implementation",
+        "estimated_hours": 0.5,
+        "description": "Update golden fixtures + doc-generation state to reflect provider outputs per docs/mcp_best_practices/10-testing-fixtures.md"
+      }
+    },
+    "phase-6-verify": {
+      "type": "group",
+      "title": "Verification",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [
+        "verify-6-1",
+        "verify-6-2"
+      ],
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-6-files"
+        ],
+        "depends": []
+      },
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {}
+    },
+    "verify-6-1": {
+      "type": "verify",
+      "title": "All new tests pass",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "auto",
+          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src pytest tests/unit/test_providers*.py tests/integration/test_provider_tools.py -v",
+          "expected": "All tests pass using mocked provider binaries"
+        }
+
+    },
+    "verify-6-2": {
+      "type": "verify",
+      "title": "Full test suite passes",
+      "status": "pending",
+      "parent": "phase-6-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+        "metadata": {
+          "verification_type": "auto",
+          "command": "FOUNDRY_PROVIDER_TEST_MODE=1 PYTHONPATH=src pytest tests/ -v --ignore=tests/parity",
+          "expected": "No regressions - all existing tests still pass"
+        }
+
+    }
+  }
+}
