@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T20:13:32.867269Z",
+  "last_updated": "2025-12-01T20:20:44.295376Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -544,7 +544,11 @@
       "metadata": {
         "file_path": "src/foundry_mcp/core/providers/registry.py",
         "task_category": "implementation",
-        "estimated_hours": 1
+        "estimated_hours": 1,
+        "started_at": "2025-12-01T20:14:07.800522Z",
+        "status_note": "Starting implementation of registry.py with ProviderRegistration dataclass and registration functions",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-01T20:20:44.295346Z"
       }
     },
     "task-2-2-1": {
@@ -1994,6 +1998,15 @@
       "content": "Created src/foundry_mcp/core/providers/detectors.py with: (1) ProviderDetector frozen dataclass with provider_id, binary_name, probe_args, probe_timeout, binary_env_override fields plus resolve_binary() and is_available() methods; (2) Default _DETECTORS dict with 5 providers (gemini, codex, cursor-agent, claude, opencode) using FOUNDRY_ prefix env vars; (3) Public API functions detect_provider_availability(), get_provider_statuses(), register_detector(), get_detector(), list_detectors(), reset_detectors(); (4) FOUNDRY_PROVIDER_TEST_MODE env var for CI-safe testing that bypasses real CLI probes. All manual tests pass. Committed as 68df0d4.",
       "metadata": {},
       "task_id": "task-2-1"
+    },
+    {
+      "timestamp": "2025-12-01T20:20:44.295335Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/providers/registry.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/core/providers/registry.py with: (1) ProviderRegistration dataclass supporting factory, lazy_loader, metadata, metadata_resolver, availability_check, priority, description, tags fields; (2) ProviderFactory Protocol for type-safe factory signatures; (3) Public API: register_provider(), register_lazy_provider(), available_providers(), check_provider_available(), resolve_provider(), get_provider_metadata(), describe_providers(), set_dependency_resolver(), reset_registry(), get_registration(). All manual tests pass with mock provider integration. Committed as 342d3b7.",
+      "metadata": {},
+      "task_id": "task-2-2"
     }
   ]
 }
