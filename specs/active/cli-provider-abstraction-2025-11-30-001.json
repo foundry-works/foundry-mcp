@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T21:00:40.844390Z",
+  "last_updated": "2025-12-01T21:02:42.896282Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -878,7 +878,11 @@
       "metadata": {
         "file_path": "src/foundry_mcp/core/providers/codex.py",
         "task_category": "implementation",
-        "estimated_hours": 1.5
+        "estimated_hours": 1.5,
+        "started_at": "2025-12-01T21:00:58.338280Z",
+        "status_note": "Starting Codex provider implementation",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-01T21:02:42.896251Z"
       }
     },
     "task-3-2-1": {
@@ -2192,6 +2196,15 @@
       "content": "Created src/foundry_mcp/core/providers/gemini.py with full Gemini CLI provider implementation. Adapted from sdd-toolkit version with foundry-mcp base types (ProviderRequest, ProviderResult, provider_id). Includes: GeminiProvider class extending ProviderContext, GEMINI_MODELS with 3 model descriptors, GEMINI_METADATA, ALLOWED_TOOLS list for read-only enforcement, RunnerProtocol for testing, create_provider factory, is_gemini_available check, and automatic registration. Verified imports work correctly.",
       "metadata": {},
       "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2025-12-01T21:02:42.896240Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/providers/codex.py",
+      "author": "claude-code",
+      "content": "Created src/foundry_mcp/core/providers/codex.py with full Codex CLI provider implementation. Features OS-level sandboxing via --sandbox read-only flag, JSONL event parsing for streaming responses, SANDBOX_ALLOWED_OPERATIONS and SANDBOX_BLOCKED_OPERATIONS lists for documentation. Includes CodexProvider class, CODEX_MODELS with 3 model descriptors, CODEX_METADATA, event processing logic for thread.started/item.delta/response.completed events, and automatic registration. Verified imports work correctly.",
+      "metadata": {},
+      "task_id": "task-3-2"
     }
   ]
 }
