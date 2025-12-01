@@ -1024,3 +1024,115 @@ def remove_task(
         "children_removed": len(nodes_to_remove) - 1,  # Exclude the target itself
         "total_tasks_removed": total_removed,
     }, None
+
+
+# Valid complexity levels for update_estimate
+COMPLEXITY_LEVELS = ("low", "medium", "high")
+
+
+def update_estimate(
+    spec_id: str,
+    task_id: str,
+    estimated_hours: Optional[float] = None,
+    complexity: Optional[str] = None,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Update effort/time estimates for a task.
+
+    Updates the estimated_hours and/or complexity metadata for a task.
+    At least one of estimated_hours or complexity must be provided.
+
+    Args:
+        spec_id: Specification ID containing the task.
+        task_id: Task ID to update.
+        estimated_hours: Optional estimated hours (float, must be >= 0).
+        complexity: Optional complexity level (low, medium, high).
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"task_id": ..., "hours": ..., "complexity": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate at least one field is provided
+    if estimated_hours is None and complexity is None:
+        return None, "At least one of estimated_hours or complexity must be provided"
+
+    # Validate estimated_hours
+    if estimated_hours is not None:
+        if not isinstance(estimated_hours, (int, float)):
+            return None, "estimated_hours must be a number"
+        if estimated_hours < 0:
+            return None, "estimated_hours must be >= 0"
+
+    # Validate complexity
+    if complexity is not None:
+        complexity = complexity.lower().strip()
+        if complexity not in COMPLEXITY_LEVELS:
+            return None, f"Invalid complexity '{complexity}'. Must be one of: {', '.join(COMPLEXITY_LEVELS)}"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    # Validate task exists
+    task = hierarchy.get(task_id)
+    if task is None:
+        return None, f"Task '{task_id}' not found"
+
+    # Validate task type (can only update task, subtask, verify)
+    task_type = task.get("type")
+    if task_type not in ("task", "subtask", "verify"):
+        return None, f"Cannot update estimates for node type '{task_type}'. Only task, subtask, or verify nodes can be updated."
+
+    # Get or create metadata
+    metadata = task.get("metadata")
+    if metadata is None:
+        metadata = {}
+        task["metadata"] = metadata
+
+    # Track previous values for response
+    previous_hours = metadata.get("estimated_hours")
+    previous_complexity = metadata.get("complexity")
+
+    # Update fields
+    if estimated_hours is not None:
+        metadata["estimated_hours"] = float(estimated_hours)
+
+    if complexity is not None:
+        metadata["complexity"] = complexity
+
+    # Save the spec
+    success = save_spec(spec_id, spec_data, specs_dir)
+    if not success:
+        return None, "Failed to save specification"
+
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "task_id": task_id,
+    }
+
+    if estimated_hours is not None:
+        result["hours"] = float(estimated_hours)
+        result["previous_hours"] = previous_hours
+
+    if complexity is not None:
+        result["complexity"] = complexity
+        result["previous_complexity"] = previous_complexity
+
+    return result, None
