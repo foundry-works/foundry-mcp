@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T20:23:55.960443Z",
+  "last_updated": "2025-12-01T20:23:56.335287Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -20,7 +20,7 @@
         "task-3-1-3"
       ],
       "total_tasks": 67,
-      "completed_tasks": 13,
+      "completed_tasks": 14,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
         "objectives": [
@@ -369,7 +369,7 @@
         "depends": []
       },
       "total_tasks": 10,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Implement CLI availability detection and provider registration",
         "risk_level": "low",
@@ -397,7 +397,7 @@
         "task-2-3"
       ],
       "total_tasks": 8,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -460,7 +460,7 @@
         "depends": []
       },
       "total_tasks": 4,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "file_path": "src/foundry_mcp/core/providers/detectors.py",
         "task_category": "implementation",
@@ -504,13 +504,16 @@
     "task-2-1-3": {
       "type": "subtask",
       "title": "Create detection helper functions",
-      "status": "pending",
+      "status": "completed",
       "parent": "task-2-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
-        "description": "detect_provider_availability() and get_provider_statuses() functions"
+        "description": "detect_provider_availability() and get_provider_statuses() functions",
+        "completed_at": "2025-12-01T20:23:56.330269Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-01T20:23:56.332769Z"
       }
     },
     "task-2-1-4": {
@@ -1882,7 +1885,7 @@
   "metadata": {
     "status": "active",
     "activated_date": "2025-12-01T15:49:52.907043Z",
-    "progress_percentage": 19,
+    "progress_percentage": 20,
     "current_phase": "phase-2"
   },
   "journal": [
@@ -2046,6 +2049,15 @@
       "content": "Already completed as part of task-2-1 (parent task). Default _DETECTORS dict created with 5 pre-configured providers (gemini, codex, cursor-agent, claude, opencode) using FOUNDRY_ prefix for env vars. See commit 68df0d4.",
       "metadata": {},
       "task_id": "task-2-1-2"
+    },
+    {
+      "timestamp": "2025-12-01T20:23:56.332761Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create detection helper functions",
+      "author": "claude-code",
+      "content": "Already completed as part of parent task task-2-1. Detection helper functions implemented: detect_provider_availability(), get_provider_statuses(), register_detector(), get_detector(), list_detectors(), reset_detectors(). Implementation reference: commit 68df0d4.",
+      "metadata": {},
+      "task_id": "task-2-1-3"
     }
   ]
 }
