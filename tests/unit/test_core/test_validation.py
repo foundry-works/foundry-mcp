@@ -13,6 +13,7 @@ from foundry_mcp.core.validation import (
     calculate_stats,
     add_verification,
     execute_verification,
+    format_verification_summary,
     Diagnostic,
     ValidationResult,
     FixAction,
@@ -651,6 +652,129 @@ class TestExecuteVerification:
         assert result["success"] is True
         assert "[stderr]" in result["output"]
         assert "error" in result["output"]
+
+
+class TestFormatVerificationSummary:
+    """Tests for format_verification_summary function."""
+
+    def test_format_single_passed_verification(self):
+        """Test formatting a single passed verification result."""
+        result = {
+            "verify_id": "verify-1",
+            "result": "PASSED",
+            "command": "echo test",
+            "output": "test output",
+        }
+        summary = format_verification_summary(result)
+        assert summary["total_verifications"] == 1
+        assert summary["passed"] == 1
+        assert summary["failed"] == 0
+        assert summary["partial"] == 0
+        assert "Verification Summary: 1 total" in summary["summary"]
+        assert "✓ Passed:  1" in summary["summary"]
+
+    def test_format_multiple_verifications(self):
+        """Test formatting multiple verification results."""
+        results = [
+            {"verify_id": "verify-1", "result": "PASSED", "command": "test1"},
+            {"verify_id": "verify-2", "result": "FAILED", "command": "test2"},
+            {"verify_id": "verify-3", "result": "PARTIAL", "command": "test3"},
+        ]
+        summary = format_verification_summary(results)
+        assert summary["total_verifications"] == 3
+        assert summary["passed"] == 1
+        assert summary["failed"] == 1
+        assert summary["partial"] == 1
+        assert "Verification Summary: 3 total" in summary["summary"]
+
+    def test_format_verifications_dict_input(self):
+        """Test formatting from dict with verifications key."""
+        data = {
+            "verifications": [
+                {"verify_id": "verify-1", "result": "PASSED"},
+                {"verify_id": "verify-2", "result": "PASSED"},
+            ]
+        }
+        summary = format_verification_summary(data)
+        assert summary["total_verifications"] == 2
+        assert summary["passed"] == 2
+
+    def test_format_empty_list(self):
+        """Test formatting empty verification list."""
+        summary = format_verification_summary([])
+        assert summary["total_verifications"] == 0
+        assert summary["passed"] == 0
+        assert summary["failed"] == 0
+        assert "Verification Summary: 0 total" in summary["summary"]
+
+    def test_format_includes_error_messages(self):
+        """Test that error messages are included in summary."""
+        result = {
+            "verify_id": "verify-1",
+            "result": "FAILED",
+            "error": "Command timed out",
+        }
+        summary = format_verification_summary(result)
+        assert "Error: Command timed out" in summary["summary"]
+
+    def test_format_truncates_long_output(self):
+        """Test that long output is truncated in preview."""
+        result = {
+            "verify_id": "verify-1",
+            "result": "PASSED",
+            "output": "x" * 500,  # Long output
+        }
+        summary = format_verification_summary(result)
+        result_entry = summary["results"][0]
+        assert len(result_entry["output_preview"]) < 210  # 200 + "..."
+
+    def test_format_truncates_long_command(self):
+        """Test that long commands are truncated in summary text."""
+        result = {
+            "verify_id": "verify-1",
+            "result": "PASSED",
+            "command": "very_long_command_" * 10,  # Long command
+        }
+        summary = format_verification_summary(result)
+        assert "..." in summary["summary"]  # Command truncated
+
+    def test_format_handles_unknown_result(self):
+        """Test handling of unknown result types."""
+        result = {
+            "verify_id": "verify-1",
+            "result": None,
+        }
+        summary = format_verification_summary(result)
+        assert summary["total_verifications"] == 1
+        assert summary["results"][0]["result"] == "UNKNOWN"
+        assert summary["results"][0]["status_icon"] == "?"
+
+    def test_format_results_contain_all_fields(self):
+        """Test that result entries contain all expected fields."""
+        result = {
+            "verify_id": "verify-1",
+            "result": "PASSED",
+            "command": "echo test",
+            "output": "test output",
+        }
+        summary = format_verification_summary(result)
+        entry = summary["results"][0]
+        assert "verify_id" in entry
+        assert "result" in entry
+        assert "status_icon" in entry
+        assert "command" in entry
+        assert "output_preview" in entry
+
+    def test_format_skips_non_dict_items(self):
+        """Test that non-dict items in list are skipped."""
+        results = [
+            {"verify_id": "verify-1", "result": "PASSED"},
+            "invalid",
+            None,
+            {"verify_id": "verify-2", "result": "FAILED"},
+        ]
+        summary = format_verification_summary(results)
+        assert summary["total_verifications"] == 2
 
 
 class TestVerificationConstants:

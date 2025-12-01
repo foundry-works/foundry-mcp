@@ -1792,3 +1792,142 @@ def execute_verification(
         response["result"] = "FAILED"
 
     return response
+
+
+def format_verification_summary(
+    verification_data: Dict[str, Any] | List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Format verification results into a human-readable summary.
+
+    Processes verification results (from execute_verification or JSON input)
+    and produces a structured summary with counts and formatted text.
+
+    Args:
+        verification_data: Either:
+            - A single verification result dict (from execute_verification)
+            - A list of verification result dicts
+            - A dict with "verifications" key containing a list
+
+    Returns:
+        Dict with formatted summary:
+        - summary: Human-readable summary text
+        - total_verifications: Total number of verifications
+        - passed: Number of passed verifications
+        - failed: Number of failed verifications
+        - partial: Number of partial verifications
+        - results: List of individual result summaries
+
+    Example:
+        >>> results = [
+        ...     execute_verification(spec_data, "verify-1"),
+        ...     execute_verification(spec_data, "verify-2"),
+        ... ]
+        >>> summary = format_verification_summary(results)
+        >>> print(summary["summary"])
+    """
+    # Normalize input to a list of verification results
+    verifications: List[Dict[str, Any]] = []
+
+    if isinstance(verification_data, list):
+        verifications = verification_data
+    elif isinstance(verification_data, dict):
+        if "verifications" in verification_data:
+            verifications = verification_data.get("verifications", [])
+        else:
+            # Single verification result
+            verifications = [verification_data]
+
+    # Count results by type
+    passed = 0
+    failed = 0
+    partial = 0
+    results: List[Dict[str, Any]] = []
+
+    for v in verifications:
+        if not isinstance(v, dict):
+            continue
+
+        result = (v.get("result") or "").upper()
+        verify_id = v.get("verify_id", "unknown")
+        command = v.get("command", "")
+        output = v.get("output", "")
+        error = v.get("error")
+
+        # Count by result type
+        if result == "PASSED":
+            passed += 1
+            status_icon = "✓"
+        elif result == "FAILED":
+            failed += 1
+            status_icon = "✗"
+        elif result == "PARTIAL":
+            partial += 1
+            status_icon = "◐"
+        else:
+            status_icon = "?"
+
+        # Build individual result summary
+        result_entry: Dict[str, Any] = {
+            "verify_id": verify_id,
+            "result": result or "UNKNOWN",
+            "status_icon": status_icon,
+            "command": command,
+        }
+
+        if error:
+            result_entry["error"] = error
+
+        # Truncate output for summary
+        if output:
+            output_preview = output[:200].strip()
+            if len(output) > 200:
+                output_preview += "..."
+            result_entry["output_preview"] = output_preview
+
+        results.append(result_entry)
+
+    # Calculate totals
+    total = len(results)
+
+    # Build summary text
+    summary_lines = []
+    summary_lines.append(f"Verification Summary: {total} total")
+    summary_lines.append(f"  ✓ Passed:  {passed}")
+    summary_lines.append(f"  ✗ Failed:  {failed}")
+    if partial > 0:
+        summary_lines.append(f"  ◐ Partial: {partial}")
+    summary_lines.append("")
+
+    # Add individual results
+    if results:
+        summary_lines.append("Results:")
+        for r in results:
+            icon = r["status_icon"]
+            vid = r["verify_id"]
+            res = r["result"]
+            cmd = r.get("command", "")
+
+            line = f"  {icon} {vid}: {res}"
+            if cmd:
+                # Truncate command for display
+                cmd_display = cmd[:50]
+                if len(cmd) > 50:
+                    cmd_display += "..."
+                line += f" ({cmd_display})"
+
+            summary_lines.append(line)
+
+            if r.get("error"):
+                summary_lines.append(f"      Error: {r['error']}")
+
+    summary_text = "\n".join(summary_lines)
+
+    return {
+        "summary": summary_text,
+        "total_verifications": total,
+        "passed": passed,
+        "failed": failed,
+        "partial": partial,
+        "results": results,
+    }
