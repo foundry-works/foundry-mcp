@@ -24,6 +24,7 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
 )
 from foundry_mcp.core.modifications import apply_modifications, load_modifications_file
+from foundry_mcp.core.task import add_task, remove_task
 
 logger = get_cli_logger()
 
@@ -219,79 +220,65 @@ def modify_task_add_cmd(
             remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
         )
+        return
 
-    # Build command
-    cmd = ["sdd", "add-task", spec_id, "--parent", parent, "--title", title, "--json"]
-
-    if description:
-        cmd.extend(["--description", description])
-    if task_type != "task":
-        cmd.extend(["--type", task_type])
-    if hours is not None:
-        cmd.extend(["--hours", str(hours)])
-    if position is not None:
-        cmd.extend(["--position", str(position)])
     if dry_run:
-        cmd.append("--dry-run")
-    if specs_dir:
-        cmd.extend(["--path", str(specs_dir.parent)])
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=MEDIUM_TIMEOUT,
-        )
-
+        # For dry_run, we just validate and preview without saving
+        # The native add_task function doesn't support dry_run directly,
+        # so we emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else "Add task failed"
-            emit_error(
-                f"Add task failed: {error_msg}",
-                code="ADD_FAILED",
-                error_type="internal",
-                remediation="Check that the parent node exists and parameters are valid",
-                details={
-                    "spec_id": spec_id,
-                    "parent": parent,
-                    "exit_code": result.returncode,
-                },
-            )
-
-        # Parse output
-        try:
-            task_data = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            task_data = {"raw_output": result.stdout}
-
         emit_success({
             "spec_id": spec_id,
             "parent": parent,
             "title": title,
             "type": task_type,
-            "dry_run": dry_run,
-            **task_data,
+            "dry_run": True,
+            "preview": {
+                "action": "add_task",
+                "description": description,
+                "estimated_hours": hours,
+                "position": position,
+            },
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         })
+        return
 
-    except subprocess.TimeoutExpired:
+    # Use native add_task function
+    result, error = add_task(
+        spec_id=spec_id,
+        parent_id=parent,
+        title=title,
+        description=description,
+        task_type=task_type,
+        estimated_hours=hours,
+        position=position,
+        specs_dir=specs_dir,
+    )
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    if error:
         emit_error(
-            f"Add task timed out after {MEDIUM_TIMEOUT}s",
-            code="TIMEOUT",
+            f"Add task failed: {error}",
+            code="ADD_FAILED",
             error_type="internal",
-            remediation="Try again or check system resources",
-            details={"spec_id": spec_id},
+            remediation="Check that the parent node exists and parameters are valid",
+            details={
+                "spec_id": spec_id,
+                "parent": parent,
+            },
         )
-    except FileNotFoundError:
-        emit_error(
-            "SDD CLI not found",
-            code="CLI_NOT_FOUND",
-            error_type="internal",
-            remediation="Ensure 'sdd' is installed and in PATH",
-            details={"hint": "Ensure 'sdd' is installed and in PATH"},
-        )
+        return
+
+    emit_success({
+        "spec_id": spec_id,
+        "parent": parent,
+        "title": title,
+        "type": task_type,
+        "dry_run": False,
+        **result,
+        "telemetry": {"duration_ms": round(duration_ms, 2)},
+    })
 
 
 @modify_task_group.command("remove")
@@ -335,73 +322,55 @@ def modify_task_remove_cmd(
             remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
         )
+        return
 
-    # Build command
-    cmd = ["sdd", "remove-task", spec_id, task_id, "--json"]
-
-    if cascade:
-        cmd.append("--cascade")
     if dry_run:
-        cmd.append("--dry-run")
-    if specs_dir:
-        cmd.extend(["--path", str(specs_dir.parent)])
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=MEDIUM_TIMEOUT,
-        )
-
+        # For dry_run, emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else "Remove task failed"
-            emit_error(
-                f"Remove task failed: {error_msg}",
-                code="REMOVE_FAILED",
-                error_type="internal",
-                remediation="Verify task exists and spec structure is valid",
-                details={
-                    "spec_id": spec_id,
-                    "task_id": task_id,
-                    "exit_code": result.returncode,
-                },
-            )
-            return
-
-        # Parse output
-        try:
-            remove_data = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            remove_data = {"raw_output": result.stdout}
-
         emit_success({
             "spec_id": spec_id,
             "task_id": task_id,
             "cascade": cascade,
-            "dry_run": dry_run,
-            **remove_data,
+            "dry_run": True,
+            "preview": {
+                "action": "remove_task",
+                "cascade": cascade,
+            },
             "telemetry": {"duration_ms": round(duration_ms, 2)},
         })
+        return
 
-    except subprocess.TimeoutExpired:
+    # Use native remove_task function
+    result, error = remove_task(
+        spec_id=spec_id,
+        task_id=task_id,
+        cascade=cascade,
+        specs_dir=specs_dir,
+    )
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    if error:
         emit_error(
-            f"Remove task timed out after {MEDIUM_TIMEOUT}s",
-            code="TIMEOUT",
+            f"Remove task failed: {error}",
+            code="REMOVE_FAILED",
             error_type="internal",
-            remediation="Try again or check system resources",
-            details={"spec_id": spec_id, "task_id": task_id},
+            remediation="Verify task exists and spec structure is valid",
+            details={
+                "spec_id": spec_id,
+                "task_id": task_id,
+            },
         )
-    except FileNotFoundError:
-        emit_error(
-            "SDD CLI not found",
-            code="CLI_NOT_FOUND",
-            error_type="internal",
-            remediation="Ensure 'sdd' is installed and in PATH",
-            details={"hint": "Ensure 'sdd' is installed and in PATH"},
-        )
+        return
+
+    emit_success({
+        "spec_id": spec_id,
+        "task_id": task_id,
+        "cascade": cascade,
+        "dry_run": False,
+        **result,
+        "telemetry": {"duration_ms": round(duration_ms, 2)},
+    })
 
 
 @modify_group.command("assumption")
