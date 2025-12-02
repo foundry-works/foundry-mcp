@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T16:09:53.067407Z",
+  "last_updated": "2025-12-02T16:11:54.320404Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 40,
+    "progress_percentage": 42,
     "current_phase": "phase-2"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 14,
+      "completed_tasks": 15,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -384,7 +384,7 @@
         "phase-2-verify"
       ],
       "total_tasks": 8,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Remove subprocess.run calls to legacy sdd binary, use core modules directly",
         "risk_level": "high",
@@ -404,7 +404,7 @@
     "phase-2-files": {
       "type": "group",
       "title": "Nativize CLI Commands",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-2",
       "children": [
         "task-2-1",
@@ -414,8 +414,12 @@
         "task-2-5"
       ],
       "total_tasks": 5,
-      "completed_tasks": 4,
-      "metadata": {},
+      "completed_tasks": 5,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T16:11:54.313384Z",
+        "journaled_at": "2025-12-02T16:11:54.320369Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-2-verify"
@@ -540,16 +544,22 @@
     "task-2-5": {
       "type": "task",
       "title": "Native pr get-context command",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-2-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/cli/commands/pr.py",
         "task_category": "refactoring",
         "estimated_hours": 1.5,
-        "details": "Implement native pr get-context without shelling out, gather completed tasks + journal entries + progress stats"
+        "details": "Implement native pr get-context without shelling out, gather completed tasks + journal entries + progress stats",
+        "started_at": "2025-12-02T16:10:28.085203Z",
+        "status_note": "Nativizing pr get-context command",
+        "completed_at": "2025-12-02T16:11:54.313222Z",
+        "needs_journaling": false,
+        "actual_hours": 0.024,
+        "journaled_at": "2025-12-02T16:11:54.316675Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1293,6 +1303,24 @@
       "content": "Created src/foundry_mcp/core/review.py with non-LLM review logic. Implemented:\n- ReviewFinding, QuickReviewResult, ReviewContext dataclasses\n- get_llm_status() - returns LLM configuration status\n- prepare_review_context() - gathers spec data, validation, progress, phases, completed tasks, and journal entries for reviews\n- quick_review() - performs structural review checking validation diagnostics, empty phases, missing estimates, missing file paths, and blocked tasks\n- review_type_requires_llm() - determines if a review type needs LLM\n\nExported all new symbols from core/__init__.py. Created comprehensive test suite with 19 passing tests in tests/unit/core/test_review.py covering all functions and edge cases.",
       "metadata": {},
       "task_id": "task-2-4"
+    },
+    {
+      "timestamp": "2025-12-02T16:11:54.316670Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Native pr get-context command",
+      "author": "claude-code",
+      "content": "Refactored pr_context_cmd in src/foundry_mcp/cli/commands/pr.py to use prepare_review_context() from core/review.py instead of manually loading spec and extracting data. This:\n- Reduces code duplication (context gathering logic now centralized in core/review.py)\n- Uses consistent progress calculation via get_progress_summary()\n- Maintains same output format for backwards compatibility\n- Removes manual hierarchy traversal in favor of reusable ReviewContext dataclass\n\nThe command was already native (not shelling out), but now uses the proper core abstraction layer. Verified imports work and tested against real spec.",
+      "metadata": {},
+      "task_id": "task-2-5"
+    },
+    {
+      "timestamp": "2025-12-02T16:11:54.320357Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Nativize CLI Commands",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-2-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-2-files"
     }
   ]
 }

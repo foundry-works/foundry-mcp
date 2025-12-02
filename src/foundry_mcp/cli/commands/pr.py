@@ -226,11 +226,18 @@ def pr_context_cmd(
             details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
         )
 
-    # Load spec to get context
-    from foundry_mcp.core.spec import load_spec
+    # Use prepare_review_context from core/review for consistent context gathering
+    from foundry_mcp.core.review import prepare_review_context
 
-    spec_data = load_spec(spec_id, specs_dir)
-    if spec_data is None:
+    review_ctx = prepare_review_context(
+        spec_id=spec_id,
+        specs_dir=specs_dir,
+        include_tasks=include_tasks,
+        include_journals=include_journals,
+        max_journal_entries=5,
+    )
+
+    if review_ctx is None:
         emit_error(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
@@ -241,42 +248,24 @@ def pr_context_cmd(
 
     context = {
         "spec_id": spec_id,
-        "title": spec_data.get("title", "Untitled"),
+        "title": review_ctx.title,
     }
 
-    hierarchy = spec_data.get("hierarchy", {})
-
-    # Get progress stats
+    # Get progress stats from context
     if include_progress:
-        root = hierarchy.get("spec-root", {})
-        total_tasks = root.get("total_tasks", 0)
-        completed_tasks = root.get("completed_tasks", 0)
-
         context["progress"] = {
-            "total_tasks": total_tasks,
-            "completed_tasks": completed_tasks,
-            "percentage": round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 1),
+            "total_tasks": review_ctx.progress.get("total_tasks", 0),
+            "completed_tasks": review_ctx.progress.get("completed_tasks", 0),
+            "percentage": review_ctx.progress.get("percentage", 0),
         }
 
-    # Get completed tasks
+    # Get completed tasks from context
     if include_tasks:
-        completed_task_list = []
-        for node_id, node in hierarchy.items():
-            if node.get("type") in ("task", "subtask", "verify"):
-                if node.get("status") == "completed":
-                    completed_task_list.append({
-                        "id": node_id,
-                        "title": node.get("title", "Untitled"),
-                        "type": node.get("type"),
-                    })
-        context["completed_tasks"] = completed_task_list
+        context["completed_tasks"] = review_ctx.completed_tasks
 
-    # Get recent journal entries
+    # Get journal entries from context
     if include_journals:
-        journal = spec_data.get("journal", [])
-        # Get last 5 entries
-        recent_entries = journal[-5:] if journal else []
-        context["journals"] = recent_entries
+        context["journals"] = review_ctx.journal_entries
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
