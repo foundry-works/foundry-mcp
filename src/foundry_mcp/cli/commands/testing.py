@@ -64,6 +64,18 @@ def test_group() -> None:
     "--markers",
     help="Pytest markers expression (e.g., 'not slow').",
 )
+@click.option(
+    "--coverage/--no-coverage",
+    default=False,
+    help="Enable coverage reporting via pytest-cov.",
+)
+@click.option(
+    "--parallel",
+    "-n",
+    type=int,
+    default=None,
+    help="Run tests in parallel with N workers (requires pytest-xdist).",
+)
 @click.pass_context
 @cli_command("test-run")
 @handle_keyboard_interrupt()
@@ -76,6 +88,8 @@ def test_run_cmd(
     verbose: bool,
     fail_fast: bool,
     markers: Optional[str],
+    coverage: bool,
+    parallel: Optional[int],
 ) -> None:
     """Run tests using pytest.
 
@@ -108,6 +122,14 @@ def test_run_cmd(
         cmd.extend(["-m", "integration"])
     elif preset == "smoke":
         cmd.extend(["-m", "smoke", "-x"])
+
+    # Coverage support
+    if coverage:
+        cmd.extend(["--cov", "--cov-report=term-missing"])
+
+    # Parallel execution support (requires pytest-xdist)
+    if parallel is not None and parallel > 0:
+        cmd.extend(["-n", str(parallel)])
 
     # Add JSON output format
     cmd.extend(["--tb=short", "-q"])
@@ -187,6 +209,13 @@ def test_run_cmd(
     default="test_*.py",
     help="File pattern for test files.",
 )
+@click.option(
+    "--list",
+    "list_only",
+    is_flag=True,
+    default=True,
+    help="List tests without running (default behavior).",
+)
 @click.pass_context
 @cli_command("test-discover")
 @handle_keyboard_interrupt()
@@ -195,6 +224,7 @@ def test_discover_cmd(
     ctx: click.Context,
     target: Optional[str],
     pattern: str,
+    list_only: bool,
 ) -> None:
     """Discover tests without running them.
 
@@ -400,6 +430,143 @@ def test_quick_cmd(ctx: click.Context, target: Optional[str]) -> None:
 def test_unit_cmd(ctx: click.Context, target: Optional[str]) -> None:
     """Run unit tests (preset: unit)."""
     ctx.invoke(test_run_cmd, target=target, preset="unit")
+
+
+# Consultation timeout (longer for AI analysis)
+CONSULT_TIMEOUT = 300
+
+
+@test_group.command("consult")
+@click.argument("pattern", required=False)
+@click.option(
+    "--issue",
+    required=True,
+    help="Description of the test failure or issue to analyze.",
+)
+@click.option(
+    "--tools",
+    help="Comma-separated list of AI tools to use (e.g., 'gemini,cursor-agent').",
+)
+@click.option(
+    "--model",
+    help="Specific LLM model to use for analysis.",
+)
+@click.pass_context
+@cli_command("test-consult")
+@handle_keyboard_interrupt()
+@with_sync_timeout(CONSULT_TIMEOUT, "Test consultation timed out")
+def test_consult_cmd(
+    ctx: click.Context,
+    pattern: Optional[str],
+    issue: str,
+    tools: Optional[str],
+    model: Optional[str],
+) -> None:
+    """Consult AI about test failures or issues.
+
+    PATTERN is an optional test pattern to filter tests (e.g., 'test_auth*').
+
+    Example:
+        sdd test consult --issue "test_login is flaky and fails intermittently"
+        sdd test consult test_api --issue "assertion error on line 42"
+    """
+    start_time = time.perf_counter()
+    cli_ctx = get_context(ctx)
+
+    # Build consultation prompt
+    prompt_parts = [f"Test issue: {issue}"]
+    if pattern:
+        prompt_parts.append(f"Test pattern: {pattern}")
+
+    # Check for recent test output to include as context
+    test_context = None
+    try:
+        # Run a quick test discovery to get context
+        if pattern:
+            discover_result = subprocess.run(
+                ["pytest", "--collect-only", "-q", pattern],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(cli_ctx.specs_dir.parent) if cli_ctx.specs_dir else None,
+            )
+            if discover_result.returncode == 0:
+                test_context = discover_result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Build the consultation command
+    cmd = ["sdd", "consult", "--json"]
+    cmd.extend(["--prompt", " | ".join(prompt_parts)])
+
+    if tools:
+        cmd.extend(["--tools", tools])
+    if model:
+        cmd.extend(["--model", model])
+    if cli_ctx.specs_dir:
+        cmd.extend(["--path", str(cli_ctx.specs_dir.parent)])
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=CONSULT_TIMEOUT,
+        )
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        if result.returncode == 0:
+            try:
+                response_data = json.loads(result.stdout)
+                emit_success({
+                    "pattern": pattern,
+                    "issue": issue,
+                    "tools_used": tools.split(",") if tools else ["default"],
+                    "model": model,
+                    "response": response_data,
+                    "test_context": test_context[:500] if test_context else None,
+                    "telemetry": {"duration_ms": round(duration_ms, 2)},
+                })
+            except json.JSONDecodeError:
+                emit_success({
+                    "pattern": pattern,
+                    "issue": issue,
+                    "tools_used": tools.split(",") if tools else ["default"],
+                    "model": model,
+                    "response": {"raw_output": result.stdout},
+                    "test_context": test_context[:500] if test_context else None,
+                    "telemetry": {"duration_ms": round(duration_ms, 2)},
+                })
+        else:
+            emit_error(
+                "Test consultation failed",
+                code="CONSULT_FAILED",
+                error_type="internal",
+                remediation="Check AI tool availability and API configuration",
+                details={
+                    "pattern": pattern,
+                    "issue": issue,
+                    "stderr": result.stderr[:500] if result.stderr else None,
+                },
+            )
+
+    except subprocess.TimeoutExpired:
+        emit_error(
+            f"Test consultation timed out after {CONSULT_TIMEOUT}s",
+            code="TIMEOUT",
+            error_type="internal",
+            remediation="Try a more specific issue description or check AI service status",
+            details={"pattern": pattern, "issue": issue, "timeout_seconds": CONSULT_TIMEOUT},
+        )
+    except FileNotFoundError:
+        emit_error(
+            "sdd command not found",
+            code="SDD_NOT_FOUND",
+            error_type="internal",
+            remediation="Ensure sdd is installed and in PATH",
+            details={"hint": "Run: pip install foundry-sdd"},
+        )
 
 
 # Top-level alias

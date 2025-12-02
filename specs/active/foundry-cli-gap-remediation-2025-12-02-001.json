@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T17:25:19.875803Z",
+  "last_updated": "2025-12-02T17:32:10.985971Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 74,
+    "progress_percentage": 77,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 26,
+      "completed_tasks": 27,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -910,7 +910,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 5,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Add missing flags to align CLI interfaces with skill documentation signatures",
         "risk_level": "low",
@@ -929,7 +929,7 @@
     "phase-4-files": {
       "type": "group",
       "title": "Flag Additions",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "task-4-1",
@@ -937,8 +937,12 @@
         "task-4-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 2,
-      "metadata": {},
+      "completed_tasks": 3,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T17:32:10.974838Z",
+        "journaled_at": "2025-12-02T17:32:10.985942Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-4-verify"
@@ -1002,16 +1006,21 @@
     "task-4-3": {
       "type": "task",
       "title": "Add missing test flags and consult command",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/cli/commands/testing.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "details": "Add --coverage, --parallel, --list flags. Add sdd test consult <pattern> --issue <description>"
+        "details": "Add --coverage, --parallel, --list flags. Add sdd test consult <pattern> --issue <description>",
+        "started_at": "2025-12-02T17:29:33.226708Z",
+        "completed_at": "2025-12-02T17:32:10.974680Z",
+        "needs_journaling": false,
+        "actual_hours": 0.044,
+        "journaled_at": "2025-12-02T17:32:10.979167Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1549,6 +1558,24 @@
       "content": "Added --output/-o (write markdown to file), --enhancement-level (alias for --mode), and --path (project root override) flags to both render_spec_cmd and render_cmd. --mode now defaults to None so --enhancement-level can be used as alternative. Both commands handle file output and path resolution. Verified help output shows all new flags. File modified: src/foundry_mcp/cli/commands/render.py.",
       "metadata": {},
       "task_id": "task-4-2"
+    },
+    {
+      "timestamp": "2025-12-02T17:32:10.979154Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add missing test flags and consult command",
+      "author": "claude-code",
+      "content": "Added --coverage/--no-coverage flag (enables pytest-cov with term-missing report), --parallel/-n flag (enables pytest-xdist parallel execution with N workers), and --list flag to test discover command. Also added new sdd test consult command for AI consultation on test failures with --issue (required), --tools, and --model options. All imports verified and help output confirmed working. File modified: src/foundry_mcp/cli/commands/testing.py.",
+      "metadata": {},
+      "task_id": "task-4-3"
+    },
+    {
+      "timestamp": "2025-12-02T17:32:10.985928Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Flag Additions",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-files"
     }
   ]
 }
