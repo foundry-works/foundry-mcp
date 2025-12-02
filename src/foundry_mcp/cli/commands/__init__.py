@@ -104,6 +104,8 @@ from foundry_mcp.cli.commands.journal import (
     journal,
     journal_add_cmd,
     journal_add_alias_cmd,
+    journal_list_cmd,
+    journal_list_alias_cmd,
 )
 from foundry_mcp.cli.commands.tasks import (
     block_task_cmd,
@@ -218,4 +220,6 @@ __all__ = [
     "journal",
     "journal_add_cmd",
     "journal_add_alias_cmd",
+    "journal_list_cmd",
+    "journal_list_alias_cmd",
 ]

@@ -147,5 +147,92 @@ def journal_add_cmd(
     })
 
 
-# Top-level alias for journal add
+@journal.command("list")
+@click.argument("spec_id")
+@click.option("--task-id", help="Filter by task ID.")
+@click.option(
+    "--type", "-T", "entry_type",
+    type=click.Choice(["note", "decision", "blocker", "deviation", "status_change"]),
+    help="Filter by entry type.",
+)
+@click.option("--limit", "-l", type=int, help="Limit number of entries returned.")
+@click.pass_context
+@cli_command("journal-list")
+@handle_keyboard_interrupt()
+@with_sync_timeout(MEDIUM_TIMEOUT, "Journal list timed out")
+def journal_list_cmd(
+    ctx: click.Context,
+    spec_id: str,
+    task_id: Optional[str],
+    entry_type: Optional[str],
+    limit: Optional[int],
+) -> None:
+    """List journal entries from a specification.
+
+    SPEC_ID is the specification identifier.
+
+    Returns entries sorted by timestamp (most recent first).
+
+    Examples:
+        sdd journal list my-spec
+        sdd journal list my-spec --task-id task-2-1
+        sdd journal list my-spec --type decision --limit 5
+    """
+    cli_ctx = get_context(ctx)
+    specs_dir = cli_ctx.specs_dir
+
+    if specs_dir is None:
+        emit_error(
+            "No specs directory found",
+            code="VALIDATION_ERROR",
+            error_type="validation",
+            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+        )
+        return
+
+    # Load spec
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        emit_error(
+            f"Specification not found: {spec_id}",
+            code="SPEC_NOT_FOUND",
+            error_type="not_found",
+            remediation="Verify the spec ID exists using: sdd specs list",
+            details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
+        )
+        return
+
+    # Get journal entries
+    entries = get_journal_entries(
+        spec_data,
+        task_id=task_id,
+        entry_type=entry_type,
+        limit=limit,
+    )
+
+    emit_success({
+        "spec_id": spec_id,
+        "entry_count": len(entries),
+        "filters": {
+            "task_id": task_id,
+            "entry_type": entry_type,
+            "limit": limit,
+        },
+        "entries": [
+            {
+                "timestamp": e.timestamp,
+                "entry_type": e.entry_type,
+                "title": e.title,
+                "content": e.content,
+                "task_id": e.task_id,
+                "author": e.author,
+            }
+            for e in entries
+        ],
+    })
+
+
+# Top-level aliases
 journal_add_alias_cmd = journal_add_cmd
+journal_list_alias_cmd = journal_list_cmd
