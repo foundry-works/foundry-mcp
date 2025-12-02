@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T16:24:17.001828Z",
+  "last_updated": "2025-12-02T16:26:13.626852Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,8 +23,8 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 51,
-    "current_phase": "phase-2"
+    "progress_percentage": 54,
+    "current_phase": "phase-3"
   },
   "hierarchy": {
     "spec-root": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 18,
+      "completed_tasks": 19,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -663,14 +663,14 @@
     "phase-3": {
       "type": "phase",
       "title": "Doc-Query Expansion",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "spec-root",
       "children": [
         "phase-3-files",
         "phase-3-verify"
       ],
       "total_tasks": 6,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "purpose": "Expand doc-query CLI surface to match skill expectations (scope, search, dependencies, refactor-candidates)",
         "risk_level": "medium",
@@ -689,7 +689,7 @@
     "phase-3-files": {
       "type": "group",
       "title": "Doc-Query Commands",
-      "status": "pending",
+      "status": "in_progress",
       "parent": "phase-3",
       "children": [
         "task-3-1",
@@ -698,7 +698,7 @@
         "task-3-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -782,16 +782,22 @@
     "task-3-4": {
       "type": "task",
       "title": "Extend DocsQuery core class",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/docs.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "details": "Add get_scope(), search(), get_refactor_candidates() methods to DocsQuery class"
+        "details": "Add get_scope(), search(), get_refactor_candidates() methods to DocsQuery class",
+        "started_at": "2025-12-02T16:25:00.290953Z",
+        "status_note": "Starting DocsQuery core class extension",
+        "completed_at": "2025-12-02T16:26:13.622120Z",
+        "needs_journaling": false,
+        "actual_hours": 0.02,
+        "journaled_at": "2025-12-02T16:26:13.625502Z"
       },
       "dependencies": {
         "blocks": [
@@ -1391,6 +1397,15 @@
       "content": "All child tasks in phase phase-2 have been completed.",
       "metadata": {},
       "task_id": "phase-2"
+    },
+    {
+      "timestamp": "2025-12-02T16:26:13.625496Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Extend DocsQuery core class",
+      "author": "claude-code",
+      "content": "Extended DocsQuery class in src/foundry_mcp/core/docs.py with three new methods: (1) get_scope(file_path, mode) - returns scoped context for a file in 'plan' or 'implement' modes, including classes, functions, dependencies, and dependents; (2) search(query, entity_types, max_results) - searches documentation by keyword with relevance scoring across class names, function names, docstrings, methods, and parameters; (3) get_refactor_candidates(min_callers, min_complexity) - identifies functions with high call counts and classes with many methods or deep inheritance as refactoring candidates. All methods follow existing patterns with DocsQueryResponse return type and proper error handling when docs not loaded. Verified all three methods are callable and return expected error responses when docs not loaded.",
+      "metadata": {},
+      "task_id": "task-3-4"
     }
   ]
 }

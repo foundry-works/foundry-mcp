@@ -669,6 +669,294 @@ class DocsQuery:
             metadata={"module": module},
         )
 
+    # Scope queries
+
+    def get_scope(
+        self,
+        file_path: str,
+        mode: str = "plan",
+    ) -> DocsQueryResponse:
+        """
+        Get scoped context for a file.
+
+        Provides targeted documentation context for planning or implementation.
+
+        Args:
+            file_path: Path to the file
+            mode: "plan" for lightweight context, "implement" for detailed context
+
+        Returns:
+            DocsQueryResponse with file scope information
+        """
+        if not self._loaded:
+            return DocsQueryResponse(
+                success=False,
+                query_type="get_scope",
+                error="Documentation not loaded",
+            )
+
+        # Normalize file path
+        normalized_path = str(Path(file_path))
+
+        # Get classes and functions in the file
+        classes = self._classes_by_file.get(normalized_path, [])
+        functions = self._functions_by_file.get(normalized_path, [])
+
+        # Build scope result
+        scope_data = {
+            "file_path": normalized_path,
+            "mode": mode,
+            "classes": [],
+            "functions": [],
+            "dependencies": [],
+            "dependents": [],
+        }
+
+        # Add class information
+        for cls in classes:
+            cls_info = {
+                "name": cls.get("name", ""),
+                "line": cls.get("line"),
+                "bases": cls.get("bases", []),
+            }
+            if mode == "implement":
+                cls_info["methods"] = cls.get("methods", [])
+                cls_info["docstring"] = cls.get("docstring", "")
+            scope_data["classes"].append(cls_info)
+
+        # Add function information
+        for func in functions:
+            func_info = {
+                "name": func.get("name", ""),
+                "line": func.get("line"),
+                "signature": func.get("signature", ""),
+            }
+            if mode == "implement":
+                func_info["docstring"] = func.get("docstring", "")
+                func_info["calls"] = func.get("calls", [])
+                func_info["parameters"] = func.get("parameters", [])
+            scope_data["functions"].append(func_info)
+
+        # Get module dependencies
+        module_path = normalized_path.replace("/", ".").replace(".py", "")
+        deps = self.data.get("dependencies", {}).get(module_path, [])
+        scope_data["dependencies"] = deps
+
+        # Get reverse dependencies (what depends on this file)
+        dependencies = self.data.get("dependencies", {})
+        for mod, mod_deps in dependencies.items():
+            if module_path in mod_deps or normalized_path in mod_deps:
+                scope_data["dependents"].append(mod)
+
+        return DocsQueryResponse(
+            success=True,
+            query_type="get_scope",
+            results=[scope_data],
+            metadata={
+                "file_path": normalized_path,
+                "mode": mode,
+                "class_count": len(classes),
+                "function_count": len(functions),
+            },
+        )
+
+    def search(
+        self,
+        query: str,
+        entity_types: Optional[List[str]] = None,
+        max_results: int = 50,
+    ) -> DocsQueryResponse:
+        """
+        Search documentation by keyword.
+
+        Args:
+            query: Search query (case-insensitive substring match)
+            entity_types: Types to search ("class", "function", or both)
+            max_results: Maximum number of results
+
+        Returns:
+            DocsQueryResponse with matching entities
+        """
+        if not self._loaded:
+            return DocsQueryResponse(
+                success=False,
+                query_type="search",
+                error="Documentation not loaded",
+            )
+
+        if entity_types is None:
+            entity_types = ["class", "function"]
+
+        results: List[QueryResult] = []
+        query_lower = query.lower()
+
+        # Search classes
+        if "class" in entity_types:
+            for cls_name, cls in self._classes_by_name.items():
+                score = 0.0
+                # Name match
+                if query_lower in cls_name.lower():
+                    score = 1.0 if cls_name.lower() == query_lower else 0.8
+                # Docstring match
+                elif query_lower in cls.get("docstring", "").lower():
+                    score = 0.5
+                # Method name match
+                else:
+                    for method in cls.get("methods", []):
+                        if query_lower in method.lower():
+                            score = 0.4
+                            break
+
+                if score > 0:
+                    results.append(QueryResult(
+                        entity_type="class",
+                        name=cls_name,
+                        data=cls,
+                        file_path=cls.get("file"),
+                        line_number=cls.get("line"),
+                        relevance_score=score,
+                    ))
+
+        # Search functions
+        if "function" in entity_types:
+            for func_name, func in self._functions_by_name.items():
+                score = 0.0
+                # Name match
+                if query_lower in func_name.lower():
+                    score = 1.0 if func_name.lower() == query_lower else 0.8
+                # Docstring match
+                elif query_lower in func.get("docstring", "").lower():
+                    score = 0.5
+                # Parameter name match
+                else:
+                    for param in func.get("parameters", []):
+                        if query_lower in str(param).lower():
+                            score = 0.3
+                            break
+
+                if score > 0:
+                    results.append(QueryResult(
+                        entity_type="function",
+                        name=func_name,
+                        data=func,
+                        file_path=func.get("file"),
+                        line_number=func.get("line"),
+                        relevance_score=score,
+                    ))
+
+        # Sort by relevance score and limit
+        results.sort(key=lambda r: r.relevance_score, reverse=True)
+        results = results[:max_results]
+
+        return DocsQueryResponse(
+            success=True,
+            query_type="search",
+            results=results,
+            metadata={
+                "query": query,
+                "entity_types": entity_types,
+                "total_matches": len(results),
+            },
+        )
+
+    def get_refactor_candidates(
+        self,
+        min_callers: int = 3,
+        min_complexity: int = 0,
+    ) -> DocsQueryResponse:
+        """
+        Find candidates for refactoring.
+
+        Identifies functions with high call counts (potential utility extraction)
+        or high complexity (potential simplification).
+
+        Args:
+            min_callers: Minimum number of callers to consider
+            min_complexity: Minimum complexity score (if available)
+
+        Returns:
+            DocsQueryResponse with refactoring candidates
+        """
+        if not self._loaded:
+            return DocsQueryResponse(
+                success=False,
+                query_type="get_refactor_candidates",
+                error="Documentation not loaded",
+            )
+
+        candidates: List[Dict[str, Any]] = []
+
+        for func_name, func in self._functions_by_name.items():
+            caller_count = len(self._callers_index.get(func_name, []))
+            callee_count = len(self._callees_index.get(func_name, []))
+            complexity = func.get("complexity", 0)
+
+            reasons = []
+
+            # High caller count suggests utility function candidate
+            if caller_count >= min_callers:
+                reasons.append(f"high_callers ({caller_count})")
+
+            # High callee count suggests complex function
+            if callee_count >= 5:
+                reasons.append(f"high_callees ({callee_count})")
+
+            # High complexity (if tracked)
+            if complexity >= min_complexity and complexity > 10:
+                reasons.append(f"high_complexity ({complexity})")
+
+            if reasons:
+                candidates.append({
+                    "name": func_name,
+                    "type": "function",
+                    "file_path": func.get("file"),
+                    "line": func.get("line"),
+                    "caller_count": caller_count,
+                    "callee_count": callee_count,
+                    "complexity": complexity,
+                    "reasons": reasons,
+                    "priority": caller_count + (callee_count * 0.5) + (complexity * 0.2),
+                })
+
+        # Also check classes
+        for cls_name, cls in self._classes_by_name.items():
+            method_count = len(cls.get("methods", []))
+            reasons = []
+
+            # Large classes
+            if method_count >= 15:
+                reasons.append(f"large_class ({method_count} methods)")
+
+            # Deep inheritance
+            if len(cls.get("bases", [])) >= 3:
+                reasons.append(f"deep_inheritance ({len(cls.get('bases', []))} bases)")
+
+            if reasons:
+                candidates.append({
+                    "name": cls_name,
+                    "type": "class",
+                    "file_path": cls.get("file"),
+                    "line": cls.get("line"),
+                    "method_count": method_count,
+                    "base_count": len(cls.get("bases", [])),
+                    "reasons": reasons,
+                    "priority": method_count * 0.5,
+                })
+
+        # Sort by priority
+        candidates.sort(key=lambda c: c.get("priority", 0), reverse=True)
+
+        return DocsQueryResponse(
+            success=True,
+            query_type="get_refactor_candidates",
+            results=candidates,
+            metadata={
+                "min_callers": min_callers,
+                "min_complexity": min_complexity,
+                "total_candidates": len(candidates),
+            },
+        )
+
     # Metadata
 
     def get_metadata(self) -> DocsQueryResponse:
