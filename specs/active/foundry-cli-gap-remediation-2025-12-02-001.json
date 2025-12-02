@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T18:15:29.652714Z",
+  "last_updated": "2025-12-02T18:16:43.440919Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -21,16 +21,16 @@
       "JSON-first output per docs/codebase_standards/cli-output.md",
       "Follow patterns established in existing CLI commands (tasks.py)"
     ],
-    "status": "active",
+    "status": "completed",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 97,
+    "progress_percentage": 100,
     "current_phase": "phase-5"
   },
   "hierarchy": {
     "spec-root": {
       "type": "spec",
       "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
-      "status": "in_progress",
+      "status": "completed",
       "parent": null,
       "children": [
         "phase-1",
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 34,
+      "completed_tasks": 35,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -1098,18 +1098,21 @@
     "phase-5": {
       "type": "phase",
       "title": "Context Management (Session Marker)",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "phase-5-files",
         "phase-5-verify"
       ],
       "total_tasks": 6,
-      "completed_tasks": 5,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Complete context management contract for sdd-next workflow",
         "risk_level": "low",
-        "estimated_hours": 4
+        "estimated_hours": 4,
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T18:16:43.429833Z",
+        "journaled_at": "2025-12-02T18:16:43.440890Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1223,7 +1226,7 @@
     "phase-5-verify": {
       "type": "group",
       "title": "Phase 5 Verification",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-5",
       "children": [
         "verify-5-1",
@@ -1231,8 +1234,12 @@
         "verify-5-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 2,
-      "metadata": {},
+      "completed_tasks": 3,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T18:16:43.429830Z",
+        "journaled_at": "2025-12-02T18:16:43.439057Z"
+      },
       "dependencies": {
         "blocked_by": [
           "phase-5-files"
@@ -1286,16 +1293,22 @@
     "verify-5-3": {
       "type": "verify",
       "title": "Final fidelity review",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-5-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "fidelity",
         "agent": "sdd-fidelity-review",
         "scope": "spec",
-        "target": "spec-root"
+        "target": "spec-root",
+        "started_at": "2025-12-02T18:16:02.906262Z",
+        "status_note": "Running final fidelity review for full spec",
+        "completed_at": "2025-12-02T18:16:43.429628Z",
+        "needs_journaling": false,
+        "actual_hours": 0.011,
+        "journaled_at": "2025-12-02T18:16:43.434586Z"
       }
     }
   },
@@ -1715,6 +1728,33 @@
       "content": "Full test suite PASSED (1914 passed, 1 skipped, 16 xfailed). Fixed command registration conflict in registry.py where validate_cmd was overwriting validate_group. Removed duplicate registration of validate_cmd as top-level alias since validate_group already provides the 'validate' command name with proper subcommands (check, stats, report, fix, analyze-deps). File modified: src/foundry_mcp/cli/registry.py.",
       "metadata": {},
       "task_id": "verify-5-2"
+    },
+    {
+      "timestamp": "2025-12-02T18:16:43.434558Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Final fidelity review",
+      "author": "claude-code",
+      "content": "Final fidelity review PASSED. All 5 phases verified: Phase 1 (Critical CLI Gaps) 100%, Phase 2 (Shell-Out Removal) 100%, Phase 3 (Doc-Query Expansion) 100%, Phase 4 (Interface Alignment) 100%, Phase 5 (Context Management) complete. Previous phase fidelity reviews (phase-2, phase-3, phase-4) all show 0 issues. Full test suite passes (1914 tests). Key implementations verified: (1) Journal commands with CRUD operations, (2) Native CLI for modify/review/PR, (3) Doc-query with scope and implementation modes, (4) Validate group with subcommands, (5) Context/session-marker commands, (6) schema alias. All commands emit proper JSON response envelopes per codebase standards.",
+      "metadata": {},
+      "task_id": "verify-5-3"
+    },
+    {
+      "timestamp": "2025-12-02T18:16:43.439046Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Phase 5 Verification",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-5-verify have been completed.",
+      "metadata": {},
+      "task_id": "phase-5-verify"
+    },
+    {
+      "timestamp": "2025-12-02T18:16:43.440884Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Context Management (Session Marker)",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-5 have been completed.",
+      "metadata": {},
+      "task_id": "phase-5"
     }
   ]
 }
