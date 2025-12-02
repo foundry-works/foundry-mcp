@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T16:26:13.626852Z",
+  "last_updated": "2025-12-02T16:30:56.231349Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 54,
+    "progress_percentage": 57,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 19,
+      "completed_tasks": 20,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -670,7 +670,7 @@
         "phase-3-verify"
       ],
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Expand doc-query CLI surface to match skill expectations (scope, search, dependencies, refactor-candidates)",
         "risk_level": "medium",
@@ -698,7 +698,7 @@
         "task-3-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -711,16 +711,22 @@
     "task-3-1": {
       "type": "task",
       "title": "Add doc scope command",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/cli/commands/docquery.py",
         "task_category": "implementation",
         "estimated_hours": 2,
-        "details": "sdd doc scope <target> [--view plan|implement|trace|debug]. Also add dependencies, describe-module, list-modules, list-functions"
+        "details": "sdd doc scope <target> [--view plan|implement|trace|debug]. Also add dependencies, describe-module, list-modules, list-functions",
+        "started_at": "2025-12-02T16:28:33.349882Z",
+        "status_note": "Starting implementation of doc scope and related commands",
+        "completed_at": "2025-12-02T16:30:56.226581Z",
+        "needs_journaling": false,
+        "actual_hours": 0.04,
+        "journaled_at": "2025-12-02T16:30:56.229963Z"
       },
       "dependencies": {
         "blocks": [
@@ -1406,6 +1412,15 @@
       "content": "Extended DocsQuery class in src/foundry_mcp/core/docs.py with three new methods: (1) get_scope(file_path, mode) - returns scoped context for a file in 'plan' or 'implement' modes, including classes, functions, dependencies, and dependents; (2) search(query, entity_types, max_results) - searches documentation by keyword with relevance scoring across class names, function names, docstrings, methods, and parameters; (3) get_refactor_candidates(min_callers, min_complexity) - identifies functions with high call counts and classes with many methods or deep inheritance as refactoring candidates. All methods follow existing patterns with DocsQueryResponse return type and proper error handling when docs not loaded. Verified all three methods are callable and return expected error responses when docs not loaded.",
       "metadata": {},
       "task_id": "task-3-4"
+    },
+    {
+      "timestamp": "2025-12-02T16:30:56.229959Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add doc scope command",
+      "author": "claude-code",
+      "content": "Implemented 5 new doc-query CLI commands in src/foundry_mcp/cli/commands/docquery.py:\n\n1. `doc scope <target> [--view plan|implement|trace|debug]` - Get scoped context for a file with different view modes\n2. `doc dependencies <module> [--reverse]` - Get module dependencies or reverse dependencies\n3. `doc describe-module <file_path>` - Describe a module showing its classes and functions\n4. `doc list-modules [--limit N]` - List all modules in codebase documentation\n5. `doc list-functions [--file FILE] [--limit N]` - List functions optionally filtered by file\n\nAll commands:\n- Use the DocsQuery core class from src/foundry_mcp/core/docs.py\n- Follow the established CLI patterns with @cli_command decorators\n- Handle keyboard interrupt and timeout via decorators\n- Output JSON via emit_success/emit_error helpers\n- Include telemetry duration metrics\n\nVerification: Commands import successfully and appear in `doc --help` output. Related tests pass.",
+      "metadata": {},
+      "task_id": "task-3-1"
     }
   ]
 }
