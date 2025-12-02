@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T17:34:01.943643Z",
+  "last_updated": "2025-12-02T17:39:56.135130Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 80,
+    "progress_percentage": 82,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 28,
+      "completed_tasks": 29,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -903,18 +903,21 @@
     "phase-4": {
       "type": "phase",
       "title": "Interface Alignment (Validate, Render, Test)",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "phase-4-files",
         "phase-4-verify"
       ],
       "total_tasks": 5,
-      "completed_tasks": 4,
+      "completed_tasks": 5,
       "metadata": {
         "purpose": "Add missing flags to align CLI interfaces with skill documentation signatures",
         "risk_level": "low",
-        "estimated_hours": 5
+        "estimated_hours": 5,
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T17:39:56.125386Z",
+        "journaled_at": "2025-12-02T17:39:56.135104Z"
       },
       "dependencies": {
         "blocks": [
@@ -1031,15 +1034,19 @@
     "phase-4-verify": {
       "type": "group",
       "title": "Phase 4 Verification",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-4",
       "children": [
         "verify-4-1",
         "verify-4-2"
       ],
       "total_tasks": 2,
-      "completed_tasks": 1,
-      "metadata": {},
+      "completed_tasks": 2,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T17:39:56.125383Z",
+        "journaled_at": "2025-12-02T17:39:56.133421Z"
+      },
       "dependencies": {
         "blocked_by": [
           "phase-4-files"
@@ -1071,16 +1078,21 @@
     "verify-4-2": {
       "type": "verify",
       "title": "Phase 4 fidelity review",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-verify",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "verification_type": "fidelity",
         "agent": "sdd-fidelity-review",
         "scope": "phase",
-        "target": "phase-4"
+        "target": "phase-4",
+        "started_at": "2025-12-02T17:34:27.117071Z",
+        "completed_at": "2025-12-02T17:39:56.125185Z",
+        "needs_journaling": false,
+        "actual_hours": 0.091,
+        "journaled_at": "2025-12-02T17:39:56.129884Z"
       }
     },
     "phase-5": {
@@ -1590,6 +1602,33 @@
       "content": "Verified all Phase 4 flag additions work correctly. Validate command has --preview, --diff, --select flags. Render command has --enhancement-level alias, -o/--output, --path flags. Test run has --coverage and --parallel flags. Test discover has --list flag. Test consult command works with --issue, --tools, --model options. All help outputs confirmed. Core CLI tests: 80 passed, 8 failed (pre-existing validate subcommand test issues unrelated to Phase 4 work). Existing behavior unchanged for all commands.",
       "metadata": {},
       "task_id": "verify-4-1"
+    },
+    {
+      "timestamp": "2025-12-02T17:39:56.129861Z",
+      "entry_type": "status_change",
+      "title": "Phase 4 Fidelity Review Completed",
+      "author": "claude-code",
+      "content": "Phase 4 fidelity review completed via AI consultation with 3 models (gemini, cursor-agent, opencode). Verdict: partial with 66.7% agreement rate. 2/3 models responded successfully (opencode errored). Results saved to specs/.fidelity-reviews/foundry-cli-gap-remediation-2025-12-02-001-phase-phase-4-fidelity-review.json.",
+      "metadata": {},
+      "task_id": "verify-4-2"
+    },
+    {
+      "timestamp": "2025-12-02T17:39:56.133416Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Phase 4 Verification",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-4-verify have been completed.",
+      "metadata": {},
+      "task_id": "phase-4-verify"
+    },
+    {
+      "timestamp": "2025-12-02T17:39:56.135096Z",
+      "entry_type": "status_change",
+      "title": "Phase Completed: Interface Alignment (Validate, Render, Test)",
+      "author": "claude-code",
+      "content": "All child tasks in phase phase-4 have been completed.",
+      "metadata": {},
+      "task_id": "phase-4"
     }
   ]
 }
