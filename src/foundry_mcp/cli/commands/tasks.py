@@ -625,3 +625,136 @@ def complete_task_cmd(
         },
         "note": note,
     })
+
+
+@tasks.command("check-complete")
+@click.argument("spec_id")
+@click.argument("task_id")
+@click.pass_context
+@cli_command("tasks-check-complete")
+@handle_keyboard_interrupt()
+@with_sync_timeout(MEDIUM_TIMEOUT, "Check complete timed out")
+def check_complete_cmd(
+    ctx: click.Context,
+    spec_id: str,
+    task_id: str,
+) -> None:
+    """Check if a task can be marked as complete.
+
+    SPEC_ID is the specification identifier.
+    TASK_ID is the task identifier.
+
+    Returns whether the task can be completed and any blockers preventing completion.
+    Checks:
+    - Task exists and is not already completed
+    - All child tasks are completed (for group/phase tasks)
+    - All dependencies are satisfied
+    - Task is not blocked
+    """
+    cli_ctx = get_context(ctx)
+    specs_dir = cli_ctx.specs_dir
+
+    if specs_dir is None:
+        emit_error(
+            "No specs directory found",
+            code="VALIDATION_ERROR",
+            error_type="validation",
+            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+        )
+        return
+
+    # Load the spec
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        emit_error(
+            f"Specification not found: {spec_id}",
+            code="SPEC_NOT_FOUND",
+            error_type="not_found",
+            remediation="Verify the spec ID exists using: sdd specs list",
+            details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
+        )
+        return
+
+    # Get task data
+    task_data = get_node(spec_data, task_id)
+    if task_data is None:
+        emit_error(
+            f"Task not found: {task_id}",
+            code="TASK_NOT_FOUND",
+            error_type="not_found",
+            remediation="Verify the task ID exists using: sdd tasks info <spec_id> --list",
+            details={"spec_id": spec_id, "task_id": task_id},
+        )
+        return
+
+    blockers = []
+    can_complete = True
+
+    # Check if already completed
+    current_status = task_data.get("status", "pending")
+    if current_status == "completed":
+        emit_success({
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "can_complete": True,
+            "already_completed": True,
+            "status": current_status,
+            "blockers": [],
+            "message": "Task is already completed",
+        })
+        return
+
+    # Check if task is blocked
+    if current_status == "blocked":
+        can_complete = False
+        blocker_info = task_data.get("metadata", {}).get("blocker", {})
+        blockers.append({
+            "type": "blocked_status",
+            "reason": blocker_info.get("reason", "Task is marked as blocked"),
+            "blocker_type": blocker_info.get("type", "unknown"),
+        })
+
+    # Check dependencies
+    deps = check_dependencies(spec_data, task_id)
+    if not deps.get("can_start", True):
+        can_complete = False
+        blocked_by = deps.get("blocked_by", [])
+        for dep in blocked_by:
+            blockers.append({
+                "type": "dependency",
+                "reason": f"Depends on incomplete task: {dep}",
+                "blocking_task": dep,
+            })
+
+    # Check child tasks for group/phase tasks
+    children = task_data.get("children", [])
+    if children:
+        hierarchy = spec_data.get("hierarchy", {})
+        incomplete_children = []
+        for child_id in children:
+            child_data = hierarchy.get(child_id)
+            if child_data and child_data.get("status") != "completed":
+                incomplete_children.append({
+                    "id": child_id,
+                    "title": child_data.get("title", child_id),
+                    "status": child_data.get("status", "pending"),
+                })
+
+        if incomplete_children:
+            can_complete = False
+            blockers.append({
+                "type": "incomplete_children",
+                "reason": f"{len(incomplete_children)} child task(s) not completed",
+                "children": incomplete_children,
+            })
+
+    emit_success({
+        "spec_id": spec_id,
+        "task_id": task_id,
+        "can_complete": can_complete,
+        "already_completed": False,
+        "status": current_status,
+        "blockers": blockers,
+        "message": "Ready to complete" if can_complete else f"{len(blockers)} blocker(s) found",
+    })

@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T18:03:05.668064Z",
+  "last_updated": "2025-12-02T18:04:29.407351Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 85,
+    "progress_percentage": 88,
     "current_phase": "phase-5"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 30,
+      "completed_tasks": 31,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -1105,7 +1105,7 @@
         "phase-5-verify"
       ],
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Complete context management contract for sdd-next workflow",
         "risk_level": "low",
@@ -1130,7 +1130,7 @@
         "task-5-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -1168,16 +1168,21 @@
     "task-5-2": {
       "type": "task",
       "title": "Add check-complete command",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-5-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/cli/commands/tasks.py",
         "task_category": "implementation",
         "estimated_hours": 1,
-        "details": "sdd check-complete <spec_id> <task_id> - verify if task can be marked complete, return blockers"
+        "details": "sdd check-complete <spec_id> <task_id> - verify if task can be marked complete, return blockers",
+        "started_at": "2025-12-02T18:03:31.152123Z",
+        "completed_at": "2025-12-02T18:04:29.402268Z",
+        "needs_journaling": false,
+        "actual_hours": 0.016,
+        "journaled_at": "2025-12-02T18:04:29.405862Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1643,6 +1648,15 @@
       "content": "Added 'sdd session context' command with --session-marker (required) and --check-limits flags. Command validates marker format, integrates with ContextTracker for session state, returns context_percentage_used. With --check-limits, also returns recommendations, threshold_warning (85), and threshold_stop (90). Completes the two-step contract with generate-marker command. Verified help output and command execution. File modified: src/foundry_mcp/cli/commands/session.py.",
       "metadata": {},
       "task_id": "task-5-1"
+    },
+    {
+      "timestamp": "2025-12-02T18:04:29.405857Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add check-complete command",
+      "author": "claude-code",
+      "content": "Added 'sdd tasks check-complete <spec_id> <task_id>' command to verify if a task can be marked complete. Command checks: task exists and not already completed, all child tasks completed (for groups/phases), all dependencies satisfied, task is not blocked. Returns can_complete boolean, blockers array with details (type, reason, blocking_task/children), and helpful message. Verified help output. File modified: src/foundry_mcp/cli/commands/tasks.py.",
+      "metadata": {},
+      "task_id": "task-5-2"
     }
   ]
 }
