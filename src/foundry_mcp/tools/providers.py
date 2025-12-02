@@ -165,41 +165,37 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             if metadata:
                 metadata_dict = {
-                    "name": metadata.name,
-                    "version": metadata.version,
+                    "name": metadata.display_name or metadata.provider_id,
+                    "version": metadata.extra.get("version") if metadata.extra else None,
                     "default_model": metadata.default_model,
                     "supported_models": [
                         {
-                            "id": m.model_id,
-                            "name": m.name,
-                            "context_window": m.context_window,
-                            "is_default": m.is_default,
+                            "id": m.id,
+                            "name": m.display_name or m.id,
+                            "context_window": m.routing_hints.get("context_window"),
+                            "is_default": m.id == metadata.default_model,
                         }
-                        for m in (metadata.supported_models or [])
+                        for m in (metadata.models or [])
                     ],
-                    "documentation_url": metadata.documentation_url,
-                    "tags": list(metadata.tags) if metadata.tags else [],
+                    "documentation_url": metadata.extra.get("documentation_url") if metadata.extra else None,
+                    "tags": metadata.extra.get("tags", []) if metadata.extra else [],
                 }
                 capabilities_list = [
                     cap.value for cap in (metadata.capabilities or [])
                 ]
 
             # Get health status from detector
+            # Note: get_provider_statuses returns Dict[str, bool] (availability map)
             statuses = get_provider_statuses()
-            health = statuses.get(provider_id)
+            health_status = statuses.get(provider_id)
             health_dict = None
-            if health:
+            if health_status is not None:
                 health_dict = {
-                    "status": health.status.value,
-                    "reason": health.reason,
-                    "checked_at": (
-                        health.checked_at.isoformat()
-                        if health.checked_at
-                        else None
-                    ),
+                    "status": "available" if health_status else "unavailable",
+                    "available": health_status,
                 }
 
-            if not is_available and metadata is None and health is None:
+            if not is_available and metadata is None and health_dict is None:
                 return asdict(
                     error_response(
                         f"Provider '{provider_id}' not found",
@@ -331,17 +327,17 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Build response
             response_data = {
                 "provider_id": provider_id,
-                "model": result.model or model or "default",
+                "model": result.model_used or model or "default",
                 "content": result.content,
-                "finish_reason": result.finish_reason,
+                "finish_reason": result.status.value if result.status else None,
             }
 
             # Include token usage if available
-            if result.usage:
+            if result.tokens and result.tokens.total_tokens > 0:
                 response_data["token_usage"] = {
-                    "prompt_tokens": result.usage.prompt_tokens,
-                    "completion_tokens": result.usage.completion_tokens,
-                    "total_tokens": result.usage.total_tokens,
+                    "prompt_tokens": result.tokens.input_tokens,
+                    "completion_tokens": result.tokens.output_tokens,
+                    "total_tokens": result.tokens.total_tokens,
                 }
 
             return asdict(success_response(data=response_data))

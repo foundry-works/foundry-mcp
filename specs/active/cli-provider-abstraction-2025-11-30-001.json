@@ -1,7 +1,7 @@
 {
   "spec_id": "cli-provider-abstraction-2025-11-30-001",
   "generated": "2025-11-30T12:00:00Z",
-  "last_updated": "2025-12-01T23:11:49.376818Z",
+  "last_updated": "2025-12-02T00:42:18.767245Z",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
@@ -20,7 +20,7 @@
         "task-3-1-3"
       ],
       "total_tasks": 67,
-      "completed_tasks": 63,
+      "completed_tasks": 65,
       "metadata": {
         "description": "Port the unified CLI provider pattern from sdd-toolkit to foundry-mcp, enabling consistent handling of external AI tool CLIs (gemini, codex, cursor-agent, claude, opencode) while adhering to foundry-mcp conventions.",
         "objectives": [
@@ -1918,7 +1918,7 @@
         "depends": []
       },
       "total_tasks": 8,
-      "completed_tasks": 4,
+      "completed_tasks": 6,
       "metadata": {
         "purpose": "Comprehensive testing for all new components",
         "risk_level": "low",
@@ -1933,7 +1933,7 @@
     "phase-6-files": {
       "type": "group",
       "title": "File Modifications",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-6",
       "children": [
         "task-6-1",
@@ -1944,8 +1944,12 @@
         "task-6-6"
       ],
       "total_tasks": 6,
-      "completed_tasks": 4,
-      "metadata": {},
+      "completed_tasks": 6,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T00:42:18.757592Z",
+        "journaled_at": "2025-12-02T00:42:18.767216Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-6-verify"
@@ -2069,7 +2073,7 @@
     "task-6-5": {
       "type": "task",
       "title": "tests/integration/test_provider_tools.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -2080,18 +2084,21 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/integration/test_provider_tools.py",
         "task_category": "implementation",
         "estimated_hours": 1.5,
-        "description": "Test MCP tools with mock server"
+        "description": "Test MCP tools with mock server",
+        "started_at": "2025-12-01T23:18:39.845530Z",
+        "status_note": "Starting integration tests for MCP provider tools",
+        "completed_at": "2025-12-01T23:30:35.445050Z"
       }
     },
     "task-6-6": {
       "type": "task",
       "title": "Regenerate provider fixtures",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-6-files",
       "children": [],
       "dependencies": {
@@ -2106,12 +2113,18 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "tests/fixtures/golden",
         "task_category": "implementation",
         "estimated_hours": 0.5,
-        "description": "Update golden fixtures + doc-generation state to reflect provider outputs per docs/mcp_best_practices/10-testing-fixtures.md"
+        "description": "Update golden fixtures + doc-generation state to reflect provider outputs per docs/mcp_best_practices/10-testing-fixtures.md",
+        "started_at": "2025-12-02T00:40:24.827405Z",
+        "status_note": "Starting fixture regeneration for provider outputs",
+        "completed_at": "2025-12-02T00:42:18.757400Z",
+        "needs_journaling": false,
+        "actual_hours": 0.032,
+        "journaled_at": "2025-12-02T00:42:18.762634Z"
       }
     },
     "phase-6-verify": {
@@ -2166,7 +2179,7 @@
   "metadata": {
     "status": "active",
     "activated_date": "2025-12-01T15:49:52.907043Z",
-    "progress_percentage": 94,
+    "progress_percentage": 97,
     "current_phase": "phase-6"
   },
   "journal": [
@@ -2746,6 +2759,32 @@
       "content": "Created tests/unit/test_providers_implementations.py with 59 unit tests covering all five provider implementations (GeminiProvider, CodexProvider, CursorAgentProvider, ClaudeProvider, OpenCodeProvider). Tests cover: provider instantiation and default model selection (8 tests), model validation (5 tests), custom binary/configuration (2 tests), request validation for unsupported parameters (4 tests), command building with proper flags (4 tests), successful execution with mocked subprocess (5 tests), error handling for non-zero exit/empty output/invalid JSON (10 tests), timeout and unavailable error paths (3 tests), streaming chunk emission (5 tests), attachment handling (3 tests), availability check function delegation (5 tests), create_provider factory functions (6 tests), automatic provider registration (5 tests). All 59 tests passing in 3.33s.",
       "metadata": {},
       "task_id": "task-6-4"
+    },
+    {
+      "timestamp": "2025-12-01T23:30:35.445050Z",
+      "task_id": "task-6-5",
+      "entry_type": "status_change",
+      "title": "Task Completed: tests/integration/test_provider_tools.py",
+      "content": "Created tests/integration/test_provider_tools.py with 27 integration tests covering the MCP provider tools (provider-list, provider-status, provider-execute). Tests cover:\n- Response envelope compliance (3 tests) - success/error structure per MCP best practices\n- Tool registration (3 tests) - verifying tools are registered with MCP server\n- Provider-list behavior (4 tests) - listing providers, filtering, including unavailable\n- Provider-status behavior (4 tests) - required params, not found, success structure, metadata\n- Provider-execute validation (4 tests) - required params, whitespace prompt, unavailable providers\n- Provider-execute error handling (3 tests) - unavailable provider, error response structure\n- End-to-end workflow (2 tests) - list-then-status workflow, metadata structure verification\n- Error cases (4 tests) - empty params, unknown providers, graceful handling\n\nAlso fixed bugs in src/foundry_mcp/tools/providers.py discovered during testing:\n1. Fixed ProviderMetadata attribute access (display_name/provider_id instead of name, models instead of supported_models, etc.)\n2. Fixed ModelDescriptor attribute access (id instead of model_id, display_name instead of name)\n3. Fixed ProviderResult attribute access (model_used instead of model, tokens instead of usage, status instead of finish_reason)\n4. Fixed get_provider_statuses() usage - returns Dict[str, bool], not health status objects\n\nAll 27 integration tests passing. All 176 provider unit tests still passing.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-02T00:42:18.762630Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Regenerate provider fixtures",
+      "author": "claude-code",
+      "content": "Created 9 golden fixture files for provider tool responses in tests/fixtures/golden/:\n- provider_list_success.json - Successful provider listing\n- provider_list_with_unavailable.json - List including unavailable providers\n- provider_status_success.json - Success with full metadata\n- provider_status_not_found.json - NOT_FOUND error response\n- provider_status_missing_id.json - MISSING_REQUIRED validation error\n- provider_execute_success.json - Successful prompt execution with token usage\n- provider_execute_missing_prompt.json - MISSING_REQUIRED validation error\n- provider_execute_unavailable.json - UNAVAILABLE error response\n- provider_execute_timeout.json - TIMEOUT error response\n\nUpdated tests/fixtures/golden/README.md with provider fixture documentation table. All 203 provider tests passing (176 unit + 27 integration).",
+      "metadata": {},
+      "task_id": "task-6-6"
+    },
+    {
+      "timestamp": "2025-12-02T00:42:18.767211Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: File Modifications",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-6-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-6-files"
     }
   ]
 }

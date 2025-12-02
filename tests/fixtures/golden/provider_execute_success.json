@@ -1,0 +1,19 @@
+{
+  "fixture_version": "1.0.0",
+  "success": true,
+  "data": {
+    "provider_id": "gemini",
+    "model": "gemini-2.0-flash",
+    "content": "Hello! How can I help you today?",
+    "finish_reason": "success",
+    "token_usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 8,
+      "total_tokens": 18
+    }
+  },
+  "error": null,
+  "meta": {
+    "version": "response-v2"
+  }
+}

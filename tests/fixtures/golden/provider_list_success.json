@@ -1,0 +1,28 @@
+{
+  "fixture_version": "1.0.0",
+  "success": true,
+  "data": {
+    "providers": [
+      {
+        "provider_id": "gemini",
+        "description": "Google Gemini API provider",
+        "priority": 100,
+        "tags": ["cloud", "api"],
+        "available": true
+      },
+      {
+        "provider_id": "claude",
+        "description": "Anthropic Claude provider",
+        "priority": 90,
+        "tags": ["cloud", "api"],
+        "available": true
+      }
+    ],
+    "available_count": 2,
+    "total_count": 2
+  },
+  "error": null,
+  "meta": {
+    "version": "response-v2"
+  }
+}

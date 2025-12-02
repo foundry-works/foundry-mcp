@@ -1,0 +1,12 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {},
+  "error": "prompt is required and cannot be empty",
+  "meta": {
+    "version": "response-v2",
+    "error_code": "MISSING_REQUIRED",
+    "error_type": "validation",
+    "remediation": "Provide a non-empty prompt string"
+  }
+}

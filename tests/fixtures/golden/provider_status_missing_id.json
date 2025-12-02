@@ -1,0 +1,12 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {},
+  "error": "provider_id is required",
+  "meta": {
+    "version": "response-v2",
+    "error_code": "MISSING_REQUIRED",
+    "error_type": "validation",
+    "remediation": "Provide a provider_id (e.g., 'gemini', 'codex')"
+  }
+}

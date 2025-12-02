@@ -1,0 +1,14 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {
+    "provider": "gemini"
+  },
+  "error": "Provider request timed out after 300 seconds",
+  "meta": {
+    "version": "response-v2",
+    "error_code": "TIMEOUT",
+    "error_type": "unavailable",
+    "remediation": "Try again with a shorter prompt or increased timeout"
+  }
+}

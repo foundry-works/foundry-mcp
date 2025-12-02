@@ -1,0 +1,12 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {},
+  "error": "Provider 'nonexistent' not found",
+  "meta": {
+    "version": "response-v2",
+    "error_code": "NOT_FOUND",
+    "error_type": "not_found",
+    "remediation": "Use provider-list to see available providers"
+  }
+}

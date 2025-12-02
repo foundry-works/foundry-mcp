@@ -1,0 +1,12 @@
+{
+  "fixture_version": "1.0.0",
+  "success": false,
+  "data": {},
+  "error": "Provider 'codex' is not available",
+  "meta": {
+    "version": "response-v2",
+    "error_code": "UNAVAILABLE",
+    "error_type": "unavailable",
+    "remediation": "Check provider configuration and availability. Use provider-list to see available providers."
+  }
+}
