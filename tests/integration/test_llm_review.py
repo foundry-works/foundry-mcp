@@ -1,16 +1,17 @@
 """
 Integration tests for LLM-powered review tools.
 
-Focused tests for spec_review and pr_create_with_spec tools with:
-- Mocked provider matrix support
-- Data-only fallback assertions
-- Circuit breaker integration
-- Response envelope validation
+Tests verify:
+- spec_review returns NOT_IMPLEMENTED (requires external AI integration)
+- review_list_tools works with provider system
+- review_list_plan_tools returns plan tools with availability
+- pr_create_with_spec returns NOT_IMPLEMENTED (requires external integration)
+- pr_get_spec_context retrieves spec context using core APIs
+- Response envelope compliance
 """
 
 import json
 import pytest
-import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -46,32 +47,41 @@ def mock_config(tmp_path):
 
 
 @pytest.fixture
-def sample_review_output():
-    """Sample JSON output from sdd review command."""
-    return json.dumps({
-        "spec_id": "test-spec-001",
-        "review_type": "quick",
-        "findings": [
-            {"type": "suggestion", "message": "Consider adding error handling", "severity": "low"},
+def sample_spec_data():
+    """Sample spec data for testing pr_get_spec_context."""
+    return {
+        "metadata": {
+            "title": "Test Specification",
+            "spec_id": "test-spec-001",
+        },
+        "hierarchy": {
+            "task-1": {
+                "type": "task",
+                "title": "First task",
+                "status": "completed",
+                "metadata": {"completed_at": "2025-01-15T10:00:00Z"},
+            },
+            "task-2": {
+                "type": "task",
+                "title": "Second task",
+                "status": "in_progress",
+                "metadata": {},
+            },
+        },
+        "journal": [
+            {
+                "timestamp": "2025-01-15T10:00:00Z",
+                "entry_type": "note",
+                "title": "Task completed",
+                "task_id": "task-1",
+                "content": "Completed first task",
+            },
         ],
-        "suggestions": ["Add input validation", "Include unit tests"],
-        "summary": "Review completed successfully with minor suggestions",
-    })
+    }
 
 
-@pytest.fixture
-def sample_pr_output():
-    """Sample JSON output from sdd create-pr command."""
-    return json.dumps({
-        "spec_id": "test-spec-001",
-        "pr_url": "https://github.com/org/repo/pull/123",
-        "title": "feat: Implement authentication flow",
-        "description_preview": "## Summary\n- Implemented JWT auth...",
-    })
-
-
-class TestSpecReviewProviderMatrix:
-    """Test spec_review with mocked provider matrix support."""
+class TestSpecReviewNotImplemented:
+    """Test spec_review returns NOT_IMPLEMENTED as expected."""
 
     def test_spec_review_registers_successfully(self, mock_mcp, mock_config):
         """Test spec_review tool registers without error."""
@@ -80,238 +90,212 @@ class TestSpecReviewProviderMatrix:
         register_review_tools(mock_mcp, mock_config)
         assert "spec_review" in mock_mcp._tools
 
-    def test_spec_review_with_cursor_agent(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review with cursor-agent tool."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(
-                spec_id="test-spec-001",
-                review_type="full",
-                tools="cursor-agent",
-            )
-
-            assert result["success"] is True
-            assert result["data"]["spec_id"] == "test-spec-001"
-            assert "cursor-agent" in mock_run.call_args[0][0]
-
-        _review_breaker.reset()
-
-    def test_spec_review_with_gemini(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review with gemini tool."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(
-                spec_id="test-spec-001",
-                review_type="security",
-                tools="gemini",
-            )
-
-            assert result["success"] is True
-            assert "gemini" in mock_run.call_args[0][0]
-
-        _review_breaker.reset()
-
-    def test_spec_review_with_multiple_tools(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review with multiple tools (cursor-agent,gemini,codex)."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(
-                spec_id="test-spec-001",
-                review_type="full",
-                tools="cursor-agent,gemini,codex",
-            )
-
-            assert result["success"] is True
-            cmd = mock_run.call_args[0][0]
-            assert "--tools" in cmd
-            assert "cursor-agent,gemini,codex" in cmd
-
-        _review_breaker.reset()
-
-    def test_spec_review_model_override(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review with custom model override."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(
-                spec_id="test-spec-001",
-                review_type="quick",
-                model="gpt-4-turbo",
-            )
-
-            assert result["success"] is True
-            cmd = mock_run.call_args[0][0]
-            assert "--model" in cmd
-            assert "gpt-4-turbo" in cmd
-
-        _review_breaker.reset()
-
-
-class TestSpecReviewDataOnlyFallback:
-    """Test spec_review data-only fallback when LLM unavailable."""
-
-    def test_spec_review_includes_llm_status(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review always includes llm_status in response."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(spec_id="test-spec-001")
-
-            assert "llm_status" in result["data"]
-            assert "configured" in result["data"]["llm_status"]
-
-        _review_breaker.reset()
-
-    def test_spec_review_fallback_on_llm_error(self, mock_mcp, mock_config):
-        """Test spec_review falls back to data-only on LLM error."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            # Simulate LLM failure but structural review succeeds
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="Structural review completed",  # Non-JSON fallback
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(spec_id="test-spec-001", review_type="quick")
-
-            assert result["success"] is True
-            # Should have raw_output when JSON parsing fails
-            assert "raw_output" in result["data"]
-
-        _review_breaker.reset()
-
-    def test_spec_review_dry_run_without_llm(self, mock_mcp, mock_config):
-        """Test spec_review dry run works without LLM execution."""
+    def test_spec_review_returns_not_implemented(self, mock_mcp, mock_config):
+        """Test spec_review returns NOT_IMPLEMENTED error response."""
         from foundry_mcp.tools.review import register_review_tools
 
         register_review_tools(mock_mcp, mock_config)
 
         spec_review = mock_mcp._tools["spec_review"]
-        result = spec_review.fn(spec_id="test-spec-001", dry_run=True)
+        result = spec_review.fn(spec_id="test-spec-001", review_type="quick")
 
-        assert result["success"] is True
-        assert result["data"]["dry_run"] is True
-        assert "command" in result["data"]
-        assert "foundry-cli" in result["data"]["command"]
+        assert result["success"] is False
+        # error_code is in the data dict
+        assert result.get("data", {}).get("error_code") == "NOT_IMPLEMENTED"
+        assert "sdd-plan-review" in result.get("error", "").lower() or \
+               "sdd-plan-review" in result.get("data", {}).get("alternative", "")
 
-    def test_review_list_tools_shows_llm_unconfigured(self, mock_mcp, mock_config):
-        """Test review_list_tools shows unconfigured LLM status."""
+    def test_spec_review_includes_spec_id_in_response(self, mock_mcp, mock_config):
+        """Test spec_review includes spec_id in response data."""
         from foundry_mcp.tools.review import register_review_tools
 
         register_review_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.review._get_llm_status') as mock_status:
-            mock_status.return_value = {"configured": False, "error": "No API key"}
+        spec_review = mock_mcp._tools["spec_review"]
+        result = spec_review.fn(spec_id="my-test-spec", review_type="full")
 
-            list_tools = mock_mcp._tools["review_list_tools"]
-            result = list_tools.fn()
+        assert result["data"]["spec_id"] == "my-test-spec"
+        assert result["data"]["review_type"] == "full"
 
-            assert result["success"] is True
-            assert result["data"]["llm_status"]["configured"] is False
+    def test_spec_review_preserves_all_parameters(self, mock_mcp, mock_config):
+        """Test spec_review includes all provided parameters in response."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        spec_review = mock_mcp._tools["spec_review"]
+        result = spec_review.fn(
+            spec_id="test-spec-001",
+            review_type="security",
+            tools="cursor-agent,gemini",
+            model="gpt-4",
+            dry_run=True,
+        )
+
+        assert result["data"]["spec_id"] == "test-spec-001"
+        assert result["data"]["review_type"] == "security"
+        assert result["data"]["tools"] == "cursor-agent,gemini"
+        assert result["data"]["model"] == "gpt-4"
+        assert result["data"]["dry_run"] is True
 
 
-class TestSpecReviewValidation:
-    """Test spec_review input validation and error handling."""
+class TestReviewListTools:
+    """Test review_list_tools with provider system integration."""
 
-    def test_spec_review_invalid_type_returns_error(self, mock_mcp, mock_config):
-        """Test invalid review type returns error with valid types."""
+    def test_review_list_tools_registers(self, mock_mcp, mock_config):
+        """Test review_list_tools registers successfully."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+        assert "review_list_tools" in mock_mcp._tools
+
+    def test_review_list_tools_returns_success(self, mock_mcp, mock_config):
+        """Test review_list_tools returns success response."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
+
+        assert result["success"] is True
+        assert "tools" in result["data"]
+        assert "llm_status" in result["data"]
+
+    def test_review_list_tools_includes_provider_info(self, mock_mcp, mock_config):
+        """Test review_list_tools includes provider information."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
+
+        assert result["success"] is True
+        tools = result["data"]["tools"]
+        assert isinstance(tools, list)
+
+        # Each tool should have expected fields
+        for tool in tools:
+            assert "name" in tool
+            assert "available" in tool
+            assert "status" in tool
+
+    def test_review_list_tools_includes_review_types(self, mock_mcp, mock_config):
+        """Test review_list_tools includes available review types."""
         from foundry_mcp.tools.review import register_review_tools, REVIEW_TYPES
 
         register_review_tools(mock_mcp, mock_config)
 
-        spec_review = mock_mcp._tools["spec_review"]
-        result = spec_review.fn(spec_id="test-spec-001", review_type="invalid_type")
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
 
-        assert result["success"] is False
-        assert "valid_types" in result["data"]
-        assert set(result["data"]["valid_types"]) == set(REVIEW_TYPES)
+        assert result["success"] is True
+        assert "review_types" in result["data"]
+        assert set(result["data"]["review_types"]) == set(REVIEW_TYPES)
 
-    def test_spec_review_all_review_types(self, mock_mcp, mock_config, sample_review_output):
-        """Test all review types are accepted."""
-        from foundry_mcp.tools.review import register_review_tools, REVIEW_TYPES, _review_breaker
+    def test_review_list_tools_includes_llm_status(self, mock_mcp, mock_config):
+        """Test review_list_tools includes LLM configuration status."""
+        from foundry_mcp.tools.review import register_review_tools
 
         register_review_tools(mock_mcp, mock_config)
 
-        for review_type in REVIEW_TYPES:
-            _review_breaker.reset()
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
 
-            with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-                mock_run.return_value = MagicMock(
-                    returncode=0,
-                    stdout=sample_review_output,
-                    stderr="",
-                )
+        assert result["success"] is True
+        llm_status = result["data"]["llm_status"]
+        assert "configured" in llm_status
 
-                spec_review = mock_mcp._tools["spec_review"]
-                result = spec_review.fn(spec_id="test-spec-001", review_type=review_type)
+    def test_review_list_tools_includes_duration(self, mock_mcp, mock_config):
+        """Test review_list_tools includes duration_ms in response."""
+        from foundry_mcp.tools.review import register_review_tools
 
-                assert result["success"] is True, f"Failed for review_type={review_type}"
-                assert result["data"]["review_type"] == review_type
+        register_review_tools(mock_mcp, mock_config)
 
-            _review_breaker.reset()
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
+
+        assert result["success"] is True
+        assert "duration_ms" in result["data"]
+        assert isinstance(result["data"]["duration_ms"], (int, float))
+
+
+class TestReviewListPlanTools:
+    """Test review_list_plan_tools functionality."""
+
+    def test_review_list_plan_tools_registers(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools registers successfully."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+        assert "review_list_plan_tools" in mock_mcp._tools
+
+    def test_review_list_plan_tools_returns_success(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools returns success response."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+        result = list_plan_tools.fn()
+
+        assert result["success"] is True
+        assert "plan_tools" in result["data"]
+
+    def test_review_list_plan_tools_includes_tool_info(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools includes detailed tool information."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+        result = list_plan_tools.fn()
+
+        assert result["success"] is True
+        plan_tools = result["data"]["plan_tools"]
+        assert isinstance(plan_tools, list)
+        assert len(plan_tools) >= 1
+
+        # Each tool should have expected fields
+        for tool in plan_tools:
+            assert "name" in tool
+            assert "description" in tool
+            assert "capabilities" in tool
+            assert "llm_required" in tool
+
+    def test_review_list_plan_tools_has_non_llm_option(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools includes at least one non-LLM option."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+        result = list_plan_tools.fn()
+
+        assert result["success"] is True
+        plan_tools = result["data"]["plan_tools"]
+
+        non_llm_tools = [t for t in plan_tools if not t.get("llm_required")]
+        assert len(non_llm_tools) >= 1, "Should have at least one non-LLM tool option"
+
+    def test_review_list_plan_tools_includes_recommendations(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools includes usage recommendations."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+        result = list_plan_tools.fn()
+
+        assert result["success"] is True
+        assert "recommendations" in result["data"]
+        assert isinstance(result["data"]["recommendations"], list)
+        assert len(result["data"]["recommendations"]) >= 1
 
 
 class TestPRCreateWithSpec:
-    """Test pr_create_with_spec tool functionality."""
+    """Test pr_create_with_spec returns NOT_IMPLEMENTED."""
 
     def test_pr_create_registers_successfully(self, mock_mcp, mock_config):
         """Test pr_create_with_spec tool registers without error."""
@@ -320,280 +304,135 @@ class TestPRCreateWithSpec:
         register_pr_workflow_tools(mock_mcp, mock_config)
         assert "pr_create_with_spec" in mock_mcp._tools
 
-    def test_pr_create_dry_run(self, mock_mcp, mock_config, sample_pr_output):
-        """Test pr_create_with_spec dry run mode."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
+    def test_pr_create_returns_not_implemented(self, mock_mcp, mock_config):
+        """Test pr_create_with_spec returns NOT_IMPLEMENTED error."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
 
-        _pr_breaker.reset()
         register_pr_workflow_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_pr_output,
-                stderr="",
-            )
+        pr_create = mock_mcp._tools["pr_create_with_spec"]
+        result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
 
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
+        assert result["success"] is False
+        # error_code is in the data dict
+        assert result.get("data", {}).get("error_code") == "NOT_IMPLEMENTED"
+        assert "sdd-pr" in result.get("error", "").lower() or \
+               "sdd-pr" in result.get("data", {}).get("alternative", "")
 
-            assert result["success"] is True
-            cmd = mock_run.call_args[0][0]
-            assert "--dry-run" in cmd
+    def test_pr_create_preserves_parameters(self, mock_mcp, mock_config):
+        """Test pr_create_with_spec includes all parameters in response."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
 
-        _pr_breaker.reset()
-
-    def test_pr_create_with_custom_title(self, mock_mcp, mock_config, sample_pr_output):
-        """Test pr_create_with_spec with custom title."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
-
-        _pr_breaker.reset()
         register_pr_workflow_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_pr_output,
-                stderr="",
-            )
+        pr_create = mock_mcp._tools["pr_create_with_spec"]
+        result = pr_create.fn(
+            spec_id="test-spec-001",
+            title="Custom PR title",
+            base_branch="develop",
+            dry_run=True,
+        )
 
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(
-                spec_id="test-spec-001",
-                title="feat: Custom PR title",
-                dry_run=True,
-            )
+        assert result["data"]["spec_id"] == "test-spec-001"
+        assert result["data"]["title"] == "Custom PR title"
+        assert result["data"]["base_branch"] == "develop"
+        assert result["data"]["dry_run"] is True
 
-            assert result["success"] is True
-            cmd = mock_run.call_args[0][0]
-            assert "--title" in cmd
-            assert "feat: Custom PR title" in cmd
 
-        _pr_breaker.reset()
+class TestPRGetSpecContext:
+    """Test pr_get_spec_context using core APIs."""
 
-    def test_pr_create_includes_journals_by_default(self, mock_mcp, mock_config, sample_pr_output):
-        """Test pr_create_with_spec includes journals by default."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
+    def test_pr_get_spec_context_registers(self, mock_mcp, mock_config):
+        """Test pr_get_spec_context registers successfully."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
 
-        _pr_breaker.reset()
+        register_pr_workflow_tools(mock_mcp, mock_config)
+        assert "pr_get_spec_context" in mock_mcp._tools
+
+    def test_pr_get_spec_context_handles_missing_spec(self, mock_mcp, mock_config):
+        """Test pr_get_spec_context handles missing spec gracefully."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
+
         register_pr_workflow_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_pr_output,
-                stderr="",
-            )
+        pr_get_context = mock_mcp._tools["pr_get_spec_context"]
+        result = pr_get_context.fn(spec_id="nonexistent-spec")
 
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
+        assert result["success"] is False
+        assert "error" in result
 
-            assert result["success"] is True
-            cmd = mock_run.call_args[0][0]
-            assert "--include-journals" in cmd
+    def test_pr_get_spec_context_with_valid_spec(
+        self, mock_mcp, mock_config, sample_spec_data, tmp_path
+    ):
+        """Test pr_get_spec_context retrieves context for valid spec."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
 
-        _pr_breaker.reset()
+        # Create specs directory and spec file
+        specs_dir = tmp_path / "specs" / "active"
+        specs_dir.mkdir(parents=True)
+        spec_file = specs_dir / "test-spec-001.json"
+        spec_file.write_text(json.dumps(sample_spec_data))
 
-    def test_pr_create_includes_diffs_by_default(self, mock_mcp, mock_config, sample_pr_output):
-        """Test pr_create_with_spec includes diffs by default."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
+        # Update config to use tmp_path
+        config = ServerConfig(specs_dir=tmp_path / "specs")
 
-        _pr_breaker.reset()
-        register_pr_workflow_tools(mock_mcp, mock_config)
+        register_pr_workflow_tools(mock_mcp, config)
 
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_pr_output,
-                stderr="",
-            )
+        pr_get_context = mock_mcp._tools["pr_get_spec_context"]
+        result = pr_get_context.fn(spec_id="test-spec-001", path=str(tmp_path))
 
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-
-            assert result["success"] is True
-            cmd = mock_run.call_args[0][0]
-            assert "--include-diffs" in cmd
-
-        _pr_breaker.reset()
-
-    def test_pr_create_includes_llm_status(self, mock_mcp, mock_config, sample_pr_output):
-        """Test pr_create_with_spec includes LLM status in response."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
-
-        _pr_breaker.reset()
-        register_pr_workflow_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_pr_output,
-                stderr="",
-            )
-
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-
-            assert result["success"] is True
-            assert "llm_status" in result["data"]
-
-        _pr_breaker.reset()
+        assert result["success"] is True
+        assert result["data"]["spec_id"] == "test-spec-001"
+        assert result["data"]["title"] == "Test Specification"
 
 
-class TestPRCreateDataOnlyFallback:
-    """Test pr_create_with_spec data-only fallback."""
+class TestProviderSystemIntegration:
+    """Test provider system integration in review tools."""
 
-    def test_pr_create_non_json_output_fallback(self, mock_mcp, mock_config):
-        """Test pr_create_with_spec handles non-JSON output gracefully."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
+    def test_provider_statuses_used_in_list_tools(self, mock_mcp, mock_config):
+        """Test review_list_tools uses provider system for status checks."""
+        from foundry_mcp.tools.review import register_review_tools
+        from foundry_mcp.core.providers import get_provider_statuses
 
-        _pr_breaker.reset()
-        register_pr_workflow_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="PR created: https://github.com/org/repo/pull/123",
-                stderr="",
-            )
-
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-
-            assert result["success"] is True
-            assert "raw_output" in result["data"]
-
-        _pr_breaker.reset()
-
-    def test_pr_create_cli_not_found(self, mock_mcp, mock_config):
-        """Test pr_create_with_spec handles missing CLI gracefully."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
-
-        _pr_breaker.reset()
-        register_pr_workflow_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
-
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-
-            assert result["success"] is False
-            assert "not found" in result["error"].lower()
-
-        _pr_breaker.reset()
-
-
-class TestCircuitBreakerIntegration:
-    """Test circuit breaker behavior for review tools."""
-
-    def test_spec_review_circuit_breaker_trips_after_failures(self, mock_mcp, mock_config):
-        """Test spec_review circuit breaker trips after consecutive failures."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-        from foundry_mcp.core.resilience import CircuitBreakerError
-
-        _review_breaker.reset()
         register_review_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
+        # Get provider statuses directly
+        provider_statuses = get_provider_statuses()
 
-            spec_review = mock_mcp._tools["spec_review"]
+        # Get list from tool
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
 
-            # Trip the circuit breaker
-            for _ in range(_review_breaker.failure_threshold):
-                result = spec_review.fn(spec_id="test-spec-001")
-                assert result["success"] is False
+        assert result["success"] is True
 
-            # Next call should get circuit breaker error
-            result = spec_review.fn(spec_id="test-spec-001")
-            assert result["success"] is False
-            assert "circuit breaker" in result["error"].lower()
+        # Tool should include provider info
+        tools = result["data"]["tools"]
+        tool_names = [t["name"] for t in tools]
 
-        _review_breaker.reset()
+        # All registered providers should appear in the tool list
+        for provider_id in provider_statuses.keys():
+            assert provider_id in tool_names
 
-    def test_pr_create_circuit_breaker_trips_after_failures(self, mock_mcp, mock_config):
-        """Test pr_create_with_spec circuit breaker trips after consecutive failures."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
+    def test_provider_availability_reflected_in_tool_status(self, mock_mcp, mock_config):
+        """Test tool availability reflects provider availability."""
+        from foundry_mcp.tools.review import register_review_tools
+        from foundry_mcp.core.providers import check_provider_available
 
-        _pr_breaker.reset()
-        register_pr_workflow_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
-
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-
-            # Trip the circuit breaker
-            for _ in range(_pr_breaker.failure_threshold):
-                result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-                assert result["success"] is False
-
-            # Next call should get circuit breaker error
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-            assert result["success"] is False
-            assert "circuit breaker" in result["error"].lower()
-
-        _pr_breaker.reset()
-
-    def test_spec_review_circuit_breaker_recovers(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review circuit breaker recovers after reset."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
         register_review_tools(mock_mcp, mock_config)
 
-        # First, trip the breaker
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
 
-            spec_review = mock_mcp._tools["spec_review"]
-            for _ in range(_review_breaker.failure_threshold + 1):
-                spec_review.fn(spec_id="test-spec-001")
+        assert result["success"] is True
 
-        # Reset and verify recovery
-        _review_breaker.reset()
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            result = spec_review.fn(spec_id="test-spec-001")
-            assert result["success"] is True
-
-        _review_breaker.reset()
+        # Check that availability is boolean
+        for tool in result["data"]["tools"]:
+            if tool["available"] is not None:
+                assert isinstance(tool["available"], bool)
 
 
 class TestResponseEnvelope:
     """Test response envelope compliance for review tools."""
-
-    def test_spec_review_success_envelope(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review success response has required envelope fields."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(spec_id="test-spec-001")
-
-            # Required envelope fields
-            assert "success" in result
-            assert result["success"] is True
-            assert "data" in result
-            assert "meta" in result
-
-        _review_breaker.reset()
 
     def test_spec_review_error_envelope(self, mock_mcp, mock_config):
         """Test spec_review error response has required envelope fields."""
@@ -602,126 +441,162 @@ class TestResponseEnvelope:
         register_review_tools(mock_mcp, mock_config)
 
         spec_review = mock_mcp._tools["spec_review"]
-        result = spec_review.fn(spec_id="test-spec-001", review_type="invalid")
+        result = spec_review.fn(spec_id="test-spec-001")
 
         # Required envelope fields for errors
         assert "success" in result
         assert result["success"] is False
         assert "error" in result
         assert "data" in result
+        assert "meta" in result
 
-    def test_pr_create_success_envelope(self, mock_mcp, mock_config, sample_pr_output):
-        """Test pr_create_with_spec success response has required envelope fields."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker
+    def test_review_list_tools_success_envelope(self, mock_mcp, mock_config):
+        """Test review_list_tools success response has required envelope fields."""
+        from foundry_mcp.tools.review import register_review_tools
 
-        _pr_breaker.reset()
-        register_pr_workflow_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_pr_output,
-                stderr="",
-            )
-
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-
-            assert "success" in result
-            assert result["success"] is True
-            assert "data" in result
-            assert "meta" in result
-
-        _pr_breaker.reset()
-
-
-class TestTimeoutHandling:
-    """Test timeout handling for review tools."""
-
-    def test_spec_review_timeout_returns_error(self, mock_mcp, mock_config):
-        """Test spec_review timeout returns appropriate error."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker, REVIEW_TIMEOUT
-
-        _review_breaker.reset()
         register_review_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=REVIEW_TIMEOUT)
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
 
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(spec_id="test-spec-001")
+        # Required envelope fields
+        assert "success" in result
+        assert result["success"] is True
+        assert "data" in result
+        assert "meta" in result
 
-            assert result["success"] is False
-            assert "timed out" in result["error"].lower()
-            assert "timeout_seconds" in result["data"]
+    def test_review_list_plan_tools_success_envelope(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools success response has required envelope fields."""
+        from foundry_mcp.tools.review import register_review_tools
 
-        _review_breaker.reset()
+        register_review_tools(mock_mcp, mock_config)
 
-    def test_pr_create_timeout_returns_error(self, mock_mcp, mock_config):
-        """Test pr_create_with_spec timeout returns appropriate error."""
-        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools, _pr_breaker, PR_TIMEOUT
+        list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+        result = list_plan_tools.fn()
 
-        _pr_breaker.reset()
+        # Required envelope fields
+        assert "success" in result
+        assert result["success"] is True
+        assert "data" in result
+        assert "meta" in result
+
+    def test_pr_create_error_envelope(self, mock_mcp, mock_config):
+        """Test pr_create_with_spec error response has required envelope fields."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
+
         register_pr_workflow_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.pr_workflow.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=PR_TIMEOUT)
+        pr_create = mock_mcp._tools["pr_create_with_spec"]
+        result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
 
-            pr_create = mock_mcp._tools["pr_create_with_spec"]
-            result = pr_create.fn(spec_id="test-spec-001", dry_run=True)
-
-            assert result["success"] is False
-            assert "timed out" in result["error"].lower()
-
-        _pr_breaker.reset()
+        # Required envelope fields for errors
+        assert "success" in result
+        assert result["success"] is False
+        assert "error" in result
+        assert "data" in result
+        assert "meta" in result
 
 
 class TestMetricsEmission:
     """Test metrics emission for review tools."""
 
-    def test_spec_review_emits_duration_metric(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review emits timer metric on success."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker, _metrics
+    def test_review_list_tools_emits_duration_metric(self, mock_mcp, mock_config):
+        """Test review_list_tools emits timer metric."""
+        from foundry_mcp.tools.review import register_review_tools, _metrics
 
-        _review_breaker.reset()
         register_review_tools(mock_mcp, mock_config)
 
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            with patch.object(_metrics, 'timer') as mock_timer:
-                spec_review = mock_mcp._tools["spec_review"]
-                result = spec_review.fn(spec_id="test-spec-001")
-
-                assert result["success"] is True
-                # Timer should have been called with duration
-                mock_timer.assert_called()
-
-        _review_breaker.reset()
-
-    def test_spec_review_response_includes_duration(self, mock_mcp, mock_config, sample_review_output):
-        """Test spec_review response includes duration_ms."""
-        from foundry_mcp.tools.review import register_review_tools, _review_breaker
-
-        _review_breaker.reset()
-        register_review_tools(mock_mcp, mock_config)
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout=sample_review_output,
-                stderr="",
-            )
-
-            spec_review = mock_mcp._tools["spec_review"]
-            result = spec_review.fn(spec_id="test-spec-001")
+        with patch.object(_metrics, 'timer') as mock_timer:
+            list_tools = mock_mcp._tools["review_list_tools"]
+            result = list_tools.fn()
 
             assert result["success"] is True
-            assert "duration_ms" in result["data"]
-            assert isinstance(result["data"]["duration_ms"], (int, float))
+            # Timer should have been called
+            mock_timer.assert_called()
 
-        _review_breaker.reset()
+    def test_review_list_plan_tools_emits_duration_metric(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools emits timer metric."""
+        from foundry_mcp.tools.review import register_review_tools, _metrics
+
+        register_review_tools(mock_mcp, mock_config)
+
+        with patch.object(_metrics, 'timer') as mock_timer:
+            list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+            result = list_plan_tools.fn()
+
+            assert result["success"] is True
+            mock_timer.assert_called()
+
+    def test_review_metrics_singleton_exists(self):
+        """Test review tools have metrics singleton available."""
+        from foundry_mcp.tools.review import _metrics
+
+        assert _metrics is not None
+
+    def test_pr_workflow_metrics_singleton_exists(self):
+        """Test PR workflow tools have metrics singleton available."""
+        from foundry_mcp.tools.pr_workflow import _metrics
+
+        assert _metrics is not None
+
+
+class TestToolRegistration:
+    """Test all review tools register correctly."""
+
+    def test_all_review_tools_register(self, mock_mcp, mock_config):
+        """Test all review tools register without error."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        # Should not raise
+        register_review_tools(mock_mcp, mock_config)
+
+        # Should have registered expected tools
+        assert "spec_review" in mock_mcp._tools
+        assert "review_list_tools" in mock_mcp._tools
+        assert "review_list_plan_tools" in mock_mcp._tools
+
+    def test_all_pr_workflow_tools_register(self, mock_mcp, mock_config):
+        """Test all PR workflow tools register without error."""
+        from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
+
+        # Should not raise
+        register_pr_workflow_tools(mock_mcp, mock_config)
+
+        # Should have registered expected tools
+        assert "pr_create_with_spec" in mock_mcp._tools
+        assert "pr_get_spec_context" in mock_mcp._tools
+
+
+class TestLLMConfigurationStatus:
+    """Test LLM configuration status reporting."""
+
+    def test_list_tools_includes_llm_configured_status(self, mock_mcp, mock_config):
+        """Test review_list_tools shows LLM configuration status."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_tools = mock_mcp._tools["review_list_tools"]
+        result = list_tools.fn()
+
+        assert result["success"] is True
+        assert "llm_status" in result["data"]
+        assert "configured" in result["data"]["llm_status"]
+
+    def test_list_plan_tools_reflects_llm_status(self, mock_mcp, mock_config):
+        """Test review_list_plan_tools shows availability based on LLM status."""
+        from foundry_mcp.tools.review import register_review_tools
+
+        register_review_tools(mock_mcp, mock_config)
+
+        list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
+        result = list_plan_tools.fn()
+
+        assert result["success"] is True
+        assert "llm_status" in result["data"]
+
+        # Plan tools should have status information
+        plan_tools = result["data"]["plan_tools"]
+        for tool in plan_tools:
+            assert "status" in tool
+            assert tool["status"] in ("available", "unavailable")

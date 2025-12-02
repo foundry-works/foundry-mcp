@@ -94,11 +94,16 @@ class TestMultiProviderMatrix:
 
     def test_review_tools_lists_supported_providers(self):
         """Test that available review tools include multiple providers."""
-        from foundry_mcp.tools.review import REVIEW_TOOLS
+        # Provider system now handles provider discovery
+        from foundry_mcp.core.providers import describe_providers
 
-        # Should support multiple external tools
-        assert len(REVIEW_TOOLS) >= 2
-        assert "cursor-agent" in REVIEW_TOOLS or "gemini" in REVIEW_TOOLS
+        providers = describe_providers()
+        provider_ids = [p.get("id") for p in providers]
+
+        # Should have multiple providers registered
+        assert len(providers) >= 2
+        # Should include expected providers
+        assert "cursor-agent" in provider_ids or "gemini" in provider_ids
 
     def test_review_types_available(self):
         """Test multiple review types are available."""
@@ -110,55 +115,58 @@ class TestMultiProviderMatrix:
 
 
 class TestCircuitBreakerIntegration:
-    """Test circuit breaker behavior across LLM tools."""
+    """Test circuit breaker behavior across LLM tools.
 
-    def test_review_circuit_breaker_exists(self):
-        """Test that review tools have circuit breaker protection."""
-        from foundry_mcp.tools.review import _review_breaker
+    Note: Circuit breaker functionality has been moved to the provider system.
+    These tests now verify that provider resilience is properly configured.
+    """
 
-        assert _review_breaker is not None
-        assert _review_breaker.name == "sdd_cli_review"
+    def test_provider_system_handles_unavailable_providers(self):
+        """Test that provider system gracefully handles unavailable providers."""
+        from foundry_mcp.core.providers import check_provider_available
 
-    def test_documentation_circuit_breaker_exists(self):
-        """Test that documentation tools have circuit breaker protection."""
-        from foundry_mcp.tools.documentation import _doc_breaker
+        # Non-existent provider should return False, not raise
+        result = check_provider_available("nonexistent-provider-xyz")
+        assert result is False
 
-        assert _doc_breaker is not None
-        assert _doc_breaker.name == "documentation"
+    def test_provider_system_returns_availability_status(self):
+        """Test that provider system reports availability status."""
+        from foundry_mcp.core.providers import get_provider_statuses
 
-    def test_circuit_breaker_opens_after_failures(self):
-        """Test circuit breaker opens after consecutive failures."""
-        from foundry_mcp.tools.review import _review_breaker, _run_review_command
-        from foundry_mcp.core.resilience import CircuitBreakerError
+        statuses = get_provider_statuses()
 
-        # Reset breaker state
-        _review_breaker.reset()
+        # Should return a dict of provider availability
+        assert isinstance(statuses, dict)
+        # All values should be booleans
+        for provider_id, available in statuses.items():
+            assert isinstance(available, bool)
 
-        # Simulate failures up to threshold
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
+    def test_provider_describes_available_providers(self):
+        """Test describe_providers includes availability info."""
+        from foundry_mcp.core.providers import describe_providers
 
-            for i in range(_review_breaker.failure_threshold):
-                try:
-                    _run_review_command(["foundry-cli", "review", "test"], "test-tool")
-                except (FileNotFoundError, CircuitBreakerError):
-                    pass
+        providers = describe_providers()
 
-            # Next call should fail - circuit breaker open
-            assert not _review_breaker.can_execute()
+        # Should return list of provider descriptions
+        assert isinstance(providers, list)
+        assert len(providers) >= 1
 
-        # Reset for other tests
-        _review_breaker.reset()
+        # Each provider should have availability info
+        for provider in providers:
+            assert "available" in provider
+            assert isinstance(provider["available"], bool)
 
-    def test_circuit_breaker_recovers_after_success(self):
-        """Test circuit breaker recovers after successful calls."""
-        from foundry_mcp.tools.review import _review_breaker
+    def test_provider_resolution_validates_availability(self):
+        """Test that resolving unavailable provider raises appropriate error."""
+        from foundry_mcp.core.providers import (
+            resolve_provider,
+            ProviderUnavailableError,
+            ProviderHooks,
+        )
 
-        # Reset to clean state
-        _review_breaker.reset()
-        _review_breaker.record_success()
-
-        assert _review_breaker.can_execute()
+        # Attempting to resolve non-existent provider should raise
+        with pytest.raises(ProviderUnavailableError):
+            resolve_provider("nonexistent-provider-xyz", hooks=ProviderHooks())
 
 
 class TestResponseEnvelopeCompliance:
@@ -187,47 +195,43 @@ class TestResponseEnvelopeCompliance:
 
 
 class TestTimeoutHandling:
-    """Test timeout handling across LLM tools."""
+    """Test timeout handling across LLM tools.
 
-    def test_review_timeout_raises_exception(self):
-        """Test review timeout raises TimeoutExpired."""
-        from foundry_mcp.tools.review import _run_review_command, _review_breaker, REVIEW_TIMEOUT
+    Note: Timeout handling is now managed by the provider system.
+    These tests verify that provider timeout errors are properly typed.
+    """
 
-        _review_breaker.reset()
+    def test_provider_timeout_error_exists(self):
+        """Test ProviderTimeoutError is available for timeout scenarios."""
+        from foundry_mcp.core.providers import ProviderTimeoutError
 
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=REVIEW_TIMEOUT)
+        # Should be able to create timeout error with context
+        error = ProviderTimeoutError("Test timeout", provider="test-provider")
+        assert "Test timeout" in str(error)
+        assert error.provider == "test-provider"
 
-            with pytest.raises(subprocess.TimeoutExpired):
-                _run_review_command(["foundry-cli", "review", "test"], "test-tool")
+    def test_provider_request_includes_timeout(self):
+        """Test ProviderRequest accepts timeout parameter."""
+        from foundry_mcp.core.providers import ProviderRequest
 
-        _review_breaker.reset()
+        request = ProviderRequest(
+            prompt="test prompt",
+            timeout=60,
+        )
+        assert request.timeout == 60
 
-    def test_documentation_timeout_provides_guidance(self):
-        """Test documentation timeout includes recovery guidance."""
-        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+    def test_provider_timeout_is_optional(self):
+        """Test ProviderRequest timeout can be None (provider decides default)."""
+        from foundry_mcp.core.providers import ProviderRequest
 
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=600)
+        request = ProviderRequest(prompt="test prompt")
+        # Timeout is optional - provider implementations decide default
+        # None means "use provider default"
+        assert request.timeout is None
 
-            result = _run_sdd_llm_doc_gen_command(["generate", "/path"])
-
-            assert result["success"] is False
-            assert "timed out" in result["error"]
-            assert "--resume" in result["error"]  # Recovery guidance
-
-    def test_fidelity_review_timeout_suggests_scope_reduction(self):
-        """Test fidelity review timeout suggests reducing scope."""
-        from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
-
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = subprocess.TimeoutExpired(cmd="foundry-cli", timeout=600)
-
-            result = _run_sdd_fidelity_review_command(["test-spec"])
-
-            assert result["success"] is False
-            assert "timed out" in result["error"]
-            assert "smaller scope" in result["error"]
+        # Can explicitly set timeout
+        request_with_timeout = ProviderRequest(prompt="test", timeout=60)
+        assert request_with_timeout.timeout == 60
 
 
 class TestErrorHandling:
@@ -384,127 +388,103 @@ class TestMetricsEmission:
 
 
 class TestDataOnlyFallbackPaths:
-    """Test data-only fallback behavior when LLM operations fail."""
+    """Test data-only fallback behavior when LLM operations fail.
 
-    def test_render_command_json_fallback(self):
-        """Test render command falls back to raw_output when JSON fails."""
-        from foundry_mcp.tools.documentation import _run_sdd_render_command
+    Note: CLI command execution is now handled by the provider system.
+    These tests verify provider error handling and response semantics.
+    """
 
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            # Simulate non-JSON output
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="Rendered to specs/.human-readable/test.md",
-                stderr="",
-            )
+    def test_provider_unavailable_returns_error_response(self):
+        """Test that unavailable provider returns proper error structure."""
+        from foundry_mcp.core.providers import (
+            check_provider_available,
+            ProviderUnavailableError,
+        )
 
-            result = _run_sdd_render_command(["test-spec"])
+        # Verify unavailable provider is detected
+        is_available = check_provider_available("nonexistent-xyz")
+        assert is_available is False
 
-            # Should succeed with raw_output fallback
-            assert result["success"] is True
-            assert "raw_output" in result["data"]
+    def test_provider_result_dataclass(self):
+        """Test ProviderResult contains expected fields."""
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus
 
-    def test_llm_doc_gen_json_fallback(self):
-        """Test LLM doc gen falls back to raw_output when JSON fails."""
-        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
+        result = ProviderResult(
+            content="Test response",
+            provider_id="test-provider",
+            model_used="test-model",
+            status=ProviderStatus.SUCCESS,
+        )
+        assert result.content == "Test response"
+        assert result.status == ProviderStatus.SUCCESS
+        assert result.provider_id == "test-provider"
+        assert result.model_used == "test-model"
 
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="Generated 5 documentation files",
-                stderr="",
-            )
+    def test_provider_result_with_error_status(self):
+        """Test ProviderResult can represent error state via status."""
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus
 
-            result = _run_sdd_llm_doc_gen_command(["generate", "/path"])
+        result = ProviderResult(
+            content="",
+            provider_id="test-provider",
+            model_used="test-model",
+            status=ProviderStatus.ERROR,
+            stderr="Something went wrong",  # Error info goes in stderr
+        )
+        assert result.status == ProviderStatus.ERROR
+        assert result.stderr == "Something went wrong"
 
-            assert result["success"] is True
-            assert "raw_output" in result["data"]
+    def test_provider_status_enum_values(self):
+        """Test ProviderStatus has expected values."""
+        from foundry_mcp.core.providers import ProviderStatus
 
-    def test_fidelity_review_json_fallback(self):
-        """Test fidelity review falls back to raw_output when JSON fails."""
-        from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
-
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="Fidelity review: PASS",
-                stderr="",
-            )
-
-            result = _run_sdd_fidelity_review_command(["test-spec"])
-
-            assert result["success"] is True
-            assert "raw_output" in result["data"]
-
-    def test_review_command_json_fallback(self):
-        """Test review command handles non-JSON output."""
-        from foundry_mcp.tools.review import _run_review_command, _review_breaker
-
-        _review_breaker.reset()
-
-        with patch('foundry_mcp.tools.review.subprocess.run') as mock_run:
-            mock_run.return_value = MagicMock(
-                returncode=0,
-                stdout="Review completed successfully",
-                stderr="",
-            )
-
-            result = _run_review_command(["foundry-cli", "review", "test"], "test-tool")
-
-            # Should complete successfully
-            assert result.returncode == 0
-
-        _review_breaker.reset()
+        # Should have common status values
+        assert ProviderStatus.SUCCESS is not None
+        assert ProviderStatus.ERROR is not None
+        assert ProviderStatus.TIMEOUT is not None
 
 
 class TestCLINotFoundHandling:
-    """Test graceful handling when SDD CLI is not found."""
+    """Test graceful handling when provider binaries are not found.
 
-    def test_doc_command_cli_not_found(self):
-        """Test doc command handles missing CLI."""
-        from foundry_mcp.tools.documentation import _run_sdd_doc_command
+    Note: Binary detection is now handled by the provider detector system.
+    These tests verify detector behavior for missing binaries.
+    """
 
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
+    def test_detector_returns_false_for_missing_binary(self):
+        """Test detector returns False when binary not in PATH."""
+        from foundry_mcp.core.providers.detectors import ProviderDetector
 
-            result = _run_sdd_doc_command(["test-spec"])
+        detector = ProviderDetector(
+            provider_id="nonexistent",
+            binary_name="nonexistent-binary-xyz-123",
+        )
+        assert detector.is_available() is False
 
-            assert result["success"] is False
-            assert "foundry-cli not found" in result["error"]
-            assert "foundry-mcp" in result["error"]
+    def test_detector_resolve_binary_returns_none_for_missing(self):
+        """Test resolve_binary returns None when binary not found."""
+        from foundry_mcp.core.providers.detectors import ProviderDetector
 
-    def test_render_command_cli_not_found(self):
-        """Test render command handles missing CLI."""
-        from foundry_mcp.tools.documentation import _run_sdd_render_command
+        detector = ProviderDetector(
+            provider_id="nonexistent",
+            binary_name="nonexistent-binary-xyz-123",
+        )
+        assert detector.resolve_binary() is None
 
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
+    def test_provider_unavailable_error_has_provider_info(self):
+        """Test ProviderUnavailableError includes provider context."""
+        from foundry_mcp.core.providers import ProviderUnavailableError
 
-            result = _run_sdd_render_command(["test-spec"])
+        error = ProviderUnavailableError(
+            "Binary not found",
+            provider="test-provider",
+        )
+        assert error.provider == "test-provider"
+        assert "Binary not found" in str(error)
 
-            assert result["success"] is False
-            assert "foundry-cli not found" in result["error"]
+    def test_check_provider_available_false_for_unknown(self):
+        """Test check_provider_available returns False for unknown providers."""
+        from foundry_mcp.core.providers import check_provider_available
 
-    def test_llm_doc_gen_cli_not_found(self):
-        """Test LLM doc gen handles missing CLI."""
-        from foundry_mcp.tools.documentation import _run_sdd_llm_doc_gen_command
-
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
-
-            result = _run_sdd_llm_doc_gen_command(["generate", "/path"])
-
-            assert result["success"] is False
-            assert "foundry-cli not found" in result["error"]
-
-    def test_fidelity_review_cli_not_found(self):
-        """Test fidelity review handles missing CLI."""
-        from foundry_mcp.tools.documentation import _run_sdd_fidelity_review_command
-
-        with patch('foundry_mcp.tools.documentation.subprocess.run') as mock_run:
-            mock_run.side_effect = FileNotFoundError("foundry-cli not found")
-
-            result = _run_sdd_fidelity_review_command(["test-spec"])
-
-            assert result["success"] is False
-            assert "foundry-cli not found" in result["error"]
+        result = check_provider_available("completely-unknown-provider-xyz")
+        assert result is False
