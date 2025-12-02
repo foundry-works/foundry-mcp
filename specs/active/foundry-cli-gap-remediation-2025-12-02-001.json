@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T16:33:30.066564Z",
+  "last_updated": "2025-12-02T16:34:49.157994Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 60,
+    "progress_percentage": 62,
     "current_phase": "phase-3"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 21,
+      "completed_tasks": 22,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -670,7 +670,7 @@
         "phase-3-verify"
       ],
       "total_tasks": 6,
-      "completed_tasks": 3,
+      "completed_tasks": 4,
       "metadata": {
         "purpose": "Expand doc-query CLI surface to match skill expectations (scope, search, dependencies, refactor-candidates)",
         "risk_level": "medium",
@@ -689,7 +689,7 @@
     "phase-3-files": {
       "type": "group",
       "title": "Doc-Query Commands",
-      "status": "in_progress",
+      "status": "completed",
       "parent": "phase-3",
       "children": [
         "task-3-1",
@@ -698,8 +698,12 @@
         "task-3-4"
       ],
       "total_tasks": 4,
-      "completed_tasks": 3,
-      "metadata": {},
+      "completed_tasks": 4,
+      "metadata": {
+        "needs_journaling": false,
+        "completed_at": "2025-12-02T16:34:49.151483Z",
+        "journaled_at": "2025-12-02T16:34:49.157971Z"
+      },
       "dependencies": {
         "blocks": [
           "phase-3-verify"
@@ -771,16 +775,22 @@
     "task-3-3": {
       "type": "task",
       "title": "Add doc refactor-candidates command",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-3-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/cli/commands/docquery.py",
         "task_category": "implementation",
         "estimated_hours": 1,
-        "details": "sdd doc refactor-candidates [--threshold n] - identify high-impact code needing refactoring"
+        "details": "sdd doc refactor-candidates [--threshold n] - identify high-impact code needing refactoring",
+        "started_at": "2025-12-02T16:33:57.295665Z",
+        "status_note": "Implementing doc refactor-candidates command",
+        "completed_at": "2025-12-02T16:34:49.151339Z",
+        "needs_journaling": false,
+        "actual_hours": 0.014,
+        "journaled_at": "2025-12-02T16:34:49.154781Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1436,6 +1446,24 @@
       "content": "Implemented 2 new doc-query CLI commands in src/foundry_mcp/cli/commands/docquery.py:\n\n1. 'doc search <query> [--type class|function|all] [--limit N]' - Search documentation by keyword with relevance scoring\n   - Searches class names, function names, docstrings, and method names\n   - Results sorted by relevance score\n   - Supports filtering by entity type\n\n2. 'doc context <target> [--depth 1|2|3]' - Get comprehensive context for a class or function\n   - Depth 1: Basic entity info (name, file, line, signature/methods)\n   - Depth 2: Adds callers/callees and file context (other entities in same file)\n   - Depth 3: Adds full impact analysis\n\nBoth commands:\n- Use the DocsQuery core class with its search() and related methods\n- Follow established CLI patterns with @cli_command decorators\n- Handle keyboard interrupt and timeout via decorators\n- Output JSON via emit_success/emit_error helpers\n- Include telemetry duration metrics\n\nVerification: Commands appear in 'doc --help' output and import successfully.",
       "metadata": {},
       "task_id": "task-3-2"
+    },
+    {
+      "timestamp": "2025-12-02T16:34:49.154776Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add doc refactor-candidates command",
+      "author": "claude-code",
+      "content": "Implemented `doc refactor-candidates` CLI command in src/foundry_mcp/cli/commands/docquery.py:\n\n`sdd doc refactor-candidates [--threshold N] [--complexity N] [--limit N]`\n\nFeatures:\n- Identifies functions and classes needing refactoring based on:\n  - High caller count (potential utility extraction)\n  - High callee count (complex functions)\n  - High complexity score (if available)\n  - Large classes (many methods)\n  - Deep inheritance hierarchies\n- Results sorted by priority score\n- Configurable threshold for minimum callers (default: 3)\n- Configurable complexity minimum (default: 0)\n- Configurable result limit (default: 50)\n\nUses DocsQuery.get_refactor_candidates() from core/docs.py. Follows established CLI patterns with @cli_command decorator, keyboard interrupt handling, timeout handling, and JSON output via emit_success/emit_error.\n\nVerification: Command appears in `doc --help` output.",
+      "metadata": {},
+      "task_id": "task-3-3"
+    },
+    {
+      "timestamp": "2025-12-02T16:34:49.157965Z",
+      "entry_type": "status_change",
+      "title": "Group Completed: Doc-Query Commands",
+      "author": "claude-code",
+      "content": "All child tasks in group phase-3-files have been completed.",
+      "metadata": {},
+      "task_id": "phase-3-files"
     }
   ]
 }

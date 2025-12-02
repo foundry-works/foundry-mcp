@@ -1247,3 +1247,105 @@ def doc_context_cmd(
             remediation="Check that the target exists in documentation",
             details={"target": target},
         )
+
+
+@doc_group.command("refactor-candidates")
+@click.option(
+    "--threshold",
+    type=int,
+    default=3,
+    help="Minimum number of callers to flag as candidate.",
+)
+@click.option(
+    "--complexity",
+    type=int,
+    default=0,
+    help="Minimum complexity score to include.",
+)
+@click.option(
+    "--limit",
+    type=int,
+    default=50,
+    help="Maximum number of candidates to return.",
+)
+@click.pass_context
+@cli_command("doc-refactor-candidates")
+@handle_keyboard_interrupt()
+@with_sync_timeout(SLOW_TIMEOUT, "Refactor candidates query timed out")
+def doc_refactor_candidates_cmd(
+    ctx: click.Context,
+    threshold: int,
+    complexity: int,
+    limit: int,
+) -> None:
+    """Find candidates for refactoring.
+
+    Identifies functions and classes that may benefit from refactoring based on:
+    - High caller count (potential utility extraction)
+    - High callee count (complex functions)
+    - High complexity score (if available)
+    - Large classes (many methods)
+    - Deep inheritance hierarchies
+
+    Results are sorted by priority score.
+    """
+    start_time = time.perf_counter()
+    cli_ctx = get_context(ctx)
+
+    try:
+        from foundry_mcp.core.docs import DocsQuery
+
+        query = DocsQuery(workspace=cli_ctx.specs_dir.parent if cli_ctx.specs_dir else None)
+        if not query.load():
+            emit_error(
+                "Codebase documentation not available",
+                code="DOCS_NOT_FOUND",
+                error_type="not_found",
+                remediation="Run documentation generation first with: sdd llm-doc generate",
+                details={"hint": "Run documentation generation first"},
+            )
+            return
+
+        result = query.get_refactor_candidates(min_callers=threshold, min_complexity=complexity)
+
+        if not result.success:
+            emit_error(
+                result.error or "Refactor candidates query failed",
+                code="REFACTOR_FAILED",
+                error_type="internal",
+                remediation="Check that codebase documentation is valid",
+                details={},
+            )
+            return
+
+        # Limit and format results
+        candidates = result.results[:limit]
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        emit_success({
+            "threshold": threshold,
+            "complexity_min": complexity,
+            "candidates": candidates,
+            "count": len(candidates),
+            "total_found": len(result.results),
+            "truncated": len(result.results) > limit,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        })
+
+    except ImportError:
+        emit_error(
+            "Docs module not available",
+            code="MODULE_NOT_FOUND",
+            error_type="internal",
+            remediation="Check foundry_mcp installation",
+            details={"hint": "Check foundry_mcp installation"},
+        )
+    except Exception as e:
+        emit_error(
+            f"Refactor candidates query failed: {e}",
+            code="REFACTOR_FAILED",
+            error_type="internal",
+            remediation="Check that codebase documentation is valid",
+            details={},
+        )
