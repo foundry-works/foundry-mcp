@@ -100,6 +100,11 @@ from foundry_mcp.cli.commands.dev import (
     dev_install_cmd,
     dev_start_cmd,
 )
+from foundry_mcp.cli.commands.journal import (
+    journal,
+    journal_add_cmd,
+    journal_add_alias_cmd,
+)
 from foundry_mcp.cli.commands.tasks import (
     block_task_cmd,
     next_task,
@@ -209,4 +214,8 @@ __all__ = [
     "dev_install_alias_cmd",
     "dev_install_cmd",
     "dev_start_cmd",
+    # Journal commands
+    "journal",
+    "journal_add_cmd",
+    "journal_add_alias_cmd",
 ]

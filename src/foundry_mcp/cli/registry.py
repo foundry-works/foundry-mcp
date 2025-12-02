@@ -74,6 +74,8 @@ def register_all_commands(cli: click.Group) -> None:
         find_function_alias_cmd,
         generate_docs_alias_cmd,
         generate_marker_cmd,
+        journal,
+        journal_add_alias_cmd,
         lifecycle,
         lifecycle_state_cmd,
         llm_doc_group,
@@ -111,6 +113,7 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(lifecycle)
     cli.add_command(session)
     cli.add_command(cache)
+    cli.add_command(journal)
     cli.add_command(validate_group)
     cli.add_command(render_group)
     cli.add_command(review_group)
@@ -149,6 +152,7 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(run_tests_alias_cmd, name="run-tests")
     cli.add_command(generate_docs_alias_cmd, name="generate-docs")
     cli.add_command(dev_install_alias_cmd, name="dev-install")
+    cli.add_command(journal_add_alias_cmd, name="journal-add")
 
     # Placeholder: version command for testing the scaffold
     @cli.command("version")

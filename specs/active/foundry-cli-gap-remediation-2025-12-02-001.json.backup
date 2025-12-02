@@ -1,0 +1,1065 @@
+{
+  "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
+  "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
+  "generated": "2025-12-02T18:00:00Z",
+  "last_updated": "2025-12-02T15:27:44.582423Z",
+  "metadata": {
+    "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
+    "objectives": [
+      "Implement missing CLI commands (journal, navigation, complete-task)",
+      "Remove shell-out dependencies in modify, review, and PR commands",
+      "Expand doc-query CLI surface to match skill expectations",
+      "Align CLI interfaces with skill documentation signatures",
+      "Add context management commands for sdd-next workflow"
+    ],
+    "complexity": "high",
+    "estimated_hours": 36,
+    "owner": "foundry-mcp",
+    "assumptions": [
+      "Core modules (journal.py, progress.py, modifications.py) already implement required business logic",
+      "CLI commands will wrap existing core modules rather than re-implementing logic",
+      "JSON-first output per docs/codebase_standards/cli-output.md",
+      "Follow patterns established in existing CLI commands (tasks.py)"
+    ],
+    "status": "active",
+    "activated_date": "2025-12-02T15:27:15.465705Z"
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5"
+      ],
+      "total_tasks": 35,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Critical CLI Gaps (Journal, Navigation, Complete-Task)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-1-files",
+        "phase-1-verify"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Implement missing commands that block core SDD workflows",
+        "risk_level": "medium",
+        "estimated_hours": 10,
+        "details": "Re-read docs/mcp_best_practices/README.md and docs/codebase_standards/cli-output.md before starting"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1-files": {
+      "type": "group",
+      "title": "CLI Command Implementation",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-1-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Create journal CLI command group",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [
+        "task-1-1-1",
+        "task-1-1-2",
+        "task-1-1-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/journal.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": "Create new journal.py command file using core/journal.py. Commands: journal add, journal list, journal unjournaled"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-4",
+          "task-1-3",
+          "task-1-5"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1-1": {
+      "type": "subtask",
+      "title": "Implement journal add command",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "sdd journal add <spec_id> --title --content [--type note|decision|blocker|deviation] [--task-id]",
+        "started_at": "2025-12-02T15:27:44.582223Z",
+        "status_note": "Starting implementation of journal add CLI command"
+      }
+    },
+    "task-1-1-2": {
+      "type": "subtask",
+      "title": "Implement journal list command",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "sdd journal list <spec_id> [--task-id] [--type] [--limit]"
+      }
+    },
+    "task-1-1-3": {
+      "type": "subtask",
+      "title": "Implement journal unjournaled command",
+      "status": "pending",
+      "parent": "task-1-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "details": "sdd journal unjournaled <spec_id> - list completed tasks needing journal entries"
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Add spec navigation commands",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/specs.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": "Add find-specs, list-phases, query-tasks, list-blockers commands using core/progress.py and core/spec.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Add complete-task command with auto-journaling",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/tasks.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "details": "sdd complete-task <spec_id> <task_id> --note <completion_note>. Combines status update + journal entry creation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "Add get-journal command",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/journal.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.5,
+        "details": "sdd get-journal <spec_id> [--task-id] [--last n] - needed by sdd-pr skill"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-5"
+        ],
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "Register journal commands and aliases",
+      "status": "pending",
+      "parent": "phase-1-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/registry.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.5,
+        "details": "Register journal group and add top-level aliases (add-journal, get-journal)"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-1-1",
+          "task-1-4"
+        ],
+        "depends": []
+      }
+    },
+    "phase-1-verify": {
+      "type": "group",
+      "title": "Phase 1 Verification",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [
+        "verify-1-1",
+        "verify-1-2",
+        "verify-1-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocked_by": [
+          "phase-1-files"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Journal CLI unit tests pass",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/test_journal.py -v",
+        "expected": "All journal CLI tests pass"
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Navigation commands work with test spec",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/test_specs.py -v -k navigation",
+        "expected": "find-specs, list-phases, query-tasks, list-blockers work correctly"
+      }
+    },
+    "verify-1-3": {
+      "type": "verify",
+      "title": "Phase 1 fidelity review",
+      "status": "pending",
+      "parent": "phase-1-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-1"
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Shell-Out Removal (Modify, Review, PR)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-2-files",
+        "phase-2-verify"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Remove subprocess.run calls to legacy sdd binary, use core modules directly",
+        "risk_level": "high",
+        "estimated_hours": 9,
+        "details": "Replace shell-outs with direct imports from core/modifications.py, core/task.py, etc."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-2-files": {
+      "type": "group",
+      "title": "Nativize CLI Commands",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "task-2-5"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-2-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Nativize modify apply command",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/modify.py",
+        "task_category": "refactoring",
+        "estimated_hours": 2,
+        "details": "Replace subprocess.run(['sdd', 'apply-modifications', ...]) with direct import from core/modifications.py"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Nativize modify task add/remove commands",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/modify.py",
+        "task_category": "refactoring",
+        "estimated_hours": 1.5,
+        "details": "Replace subprocess calls with core/task.py add_task() and remove_task()"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-2-1",
+          "task-2-3"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Add assumption/revision/frontmatter helpers to core",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/spec.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "details": "Add add_assumption(), add_revision(), update_frontmatter() functions to core/spec.py"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "Create core/review.py for non-LLM review logic",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/review.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": "Extract structural review logic from CLI, create quick_review() and prepare_review_context()"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-2-5"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-5": {
+      "type": "task",
+      "title": "Native pr get-context command",
+      "status": "pending",
+      "parent": "phase-2-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/pr.py",
+        "task_category": "refactoring",
+        "estimated_hours": 1.5,
+        "details": "Implement native pr get-context without shelling out, gather completed tasks + journal entries + progress stats"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-2-4"
+        ],
+        "depends": []
+      }
+    },
+    "phase-2-verify": {
+      "type": "group",
+      "title": "Phase 2 Verification",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [
+        "verify-2-1",
+        "verify-2-2",
+        "verify-2-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocked_by": [
+          "phase-2-files"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Modify commands work without sdd binary",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/test_modify.py -v",
+        "expected": "All modify tests pass without subprocess calls"
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "PR context command works natively",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/test_pr.py -v -k get_context",
+        "expected": "pr get-context returns valid JSON"
+      }
+    },
+    "verify-2-3": {
+      "type": "verify",
+      "title": "Phase 2 fidelity review",
+      "status": "pending",
+      "parent": "phase-2-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-2"
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Doc-Query Expansion",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-3-files",
+        "phase-3-verify"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Expand doc-query CLI surface to match skill expectations (scope, search, dependencies, refactor-candidates)",
+        "risk_level": "medium",
+        "estimated_hours": 7
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "phase-3-files": {
+      "type": "group",
+      "title": "Doc-Query Commands",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-3-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Add doc scope command",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/docquery.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": "sdd doc scope <target> [--view plan|implement|trace|debug]. Also add dependencies, describe-module, list-modules, list-functions"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-3-2",
+          "task-3-3"
+        ],
+        "blocked_by": [
+          "task-3-4"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Add doc search and context commands",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/docquery.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "details": "sdd doc search <query> [--type class|function|module], sdd doc context <target>"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-3-1",
+          "task-3-4"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Add doc refactor-candidates command",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/docquery.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "details": "sdd doc refactor-candidates [--threshold n] - identify high-impact code needing refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "task-3-1",
+          "task-3-4"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Extend DocsQuery core class",
+      "status": "pending",
+      "parent": "phase-3-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/core/docs.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": "Add get_scope(), search(), get_refactor_candidates() methods to DocsQuery class"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-3-1",
+          "task-3-2",
+          "task-3-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3-verify": {
+      "type": "group",
+      "title": "Phase 3 Verification",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [
+        "verify-3-1",
+        "verify-3-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocked_by": [
+          "phase-3-files"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Doc-query commands work with test codebase.json",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/test_docquery.py -v",
+        "expected": "All doc-query commands work correctly"
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "Phase 3 fidelity review",
+      "status": "pending",
+      "parent": "phase-3-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-3"
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Interface Alignment (Validate, Render, Test)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-4-files",
+        "phase-4-verify"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add missing flags to align CLI interfaces with skill documentation signatures",
+        "risk_level": "low",
+        "estimated_hours": 5
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "phase-4-files": {
+      "type": "group",
+      "title": "Flag Additions",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-4-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Add missing validate flags",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/validate.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "details": "Add --preview, --diff, --select flags. Add top-level aliases: sdd validate, sdd fix"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Add missing render flags",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/render.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "details": "Add --output/-o, --enhancement-level (map to --mode), --path flags"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Add missing test flags and consult command",
+      "status": "pending",
+      "parent": "phase-4-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/testing.py",
+        "task_category": "implementation",
+        "estimated_hours": 2,
+        "details": "Add --coverage, --parallel, --list flags. Add sdd test consult <pattern> --issue <description>"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-4-verify": {
+      "type": "group",
+      "title": "Phase 4 Verification",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [
+        "verify-4-1",
+        "verify-4-2"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocked_by": [
+          "phase-4-files"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "New flags work and are backward compatible",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/ -v -k 'validate or render or test'",
+        "expected": "All flag tests pass, existing behavior unchanged"
+      }
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "Phase 4 fidelity review",
+      "status": "pending",
+      "parent": "phase-4-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "phase",
+        "target": "phase-4"
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "Context Management (Session Marker)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "phase-5-files",
+        "phase-5-verify"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Complete context management contract for sdd-next workflow",
+        "risk_level": "low",
+        "estimated_hours": 4
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": []
+      }
+    },
+    "phase-5-files": {
+      "type": "group",
+      "title": "Context Commands",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "task-5-1",
+        "task-5-2",
+        "task-5-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocks": [
+          "phase-5-verify"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "Add context command with session-marker",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/session.py",
+        "task_category": "implementation",
+        "estimated_hours": 1.5,
+        "details": "sdd context --session-marker <marker> [--check-limits]. Completes two-step contract with generate-marker"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "Add check-complete command",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/commands/tasks.py",
+        "task_category": "implementation",
+        "estimated_hours": 1,
+        "details": "sdd check-complete <spec_id> <task_id> - verify if task can be marked complete, return blockers"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "Add schema top-level alias",
+      "status": "pending",
+      "parent": "phase-5-files",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "file_path": "src/foundry_mcp/cli/registry.py",
+        "task_category": "implementation",
+        "estimated_hours": 0.5,
+        "details": "Add sdd schema as alias for sdd specs schema"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-5-verify": {
+      "type": "group",
+      "title": "Phase 5 Verification",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [
+        "verify-5-1",
+        "verify-5-2",
+        "verify-5-3"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {},
+      "dependencies": {
+        "blocked_by": [
+          "phase-5-files"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "Context token tracking tests pass",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/cli/commands/test_session.py -v -k context",
+        "expected": "Context command with session-marker works correctly"
+      }
+    },
+    "verify-5-2": {
+      "type": "verify",
+      "title": "Full test suite passes",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "auto",
+        "agent": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/ -v --ignore=tests/integration",
+        "expected": "All unit tests pass"
+      }
+    },
+    "verify-5-3": {
+      "type": "verify",
+      "title": "Final fidelity review",
+      "status": "pending",
+      "parent": "phase-5-verify",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "agent": "sdd-fidelity-review",
+        "scope": "spec",
+        "target": "spec-root"
+      }
+    }
+  },
+  "journal": []
+}
