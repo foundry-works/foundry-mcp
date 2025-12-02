@@ -2,7 +2,7 @@
   "spec_id": "foundry-cli-gap-remediation-2025-12-02-001",
   "title": "Foundry CLI Gap Remediation - Skill Migration Enablement",
   "generated": "2025-12-02T18:00:00Z",
-  "last_updated": "2025-12-02T17:22:44.103090Z",
+  "last_updated": "2025-12-02T17:25:19.875803Z",
   "metadata": {
     "description": "Remove blocking gaps in Foundry CLI that prevent claude-sdd-toolkit skills from migrating away from the legacy sdd binary",
     "objectives": [
@@ -23,7 +23,7 @@
     ],
     "status": "active",
     "activated_date": "2025-12-02T15:27:15.465705Z",
-    "progress_percentage": 71,
+    "progress_percentage": 74,
     "current_phase": "phase-4"
   },
   "hierarchy": {
@@ -40,7 +40,7 @@
         "phase-5"
       ],
       "total_tasks": 35,
-      "completed_tasks": 25,
+      "completed_tasks": 26,
       "metadata": {
         "purpose": "Enable claude-sdd-toolkit skills to migrate from legacy sdd binary to native Foundry CLI"
       }
@@ -910,7 +910,7 @@
         "phase-4-verify"
       ],
       "total_tasks": 5,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Add missing flags to align CLI interfaces with skill documentation signatures",
         "risk_level": "low",
@@ -937,7 +937,7 @@
         "task-4-3"
       ],
       "total_tasks": 3,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -976,16 +976,22 @@
     "task-4-2": {
       "type": "task",
       "title": "Add missing render flags",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-4-files",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/cli/commands/render.py",
         "task_category": "implementation",
         "estimated_hours": 1.5,
-        "details": "Add --output/-o, --enhancement-level (map to --mode), --path flags"
+        "details": "Add --output/-o, --enhancement-level (map to --mode), --path flags",
+        "started_at": "2025-12-02T17:23:17.316473Z",
+        "status_note": "Adding render flags",
+        "completed_at": "2025-12-02T17:25:19.870902Z",
+        "needs_journaling": false,
+        "actual_hours": 0.034,
+        "journaled_at": "2025-12-02T17:25:19.874379Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1534,6 +1540,15 @@
       "content": "Added --preview, --diff, --select flags to validate_cmd. Added top-level fix_cmd alias for validate fix command. Both commands registered in registry.py. Verified imports and help output working correctly. Files modified: src/foundry_mcp/cli/commands/validate.py (added new flags to validate_cmd, created fix_cmd), src/foundry_mcp/cli/commands/__init__.py (exported fix_cmd), src/foundry_mcp/cli/registry.py (registered validate and fix as top-level aliases).",
       "metadata": {},
       "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2025-12-02T17:25:19.874375Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add missing render flags",
+      "author": "claude-code",
+      "content": "Added --output/-o (write markdown to file), --enhancement-level (alias for --mode), and --path (project root override) flags to both render_spec_cmd and render_cmd. --mode now defaults to None so --enhancement-level can be used as alternative. Both commands handle file output and path resolution. Verified help output shows all new flags. File modified: src/foundry_mcp/cli/commands/render.py.",
+      "metadata": {},
+      "task_id": "task-4-2"
     }
   ]
 }

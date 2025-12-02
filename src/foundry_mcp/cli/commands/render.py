@@ -60,8 +60,14 @@ def render_group() -> None:
     "--mode",
     "-m",
     type=click.Choice(["basic", "enhanced"]),
-    default="basic",
+    default=None,
     help="Rendering mode.",
+)
+@click.option(
+    "--enhancement-level",
+    type=click.Choice(["basic", "enhanced"]),
+    default=None,
+    help="Alias for --mode (rendering enhancement level).",
 )
 @click.option(
     "--include-journal/--no-journal",
@@ -81,6 +87,17 @@ def render_group() -> None:
     help="Filter to specific phase IDs.",
 )
 @click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Write markdown to file instead of JSON output.",
+)
+@click.option(
+    "--path",
+    type=click.Path(exists=True),
+    help="Project root path (overrides default spec location).",
+)
+@click.option(
     "--enable-feature",
     "enable_features",
     multiple=True,
@@ -93,10 +110,13 @@ def render_group() -> None:
 def render_spec_cmd(
     ctx: click.Context,
     spec_id: str,
-    mode: str,
+    mode: Optional[str],
+    enhancement_level: Optional[str],
     include_journal: bool,
     max_depth: int,
     phases: tuple,
+    output: Optional[str],
+    path: Optional[str],
     enable_features: tuple,
 ) -> None:
     """Render a specification to markdown.
@@ -112,7 +132,18 @@ def render_spec_cmd(
         apply_cli_flag_overrides(enable=list(enable_features))
     start_time = time.perf_counter()
     cli_ctx = get_context(ctx)
-    specs_dir = cli_ctx.specs_dir
+
+    # Resolve render mode (--mode takes precedence over --enhancement-level)
+    render_mode = mode or enhancement_level or "basic"
+
+    # Use --path if provided, otherwise fall back to context
+    from pathlib import Path
+    if path:
+        specs_dir = Path(path) / "specs"
+        if not specs_dir.exists():
+            specs_dir = Path(path)
+    else:
+        specs_dir = cli_ctx.specs_dir
 
     if specs_dir is None:
         emit_error(
@@ -138,7 +169,7 @@ def render_spec_cmd(
         )
 
     # Check feature flag for enhanced mode
-    if mode == "enhanced":
+    if render_mode == "enhanced":
         flags = get_cli_flags()
         if not flags.is_enabled("enhanced_render"):
             emit_error(
@@ -166,7 +197,7 @@ def render_spec_cmd(
 
     # Build render options
     options = RenderOptions(
-        mode=mode,
+        mode=render_mode,
         include_journal=include_journal,
         max_depth=max_depth,
         phase_filter=list(phases) if phases else None,
@@ -177,18 +208,35 @@ def render_spec_cmd(
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
-    emit_success({
-        "spec_id": result.spec_id,
-        "title": result.title,
-        "mode": mode,
-        "markdown": result.markdown,
-        "stats": {
-            "total_sections": result.total_sections,
-            "total_tasks": result.total_tasks,
-            "completed_tasks": result.completed_tasks,
-        },
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    # Handle output to file
+    if output:
+        output_path = Path(output)
+        output_path.write_text(result.markdown)
+        emit_success({
+            "spec_id": result.spec_id,
+            "title": result.title,
+            "mode": render_mode,
+            "output_file": str(output_path),
+            "stats": {
+                "total_sections": result.total_sections,
+                "total_tasks": result.total_tasks,
+                "completed_tasks": result.completed_tasks,
+            },
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        })
+    else:
+        emit_success({
+            "spec_id": result.spec_id,
+            "title": result.title,
+            "mode": render_mode,
+            "markdown": result.markdown,
+            "stats": {
+                "total_sections": result.total_sections,
+                "total_tasks": result.total_tasks,
+                "completed_tasks": result.completed_tasks,
+            },
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        })
 
 
 @render_group.command("progress")
@@ -363,13 +411,30 @@ def render_tasks_cmd(
     "--mode",
     "-m",
     type=click.Choice(["basic", "enhanced"]),
-    default="basic",
+    default=None,
     help="Rendering mode.",
+)
+@click.option(
+    "--enhancement-level",
+    type=click.Choice(["basic", "enhanced"]),
+    default=None,
+    help="Alias for --mode (rendering enhancement level).",
 )
 @click.option(
     "--include-journal/--no-journal",
     default=False,
     help="Include journal entries.",
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(),
+    help="Write markdown to file instead of JSON output.",
+)
+@click.option(
+    "--path",
+    type=click.Path(exists=True),
+    help="Project root path (overrides default spec location).",
 )
 @click.option(
     "--enable-feature",
@@ -384,8 +449,11 @@ def render_tasks_cmd(
 def render_cmd(
     ctx: click.Context,
     spec_id: str,
-    mode: str,
+    mode: Optional[str],
+    enhancement_level: Optional[str],
     include_journal: bool,
+    output: Optional[str],
+    path: Optional[str],
     enable_features: tuple,
 ) -> None:
     """Render a specification to markdown.
@@ -400,7 +468,18 @@ def render_cmd(
 
     start_time = time.perf_counter()
     cli_ctx = get_context(ctx)
-    specs_dir = cli_ctx.specs_dir
+
+    # Resolve render mode (--mode takes precedence over --enhancement-level)
+    render_mode = mode or enhancement_level or "basic"
+
+    # Use --path if provided, otherwise fall back to context
+    from pathlib import Path
+    if path:
+        specs_dir = Path(path) / "specs"
+        if not specs_dir.exists():
+            specs_dir = Path(path)
+    else:
+        specs_dir = cli_ctx.specs_dir
 
     if specs_dir is None:
         emit_error(
@@ -426,7 +505,7 @@ def render_cmd(
         )
 
     # Check feature flag for enhanced mode
-    if mode == "enhanced":
+    if render_mode == "enhanced":
         flags = get_cli_flags()
         if not flags.is_enabled("enhanced_render"):
             emit_error(
@@ -454,7 +533,7 @@ def render_cmd(
 
     # Build render options
     options = RenderOptions(
-        mode=mode,
+        mode=render_mode,
         include_journal=include_journal,
     )
 
@@ -463,15 +542,32 @@ def render_cmd(
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
-    emit_success({
-        "spec_id": result.spec_id,
-        "title": result.title,
-        "mode": mode,
-        "markdown": result.markdown,
-        "stats": {
-            "total_sections": result.total_sections,
-            "total_tasks": result.total_tasks,
-            "completed_tasks": result.completed_tasks,
-        },
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    # Handle output to file
+    if output:
+        output_path = Path(output)
+        output_path.write_text(result.markdown)
+        emit_success({
+            "spec_id": result.spec_id,
+            "title": result.title,
+            "mode": render_mode,
+            "output_file": str(output_path),
+            "stats": {
+                "total_sections": result.total_sections,
+                "total_tasks": result.total_tasks,
+                "completed_tasks": result.completed_tasks,
+            },
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        })
+    else:
+        emit_success({
+            "spec_id": result.spec_id,
+            "title": result.title,
+            "mode": render_mode,
+            "markdown": result.markdown,
+            "stats": {
+                "total_sections": result.total_sections,
+                "total_tasks": result.total_tasks,
+                "completed_tasks": result.completed_tasks,
+            },
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        })
