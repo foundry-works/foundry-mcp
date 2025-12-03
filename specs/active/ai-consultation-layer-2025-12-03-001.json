@@ -2,7 +2,7 @@
   "spec_id": "ai-consultation-layer-2025-12-03-001",
   "title": "AI Consultation Layer",
   "generated": "2025-12-03T12:00:00Z",
-  "last_updated": "2025-12-03T14:56:17.497772Z",
+  "last_updated": "2025-12-03T14:58:18.116753Z",
   "metadata": {
     "description": "Restore LLM-backed capabilities in foundry-mcp without claude_skills dependency",
     "objectives": [
@@ -19,7 +19,7 @@
       "Provider detection via detectors.py works correctly",
       "CLI and MCP surfaces share the same consultation layer"
     ],
-    "progress_percentage": 3,
+    "progress_percentage": 7,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -37,7 +37,7 @@
         "phase-5"
       ],
       "total_tasks": 26,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {}
     },
     "phase-1": {
@@ -50,7 +50,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 8,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {
         "purpose": "Create core AI consultation infrastructure",
         "risk_level": "medium"
@@ -79,7 +79,7 @@
         "task-1-6"
       ],
       "total_tasks": 6,
-      "completed_tasks": 1,
+      "completed_tasks": 2,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -128,7 +128,7 @@
     "task-1-2": {
       "type": "task",
       "title": "src/foundry_mcp/core/prompts/__init__.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [],
       "dependencies": {
@@ -141,7 +141,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/prompts/__init__.py",
         "task_category": "implementation",
@@ -151,7 +151,13 @@
           "PromptRegistry class for registering and retrieving prompts by ID",
           "Template variable substitution via {variable} syntax",
           "Validation of required_context keys"
-        ]
+        ],
+        "started_at": "2025-12-03T14:56:52.974552Z",
+        "status_note": "Enhancing prompts/__init__.py with PromptTemplate and PromptRegistry",
+        "completed_at": "2025-12-03T14:58:18.111746Z",
+        "needs_journaling": false,
+        "actual_hours": 0.024,
+        "journaled_at": "2025-12-03T14:58:18.115391Z"
       }
     },
     "task-1-3": {
@@ -945,6 +951,15 @@
       "content": "Created src/foundry_mcp/core/ai_consultation.py with:\n- ConsultationWorkflow enum (DOC_GENERATION, PLAN_REVIEW, FIDELITY_REVIEW)\n- ConsultationRequest dataclass with all specified fields (workflow, prompt_id, context, provider_id, model, cache_key, timeout, temperature, max_tokens, system_prompt_override)\n- ConsultationResult dataclass with success property and all output fields\n- ResultCache class with filesystem persistence under .cache/foundry-mcp/consultations/, supporting get/set/invalidate/stats operations\n- ConsultationOrchestrator class with consult(), is_available(), get_available_providers(), consult_multiple() methods\n- Integration with existing provider registry via resolve_provider()\n\nAlso created prompts package:\n- src/foundry_mcp/core/prompts/__init__.py with PromptBuilder ABC and get_prompt_builder() factory\n- src/foundry_mcp/core/prompts/doc_generation.py with 5 prompt templates\n- src/foundry_mcp/core/prompts/plan_review.py with 5 prompt templates  \n- src/foundry_mcp/core/prompts/fidelity_review.py with 5 prompt templates\n\nAll imports verified working. Manual tests pass for cache operations, prompt building, and result structures.",
       "metadata": {},
       "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2025-12-03T14:58:18.115383Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/prompts/__init__.py",
+      "author": "claude-code",
+      "content": "Enhanced src/foundry_mcp/core/prompts/__init__.py with:\n- PromptTemplate dataclass (frozen) with: id, version, system_prompt, user_template, required_context, optional_context, metadata\n- PromptTemplate methods: get_variables() for extracting {variable} patterns, validate_context() for checking required keys, render() for template substitution\n- PromptTemplate validation in __post_init__ for empty id/version/user_template\n- PromptRegistry class with: register(), get(), get_required(), list_templates(), unregister(), clear(), render() methods\n- PromptRegistry supports __len__ and __contains__ protocols\n- Global registry singleton via get_global_registry() and reset_global_registry()\n- Template variable substitution via {variable} syntax\n- Validation of required_context keys with strict mode option\n\nAll tests pass: template creation, variable extraction, context validation, rendering, registry operations, global registry.",
+      "metadata": {},
+      "task_id": "task-1-2"
     }
   ]
 }
