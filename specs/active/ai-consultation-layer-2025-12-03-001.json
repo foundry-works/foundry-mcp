@@ -2,7 +2,7 @@
   "spec_id": "ai-consultation-layer-2025-12-03-001",
   "title": "AI Consultation Layer",
   "generated": "2025-12-03T12:00:00Z",
-  "last_updated": "2025-12-03T14:58:18.116753Z",
+  "last_updated": "2025-12-03T15:06:55.462817Z",
   "metadata": {
     "description": "Restore LLM-backed capabilities in foundry-mcp without claude_skills dependency",
     "objectives": [
@@ -19,7 +19,7 @@
       "Provider detection via detectors.py works correctly",
       "CLI and MCP surfaces share the same consultation layer"
     ],
-    "progress_percentage": 7,
+    "progress_percentage": 11,
     "status": "active",
     "current_phase": "phase-1"
   },
@@ -37,7 +37,7 @@
         "phase-5"
       ],
       "total_tasks": 26,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {}
     },
     "phase-1": {
@@ -50,7 +50,7 @@
         "phase-1-verify"
       ],
       "total_tasks": 8,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {
         "purpose": "Create core AI consultation infrastructure",
         "risk_level": "medium"
@@ -79,7 +79,7 @@
         "task-1-6"
       ],
       "total_tasks": 6,
-      "completed_tasks": 2,
+      "completed_tasks": 3,
       "metadata": {},
       "dependencies": {
         "blocks": [
@@ -163,7 +163,7 @@
     "task-1-3": {
       "type": "task",
       "title": "src/foundry_mcp/core/prompts/doc_generation.py",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1-files",
       "children": [],
       "dependencies": {
@@ -175,7 +175,7 @@
         "depends": []
       },
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "file_path": "src/foundry_mcp/core/prompts/doc_generation.py",
         "task_category": "implementation",
@@ -186,7 +186,13 @@
           "DOC_GEN_ARCHITECTURE_V1 - architecture documentation",
           "DOC_GEN_COMPONENT_INVENTORY_V1 - component inventory",
           "Each prompt includes system_prompt and user_template with {codebase_json} context"
-        ]
+        ],
+        "started_at": "2025-12-03T15:02:14.398653Z",
+        "status_note": "Starting doc generation prompts implementation",
+        "completed_at": "2025-12-03T15:06:55.458148Z",
+        "needs_journaling": false,
+        "actual_hours": 0.078,
+        "journaled_at": "2025-12-03T15:06:55.461623Z"
       }
     },
     "task-1-4": {
@@ -960,6 +966,15 @@
       "content": "Enhanced src/foundry_mcp/core/prompts/__init__.py with:\n- PromptTemplate dataclass (frozen) with: id, version, system_prompt, user_template, required_context, optional_context, metadata\n- PromptTemplate methods: get_variables() for extracting {variable} patterns, validate_context() for checking required keys, render() for template substitution\n- PromptTemplate validation in __post_init__ for empty id/version/user_template\n- PromptRegistry class with: register(), get(), get_required(), list_templates(), unregister(), clear(), render() methods\n- PromptRegistry supports __len__ and __contains__ protocols\n- Global registry singleton via get_global_registry() and reset_global_registry()\n- Template variable substitution via {variable} syntax\n- Validation of required_context keys with strict mode option\n\nAll tests pass: template creation, variable extraction, context validation, rendering, registry operations, global registry.",
       "metadata": {},
       "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2025-12-03T15:06:55.461617Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: src/foundry_mcp/core/prompts/doc_generation.py",
+      "author": "claude-code",
+      "content": "Enhanced src/foundry_mcp/core/prompts/doc_generation.py with:\n- DOC_GEN_PROJECT_OVERVIEW_V1: PromptTemplate for project overview narrative generation with project_context and key_files variables\n- DOC_GEN_ARCHITECTURE_V1: PromptTemplate for architecture documentation with 10 research sections covering patterns, decisions, structure, technology integration, implementation patterns, data/security/performance architecture\n- DOC_GEN_COMPONENT_INVENTORY_V1: PromptTemplate for component inventory with directory_structure and directories_to_analyze variables, 8 research sections for source tree analysis\n- Each template includes system_prompt, user_template with {variable} placeholders, required_context, optional_context (ignore_patterns), and metadata\n- DocGenerationPromptBuilder updated to support both DOC_GEN_* templates and legacy analyze_*/generate_*/summarize_* templates\n- DOC_GEN_TEMPLATES dict for programmatic access to new templates\n- All tests pass: template instantiation, builder.list_prompts(), builder.build() for both DOC_GEN and legacy templates",
+      "metadata": {},
+      "task_id": "task-1-3"
     }
   ]
 }
