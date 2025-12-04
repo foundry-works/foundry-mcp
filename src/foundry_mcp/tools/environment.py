@@ -5,10 +5,12 @@ Provides MCP tools for environment verification, workspace initialization,
 and topology detection.
 """
 
+import json
 import logging
 import shutil
 import subprocess
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -23,6 +25,161 @@ logger = logging.getLogger(__name__)
 
 # Metrics singleton for environment tools
 _metrics = get_metrics()
+
+# Permission presets for sdd-setup tool
+_MINIMAL_PERMISSIONS = [
+    # Read-only spec operations
+    "mcp__foundry-mcp__spec-list",
+    "mcp__foundry-mcp__spec-get",
+    "mcp__foundry-mcp__spec-get-hierarchy",
+    "mcp__foundry-mcp__spec-render",
+    "mcp__foundry-mcp__spec-stats",
+    # Read-only task operations
+    "mcp__foundry-mcp__task-list",
+    "mcp__foundry-mcp__task-info",
+    "mcp__foundry-mcp__task-progress",
+    # Server info
+    "mcp__foundry-mcp__get-server-context",
+    "mcp__foundry-mcp__tool-list",
+]
+
+_STANDARD_PERMISSIONS = _MINIMAL_PERMISSIONS + [
+    # Environment tools
+    "mcp__foundry-mcp__sdd-init-workspace",
+    "mcp__foundry-mcp__sdd-verify-environment",
+    "mcp__foundry-mcp__sdd-verify-toolchain",
+    "mcp__foundry-mcp__sdd-setup",
+    # Spec lifecycle
+    "mcp__foundry-mcp__spec-create",
+    "mcp__foundry-mcp__spec-validate",
+    "mcp__foundry-mcp__spec-lifecycle-activate",
+    "mcp__foundry-mcp__spec-lifecycle-complete",
+    # Task workflow
+    "mcp__foundry-mcp__task-start",
+    "mcp__foundry-mcp__task-complete",
+    "mcp__foundry-mcp__task-update-status",
+    # Journal
+    "mcp__foundry-mcp__journal-add",
+    "mcp__foundry-mcp__journal-list",
+    # File patterns for specs
+    "Read(//**/specs/**)",
+    "Write(//**/specs/active/**)",
+    "Write(//**/specs/pending/**)",
+    "Edit(//**/specs/active/**)",
+    "Edit(//**/specs/pending/**)",
+]
+
+_FULL_PERMISSIONS = [
+    "mcp__foundry-mcp__*",
+    "Read(//**/specs/**)",
+    "Write(//**/specs/**)",
+    "Edit(//**/specs/**)",
+]
+
+# Default TOML content for foundry-mcp.toml
+_DEFAULT_TOML_CONTENT = """[workspace]
+specs_dir = "./specs"
+
+[workflow]
+mode = "single"
+auto_validate = true
+
+[logging]
+level = "INFO"
+"""
+
+
+def _update_permissions(settings_file: Path, preset: str, dry_run: bool) -> Dict[str, Any]:
+    """
+    Update .claude/settings.local.json with additive permission merge.
+
+    Args:
+        settings_file: Path to settings.local.json
+        preset: Permission preset name (minimal, standard, full)
+        dry_run: If True, don't write changes
+
+    Returns:
+        Dict with changes list
+    """
+    changes: List[str] = []
+    preset_perms = {
+        "minimal": _MINIMAL_PERMISSIONS,
+        "standard": _STANDARD_PERMISSIONS,
+        "full": _FULL_PERMISSIONS,
+    }[preset]
+
+    # Load existing or create new
+    if settings_file.exists():
+        with open(settings_file, "r") as f:
+            settings = json.load(f)
+    else:
+        settings = {"permissions": {"allow": [], "deny": [], "ask": []}}
+        changes.append(f"Created {settings_file}")
+
+    # Merge permissions (additive - preserve user's custom entries)
+    existing = set(settings.get("permissions", {}).get("allow", []))
+    new_perms = set(preset_perms) - existing
+
+    if new_perms:
+        settings.setdefault("permissions", {}).setdefault("allow", [])
+        settings["permissions"]["allow"].extend(sorted(new_perms))
+        changes.append(f"Added {len(new_perms)} permissions to allow list")
+
+    # Ensure MCP server enabled
+    settings["enableAllProjectMcpServers"] = True
+    if "foundry-mcp" not in settings.get("enabledMcpjsonServers", []):
+        settings.setdefault("enabledMcpjsonServers", []).append("foundry-mcp")
+        changes.append("Enabled foundry-mcp server")
+
+    if not dry_run and changes:
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(settings_file, "w") as f:
+            json.dump(settings, f, indent=2)
+
+    return {"changes": changes}
+
+
+def _write_default_toml(toml_path: Path) -> None:
+    """Write default foundry-mcp.toml configuration file."""
+    with open(toml_path, "w") as f:
+        f.write(_DEFAULT_TOML_CONTENT)
+
+
+def _init_specs_directory(base_path: Path, dry_run: bool) -> Dict[str, Any]:
+    """
+    Initialize specs directory structure.
+
+    Args:
+        base_path: Project root path
+        dry_run: If True, don't create directories
+
+    Returns:
+        Dict with changes list
+    """
+    specs_dir = base_path / "specs"
+    subdirs = ["active", "pending", "completed", "archived"]
+    changes: List[str] = []
+
+    if not dry_run:
+        if not specs_dir.exists():
+            specs_dir.mkdir(parents=True)
+            changes.append(f"Created {specs_dir}")
+
+        for subdir in subdirs:
+            subdir_path = specs_dir / subdir
+            if not subdir_path.exists():
+                subdir_path.mkdir(parents=True)
+                changes.append(f"Created {subdir_path}")
+    else:
+        # Dry run - report what would be created
+        if not specs_dir.exists():
+            changes.append(f"Would create {specs_dir}")
+        for subdir in subdirs:
+            subdir_path = specs_dir / subdir
+            if not subdir_path.exists():
+                changes.append(f"Would create {subdir_path}")
+
+    return {"changes": changes}
 
 
 def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -502,3 +659,136 @@ def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Error verifying environment")
             return asdict(error_response(f"Failed to verify environment: {e}"))
+
+    @canonical_tool(
+        mcp,
+        canonical_name="sdd-setup",
+    )
+    def sdd_setup(
+        path: Optional[str] = None,
+        permissions_preset: str = "standard",
+        create_toml: bool = True,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        Initialize a project for SDD workflows.
+
+        Performs comprehensive setup including workspace directories,
+        Claude Code permissions, and configuration files.
+
+        WHEN TO USE:
+        - First-time setup of a project for SDD
+        - Adding foundry-mcp permissions after plugin installation
+        - Onboarding an existing project to spec-driven development
+
+        WHEN NOT TO USE:
+        - If you only need to create specs directory (use sdd-init-workspace)
+        - If you only need to verify environment (use sdd-verify-environment)
+
+        Args:
+            path: Project root path (default: current directory)
+            permissions_preset: Permission level - "minimal", "standard", or "full"
+            create_toml: Create foundry-mcp.toml config file (default: True)
+            dry_run: Preview changes without writing files (default: False)
+
+        Returns:
+            JSON object with:
+            - specs_dir: Path to specs directory created/verified
+            - permissions_file: Path to .claude/settings.local.json
+            - config_file: Path to foundry-mcp.toml (if created)
+            - changes: List of changes made (or would be made if dry_run)
+            - warnings: Any non-fatal issues encountered
+        """
+        try:
+            # 1. Input validation
+            base_path = Path(path) if path else Path.cwd()
+            if not base_path.exists():
+                return asdict(
+                    error_response(
+                        f"Path does not exist: {base_path}",
+                        error_code="PATH_NOT_FOUND",
+                        error_type="validation",
+                        remediation="Provide a valid project directory path",
+                    )
+                )
+
+            if permissions_preset not in ("minimal", "standard", "full"):
+                return asdict(
+                    error_response(
+                        f"Invalid preset: {permissions_preset}",
+                        error_code="INVALID_PRESET",
+                        error_type="validation",
+                        remediation="Use 'minimal', 'standard', or 'full'",
+                    )
+                )
+
+            changes: List[str] = []
+            warnings: List[str] = []
+
+            # 2. Initialize specs/ directory
+            specs_result = _init_specs_directory(base_path, dry_run)
+            changes.extend(specs_result["changes"])
+
+            # 3. Create/update .claude/settings.local.json
+            claude_dir = base_path / ".claude"
+            settings_file = claude_dir / "settings.local.json"
+            settings_result = _update_permissions(settings_file, permissions_preset, dry_run)
+            changes.extend(settings_result["changes"])
+
+            # 4. Create foundry-mcp.toml (if requested and doesn't exist)
+            config_file = None
+            if create_toml:
+                toml_path = base_path / "foundry-mcp.toml"
+                if not toml_path.exists():
+                    config_file = str(toml_path)
+                    if not dry_run:
+                        _write_default_toml(toml_path)
+                    changes.append(f"Created {toml_path}")
+                else:
+                    warnings.append("foundry-mcp.toml already exists, skipping")
+
+            # 5. Audit log and metrics
+            audit_log(
+                "sdd_setup",
+                tool="sdd-setup",
+                path=str(base_path),
+                preset=permissions_preset,
+                dry_run=dry_run,
+            )
+            _metrics.counter(
+                "environment.sdd_setup",
+                labels={"preset": permissions_preset, "dry_run": str(dry_run)},
+            )
+
+            return asdict(
+                success_response(
+                    data={
+                        "specs_dir": str(base_path / "specs"),
+                        "permissions_file": str(settings_file),
+                        "config_file": config_file,
+                        "changes": changes,
+                        "dry_run": dry_run,
+                    },
+                    warnings=warnings if warnings else None,
+                )
+            )
+
+        except PermissionError as e:
+            logger.exception("Permission denied during setup")
+            return asdict(
+                error_response(
+                    f"Permission denied: {e}",
+                    error_code="FORBIDDEN",
+                    error_type="authorization",
+                    remediation="Check write permissions for the target directory.",
+                )
+            )
+        except Exception as e:
+            logger.exception("Error in sdd_setup")
+            return asdict(
+                error_response(
+                    f"Setup failed: {e}",
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                )
+            )

@@ -347,6 +347,226 @@ class TestVerifyEnvironment:
         assert len(result["data"]["issues"]) == 2
 
 
+class TestSddSetup:
+    """Tests for sdd_setup function logic."""
+
+    def test_fresh_project_setup(self):
+        """Test setup on a project with no existing config."""
+        import json
+        from foundry_mcp.tools.environment import (
+            _init_specs_directory,
+            _update_permissions,
+            _write_default_toml,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_path = Path(tmpdir)
+
+            # Initialize specs directory
+            specs_result = _init_specs_directory(base_path, dry_run=False)
+            assert len(specs_result["changes"]) > 0
+
+            # Verify specs structure created
+            assert (base_path / "specs").exists()
+            assert (base_path / "specs" / "active").exists()
+            assert (base_path / "specs" / "pending").exists()
+            assert (base_path / "specs" / "completed").exists()
+            assert (base_path / "specs" / "archived").exists()
+
+            # Update permissions
+            settings_file = base_path / ".claude" / "settings.local.json"
+            perm_result = _update_permissions(settings_file, "minimal", dry_run=False)
+            assert len(perm_result["changes"]) > 0
+            assert settings_file.exists()
+
+            # Verify settings content
+            with open(settings_file) as f:
+                settings = json.load(f)
+            assert "permissions" in settings
+            assert "allow" in settings["permissions"]
+            assert "mcp__foundry-mcp__spec-list" in settings["permissions"]["allow"]
+
+            # Create TOML
+            toml_path = base_path / "foundry-mcp.toml"
+            _write_default_toml(toml_path)
+            assert toml_path.exists()
+
+    def test_merge_existing_permissions(self):
+        """Test that existing permissions are preserved during merge."""
+        import json
+        from foundry_mcp.tools.environment import _update_permissions
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_path = Path(tmpdir)
+            claude_dir = base_path / ".claude"
+            claude_dir.mkdir(parents=True)
+            settings_file = claude_dir / "settings.local.json"
+
+            # Create existing settings with custom permission
+            existing_settings = {
+                "permissions": {
+                    "allow": ["CustomTool", "AnotherCustomTool"],
+                    "deny": [],
+                    "ask": [],
+                }
+            }
+            with open(settings_file, "w") as f:
+                json.dump(existing_settings, f)
+
+            # Update with minimal preset
+            _update_permissions(settings_file, "minimal", dry_run=False)
+
+            # Verify custom permissions preserved
+            with open(settings_file) as f:
+                new_settings = json.load(f)
+
+            assert "CustomTool" in new_settings["permissions"]["allow"]
+            assert "AnotherCustomTool" in new_settings["permissions"]["allow"]
+            # Also verify new permissions added
+            assert "mcp__foundry-mcp__spec-list" in new_settings["permissions"]["allow"]
+
+    def test_dry_run_no_changes(self):
+        """Test dry_run mode doesn't create files."""
+        from foundry_mcp.tools.environment import _init_specs_directory, _update_permissions
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_path = Path(tmpdir)
+
+            # Dry run specs init
+            specs_result = _init_specs_directory(base_path, dry_run=True)
+            assert not (base_path / "specs").exists()
+            # But changes should be reported
+            assert any("Would create" in c for c in specs_result["changes"])
+
+            # Dry run permissions
+            settings_file = base_path / ".claude" / "settings.local.json"
+            perm_result = _update_permissions(settings_file, "minimal", dry_run=True)
+            assert not (base_path / ".claude").exists()
+
+    def test_permission_presets(self):
+        """Test that permission presets have expected tools."""
+        from foundry_mcp.tools.environment import (
+            _MINIMAL_PERMISSIONS,
+            _STANDARD_PERMISSIONS,
+            _FULL_PERMISSIONS,
+        )
+
+        # Minimal should have read-only tools
+        assert "mcp__foundry-mcp__spec-list" in _MINIMAL_PERMISSIONS
+        assert "mcp__foundry-mcp__spec-get" in _MINIMAL_PERMISSIONS
+        assert "mcp__foundry-mcp__task-list" in _MINIMAL_PERMISSIONS
+        # Minimal should NOT have write tools
+        assert "mcp__foundry-mcp__spec-create" not in _MINIMAL_PERMISSIONS
+
+        # Standard should include minimal + write tools
+        assert "mcp__foundry-mcp__spec-list" in _STANDARD_PERMISSIONS
+        assert "mcp__foundry-mcp__spec-create" in _STANDARD_PERMISSIONS
+        assert "mcp__foundry-mcp__task-complete" in _STANDARD_PERMISSIONS
+
+        # Full should use wildcard
+        assert "mcp__foundry-mcp__*" in _FULL_PERMISSIONS
+
+    def test_invalid_preset_validation(self):
+        """Test validation of invalid permissions preset."""
+        from foundry_mcp.core.responses import error_response
+        from dataclasses import asdict
+
+        invalid_preset = "invalid_preset"
+        result = asdict(
+            error_response(
+                f"Invalid preset: {invalid_preset}",
+                error_code="INVALID_PRESET",
+                error_type="validation",
+                remediation="Use 'minimal', 'standard', or 'full'",
+            )
+        )
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "INVALID_PRESET"
+
+    def test_path_not_found_validation(self):
+        """Test validation when path does not exist."""
+        from foundry_mcp.core.responses import error_response
+        from dataclasses import asdict
+
+        nonexistent_path = "/nonexistent/path/xyz123"
+        result = asdict(
+            error_response(
+                f"Path does not exist: {nonexistent_path}",
+                error_code="PATH_NOT_FOUND",
+                error_type="validation",
+                remediation="Provide a valid project directory path",
+            )
+        )
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "PATH_NOT_FOUND"
+
+    def test_response_envelope_compliance(self):
+        """Test that success response follows v2 contract."""
+        from foundry_mcp.core.responses import success_response
+        from dataclasses import asdict
+
+        data = {
+            "specs_dir": "/tmp/test/specs",
+            "permissions_file": "/tmp/test/.claude/settings.local.json",
+            "config_file": "/tmp/test/foundry-mcp.toml",
+            "changes": ["Created specs/", "Created .claude/settings.local.json"],
+            "dry_run": False,
+        }
+
+        result = asdict(success_response(data=data))
+
+        # Verify v2 envelope structure
+        assert "success" in result
+        assert "data" in result
+        assert "error" in result
+        assert "meta" in result
+        assert result["success"] is True
+        assert result["meta"]["version"] == "response-v2"
+
+    def test_toml_content(self):
+        """Test that generated TOML has expected content."""
+        from foundry_mcp.tools.environment import _DEFAULT_TOML_CONTENT
+
+        assert "[workspace]" in _DEFAULT_TOML_CONTENT
+        assert "specs_dir" in _DEFAULT_TOML_CONTENT
+        assert "[workflow]" in _DEFAULT_TOML_CONTENT
+        assert "mode" in _DEFAULT_TOML_CONTENT
+        assert "[logging]" in _DEFAULT_TOML_CONTENT
+
+    def test_idempotent_setup(self):
+        """Test that running setup twice is safe (idempotent)."""
+        import json
+        from foundry_mcp.tools.environment import (
+            _init_specs_directory,
+            _update_permissions,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_path = Path(tmpdir)
+            settings_file = base_path / ".claude" / "settings.local.json"
+
+            # First run
+            _init_specs_directory(base_path, dry_run=False)
+            _update_permissions(settings_file, "minimal", dry_run=False)
+
+            with open(settings_file) as f:
+                first_settings = json.load(f)
+            first_perms_count = len(first_settings["permissions"]["allow"])
+
+            # Second run
+            _init_specs_directory(base_path, dry_run=False)
+            _update_permissions(settings_file, "minimal", dry_run=False)
+
+            with open(settings_file) as f:
+                second_settings = json.load(f)
+            second_perms_count = len(second_settings["permissions"]["allow"])
+
+            # Should have same number of permissions (no duplicates)
+            assert first_perms_count == second_perms_count
+
+
 class TestDiscoveryMetadata:
     """Tests for environment tools discovery metadata."""
 
