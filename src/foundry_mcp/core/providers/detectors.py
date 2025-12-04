@@ -223,6 +223,52 @@ class ProviderDetector:
         # Run health probe
         return self._run_probe(executable)
 
+    def get_unavailability_reason(self, *, use_probe: bool = True) -> Optional[str]:
+        """
+        Return a human-readable reason why this provider is unavailable.
+
+        Useful for diagnostic messages when a provider cannot be used.
+        Returns None if the provider is available.
+
+        Args:
+            use_probe: When True, include probe failures in reasons.
+                When False, only check PATH/override status.
+
+        Returns:
+            String describing why unavailable, or None if available
+
+        Example:
+            >>> detector = ProviderDetector(
+            ...     provider_id="missing",
+            ...     binary_name="nonexistent-binary",
+            ... )
+            >>> detector.get_unavailability_reason()
+            "Binary 'nonexistent-binary' not found in PATH"
+        """
+        # Check environment override
+        if self.override_env:
+            override = _coerce_bool(os.environ.get(self.override_env))
+            if override is False:
+                return f"Explicitly disabled via {self.override_env}=0"
+            if override is True:
+                return None  # Available via override
+
+        # Check test mode
+        if _is_test_mode():
+            return f"Test mode enabled ({_TEST_MODE_ENV}=1) and no override set"
+
+        # Check binary resolution
+        executable = self.resolve_binary()
+        if not executable:
+            return f"Binary '{self.binary_name}' not found in PATH"
+
+        # Check probe if requested
+        if use_probe and not self._run_probe(executable):
+            probe_cmd = f"{executable} {' '.join(self.probe_args)}"
+            return f"Health probe failed: {probe_cmd}"
+
+        return None  # Available
+
 
 # =============================================================================
 # Default Provider Detectors
@@ -366,6 +412,38 @@ def get_provider_statuses(*, use_probe: bool = True) -> Dict[str, bool]:
     }
 
 
+def get_provider_unavailability_reasons(
+    *, use_probe: bool = True
+) -> Dict[str, Optional[str]]:
+    """
+    Return unavailability reasons for all registered detectors.
+
+    Useful for diagnostic messages when providers cannot be used.
+    Available providers have None as their reason.
+
+    Args:
+        use_probe: When True, include probe failures in reasons.
+            When False, only check PATH/override status.
+
+    Returns:
+        Dict mapping provider_id to reason string (None if available)
+
+    Example:
+        >>> get_provider_unavailability_reasons()
+        {
+            'gemini': None,  # available
+            'codex': "Binary 'codex' not found in PATH",
+            'cursor-agent': None,  # available
+            'claude': None,  # available
+            'opencode': "Health probe failed: /usr/bin/opencode --version"
+        }
+    """
+    return {
+        provider_id: detector.get_unavailability_reason(use_probe=use_probe)
+        for provider_id, detector in _DETECTORS.items()
+    }
+
+
 def list_detectors() -> Iterable[ProviderDetector]:
     """
     Return all registered detector configurations.
@@ -404,6 +482,7 @@ __all__ = [
     "get_detector",
     "detect_provider_availability",
     "get_provider_statuses",
+    "get_provider_unavailability_reasons",
     "list_detectors",
     "reset_detectors",
 ]

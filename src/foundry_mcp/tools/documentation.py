@@ -779,6 +779,11 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "documentation.errors",
                     labels={"tool": "spec-review-fidelity", "error_type": "no_provider"},
                 )
+                # Get detailed unavailability reasons for diagnostics
+                from foundry_mcp.core.providers.detectors import (
+                    get_provider_unavailability_reasons,
+                )
+                unavailability_reasons = get_provider_unavailability_reasons()
                 return asdict(
                     error_response(
                         f"Fidelity review requested but no providers available{provider_msg}",
@@ -787,8 +792,13 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         data={
                             "spec_id": spec_id,
                             "requested_provider": first_provider,
+                            "provider_status": unavailability_reasons,
                         },
-                        remediation="Install and configure an AI provider (gemini, cursor-agent, codex)",
+                        remediation=(
+                            "Install and configure an AI provider. Run 'which claude' or "
+                            "'which gemini' to verify binaries are in PATH. Set "
+                            "FOUNDRY_<PROVIDER>_AVAILABLE_OVERRIDE=1 to force availability."
+                        ),
                     )
                 )
 
@@ -831,7 +841,69 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     )
                 )
 
-            # Parse JSON response if possible
+            # Check for consultation failure (result.error indicates provider/prompt issues)
+            if result is None or result.error:
+                error_msg = result.error if result else "Consultation returned no result"
+                metrics.counter(
+                    "documentation.errors",
+                    labels={"tool": "spec-review-fidelity", "error_type": "consultation_failed"},
+                )
+                # Get detailed provider unavailability reasons for diagnostics
+                from foundry_mcp.core.providers.detectors import (
+                    get_provider_unavailability_reasons,
+                )
+                unavailability_reasons = get_provider_unavailability_reasons()
+                return asdict(
+                    error_response(
+                        f"AI consultation failed: {error_msg}",
+                        error_code="AI_CONSULTATION_FAILED",
+                        error_type="unavailable",
+                        data={
+                            "spec_id": spec_id,
+                            "review_scope": review_scope,
+                            "error_details": error_msg,
+                            "provider_id": result.provider_id if result else "none",
+                            "provider_status": unavailability_reasons,
+                        },
+                        remediation=(
+                            "Check provider availability. Ensure at least one AI provider "
+                            "(claude, gemini, codex) is installed and accessible in PATH. "
+                            "Run 'which claude' or 'which gemini' to verify."
+                        ),
+                    )
+                )
+
+            # Check for empty content (consultation completed but no response)
+            if not result.content:
+                metrics.counter(
+                    "documentation.errors",
+                    labels={"tool": "spec-review-fidelity", "error_type": "empty_response"},
+                )
+                from foundry_mcp.core.providers.detectors import (
+                    get_provider_unavailability_reasons,
+                )
+                unavailability_reasons = get_provider_unavailability_reasons()
+                return asdict(
+                    error_response(
+                        "AI consultation returned empty response",
+                        error_code="AI_EMPTY_RESPONSE",
+                        error_type="error",
+                        data={
+                            "spec_id": spec_id,
+                            "review_scope": review_scope,
+                            "provider_id": result.provider_id,
+                            "model_used": result.model_used,
+                            "provider_status": unavailability_reasons,
+                        },
+                        remediation=(
+                            "The AI provider returned an empty response. This may indicate "
+                            "a provider configuration issue or timeout. Try again or check "
+                            "provider logs."
+                        ),
+                    )
+                )
+
+            # Parse JSON response
             parsed_response = None
             if result and result.content:
                 try:
@@ -847,8 +919,32 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         if end > start:
                             content = content[start:end].strip()
                     parsed_response = json.loads(content)
-                except (json.JSONDecodeError, ValueError):
-                    pass
+                except (json.JSONDecodeError, ValueError) as exc:
+                    # JSON parsing failed - return error instead of unknown verdict
+                    metrics.counter(
+                        "documentation.errors",
+                        labels={"tool": "spec-review-fidelity", "error_type": "invalid_response"},
+                    )
+                    return asdict(
+                        error_response(
+                            "AI response could not be parsed as valid JSON",
+                            error_code="AI_INVALID_RESPONSE",
+                            error_type="error",
+                            data={
+                                "spec_id": spec_id,
+                                "review_scope": review_scope,
+                                "provider_id": result.provider_id,
+                                "model_used": result.model_used,
+                                "parse_error": str(exc),
+                                "raw_response_preview": result.content[:500] if result.content else None,
+                            },
+                            remediation=(
+                                "The AI provider returned a response that could not be parsed "
+                                "as valid JSON. This may indicate the prompt needs adjustment or "
+                                "the model response format is unexpected."
+                            ),
+                        )
+                    )
 
             # Build successful response
             metrics.counter(

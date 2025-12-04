@@ -413,6 +413,115 @@ class TestSpecReviewFidelity:
         assert result["success"] is False
         assert result["data"].get("error_code") == "SPEC_NOT_FOUND"
 
+    def test_no_provider_error_includes_provider_status(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
+        """AI_NO_PROVIDER error should include provider_status with unavailability reasons."""
+        import os
+        from foundry_mcp.tools.documentation import register_documentation_tools
+
+        project_path, _ = temp_project
+        monkeypatch.chdir(project_path)
+
+        # Force test mode to make all providers unavailable
+        with patch.dict(os.environ, {"FOUNDRY_PROVIDER_TEST_MODE": "1"}):
+            register_documentation_tools(mock_mcp, mock_config)
+
+            spec_review_fidelity = mock_mcp._tools["spec-review-fidelity"]
+            result = spec_review_fidelity(spec_id="test-spec-001")
+
+            assert_response_contract(result)
+            # Should fail because no providers are available
+            assert result["success"] is False
+            assert result["data"].get("error_code") == "AI_NO_PROVIDER"
+            # Should include provider_status with unavailability reasons
+            assert "provider_status" in result["data"]
+            provider_status = result["data"]["provider_status"]
+            assert isinstance(provider_status, dict)
+            # Each provider should have a reason (string) or None (if available)
+            for provider_id, reason in provider_status.items():
+                assert reason is None or isinstance(reason, str)
+
+    def test_consultation_failure_returns_error_not_unknown(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
+        """Consultation failure should return error response, not success with 'unknown' verdict."""
+        from unittest.mock import MagicMock
+        from foundry_mcp.tools.documentation import register_documentation_tools
+
+        project_path, _ = temp_project
+        monkeypatch.chdir(project_path)
+
+        # Mock the ConsultationOrchestrator to return a failed result
+        mock_result = MagicMock()
+        mock_result.content = ""
+        mock_result.provider_id = "claude"
+        mock_result.model_used = "none"
+        mock_result.error = "Provider execution failed: Connection timeout"
+        mock_result.cache_hit = False
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.ConsultationOrchestrator"
+        ) as MockOrch:
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.is_available.return_value = True
+            mock_orchestrator.consult.return_value = mock_result
+            MockOrch.return_value = mock_orchestrator
+
+            register_documentation_tools(mock_mcp, mock_config)
+
+            spec_review_fidelity = mock_mcp._tools["spec-review-fidelity"]
+            result = spec_review_fidelity(spec_id="test-spec-001")
+
+            assert_response_contract(result)
+            # Should return error, NOT success with "unknown" verdict
+            assert result["success"] is False
+            assert result["data"].get("error_code") == "AI_CONSULTATION_FAILED"
+            assert "error_details" in result["data"]
+            assert "Connection timeout" in result["data"]["error_details"]
+            # Should include provider_status
+            assert "provider_status" in result["data"]
+
+    def test_fidelity_review_never_returns_unknown_on_success(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
+        """Successful fidelity review should never have 'unknown' verdict."""
+        from foundry_mcp.tools.documentation import register_documentation_tools
+
+        project_path, _ = temp_project
+        monkeypatch.chdir(project_path)
+
+        register_documentation_tools(mock_mcp, mock_config)
+
+        spec_review_fidelity = mock_mcp._tools["spec-review-fidelity"]
+        result = spec_review_fidelity(spec_id="test-spec-001")
+
+        assert_response_contract(result)
+        # If success, verdict must not be "unknown"
+        if result["success"] is True:
+            verdict = result["data"].get("verdict")
+            assert verdict != "unknown", (
+                "Success response should not have 'unknown' verdict - "
+                "this indicates a silent consultation failure"
+            )
+        else:
+            # If not success, it should be a proper error response
+            # (not a pseudo-success with unknown verdict)
+            error_code = result["data"].get("error_code")
+            # These are acceptable error codes
+            acceptable_errors = {
+                "AI_NO_PROVIDER",
+                "AI_NOT_AVAILABLE",
+                "AI_CONSULTATION_FAILED",
+                "AI_EMPTY_RESPONSE",
+                "AI_CONSULTATION_ERROR",
+                "AI_INVALID_RESPONSE",
+                "AI_INCOMPLETE_RESPONSE",
+            }
+            assert error_code in acceptable_errors or error_code is not None, (
+                f"Error response should have a proper error_code, got: {error_code}"
+            )
+
 
 # =============================================================================
 # Tool Registration Tests

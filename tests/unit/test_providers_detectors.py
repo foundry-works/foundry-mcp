@@ -21,6 +21,7 @@ from foundry_mcp.core.providers.detectors import (
     get_detector,
     detect_provider_availability,
     get_provider_statuses,
+    get_provider_unavailability_reasons,
     list_detectors,
     reset_detectors,
 )
@@ -510,3 +511,114 @@ class TestDefaultDetectors:
         assert detector.binary_name == "opencode"
         assert detector.override_env == "FOUNDRY_OPENCODE_AVAILABLE_OVERRIDE"
         assert detector.binary_env == "FOUNDRY_OPENCODE_BINARY"
+
+
+# =============================================================================
+# Diagnostic Function Tests
+# =============================================================================
+
+
+class TestGetUnavailabilityReason:
+    """Tests for ProviderDetector.get_unavailability_reason() method."""
+
+    def test_returns_none_when_available_via_override(self, custom_detector):
+        """Should return None when provider is available via override."""
+        with patch.dict(os.environ, {"TEST_PROVIDER_OVERRIDE": "true"}):
+            reason = custom_detector.get_unavailability_reason()
+            assert reason is None
+
+    def test_returns_reason_when_disabled_via_override(self, custom_detector):
+        """Should return reason when explicitly disabled via override."""
+        with patch.dict(os.environ, {"TEST_PROVIDER_OVERRIDE": "0"}):
+            reason = custom_detector.get_unavailability_reason()
+            assert reason is not None
+            assert "Explicitly disabled" in reason
+            assert "TEST_PROVIDER_OVERRIDE" in reason
+
+    def test_returns_reason_for_test_mode(self, custom_detector):
+        """Should return reason when in test mode without override."""
+        with patch.dict(os.environ, {"FOUNDRY_PROVIDER_TEST_MODE": "1"}, clear=True):
+            reason = custom_detector.get_unavailability_reason()
+            assert reason is not None
+            assert "Test mode enabled" in reason
+
+    def test_returns_reason_for_missing_binary(self):
+        """Should return reason when binary is not found."""
+        detector = ProviderDetector(
+            provider_id="missing",
+            binary_name="nonexistent-binary-xyz-12345",
+        )
+        reason = detector.get_unavailability_reason()
+        assert reason is not None
+        assert "not found in PATH" in reason
+        assert "nonexistent-binary-xyz-12345" in reason
+
+    @pytest.mark.skipif(
+        _TEST_MODE_ENABLED,
+        reason="Test mode disables real probe execution"
+    )
+    def test_returns_reason_for_probe_failure(self):
+        """Should return reason when health probe fails."""
+        detector = ProviderDetector(
+            provider_id="test",
+            binary_name="python",  # Exists
+            probe_args=("--nonexistent-flag-xyz",),  # Will fail
+        )
+        reason = detector.get_unavailability_reason(use_probe=True)
+        assert reason is not None
+        assert "Health probe failed" in reason
+
+    @pytest.mark.skipif(
+        _TEST_MODE_ENABLED,
+        reason="Test mode disables real probe execution"
+    )
+    def test_returns_none_for_available_provider(self):
+        """Should return None when provider is available."""
+        detector = ProviderDetector(
+            provider_id="python",
+            binary_name="python",
+            probe_args=("--version",),
+        )
+        reason = detector.get_unavailability_reason(use_probe=True)
+        assert reason is None
+
+
+class TestGetProviderUnavailabilityReasons:
+    """Tests for get_provider_unavailability_reasons function."""
+
+    def test_returns_dict_of_all_providers(self):
+        """Should return reasons dict for all registered providers."""
+        with patch.dict(os.environ, {"FOUNDRY_PROVIDER_TEST_MODE": "1"}):
+            reasons = get_provider_unavailability_reasons()
+            assert isinstance(reasons, dict)
+            assert "gemini" in reasons
+            assert "codex" in reasons
+            assert "cursor-agent" in reasons
+            assert "claude" in reasons
+            assert "opencode" in reasons
+
+    def test_returns_optional_str_values(self):
+        """Should return Optional[str] values (None or string)."""
+        with patch.dict(os.environ, {"FOUNDRY_PROVIDER_TEST_MODE": "1"}):
+            reasons = get_provider_unavailability_reasons()
+            for provider_id, reason in reasons.items():
+                assert reason is None or isinstance(reason, str)
+
+    def test_respects_overrides(self):
+        """Should return None for providers with available override."""
+        with patch.dict(os.environ, {
+            "FOUNDRY_PROVIDER_TEST_MODE": "1",
+            "FOUNDRY_GEMINI_AVAILABLE_OVERRIDE": "true",
+        }):
+            reasons = get_provider_unavailability_reasons()
+            assert reasons["gemini"] is None  # Available via override
+            assert reasons["codex"] is not None  # No override, test mode
+
+    def test_unavailable_reasons_contain_details(self):
+        """Unavailable reasons should contain diagnostic details."""
+        with patch.dict(os.environ, {"FOUNDRY_PROVIDER_TEST_MODE": "1"}):
+            reasons = get_provider_unavailability_reasons()
+            # In test mode, should mention test mode
+            for provider_id, reason in reasons.items():
+                if reason is not None:
+                    assert "Test mode" in reason or "not found" in reason or "probe failed" in reason
