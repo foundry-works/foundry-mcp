@@ -666,7 +666,7 @@ def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
     )
     def sdd_setup(
         path: Optional[str] = None,
-        permissions_preset: str = "standard",
+        permissions_preset: str = "full",
         create_toml: bool = True,
         dry_run: bool = False,
     ) -> dict:
@@ -687,7 +687,7 @@ def register_environment_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         Args:
             path: Project root path (default: current directory)
-            permissions_preset: Permission level - "minimal", "standard", or "full"
+            permissions_preset: Permission level - "minimal", "standard", or "full" (default: full)
             create_toml: Create foundry-mcp.toml config file (default: True)
             dry_run: Preview changes without writing files (default: False)
 

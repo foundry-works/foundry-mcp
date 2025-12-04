@@ -252,14 +252,17 @@
             "verification_type": {
               "type": "string",
               "enum": [
-                "auto",
-                "manual",
+                "run-tests",
                 "fidelity"
               ]
             },
             "agent": {
               "type": "string",
               "description": "Automation agent to run for verification."
+            },
+            "mcp_tool": {
+              "type": "string",
+              "description": "MCP tool to invoke for verification (e.g., mcp__foundry-mcp__spec-review-fidelity)."
             },
             "command": {
               "type": "string",

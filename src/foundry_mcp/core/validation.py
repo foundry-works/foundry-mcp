@@ -106,7 +106,7 @@ STATUS_FIELDS = {"pending", "in_progress", "completed", "blocked"}
 VALID_NODE_TYPES = {"spec", "phase", "group", "task", "subtask", "verify"}
 VALID_STATUSES = {"pending", "in_progress", "completed", "blocked"}
 VALID_TASK_CATEGORIES = {"investigation", "implementation", "refactoring", "decision", "research"}
-VALID_VERIFICATION_TYPES = {"auto", "manual", "fidelity"}
+VALID_VERIFICATION_TYPES = {"run-tests", "fidelity"}
 
 
 # Validation functions
@@ -767,13 +767,13 @@ def _validate_metadata(hierarchy: Dict[str, Any], result: ValidationResult) -> N
                     severity="error",
                     category="metadata",
                     location=node_id,
-                    suggested_fix="Set verification_type to 'auto', 'manual', or 'fidelity'",
+                    suggested_fix="Set verification_type to 'run-tests' or 'fidelity'",
                     auto_fixable=True,
                 ))
             elif verification_type not in VALID_VERIFICATION_TYPES:
                 result.diagnostics.append(Diagnostic(
                     code="INVALID_VERIFICATION_TYPE",
-                    message=f"Verify node '{node_id}' verification_type must be 'auto', 'manual', or 'fidelity'",
+                    message=f"Verify node '{node_id}' verification_type must be 'run-tests' or 'fidelity'",
                     severity="error",
                     category="metadata",
                     location=node_id,
@@ -1190,15 +1190,15 @@ def _build_verification_type_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) ->
             return
         metadata = node.setdefault("metadata", {})
         if "verification_type" not in metadata:
-            metadata["verification_type"] = "manual"
+            metadata["verification_type"] = "run-tests"
 
     return FixAction(
         id=f"metadata.fix_verification_type:{node_id}",
-        description=f"Set verification_type to 'manual' for {node_id}",
+        description=f"Set verification_type to 'run-tests' for {node_id}",
         category="metadata",
         severity=diag.severity,
         auto_apply=True,
-        preview=f"Set verification_type to 'manual' for {node_id}",
+        preview=f"Set verification_type to 'run-tests' for {node_id}",
         apply=apply,
     )
 

@@ -15,6 +15,11 @@ from typing import Optional, Dict, Any, List, Tuple
 TEMPLATES = ("simple", "medium", "complex", "security")
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
+# Valid verification types for verify nodes
+# - run-tests: Automated tests via mcp__foundry-mcp__test-run
+# - fidelity: Implementation-vs-spec comparison via mcp__foundry-mcp__spec-review-fidelity
+VERIFICATION_TYPES = ("run-tests", "fidelity")
+
 
 def find_git_root() -> Optional[Path]:
     """Find the root of the git repository."""
@@ -430,9 +435,72 @@ def generate_spec_id(name: str) -> str:
     return f"{slug}-{date_suffix}-001"
 
 
+def _add_phase_verification(hierarchy: Dict[str, Any], phase_num: int, phase_id: str) -> None:
+    """
+    Add verify nodes (auto + fidelity) to a phase.
+
+    Args:
+        hierarchy: The hierarchy dict to modify.
+        phase_num: Phase number (1, 2, 3, etc.).
+        phase_id: Phase node ID (e.g., "phase-1").
+    """
+    verify_auto_id = f"verify-{phase_num}-1"
+    verify_fidelity_id = f"verify-{phase_num}-2"
+
+    # Run tests verification
+    hierarchy[verify_auto_id] = {
+        "type": "verify",
+        "title": "Run tests",
+        "status": "pending",
+        "parent": phase_id,
+        "children": [],
+        "total_tasks": 1,
+        "completed_tasks": 0,
+        "metadata": {
+            "verification_type": "run-tests",
+            "mcp_tool": "mcp__foundry-mcp__test-run",
+            "expected": "All tests pass",
+        },
+        "dependencies": {
+            "blocks": [verify_fidelity_id],
+            "blocked_by": [],
+            "depends": [],
+        },
+    }
+
+    # Fidelity verification (spec review)
+    hierarchy[verify_fidelity_id] = {
+        "type": "verify",
+        "title": "Fidelity review",
+        "status": "pending",
+        "parent": phase_id,
+        "children": [],
+        "total_tasks": 1,
+        "completed_tasks": 0,
+        "metadata": {
+            "verification_type": "fidelity",
+            "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+            "scope": "phase",
+            "target": phase_id,
+            "expected": "Implementation matches specification",
+        },
+        "dependencies": {
+            "blocks": [],
+            "blocked_by": [verify_auto_id],
+            "depends": [],
+        },
+    }
+
+    # Update phase children and task count
+    hierarchy[phase_id]["children"].extend([verify_auto_id, verify_fidelity_id])
+    hierarchy[phase_id]["total_tasks"] += 2
+
+
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     Get the hierarchical structure for a spec template.
+
+    All templates include per-phase verification (auto + fidelity) for each phase.
 
     Args:
         template: Template type (simple, medium, complex, security).
@@ -499,10 +567,14 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
         },
     }
 
+    # Add verification to phase-1 (all templates)
+    _add_phase_verification(base_hierarchy, 1, "phase-1")
+    base_hierarchy["spec-root"]["total_tasks"] = 3  # task + 2 verify
+
     if template == "simple":
         return base_hierarchy
 
-    # Medium template adds implementation phase
+    # Medium/complex/security: add implementation phase
     if template in ("medium", "complex", "security"):
         base_hierarchy["spec-root"]["children"].append("phase-2")
         base_hierarchy["phase-1"]["dependencies"]["blocks"].append("phase-2")
@@ -543,62 +615,20 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
                 "depends": [],
             },
         }
-        base_hierarchy["spec-root"]["total_tasks"] = 2
-        base_hierarchy["phase-1"]["total_tasks"] = 1
+        # Add verification to phase-2
+        _add_phase_verification(base_hierarchy, 2, "phase-2")
+        base_hierarchy["spec-root"]["total_tasks"] = 6  # 2 tasks + 4 verify
 
-    # Complex template adds verification phase
-    if template in ("complex", "security"):
+    # Security: add security review phase
+    if template == "security":
         base_hierarchy["spec-root"]["children"].append("phase-3")
         base_hierarchy["phase-2"]["dependencies"]["blocks"].append("phase-3")
         base_hierarchy["phase-3"] = {
             "type": "phase",
-            "title": "Verification & Testing",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["verify-3-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Verify implementation meets requirements",
-                "estimated_hours": 4,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": ["phase-2"],
-                "depends": [],
-            },
-        }
-        base_hierarchy["verify-3-1"] = {
-            "type": "verify",
-            "title": "Run test suite",
-            "status": "pending",
-            "parent": "phase-3",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "verification_type": "auto",
-                "command": "pytest",
-                "expected": "All tests pass",
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        }
-        base_hierarchy["spec-root"]["total_tasks"] = 3
-
-    # Security template adds security review phase
-    if template == "security":
-        base_hierarchy["spec-root"]["children"].append("phase-4")
-        base_hierarchy["phase-3"]["dependencies"]["blocks"].append("phase-4")
-        base_hierarchy["phase-4"] = {
-            "type": "phase",
             "title": "Security Review",
             "status": "pending",
             "parent": "spec-root",
-            "children": ["task-4-1"],
+            "children": ["task-3-1"],
             "total_tasks": 1,
             "completed_tasks": 0,
             "metadata": {
@@ -607,15 +637,15 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
             },
             "dependencies": {
                 "blocks": [],
-                "blocked_by": ["phase-3"],
+                "blocked_by": ["phase-2"],
                 "depends": [],
             },
         }
-        base_hierarchy["task-4-1"] = {
+        base_hierarchy["task-3-1"] = {
             "type": "task",
             "title": "Security audit",
             "status": "pending",
-            "parent": "phase-4",
+            "parent": "phase-3",
             "children": [],
             "total_tasks": 1,
             "completed_tasks": 0,
@@ -630,7 +660,9 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
                 "depends": [],
             },
         }
-        base_hierarchy["spec-root"]["total_tasks"] = 4
+        # Add verification to phase-3
+        _add_phase_verification(base_hierarchy, 3, "phase-3")
+        base_hierarchy["spec-root"]["total_tasks"] = 9  # 3 tasks + 6 verify
 
     return base_hierarchy
 
