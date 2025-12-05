@@ -1,0 +1,884 @@
+{
+  "spec_id": "observability-stack-2025-12-05-001",
+  "title": "Full Observability Stack with Graceful Degradation",
+  "generated": "2025-12-05T12:00:00Z",
+  "last_updated": "2025-12-05T12:00:00Z",
+  "metadata": {
+    "title": "Full Observability Stack with Graceful Degradation",
+    "description": "Add OpenTelemetry tracing, Prometheus metrics exporter, Grafana dashboards, and metrics registry with graceful degradation. All features OFF by default, zero overhead when disabled, no errors when optional packages missing.",
+    "objectives": [
+      "Add optional OpenTelemetry SDK integration with OTLP exporter",
+      "Add optional Prometheus metrics exporter with /metrics endpoint",
+      "Create sample Grafana dashboards for key metrics",
+      "Document all 50+ existing metrics in a registry/catalog",
+      "Ensure graceful degradation when packages not installed",
+      "Zero performance overhead when observability disabled"
+    ],
+    "complexity": "medium",
+    "estimated_hours": 16,
+    "owner": "claude",
+    "status": "pending",
+    "assumptions": [
+      "All observability features are OFF by default",
+      "Optional dependencies via pip extras (tracing, metrics, observability)",
+      "No import errors when optional packages missing (try/except pattern)",
+      "Existing MetricsCollector/AuditLogger API preserved for backward compatibility",
+      "Operators handle their own monitoring infrastructure (Prometheus server, Grafana)"
+    ],
+    "revision_history": [
+      {
+        "version": "1.0",
+        "date": "2025-12-05T12:00:00Z",
+        "author": "claude",
+        "changelog": "Initial specification created from approved phase plan"
+      }
+    ]
+  },
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "Full Observability Stack with Graceful Degradation",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6"
+      ],
+      "total_tasks": 23,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add comprehensive observability (OTel, Prometheus, Grafana) with graceful degradation"
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Infrastructure Foundation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "verify-1-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add optional dependencies and create no-op fallback implementations",
+        "risk_level": "low",
+        "estimated_hours": 1.5
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2",
+          "phase-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add optional dependencies to pyproject.toml",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "pyproject.toml",
+        "estimated_hours": 0.25,
+        "details": [
+          "Add [project.optional-dependencies] section with:",
+          "  tracing = ['opentelemetry-sdk>=1.20.0', 'opentelemetry-exporter-otlp>=1.20.0']",
+          "  metrics = ['prometheus-client>=0.17.0']",
+          "  observability = ['foundry-mcp[tracing,metrics]']",
+          "Keep existing test dependencies unchanged"
+        ],
+        "changes": "Add 3 new optional dependency groups for observability features"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-1-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Create no-op stubs module",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/otel_stubs.py",
+        "estimated_hours": 1.0,
+        "details": [
+          "Create NoOpSpan class with __enter__, __exit__, set_attribute, set_status, record_exception, add_event methods",
+          "Create NoOpTracer class with start_as_current_span, start_span methods returning NoOpSpan",
+          "Create NoOpCounter, NoOpGauge, NoOpHistogram classes with appropriate no-op methods",
+          "Create NoOpMetricsRegistry class returning no-op metric instances",
+          "Use singleton pattern for no-op instances to minimize allocations",
+          "Add get_noop_tracer() and get_noop_meter() convenience functions"
+        ],
+        "changes": "New file with ~100 lines of no-op implementations"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-1-1"
+        ],
+        "blocks": [
+          "verify-1-1",
+          "task-2-1",
+          "task-3-1"
+        ],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Verify no import errors without optional packages",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "command": "python -c 'from foundry_mcp.core.otel_stubs import NoOpTracer, NoOpSpan'",
+        "expected": "Import succeeds without opentelemetry installed"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-1-2"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "OpenTelemetry Integration",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "verify-2-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add OTel SDK integration with OTLP exporter support and graceful fallback",
+        "risk_level": "medium",
+        "estimated_hours": 3.0
+      },
+      "dependencies": {
+        "blocked_by": [
+          "phase-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Create OpenTelemetry integration module",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/otel.py",
+        "estimated_hours": 2.5,
+        "details": [
+          "Add try/except import for opentelemetry with _OPENTELEMETRY_AVAILABLE flag",
+          "Create OTelConfig dataclass with enabled, otlp_endpoint, service_name, sample_rate fields",
+          "Add from_env_and_config() classmethod to load from env vars and TOML",
+          "Create initialize() function to setup TracerProvider with OTLP exporter",
+          "Create get_tracer() function returning real tracer or NoOpTracer",
+          "Create get_meter() function returning real meter or NoOpMeter",
+          "Create @traced decorator for easy span creation",
+          "Create is_enabled() and shutdown() functions",
+          "Use lazy initialization pattern - initialize on first use"
+        ],
+        "changes": "New file with ~250 lines"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-1-2"
+        ],
+        "blocks": [
+          "task-2-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Add OTel availability check to observability module",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/observability.py",
+        "estimated_hours": 0.5,
+        "details": [
+          "Add _OPENTELEMETRY_AVAILABLE flag at module top with try/except import",
+          "Add get_observability_status() function returning dict with availability info"
+        ],
+        "changes": "Add ~20 lines to existing module"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-2-1"
+        ],
+        "blocks": [
+          "verify-2-1"
+        ],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Verify OTel module with graceful degradation",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "command": "python -c 'from foundry_mcp.core.otel import get_tracer, is_enabled; t = get_tracer(); print(f\"enabled={is_enabled()}\")'",
+        "expected": "Returns NoOpTracer when OTel not installed, real tracer when installed and enabled"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-2-2"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Prometheus Integration",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "verify-3-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add Prometheus metrics exporter with optional /metrics endpoint",
+        "risk_level": "medium",
+        "estimated_hours": 2.5
+      },
+      "dependencies": {
+        "blocked_by": [
+          "phase-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Create Prometheus integration module",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/prometheus.py",
+        "estimated_hours": 2.5,
+        "details": [
+          "Add try/except import for prometheus_client with _PROMETHEUS_AVAILABLE flag",
+          "Create PrometheusConfig dataclass with enabled, port, host, namespace fields",
+          "Add from_env_and_config() classmethod for config loading",
+          "Create PrometheusExporter class with:",
+          "  - _initialize_metrics() creating Counter, Histogram, Gauge instances",
+          "  - is_enabled() check method",
+          "  - start_server() to optionally expose /metrics endpoint",
+          "  - record_tool_invocation(), record_tool_start(), record_tool_end() methods",
+          "  - record_resource_access(), record_error() methods",
+          "All methods become no-ops when not enabled/available",
+          "Create get_prometheus_exporter() singleton accessor"
+        ],
+        "changes": "New file with ~200 lines"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-1-2"
+        ],
+        "blocks": [
+          "verify-3-1"
+        ],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Verify Prometheus module with graceful degradation",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "command": "python -c 'from foundry_mcp.core.prometheus import get_prometheus_exporter; e = get_prometheus_exporter(); print(f\"enabled={e.is_enabled()}\")'",
+        "expected": "Returns exporter instance, is_enabled() returns False when prometheus_client not installed"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-3-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Configuration & Metrics Registry",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "verify-4-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Add configuration schema and centralized metrics catalog",
+        "risk_level": "low",
+        "estimated_hours": 2.5
+      },
+      "dependencies": {
+        "depends": [
+          "phase-2",
+          "phase-3"
+        ],
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Add ObservabilityConfig to config module",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/config.py",
+        "estimated_hours": 1.0,
+        "details": [
+          "Create ObservabilityConfig dataclass with fields:",
+          "  enabled: bool = False (master switch)",
+          "  otel_enabled: bool = False",
+          "  otel_endpoint: str = ''",
+          "  otel_service_name: str = 'foundry-mcp'",
+          "  otel_sample_rate: float = 1.0",
+          "  prometheus_enabled: bool = False",
+          "  prometheus_port: int = 9090",
+          "  prometheus_host: str = '0.0.0.0'",
+          "  prometheus_namespace: str = 'foundry_mcp'",
+          "Add from_toml_dict() classmethod for TOML parsing",
+          "Add observability field to ServerConfig",
+          "Update _load_toml() to parse [observability] section"
+        ],
+        "changes": "Add ~60 lines to config.py"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-4-2",
+          "task-5-1"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Add observability section to sample TOML",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "samples/foundry-mcp.toml",
+        "estimated_hours": 0.5,
+        "details": [
+          "Add [observability] section with enabled = false",
+          "Add [observability.otel] section with all OTel options documented",
+          "Add [observability.prometheus] section with all Prometheus options documented",
+          "Include comments explaining each option",
+          "Note optional dependency requirements in comments"
+        ],
+        "changes": "Add ~40 lines to sample config"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-4-1"
+        ],
+        "blocks": [
+          "verify-4-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Create metrics registry module",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/metrics_registry.py",
+        "estimated_hours": 1.0,
+        "details": [
+          "Create MetricCategory enum (TOOL, RESOURCE, AUDIT, ERROR, SYSTEM, PERFORMANCE, CLI)",
+          "Create MetricDefinition dataclass with name, description, type, category, labels, unit, examples",
+          "Create METRICS_CATALOG dict with all existing metrics documented:",
+          "  - tool.invocations (counter, labels: tool, status)",
+          "  - tool.latency (histogram, labels: tool)",
+          "  - resource.access (counter, labels: resource_type, status)",
+          "  - resource.latency (histogram, labels: resource_type)",
+          "  - cli.command.invocations (counter, labels: command, status)",
+          "  - errors.total (counter, labels: error_type, tool)",
+          "Create get_metrics_catalog(), get_metrics_by_category() functions",
+          "Create export_catalog_as_markdown() for documentation generation"
+        ],
+        "changes": "New file with ~150 lines"
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Verify configuration loading",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "command": "python -c 'from foundry_mcp.config import ServerConfig; c = ServerConfig(); print(f\"obs_enabled={c.observability.enabled}\")'",
+        "expected": "ObservabilityConfig loaded with defaults (all False)"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-4-2"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "Core Integration",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-5-1",
+        "task-5-2",
+        "task-5-3",
+        "verify-5-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Wire observability into existing modules and server startup",
+        "risk_level": "medium-high",
+        "estimated_hours": 3.5
+      },
+      "dependencies": {
+        "blocked_by": [
+          "phase-4"
+        ],
+        "blocks": [
+          "phase-6"
+        ],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "Add ObservabilityManager to observability module",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/observability.py",
+        "estimated_hours": 2.0,
+        "details": [
+          "Create ObservabilityManager singleton class with:",
+          "  - Thread-safe singleton pattern using _lock",
+          "  - initialize(config) method for setup",
+          "  - get_tracer(), get_metrics() accessors",
+          "  - is_tracing_enabled(), is_metrics_enabled() checks",
+          "  - shutdown() for graceful cleanup",
+          "Update MetricsCollector.emit() to also emit to Prometheus when enabled",
+          "Update @mcp_tool decorator to:",
+          "  - Add fast-path check for disabled state",
+          "  - Create OTel spans when tracing enabled",
+          "  - Record Prometheus metrics when enabled",
+          "  - Preserve existing logging/audit behavior",
+          "Add _PROMETHEUS_AVAILABLE flag with try/except import"
+        ],
+        "changes": "Add ~150 lines to existing module"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-4-1"
+        ],
+        "blocks": [
+          "task-5-2",
+          "task-5-3"
+        ],
+        "depends": []
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "Add observability initialization to server",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/server.py",
+        "estimated_hours": 1.0,
+        "details": [
+          "Import OTel and Prometheus modules",
+          "Create _init_observability(config) helper function that:",
+          "  - Creates OTelConfig from ObservabilityConfig",
+          "  - Calls otel.initialize()",
+          "  - Creates PrometheusConfig from ObservabilityConfig",
+          "  - Calls init_prometheus() and starts server if enabled",
+          "Call _init_observability() in create_server()",
+          "Add shutdown hook in main() to call otel.shutdown()"
+        ],
+        "changes": "Add ~40 lines to server.py"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-5-1"
+        ],
+        "blocks": [
+          "verify-5-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "Update mcp_resource decorator for observability",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "src/foundry_mcp/core/observability.py",
+        "estimated_hours": 0.5,
+        "details": [
+          "Update @mcp_resource decorator similar to @mcp_tool:",
+          "  - Add fast-path check for disabled state",
+          "  - Create OTel spans for resource access when enabled",
+          "  - Record Prometheus resource metrics when enabled",
+          "  - Preserve existing behavior"
+        ],
+        "changes": "Modify existing decorator (~20 lines changed)"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-5-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "Verify server starts with observability disabled",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "command": "timeout 5 python -c 'from foundry_mcp.server import create_server; s = create_server(); print(\"Server created successfully\")' || true",
+        "expected": "Server creates without errors, observability disabled by default"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-5-2"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "phase-6": {
+      "type": "phase",
+      "title": "Dashboards, Documentation & Tests",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-6-1",
+        "task-6-2",
+        "task-6-3",
+        "task-6-4",
+        "task-6-5",
+        "task-6-6",
+        "verify-6-1"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Create Grafana dashboards, user documentation, and test coverage",
+        "risk_level": "low",
+        "estimated_hours": 3.0
+      },
+      "dependencies": {
+        "blocked_by": [
+          "phase-5"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "task-6-1": {
+      "type": "task",
+      "title": "Create dashboards README",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "docs/dashboards/README.md",
+        "estimated_hours": 0.25,
+        "details": [
+          "Create docs/dashboards/ directory",
+          "Document prerequisites (Prometheus, Grafana)",
+          "List available dashboards with descriptions",
+          "Provide import instructions for Grafana",
+          "Note datasource configuration requirements"
+        ],
+        "changes": "New file with ~40 lines"
+      },
+      "dependencies": {
+        "blocks": [
+          "task-6-2",
+          "task-6-3",
+          "task-6-4"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-2": {
+      "type": "task",
+      "title": "Create overview Grafana dashboard",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "docs/dashboards/foundry-mcp-overview.json",
+        "estimated_hours": 0.5,
+        "details": [
+          "Create Grafana dashboard JSON with:",
+          "  - Total tool invocations stat panel",
+          "  - Tool latency percentiles (p50, p95, p99) timeseries",
+          "  - Error rate by tool timeseries",
+          "  - Currently executing requests gauge",
+          "Use $datasource template variable",
+          "Set appropriate time range defaults"
+        ],
+        "changes": "New JSON file (~200 lines)"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-6-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "task-6-3": {
+      "type": "task",
+      "title": "Create tools Grafana dashboard",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "docs/dashboards/foundry-mcp-tools.json",
+        "estimated_hours": 0.5,
+        "details": [
+          "Create per-tool breakdown dashboard with:",
+          "  - Tool selector variable",
+          "  - Invocation rate by tool",
+          "  - Detailed latency histogram",
+          "  - Success/error ratio",
+          "  - Top 10 slowest tools table"
+        ],
+        "changes": "New JSON file (~250 lines)"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-6-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "task-6-4": {
+      "type": "task",
+      "title": "Create errors Grafana dashboard",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "docs/dashboards/foundry-mcp-errors.json",
+        "estimated_hours": 0.5,
+        "details": [
+          "Create error analysis dashboard with:",
+          "  - Total errors stat panel",
+          "  - Errors by type pie chart",
+          "  - Error rate over time by tool",
+          "  - Error spike detection alerts (optional)",
+          "  - Recent errors table"
+        ],
+        "changes": "New JSON file (~200 lines)"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-6-1"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    },
+    "task-6-5": {
+      "type": "task",
+      "title": "Create observability user guide",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "docs/guides/observability.md",
+        "estimated_hours": 0.75,
+        "details": [
+          "Document design philosophy (graceful degradation)",
+          "Quick start for enabling Prometheus metrics",
+          "Quick start for enabling OpenTelemetry tracing",
+          "Configuration reference (TOML and env vars)",
+          "Grafana dashboard import instructions",
+          "Link to metrics catalog",
+          "Troubleshooting section"
+        ],
+        "changes": "New file with ~150 lines"
+      }
+    },
+    "task-6-6": {
+      "type": "task",
+      "title": "Create graceful degradation tests",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "task_category": "implementation",
+        "file_path": "tests/unit/test_observability_graceful.py",
+        "estimated_hours": 0.5,
+        "details": [
+          "Test NoOp classes work correctly",
+          "Test get_observability_status() returns correct availability",
+          "Test ObservabilityManager with disabled config",
+          "Test @mcp_tool decorator fast-path when disabled",
+          "Test config loading with [observability] section",
+          "Mock missing imports to test graceful fallback"
+        ],
+        "changes": "New test file with ~100 lines"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-6-1"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-1": {
+      "type": "verify",
+      "title": "Run all tests",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "command": "PYTHONPATH=src pytest tests/unit/test_observability_graceful.py -v",
+        "expected": "All graceful degradation tests pass"
+      },
+      "dependencies": {
+        "blocked_by": [
+          "task-6-6"
+        ],
+        "blocks": [],
+        "depends": []
+      }
+    }
+  }
+}

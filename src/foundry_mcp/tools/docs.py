@@ -18,7 +18,7 @@ from foundry_mcp.core.pagination import (
     CursorError,
     normalize_page_size,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error finding class: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     @canonical_tool(
         mcp,
@@ -248,7 +248,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error finding function: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     @canonical_tool(
         mcp,
@@ -320,7 +320,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error tracing calls: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     @canonical_tool(
         mcp,
@@ -400,7 +400,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error analyzing impact: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     @canonical_tool(
         mcp,
@@ -465,7 +465,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting callers: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     @canonical_tool(
         mcp,
@@ -530,7 +530,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting callees: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     @canonical_tool(
         mcp,
@@ -568,7 +568,7 @@ def register_docs_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting docs stats: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="docs")))
 
     logger.debug(
         "Registered docs tools: code-find-class/code-find-function/code-trace-calls/"

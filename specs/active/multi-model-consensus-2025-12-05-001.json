@@ -1,0 +1,622 @@
+{
+  "spec_id": "multi-model-consensus-2025-12-05-001",
+  "title": "multi-model-consensus",
+  "generated": "2025-12-05T16:25:40.967157Z",
+  "last_updated": "2025-12-05T17:11:02.527262Z",
+  "metadata": {
+    "description": "Add multi-model consensus support to ConsultationOrchestrator. When min_models > 1, execute multiple providers in parallel and return all individual results with agreement metadata.",
+    "objectives": [],
+    "complexity": "medium",
+    "estimated_hours": 15,
+    "assumptions": [],
+    "status": "pending",
+    "owner": "",
+    "progress_percentage": 0,
+    "current_phase": "phase-1",
+    "category": "implementation",
+    "template": "medium",
+    "title": "Multi-Model Consensus Support",
+    "hierarchy.phase-1.title": "Configuration Support",
+    "hierarchy.phase-2.title": "Implementation & Integration"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": "phase-1",
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "multi-model-consensus",
+      "status": "in_progress",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2"
+      ],
+      "total_tasks": 22,
+      "completed_tasks": 5,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Planning & Discovery",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "verify-1-1"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 5,
+      "metadata": {
+        "purpose": "Initial planning and requirements gathering",
+        "estimated_hours": 2,
+        "description": "Add per-workflow consultation configuration with min_models setting",
+        "needs_journaling": true,
+        "completed_at": "2025-12-05T17:11:02.527200Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Implementation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "verify-2-1",
+        "task-2-5",
+        "task-2-6",
+        "task-2-7",
+        "task-2-8",
+        "task-2-9",
+        "task-2-10",
+        "task-2-11",
+        "task-2-12",
+        "task-2-13",
+        "task-2-14",
+        "verify-2-2",
+        "verify-2-3"
+      ],
+      "total_tasks": 17,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Core implementation work",
+        "estimated_hours": 8,
+        "description": "Define data structures for multi-provider responses and consensus metadata"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add WorkflowConsultationConfig dataclass",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Create dataclass with min_models: int = 1 and timeout_override: Optional[float] = None",
+        "file_path": "src/foundry_mcp/core/llm_config.py",
+        "task_category": "implementation",
+        "started_at": "2025-12-05T16:52:40.764158Z",
+        "completed_at": "2025-12-05T16:53:47.494312Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Extend ConsultationConfig with workflows dict",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add workflows: Dict[str, WorkflowConsultationConfig] and get_workflow_config() method",
+        "file_path": "src/foundry_mcp/core/llm_config.py",
+        "task_category": "implementation",
+        "started_at": "2025-12-05T16:54:22.003903Z",
+        "completed_at": "2025-12-05T16:55:37.390555Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Update from_dict() to parse workflow sections",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Parse [consultation.workflows.*] TOML sections into WorkflowConsultationConfig objects",
+        "file_path": "src/foundry_mcp/core/llm_config.py",
+        "task_category": "implementation",
+        "started_at": "2025-12-05T16:56:51.003853Z",
+        "completed_at": "2025-12-05T16:57:27.515495Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "Update sample TOML with workflow examples",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add [consultation.workflows] section with plan_review, fidelity_review examples",
+        "file_path": "samples/foundry-mcp.toml",
+        "task_category": "implementation",
+        "started_at": "2025-12-05T16:59:06.848898Z",
+        "completed_at": "2025-12-05T16:59:46.905124Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Unit tests for config parsing",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Test WorkflowConsultationConfig parsing and defaults",
+        "verification_type": "run-tests",
+        "started_at": "2025-12-05T17:09:43.034657Z",
+        "completed_at": "2025-12-05T17:11:02.527131Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Add ProviderResponse dataclass",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create dataclass with provider_id, model_used, content, success, error, tokens, duration_ms, cache_hit",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Add AgreementMetadata dataclass",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create dataclass with total_providers, successful_providers, failed_providers counts",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Add ConsensusResult dataclass",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create dataclass with workflow, responses list, agreement metadata, duration_ms, warnings, success property",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "Add ConsultationOutcome type alias",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create Union[ConsultationResult, ConsensusResult] type alias for backward compatibility",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Unit tests for result structures",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Test ConsensusResult properties, ProviderResponse serialization",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-5": {
+      "type": "task",
+      "title": "Add _try_provider_with_retries_async method",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Async version using asyncio.sleep() for retry delays and executor for sync provider.generate()",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-6": {
+      "type": "task",
+      "title": "Add _execute_single_provider_async method",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Execute one provider and return ProviderResponse",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-7": {
+      "type": "task",
+      "title": "Add _execute_parallel_providers_async method",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Execute N providers in parallel using asyncio.gather, return ConsensusResult",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-8": {
+      "type": "task",
+      "title": "Add consult_async main entry point",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Route to single or parallel based on workflow_config.min_models",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-9": {
+      "type": "task",
+      "title": "Update sync consult() wrapper",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Wrap consult_async with asyncio.run(), return ConsultationOutcome",
+        "file_path": "src/foundry_mcp/core/ai_consultation.py",
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-10": {
+      "type": "task",
+      "title": "Update _run_ai_review to handle ConsensusResult",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Check isinstance(result, ConsensusResult) and format response with mode, responses array, agreement",
+        "file_path": "src/foundry_mcp/tools/review.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-11": {
+      "type": "task",
+      "title": "Update spec_review_fidelity to handle ConsensusResult",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Check isinstance(result, ConsensusResult) and format response with consensus mode output",
+        "file_path": "src/foundry_mcp/tools/documentation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-12": {
+      "type": "task",
+      "title": "Add async parallel execution tests",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Test parallel timing, partial failure handling, timeout behavior",
+        "file_path": "tests/unit/test_core/test_ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-13": {
+      "type": "task",
+      "title": "Add backward compatibility tests",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify min_models=1 returns ConsultationResult not ConsensusResult",
+        "file_path": "tests/unit/test_core/test_ai_consultation.py",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-14": {
+      "type": "task",
+      "title": "Update foundry-mcp.toml with workflow config",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add production workflow configuration with min_models settings",
+        "file_path": "foundry-mcp.toml",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Full test suite passes",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run pytest tests/ -v --tb=short and verify all tests pass",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-3": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Compare implementation against this spec using sdd-fidelity-review",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2025-12-05T16:52:40.764158Z",
+      "task_id": "task-1-1",
+      "entry_type": "status_change",
+      "title": "Task Started: Add WorkflowConsultationConfig dataclass",
+      "content": "Starting implementation of WorkflowConsultationConfig dataclass",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:53:47.494312Z",
+      "task_id": "task-1-1",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add WorkflowConsultationConfig dataclass",
+      "content": "Implemented WorkflowConsultationConfig dataclass in src/foundry_mcp/core/llm_config.py:859-919. Features:\n- min_models: int = 1 (minimum models for consensus)\n- timeout_override: Optional[float] = None (workflow-specific timeout)\n- validate() method with proper error checking\n- from_dict() factory method for TOML parsing\n- Added to __all__ exports\n- All tests pass: default values, from_dict parsing, validation of valid/invalid configs",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:54:22.003903Z",
+      "task_id": "task-1-2",
+      "entry_type": "status_change",
+      "title": "Task Started: Extend ConsultationConfig with workflows dict",
+      "content": "Extending ConsultationConfig with workflows dict and get_workflow_config() method",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:55:37.390555Z",
+      "task_id": "task-1-2",
+      "entry_type": "status_change",
+      "title": "Task Completed: Extend ConsultationConfig with workflows dict",
+      "content": "Extended ConsultationConfig with workflows support in src/foundry_mcp/core/llm_config.py:\n- Added workflows: Dict[str, WorkflowConsultationConfig] = field(default_factory=dict) attribute (line 982)\n- Added get_workflow_config(workflow_name: str) method (lines 1006-1026) that returns workflow-specific config or default\n- Updated docstring with workflow TOML example (lines 948-954)\n- Updated Attributes section documenting workflows field (line 972)\n- Extended validate() to validate all workflow configs (lines 1060-1068)\n- All tests pass: default empty dict, get_workflow_config for unknown/configured workflows, validation with valid/invalid configs",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:56:51.003853Z",
+      "task_id": "task-1-3",
+      "entry_type": "status_change",
+      "title": "Task Started: Update from_dict() to parse workflow sections",
+      "content": "Adding workflow parsing to ConsultationConfig.from_dict()",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:57:27.515495Z",
+      "task_id": "task-1-3",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update from_dict() to parse workflow sections",
+      "content": "Updated ConsultationConfig.from_dict() to parse workflow sections in src/foundry_mcp/core/llm_config.py:1114-1129.\n- Added parsing of 'workflows' key from data dict\n- Iterates over workflow entries and calls WorkflowConsultationConfig.from_dict() for each\n- Proper type checking with warning logs for invalid formats\n- All tests pass: parsing multiple workflows, default values, integration with get_workflow_config(), backward compatibility without workflows key",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:59:06.848898Z",
+      "task_id": "task-1-4",
+      "entry_type": "status_change",
+      "title": "Task Started: Update sample TOML with workflow examples",
+      "content": "Adding workflow examples to samples/foundry-mcp.toml",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T16:59:46.905124Z",
+      "task_id": "task-1-4",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update sample TOML with workflow examples",
+      "content": "Updated samples/foundry-mcp.toml with workflow configuration examples (lines 174-200):\n- Added new \"Per-Workflow Consultation Configuration\" section with documentation\n- Added [consultation.workflows.fidelity_review] with min_models=2, timeout_override=600.0\n- Added [consultation.workflows.plan_review] with min_models=3\n- Added commented quick_check example showing minimal config\n- Verified TOML parsing and integration with ConsultationConfig.from_dict()",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T17:09:43.034657Z",
+      "task_id": "verify-1-1",
+      "entry_type": "status_change",
+      "title": "Task Started: Unit tests for config parsing",
+      "content": "Running unit tests for config parsing verification",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-05T17:11:02.527131Z",
+      "task_id": "verify-1-1",
+      "entry_type": "status_change",
+      "title": "Task Completed: Unit tests for config parsing",
+      "content": "Verification complete for Phase 1 config parsing:\n\nTest Results:\n- 74 existing tests pass (test_provider_spec.py, test_ai_consultation.py)\n- 8 comprehensive workflow config verification tests pass:\n  1. WorkflowConsultationConfig defaults (min_models=1, timeout_override=None)\n  2. WorkflowConsultationConfig.from_dict() parsing\n  3. WorkflowConsultationConfig.validate() error handling\n  4. ConsultationConfig workflows dict integration\n  5. ConsultationConfig.get_workflow_config() for known/unknown workflows\n  6. ConsultationConfig.from_dict() with nested workflows parsing\n  7. Sample TOML parsing with fidelity_review and plan_review workflows\n  8. ConsultationConfig.validate() catches invalid workflow configs\n\nAll Phase 1 implementation verified working correctly.",
+      "author": "foundry-mcp"
+    }
+  ]
+}

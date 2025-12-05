@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.spec import find_specs_directory, load_spec, find_spec_file
@@ -232,7 +232,7 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Error getting spec context for {spec_id}")
             return asdict(
                 error_response(
-                    f"Error: {str(e)}",
-                    data={"spec_id": spec_id, "error_type": type(e).__name__},
+                    sanitize_error_message(e, context="PR workflow"),
+                    data={"spec_id": spec_id},
                 )
             )

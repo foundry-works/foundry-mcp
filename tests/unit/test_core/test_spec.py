@@ -16,6 +16,7 @@ from foundry_mcp.core.spec import (
     update_node,
     add_revision,
     update_frontmatter,
+    add_phase,
 )
 
 
@@ -63,7 +64,7 @@ def sample_spec():
                 "status": "completed",
                 "parent": "phase-1",
             },
-        }
+        },
     }
 
 
@@ -198,6 +199,127 @@ class TestUpdateNode:
         assert sample_spec["hierarchy"]["task-1-1"]["parent"] == "phase-1"
 
 
+class TestAddPhase:
+    """Tests for add_phase helper."""
+
+    def _write_spec(self, temp_specs_dir, spec_id: str = "test-spec-phase") -> Path:
+        spec_data = {
+            "spec_id": spec_id,
+            "title": "Test Spec",
+            "metadata": {
+                "estimated_hours": 5,
+                "status": "pending",
+            },
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Test Spec",
+                    "status": "pending",
+                    "parent": None,
+                    "children": ["phase-1"],
+                    "total_tasks": 0,
+                    "completed_tasks": 0,
+                    "metadata": {"purpose": "", "category": "implementation"},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                },
+                "phase-1": {
+                    "type": "phase",
+                    "title": "Existing Phase",
+                    "status": "pending",
+                    "parent": "spec-root",
+                    "children": [],
+                    "total_tasks": 0,
+                    "completed_tasks": 0,
+                    "metadata": {"purpose": "Initial work"},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                },
+            },
+        }
+        spec_path = temp_specs_dir / "pending" / f"{spec_id}.json"
+        spec_path.parent.mkdir(parents=True, exist_ok=True)
+        spec_path.write_text(json.dumps(spec_data))
+        return spec_path
+
+    def test_add_phase_appends_and_links_to_previous(self, temp_specs_dir):
+        """add_phase should append a phase, scaffold verifications, and link dependencies."""
+        spec_id = "phase-spec"
+        self._write_spec(temp_specs_dir, spec_id)
+
+        result, error = add_phase(
+            spec_id=spec_id,
+            title="Implementation",
+            description="Async orchestrator",
+            purpose="Core work",
+            estimated_hours=3,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result["phase_id"] == "phase-2"
+        assert result["linked_previous"] == "phase-1"
+        assert result["verify_tasks"] == ["verify-2-1", "verify-2-2"]
+
+        spec = load_spec(spec_id, temp_specs_dir)
+        hierarchy = spec["hierarchy"]
+        spec_root = hierarchy["spec-root"]
+        assert spec_root["children"][-1] == "phase-2"
+        assert spec_root["total_tasks"] == 2  # verification tasks added
+
+        phase_two = hierarchy["phase-2"]
+        assert phase_two["metadata"]["description"] == "Async orchestrator"
+        assert phase_two["metadata"]["estimated_hours"] == 3
+        assert phase_two["children"] == ["verify-2-1", "verify-2-2"]
+        assert hierarchy["verify-2-1"]["parent"] == "phase-2"
+        assert hierarchy["verify-2-2"]["dependencies"]["blocked_by"] == ["verify-2-1"]
+        assert hierarchy["phase-1"]["dependencies"]["blocks"] == ["phase-2"]
+        assert hierarchy["phase-2"]["dependencies"]["blocked_by"] == ["phase-1"]
+        assert spec["metadata"]["estimated_hours"] == 8
+
+    def test_add_phase_inserts_at_custom_position_without_link(self, temp_specs_dir):
+        """add_phase should support insertion at specific index without linking."""
+        spec_id = "phase-spec-position"
+        self._write_spec(temp_specs_dir, spec_id)
+
+        result, error = add_phase(
+            spec_id=spec_id,
+            title="Prep",
+            position=0,
+            link_previous=False,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result["position"] == 0
+        assert result["linked_previous"] is None
+
+        spec = load_spec(spec_id, temp_specs_dir)
+        spec_root_children = spec["hierarchy"]["spec-root"]["children"]
+        assert spec_root_children[0] == result["phase_id"]
+        # Original phase remains second
+        assert spec_root_children[1] == "phase-1"
+        # No automatic block linkage when inserted at beginning
+        assert spec["hierarchy"]["phase-1"]["dependencies"]["blocked_by"] == []
+
+    def test_add_phase_validates_inputs(self, temp_specs_dir):
+        """add_phase should validate required fields and numeric ranges."""
+        # Missing spec_id
+        result, error = add_phase(spec_id="", title="New")
+        assert result is None
+        assert error == "Specification ID is required"
+
+        # Negative estimated hours
+        spec_id = "phase-spec-invalid"
+        self._write_spec(temp_specs_dir, spec_id)
+        result, error = add_phase(
+            spec_id=spec_id,
+            title="Negative",
+            estimated_hours=-1,
+            specs_dir=temp_specs_dir,
+        )
+        assert result is None
+        assert error == "estimated_hours must be non-negative"
+
+
 class TestAddRevision:
     """Tests for add_revision function."""
 
@@ -210,7 +332,7 @@ class TestAddRevision:
             "test-spec-001",
             version="1.1",
             changelog="Added new feature",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -240,7 +362,7 @@ class TestAddRevision:
             author="Test Author",
             modified_by="sdd-cli",
             review_triggered_by="/path/to/review.md",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -260,8 +382,12 @@ class TestAddRevision:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        add_revision("test-spec-001", "1.0", "Initial release", specs_dir=temp_specs_dir)
-        result, error = add_revision("test-spec-001", "1.1", "Bug fix", specs_dir=temp_specs_dir)
+        add_revision(
+            "test-spec-001", "1.0", "Initial release", specs_dir=temp_specs_dir
+        )
+        result, error = add_revision(
+            "test-spec-001", "1.1", "Bug fix", specs_dir=temp_specs_dir
+        )
 
         assert error is None
         assert result["revision_index"] == 2
@@ -278,7 +404,7 @@ class TestAddRevision:
             "nonexistent-spec",
             version="1.0",
             changelog="Test",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -290,10 +416,7 @@ class TestAddRevision:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_revision(
-            "test-spec-001",
-            version="",
-            changelog="Test",
-            specs_dir=temp_specs_dir
+            "test-spec-001", version="", changelog="Test", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -305,10 +428,7 @@ class TestAddRevision:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = add_revision(
-            "test-spec-001",
-            version="1.0",
-            changelog="",
-            specs_dir=temp_specs_dir
+            "test-spec-001", version="1.0", changelog="", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -324,7 +444,7 @@ class TestAddRevision:
             version="  1.0  ",
             changelog="  Test changelog  ",
             author="  Author  ",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -350,7 +470,7 @@ class TestUpdateFrontmatter:
             "test-spec-001",
             key="description",
             value="Updated description",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -371,10 +491,7 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001",
-            key="owner",
-            value="New Owner",
-            specs_dir=temp_specs_dir
+            "test-spec-001", key="owner", value="New Owner", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -387,10 +504,7 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001",
-            key="title",
-            value="New Title",
-            specs_dir=temp_specs_dir
+            "test-spec-001", key="title", value="New Title", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -405,10 +519,7 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001",
-            key="estimated_hours",
-            value=42,
-            specs_dir=temp_specs_dir
+            "test-spec-001", key="estimated_hours", value=42, specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -426,7 +537,7 @@ class TestUpdateFrontmatter:
             "test-spec-001",
             key="objectives",
             value=["Objective 1", "Objective 2"],
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -436,10 +547,7 @@ class TestUpdateFrontmatter:
     def test_update_frontmatter_spec_not_found(self, temp_specs_dir):
         """Should return error for nonexistent spec."""
         result, error = update_frontmatter(
-            "nonexistent-spec",
-            key="title",
-            value="Test",
-            specs_dir=temp_specs_dir
+            "nonexistent-spec", key="title", value="Test", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -451,10 +559,7 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001",
-            key="",
-            value="Test",
-            specs_dir=temp_specs_dir
+            "test-spec-001", key="", value="Test", specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -466,10 +571,7 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001",
-            key="description",
-            value=None,
-            specs_dir=temp_specs_dir
+            "test-spec-001", key="description", value=None, specs_dir=temp_specs_dir
         )
 
         assert result is None
@@ -484,13 +586,15 @@ class TestUpdateFrontmatter:
             "test-spec-001",
             key="assumptions",
             value=["new assumption"],
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
         assert "dedicated function" in error
 
-    def test_update_frontmatter_blocks_revision_history(self, temp_specs_dir, sample_spec):
+    def test_update_frontmatter_blocks_revision_history(
+        self, temp_specs_dir, sample_spec
+    ):
         """Should block direct update of revision_history array."""
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
@@ -499,7 +603,7 @@ class TestUpdateFrontmatter:
             "test-spec-001",
             key="revision_history",
             value=[{"version": "1.0"}],
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert result is None
@@ -514,7 +618,7 @@ class TestUpdateFrontmatter:
             "test-spec-001",
             key="  description  ",
             value="  Trimmed value  ",
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None
@@ -528,10 +632,7 @@ class TestUpdateFrontmatter:
         spec_file.write_text(json.dumps(sample_spec))
 
         result, error = update_frontmatter(
-            "test-spec-001",
-            key="description",
-            value="",
-            specs_dir=temp_specs_dir
+            "test-spec-001", key="description", value="", specs_dir=temp_specs_dir
         )
 
         assert error is None
@@ -547,7 +648,7 @@ class TestUpdateFrontmatter:
             "test-spec-001",
             key="progress_percentage",
             value=0,
-            specs_dir=temp_specs_dir
+            specs_dir=temp_specs_dir,
         )
 
         assert error is None

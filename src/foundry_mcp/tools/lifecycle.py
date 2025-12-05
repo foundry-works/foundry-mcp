@@ -11,7 +11,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.pagination import (
     encode_cursor,
     decode_cursor,
@@ -91,7 +91,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error moving spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
 
     @canonical_tool(
         mcp,
@@ -133,7 +133,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error activating spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
 
     @canonical_tool(
         mcp,
@@ -181,7 +181,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error completing spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
 
     @canonical_tool(
         mcp,
@@ -225,7 +225,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error archiving spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
 
     @canonical_tool(
         mcp,
@@ -273,7 +273,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting lifecycle state: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
 
     @canonical_tool(
         mcp,
@@ -375,7 +375,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error listing specs by folder: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
 
     logger.debug(
         "Registered lifecycle tools: spec-lifecycle-move/spec-lifecycle-activate/"

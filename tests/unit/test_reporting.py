@@ -575,7 +575,8 @@ class TestErrorHandling:
 
             assert_response_contract(result)
             assert result["success"] is False
-            assert "unexpected" in result["error"].lower() or "runtime" in result["error"].lower()
+            # Sanitized error messages use generic text per MCP best practices
+            assert "internal" in result["error"].lower() or "error" in result["error"].lower()
 
     def test_circuit_breaker_error_recovery(self, mock_mcp, mock_config, assert_response_contract):
         """Circuit breaker should recover after timeout."""

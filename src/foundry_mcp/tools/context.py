@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.resilience import CircuitBreaker
 from foundry_mcp.core.observability import get_metrics, mcp_tool
@@ -70,7 +70,7 @@ def _get_llm_config_safe() -> Dict[str, Any]:
         return {"error": "LLM config module not available"}
     except Exception as e:
         logger.warning(f"Failed to get LLM config: {e}")
-        return {"error": str(e)}
+        return {"error": "Failed to load LLM configuration"}
 
 
 def _get_api_key_source(config) -> Optional[str]:
@@ -113,7 +113,7 @@ def _get_workflow_config_safe() -> Dict[str, Any]:
         return {"error": "Workflow config module not available"}
     except Exception as e:
         logger.warning(f"Failed to get workflow config: {e}")
-        return {"error": str(e)}
+        return {"error": "Failed to load workflow configuration"}
 
 
 def register_context_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -252,8 +252,7 @@ def register_context_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error getting server context")
             return asdict(
                 error_response(
-                    f"Failed to get server context: {str(e)}",
-                    data={"error_type": type(e).__name__},
+                    sanitize_error_message(e, context="server context"),
                 )
             )
 
@@ -319,7 +318,6 @@ def register_context_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error getting LLM status")
             return asdict(
                 error_response(
-                    f"Failed to get LLM status: {str(e)}",
-                    data={"error_type": type(e).__name__},
+                    sanitize_error_message(e, context="LLM status"),
                 )
             )

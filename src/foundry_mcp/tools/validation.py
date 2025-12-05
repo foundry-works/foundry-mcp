@@ -24,7 +24,7 @@ from foundry_mcp.core.validation import (
     apply_fixes,
     calculate_stats,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error validating spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
 
     @canonical_tool(
         mcp,
@@ -211,7 +211,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error fixing spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
 
     @canonical_tool(
         mcp,
@@ -275,7 +275,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting spec stats: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
 
     @canonical_tool(
         mcp,
@@ -373,7 +373,7 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error in validate_and_fix: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
 
     logger.debug(
         "Registered validation tools: spec-validate/spec-fix/spec-stats/spec-validate-fix"

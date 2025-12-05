@@ -20,7 +20,7 @@ from foundry_mcp.core.pagination import (
     CursorError,
     normalize_page_size,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.spec import (
     find_specs_directory,
     find_spec_file,
@@ -158,7 +158,7 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error finding spec {spec_id}: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec queries")))
 
     @canonical_tool(
         mcp,
@@ -261,7 +261,7 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error listing specs: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec queries")))
 
     @canonical_tool(
         mcp,
@@ -379,6 +379,6 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error querying tasks in {spec_id}: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec queries")))
 
     logger.debug("Registered query tools: spec-find/spec-list/task-query")

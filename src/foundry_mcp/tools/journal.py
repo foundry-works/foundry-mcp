@@ -32,7 +32,7 @@ from foundry_mcp.core.journal import (
     list_blocked_tasks,
     find_unjournaled_tasks,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error adding journal entry: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="journal")))
 
     @canonical_tool(
         mcp,
@@ -235,7 +235,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting journal entries: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="journal")))
 
     @canonical_tool(
         mcp,
@@ -317,7 +317,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error marking task blocked: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="journal")))
 
     @canonical_tool(
         mcp,
@@ -394,7 +394,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error unblocking task: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="journal")))
 
     @canonical_tool(
         mcp,
@@ -485,7 +485,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error listing blocked tasks: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="journal")))
 
     @canonical_tool(
         mcp,
@@ -576,7 +576,7 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error finding unjournaled tasks: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="journal")))
 
     logger.debug(
         "Registered journal tools: journal-add/journal-list/task-block/task-unblock/task-list-blocked/journal-list-unjournaled"

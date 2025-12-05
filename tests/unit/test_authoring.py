@@ -33,6 +33,7 @@ def mock_mcp():
             tool_name = kwargs.get("name", func.__name__)
             mcp._tools[tool_name] = func
             return func
+
         return decorator
 
     mcp.tool = mock_tool
@@ -62,22 +63,22 @@ def temp_spec_file(tmp_path):
                 "title": "Test Specification",
                 "status": "pending",
                 "children": ["phase-1"],
-                "parent": None
+                "parent": None,
             },
             "phase-1": {
                 "type": "phase",
                 "title": "Phase 1",
                 "status": "pending",
                 "children": ["task-1-1"],
-                "parent": "spec-root"
+                "parent": "spec-root",
             },
             "task-1-1": {
                 "type": "task",
                 "title": "Task 1",
                 "status": "pending",
                 "children": [],
-                "parent": "phase-1"
-            }
+                "parent": "phase-1",
+            },
         },
         "assumptions": [],
         "revision_history": [],
@@ -101,7 +102,9 @@ def temp_spec_file(tmp_path):
 class TestSpecCreate:
     """Test the spec-create tool."""
 
-    def test_validation_error_on_empty_name(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_empty_name(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_create should return validation error on empty name."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -115,7 +118,9 @@ class TestSpecCreate:
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
         assert result["data"].get("error_type") == "validation"
 
-    def test_validation_error_on_invalid_template(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_invalid_template(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_create should return validation error on invalid template."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -129,7 +134,9 @@ class TestSpecCreate:
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
         assert "remediation" in result["data"]
 
-    def test_validation_error_on_invalid_category(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_invalid_category(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_create should return validation error on invalid category."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -151,7 +158,9 @@ class TestSpecCreate:
 class TestSpecTemplate:
     """Test the spec-template tool."""
 
-    def test_list_action_returns_templates(self, mock_mcp, mock_config, assert_response_contract):
+    def test_list_action_returns_templates(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_template list action should return available templates."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -167,7 +176,9 @@ class TestSpecTemplate:
         assert isinstance(result["data"]["templates"], list)
         assert len(result["data"]["templates"]) > 0
 
-    def test_validation_error_on_invalid_action(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_invalid_action(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_template should return validation error on invalid action."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -180,7 +191,9 @@ class TestSpecTemplate:
         assert result["success"] is False
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
 
-    def test_show_action_requires_template_name(self, mock_mcp, mock_config, assert_response_contract):
+    def test_show_action_requires_template_name(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_template show action should require template_name."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -193,7 +206,9 @@ class TestSpecTemplate:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_show_action_with_valid_template(self, mock_mcp, mock_config, assert_response_contract):
+    def test_show_action_with_valid_template(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_template show action should return template content."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -217,7 +232,9 @@ class TestSpecTemplate:
 class TestTaskAdd:
     """Test the task-add tool."""
 
-    def test_validation_error_on_missing_spec_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_add should return validation error on missing spec_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -230,7 +247,9 @@ class TestTaskAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_parent(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_parent(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_add should return validation error on missing parent."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -243,7 +262,9 @@ class TestTaskAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_title(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_title(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_add should return validation error on missing title."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -256,20 +277,26 @@ class TestTaskAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_invalid_task_type(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_invalid_task_type(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_add should return validation error on invalid task_type."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
         register_authoring_tools(mock_mcp, mock_config)
 
         task_add = mock_mcp._tools["task-add"]
-        result = task_add(spec_id="test-spec", parent="phase-1", title="Test", task_type="invalid")
+        result = task_add(
+            spec_id="test-spec", parent="phase-1", title="Test", task_type="invalid"
+        )
 
         assert_response_contract(result)
         assert result["success"] is False
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
 
-    def test_dry_run_returns_preview(self, mock_mcp, mock_config, assert_response_contract):
+    def test_dry_run_returns_preview(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_add with dry_run should return preview without changes."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -277,16 +304,78 @@ class TestTaskAdd:
 
         task_add = mock_mcp._tools["task-add"]
         result = task_add(
-            spec_id="test-spec",
-            parent="phase-1",
-            title="Test task",
-            dry_run=True
+            spec_id="test-spec", parent="phase-1", title="Test task", dry_run=True
         )
 
         assert_response_contract(result)
         assert result["success"] is True
         assert result["data"]["dry_run"] is True
         assert result["data"]["task_id"] == "(preview)"
+
+
+class TestPhaseAdd:
+    """Test the phase-add tool."""
+
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
+        """phase_add should return validation error on missing spec_id."""
+        from foundry_mcp.tools.authoring import register_authoring_tools
+
+        register_authoring_tools(mock_mcp, mock_config)
+
+        phase_add = mock_mcp._tools["phase-add"]
+        result = phase_add(spec_id="", title="New Phase")
+
+        assert_response_contract(result)
+        assert result["success"] is False
+        assert result["data"].get("error_code") == "MISSING_REQUIRED"
+
+    def test_validation_error_on_missing_title(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
+        """phase_add should return validation error on missing title."""
+        from foundry_mcp.tools.authoring import register_authoring_tools
+
+        register_authoring_tools(mock_mcp, mock_config)
+
+        phase_add = mock_mcp._tools["phase-add"]
+        result = phase_add(spec_id="test-spec", title="")
+
+        assert_response_contract(result)
+        assert result["success"] is False
+        assert result["data"].get("error_code") == "MISSING_REQUIRED"
+
+    def test_validation_error_on_negative_hours(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
+        """phase_add should validate estimated_hours is non-negative."""
+        from foundry_mcp.tools.authoring import register_authoring_tools
+
+        register_authoring_tools(mock_mcp, mock_config)
+
+        phase_add = mock_mcp._tools["phase-add"]
+        result = phase_add(spec_id="test-spec", title="Invalid", estimated_hours=-1)
+
+        assert_response_contract(result)
+        assert result["success"] is False
+        assert result["data"].get("error_code") == "VALIDATION_ERROR"
+
+    def test_dry_run_returns_preview(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
+        """phase_add with dry_run should return preview without changes."""
+        from foundry_mcp.tools.authoring import register_authoring_tools
+
+        register_authoring_tools(mock_mcp, mock_config)
+
+        phase_add = mock_mcp._tools["phase-add"]
+        result = phase_add(spec_id="test-spec", title="Phase", dry_run=True)
+
+        assert_response_contract(result)
+        assert result["success"] is True
+        assert result["data"]["dry_run"] is True
+        assert result["data"].get("phase_id") == "(preview)"
 
 
 # =============================================================================
@@ -297,7 +386,9 @@ class TestTaskAdd:
 class TestTaskRemove:
     """Test the task-remove tool."""
 
-    def test_validation_error_on_missing_spec_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_remove should return validation error on missing spec_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -310,7 +401,9 @@ class TestTaskRemove:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_task_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_task_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_remove should return validation error on missing task_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -323,18 +416,16 @@ class TestTaskRemove:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_dry_run_returns_preview(self, mock_mcp, mock_config, assert_response_contract):
+    def test_dry_run_returns_preview(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """task_remove with dry_run should return preview without changes."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
         register_authoring_tools(mock_mcp, mock_config)
 
         task_remove = mock_mcp._tools["task-remove"]
-        result = task_remove(
-            spec_id="test-spec",
-            task_id="task-1-2",
-            dry_run=True
-        )
+        result = task_remove(spec_id="test-spec", task_id="task-1-2", dry_run=True)
 
         assert_response_contract(result)
         assert result["success"] is True
@@ -349,7 +440,9 @@ class TestTaskRemove:
 class TestAssumptionAdd:
     """Test the assumption-add tool."""
 
-    def test_validation_error_on_missing_spec_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """assumption_add should return validation error on missing spec_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -362,7 +455,9 @@ class TestAssumptionAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_text(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_text(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """assumption_add should return validation error on missing text."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -375,7 +470,9 @@ class TestAssumptionAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_invalid_type(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_invalid_type(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """assumption_add should return validation error on invalid assumption_type."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -383,16 +480,16 @@ class TestAssumptionAdd:
 
         assumption_add = mock_mcp._tools["assumption-add"]
         result = assumption_add(
-            spec_id="test-spec",
-            text="Test assumption",
-            assumption_type="invalid"
+            spec_id="test-spec", text="Test assumption", assumption_type="invalid"
         )
 
         assert_response_contract(result)
         assert result["success"] is False
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
 
-    def test_dry_run_returns_preview(self, mock_mcp, mock_config, assert_response_contract):
+    def test_dry_run_returns_preview(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """assumption_add with dry_run should return preview without changes."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -400,9 +497,7 @@ class TestAssumptionAdd:
 
         assumption_add = mock_mcp._tools["assumption-add"]
         result = assumption_add(
-            spec_id="test-spec",
-            text="Test assumption",
-            dry_run=True
+            spec_id="test-spec", text="Test assumption", dry_run=True
         )
 
         assert_response_contract(result)
@@ -418,7 +513,9 @@ class TestAssumptionAdd:
 class TestAssumptionList:
     """Test the assumption-list tool."""
 
-    def test_validation_error_on_missing_spec_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """assumption_list should return validation error on missing spec_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -431,7 +528,9 @@ class TestAssumptionList:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_invalid_type(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_invalid_type(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """assumption_list should return validation error on invalid assumption_type."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -453,7 +552,9 @@ class TestAssumptionList:
 class TestRevisionAdd:
     """Test the revision-add tool."""
 
-    def test_validation_error_on_missing_spec_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """revision_add should return validation error on missing spec_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -466,20 +567,26 @@ class TestRevisionAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_version(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_version(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """revision_add should return validation error on missing version."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
         register_authoring_tools(mock_mcp, mock_config)
 
         revision_add = mock_mcp._tools["revision-add"]
-        result = revision_add(spec_id="test-spec", version="", changes="Added new tasks")
+        result = revision_add(
+            spec_id="test-spec", version="", changes="Added new tasks"
+        )
 
         assert_response_contract(result)
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_changes(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_changes(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """revision_add should return validation error on missing changes."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -492,7 +599,9 @@ class TestRevisionAdd:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_dry_run_returns_preview(self, mock_mcp, mock_config, assert_response_contract):
+    def test_dry_run_returns_preview(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """revision_add with dry_run should return preview without changes."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -500,10 +609,7 @@ class TestRevisionAdd:
 
         revision_add = mock_mcp._tools["revision-add"]
         result = revision_add(
-            spec_id="test-spec",
-            version="1.1",
-            changes="Added new tasks",
-            dry_run=True
+            spec_id="test-spec", version="1.1", changes="Added new tasks", dry_run=True
         )
 
         assert_response_contract(result)
@@ -519,7 +625,9 @@ class TestRevisionAdd:
 class TestSpecUpdateFrontmatter:
     """Test the spec-update-frontmatter tool."""
 
-    def test_validation_error_on_missing_spec_id(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_spec_id(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_update_frontmatter should return validation error on missing spec_id."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -532,7 +640,9 @@ class TestSpecUpdateFrontmatter:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_validation_error_on_missing_key(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_on_missing_key(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_update_frontmatter should return validation error on missing key."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -545,7 +655,9 @@ class TestSpecUpdateFrontmatter:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_dry_run_returns_preview(self, mock_mcp, mock_config, assert_response_contract):
+    def test_dry_run_returns_preview(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """spec_update_frontmatter with dry_run should return preview without changes."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -553,10 +665,7 @@ class TestSpecUpdateFrontmatter:
 
         update = mock_mcp._tools["spec-update-frontmatter"]
         result = update(
-            spec_id="test-spec",
-            key="title",
-            value="New Title",
-            dry_run=True
+            spec_id="test-spec", key="title", value="New Title", dry_run=True
         )
 
         assert_response_contract(result)
@@ -582,6 +691,7 @@ class TestToolRegistration:
             "spec-create",
             "spec-template",
             "task-add",
+            "phase-add",
             "task-remove",
             "assumption-add",
             "assumption-list",
@@ -610,7 +720,9 @@ class TestToolRegistration:
 class TestResponseContractCompliance:
     """Test that all responses comply with the response-v2 contract."""
 
-    def test_validation_error_response_structure(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_response_structure(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Validation error responses should have correct structure."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -626,7 +738,9 @@ class TestResponseContractCompliance:
         assert "meta" in result
         assert result["meta"]["version"] == "response-v2"
 
-    def test_success_response_has_required_fields(self, mock_mcp, mock_config, assert_response_contract):
+    def test_success_response_has_required_fields(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Success responses should have all required fields."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 
@@ -641,7 +755,9 @@ class TestResponseContractCompliance:
         assert "templates" in result["data"]
         assert result["meta"]["version"] == "response-v2"
 
-    def test_error_response_has_required_fields(self, mock_mcp, mock_config, assert_response_contract):
+    def test_error_response_has_required_fields(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Error responses should have all required fields."""
         from foundry_mcp.tools.authoring import register_authoring_tools
 

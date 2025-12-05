@@ -17,7 +17,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.exception("Error listing providers")
-            return asdict(error_response(f"Failed to list providers: {e}"))
+            return asdict(error_response(sanitize_error_message(e, context="providers")))
 
     @canonical_tool(
         mcp,
@@ -219,7 +219,7 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.exception(f"Error getting provider status for {provider_id}")
-            return asdict(error_response(f"Failed to get provider status: {e}"))
+            return asdict(error_response(sanitize_error_message(e, context="providers")))
 
     @canonical_tool(
         mcp,
@@ -346,7 +346,7 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.warning(f"Provider unavailable: {e}")
             return asdict(
                 error_response(
-                    str(e),
+                    f"Provider {e.provider or provider_id} is unavailable",
                     error_code="UNAVAILABLE",
                     error_type="unavailable",
                     data={"provider": e.provider} if e.provider else None,
@@ -358,7 +358,7 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.warning(f"Provider timeout: {e}")
             return asdict(
                 error_response(
-                    str(e),
+                    f"Provider {e.provider or provider_id} timed out",
                     error_code="TIMEOUT",
                     error_type="unavailable",
                     data={"provider": e.provider} if e.provider else None,
@@ -370,7 +370,7 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.warning(f"Provider execution error: {e}")
             return asdict(
                 error_response(
-                    str(e),
+                    f"Provider {e.provider or provider_id} execution failed",
                     error_code="EXECUTION_ERROR",
                     error_type="internal",
                     data={"provider": e.provider} if e.provider else None,
@@ -380,6 +380,6 @@ def register_provider_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.exception(f"Error executing provider {provider_id}")
-            return asdict(error_response(f"Failed to execute provider: {e}"))
+            return asdict(error_response(sanitize_error_message(e, context="providers")))
 
     logger.debug("Provider tools registered")

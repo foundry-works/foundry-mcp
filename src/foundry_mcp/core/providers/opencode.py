@@ -9,6 +9,7 @@ response parsing, and token usage normalization.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -16,6 +17,8 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Sequence
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     ModelDescriptor,
@@ -463,8 +466,9 @@ class OpenCodeProvider(ProviderContext):
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
+            logger.debug(f"OpenCode wrapper stderr: {stderr or 'no stderr'}")
             raise ProviderExecutionError(
-                f"OpenCode wrapper exited with code {completed.returncode}: {stderr or 'no stderr'}",
+                f"OpenCode wrapper exited with code {completed.returncode}",
                 provider=self.metadata.provider_id,
             )
 
@@ -481,8 +485,9 @@ class OpenCodeProvider(ProviderContext):
             try:
                 msg = json.loads(line)
             except json.JSONDecodeError as exc:
+                logger.debug(f"OpenCode wrapper JSON parse error: {exc}")
                 raise ProviderExecutionError(
-                    f"Invalid JSON from wrapper: {line[:100]}",
+                    "OpenCode wrapper returned invalid JSON response",
                     provider=self.metadata.provider_id,
                 ) from exc
 

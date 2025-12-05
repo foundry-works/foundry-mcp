@@ -9,12 +9,15 @@ Enforces read-only restrictions via Cursor's permission configuration system.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     ModelDescriptor,
@@ -437,7 +440,10 @@ class CursorAgentProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise ProviderTimeoutError(str(exc), provider=self.metadata.provider_id) from exc
+            raise ProviderTimeoutError(
+                f"Command timed out after {exc.timeout} seconds",
+                provider=self.metadata.provider_id,
+            ) from exc
 
     def _run_with_retry(
         self,
@@ -472,13 +478,16 @@ class CursorAgentProvider(ProviderContext):
                 return retry_process, False
 
             stderr_text = (retry_process.stderr or stderr_text).strip()
+            logger.debug(f"Cursor Agent CLI stderr (retry): {stderr_text or 'no stderr'}")
             raise ProviderExecutionError(
-                f"Cursor Agent CLI exited with code {retry_process.returncode}: {stderr_text or 'no stderr'}",
+                f"Cursor Agent CLI exited with code {retry_process.returncode}",
                 provider=self.metadata.provider_id,
             )
 
+        stderr_text = (completed.stderr or "").strip()
+        logger.debug(f"Cursor Agent CLI stderr: {stderr_text or 'no stderr'}")
         raise ProviderExecutionError(
-            f"Cursor Agent CLI exited with code {completed.returncode}: {(completed.stderr or '').strip() or 'no stderr'}",
+            f"Cursor Agent CLI exited with code {completed.returncode}",
             provider=self.metadata.provider_id,
         )
 
@@ -492,8 +501,9 @@ class CursorAgentProvider(ProviderContext):
         try:
             payload = json.loads(text)
         except json.JSONDecodeError as exc:
+            logger.debug(f"Cursor Agent CLI JSON parse error: {exc}")
             raise ProviderExecutionError(
-                f"Cursor Agent CLI returned invalid JSON: {exc}",
+                "Cursor Agent CLI returned invalid JSON response",
                 provider=self.metadata.provider_id,
             ) from exc
         if not isinstance(payload, dict):

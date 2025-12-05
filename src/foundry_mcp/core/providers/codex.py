@@ -10,9 +10,12 @@ OS-level sandboxing (--sandbox read-only flag).
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     ModelDescriptor,
@@ -372,7 +375,10 @@ class CodexProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise ProviderTimeoutError(str(exc), provider=self.metadata.provider_id) from exc
+            raise ProviderTimeoutError(
+                f"Command timed out after {exc.timeout} seconds",
+                provider=self.metadata.provider_id,
+            ) from exc
 
     def _flatten_text(self, payload: Any) -> str:
         if isinstance(payload, str):
@@ -511,8 +517,9 @@ class CodexProvider(ProviderContext):
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
+            logger.debug(f"Codex CLI stderr: {stderr or 'no stderr'}")
             raise ProviderExecutionError(
-                f"Codex CLI exited with code {completed.returncode}: {stderr or 'no stderr'}",
+                f"Codex CLI exited with code {completed.returncode}",
                 provider=self.metadata.provider_id,
             )
 

@@ -28,7 +28,7 @@ def find_git_root() -> Optional[Path]:
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         return Path(result.stdout.strip())
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -46,12 +46,15 @@ def find_specs_directory(provided_path: Optional[str] = None) -> Optional[Path]:
         Absolute Path to specs directory (containing pending/active/completed/archived),
         or None if not found
     """
+
     def is_valid_specs_dir(p: Path) -> bool:
         """Check if a directory is a valid specs directory."""
-        return ((p / "pending").is_dir() or
-                (p / "active").is_dir() or
-                (p / "completed").is_dir() or
-                (p / "archived").is_dir())
+        return (
+            (p / "pending").is_dir()
+            or (p / "active").is_dir()
+            or (p / "completed").is_dir()
+            or (p / "archived").is_dir()
+        )
 
     if provided_path:
         path = Path(provided_path).resolve()
@@ -121,7 +124,9 @@ def find_spec_file(spec_id: str, specs_dir: Path) -> Optional[Path]:
     return None
 
 
-def resolve_spec_file(spec_name_or_path: str, specs_dir: Optional[Path] = None) -> Optional[Path]:
+def resolve_spec_file(
+    spec_name_or_path: str, specs_dir: Optional[Path] = None
+) -> Optional[Path]:
     """
     Resolve spec file from either a spec name or full path.
 
@@ -136,14 +141,14 @@ def resolve_spec_file(spec_name_or_path: str, specs_dir: Optional[Path] = None) 
 
     if path.is_absolute():
         spec_file = path.resolve()
-        if spec_file.exists() and spec_file.suffix == '.json':
+        if spec_file.exists() and spec_file.suffix == ".json":
             return spec_file
         return None
 
     search_name = spec_name_or_path
-    if spec_name_or_path.endswith('.json'):
+    if spec_name_or_path.endswith(".json"):
         spec_file = path.resolve()
-        if spec_file.exists() and spec_file.suffix == '.json':
+        if spec_file.exists() and spec_file.suffix == ".json":
             return spec_file
         search_name = path.stem
 
@@ -156,7 +161,9 @@ def resolve_spec_file(spec_name_or_path: str, specs_dir: Optional[Path] = None) 
     return find_spec_file(search_name, specs_dir)
 
 
-def load_spec(spec_id: str, specs_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+def load_spec(
+    spec_id: str, specs_dir: Optional[Path] = None
+) -> Optional[Dict[str, Any]]:
     """
     Load the JSON spec file for a given spec ID or path.
 
@@ -173,7 +180,7 @@ def load_spec(spec_id: str, specs_dir: Optional[Path] = None) -> Optional[Dict[s
         return None
 
     try:
-        with open(spec_file, 'r') as f:
+        with open(spec_file, "r") as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return None
@@ -184,7 +191,7 @@ def save_spec(
     spec_data: Dict[str, Any],
     specs_dir: Optional[Path] = None,
     backup: bool = True,
-    validate: bool = True
+    validate: bool = True,
 ) -> bool:
     """
     Save JSON spec file with atomic write and optional backup.
@@ -208,14 +215,16 @@ def save_spec(
         if not _validate_spec_structure(spec_data):
             return False
 
-    spec_data["last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    spec_data["last_updated"] = (
+        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
     if backup:
         backup_spec(spec_id, specs_dir)
 
-    temp_file = spec_file.with_suffix('.tmp')
+    temp_file = spec_file.with_suffix(".tmp")
     try:
-        with open(temp_file, 'w') as f:
+        with open(temp_file, "w") as f:
             json.dump(spec_data, f, indent=2)
         temp_file.replace(spec_file)
         return True
@@ -283,15 +292,19 @@ def _validate_spec_structure(spec_data: Dict[str, Any]) -> bool:
             return False
         if "type" not in node_data or "status" not in node_data:
             return False
-        if node_data["status"] not in ["pending", "in_progress", "completed", "blocked"]:
+        if node_data["status"] not in [
+            "pending",
+            "in_progress",
+            "completed",
+            "blocked",
+        ]:
             return False
 
     return True
 
 
 def list_specs(
-    specs_dir: Optional[Path] = None,
-    status: Optional[str] = None
+    specs_dir: Optional[Path] = None, status: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     List specification files with optional filtering.
@@ -339,8 +352,7 @@ def list_specs(
 
             total_tasks = len(hierarchy)
             completed_tasks = sum(
-                1 for task in hierarchy.values()
-                if task.get("status") == "completed"
+                1 for task in hierarchy.values() if task.get("status") == "completed"
             )
 
             progress_pct = 0
@@ -360,7 +372,12 @@ def list_specs(
             specs_info.append(info)
 
     # Sort: active first, then by completion % (highest first)
-    specs_info.sort(key=lambda s: (0 if s.get("status") == "active" else 1, -s.get("progress_percentage", 0)))
+    specs_info.sort(
+        key=lambda s: (
+            0 if s.get("status") == "active" else 1,
+            -s.get("progress_percentage", 0),
+        )
+    )
 
     return specs_info
 
@@ -380,7 +397,9 @@ def get_node(spec_data: Dict[str, Any], node_id: str) -> Optional[Dict[str, Any]
     return hierarchy.get(node_id)
 
 
-def update_node(spec_data: Dict[str, Any], node_id: str, updates: Dict[str, Any]) -> bool:
+def update_node(
+    spec_data: Dict[str, Any], node_id: str, updates: Dict[str, Any]
+) -> bool:
     """
     Update a node in the hierarchy.
 
@@ -435,7 +454,9 @@ def generate_spec_id(name: str) -> str:
     return f"{slug}-{date_suffix}-001"
 
 
-def _add_phase_verification(hierarchy: Dict[str, Any], phase_num: int, phase_id: str) -> None:
+def _add_phase_verification(
+    hierarchy: Dict[str, Any], phase_num: int, phase_id: str
+) -> None:
     """
     Add verify nodes (auto + fidelity) to a phase.
 
@@ -494,6 +515,173 @@ def _add_phase_verification(hierarchy: Dict[str, Any], phase_num: int, phase_id:
     # Update phase children and task count
     hierarchy[phase_id]["children"].extend([verify_auto_id, verify_fidelity_id])
     hierarchy[phase_id]["total_tasks"] += 2
+
+
+def _generate_phase_id(hierarchy: Dict[str, Any]) -> Tuple[str, int]:
+    """Generate the next phase ID and numeric suffix."""
+    pattern = re.compile(r"^phase-(\\d+)$")
+    max_id = 0
+    for node_id in hierarchy.keys():
+        match = pattern.match(node_id)
+        if match:
+            max_id = max(max_id, int(match.group(1)))
+    next_id = max_id + 1
+    return f"phase-{next_id}", next_id
+
+
+def add_phase(
+    spec_id: str,
+    title: str,
+    description: Optional[str] = None,
+    purpose: Optional[str] = None,
+    estimated_hours: Optional[float] = None,
+    position: Optional[int] = None,
+    link_previous: bool = True,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Add a new phase under spec-root and scaffold verification tasks.
+
+    Args:
+        spec_id: Specification ID to mutate.
+        title: Phase title.
+        description: Optional phase description.
+        purpose: Optional purpose/goal metadata string.
+        estimated_hours: Optional estimated hours for the phase.
+        position: Optional zero-based insertion index in spec-root children.
+        link_previous: Whether to automatically block on the previous phase when appending.
+        specs_dir: Specs directory override.
+
+    Returns:
+        Tuple of (result_dict, error_message).
+    """
+    if not spec_id or not spec_id.strip():
+        return None, "Specification ID is required"
+
+    if not title or not title.strip():
+        return None, "Phase title is required"
+
+    if estimated_hours is not None and estimated_hours < 0:
+        return None, "estimated_hours must be non-negative"
+
+    title = title.strip()
+
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
+
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    spec_root = hierarchy.get("spec-root")
+
+    if spec_root is None:
+        return None, "Specification root node 'spec-root' not found"
+
+    if spec_root.get("type") not in {"spec", "root"}:
+        return None, "Specification root node has invalid type"
+
+    children = spec_root.get("children", []) or []
+    if not isinstance(children, list):
+        children = []
+
+    insert_index = len(children)
+    if position is not None and position >= 0:
+        insert_index = min(position, len(children))
+
+    phase_id, phase_num = _generate_phase_id(hierarchy)
+
+    metadata: Dict[str, Any] = {
+        "purpose": (purpose.strip() if purpose else ""),
+    }
+    if description:
+        metadata["description"] = description.strip()
+    if estimated_hours is not None:
+        metadata["estimated_hours"] = estimated_hours
+
+    phase_node = {
+        "type": "phase",
+        "title": title,
+        "status": "pending",
+        "parent": "spec-root",
+        "children": [],
+        "total_tasks": 0,
+        "completed_tasks": 0,
+        "metadata": metadata,
+        "dependencies": {
+            "blocks": [],
+            "blocked_by": [],
+            "depends": [],
+        },
+    }
+
+    hierarchy[phase_id] = phase_node
+
+    if insert_index == len(children):
+        children.append(phase_id)
+    else:
+        children.insert(insert_index, phase_id)
+    spec_root["children"] = children
+
+    linked_phase_id: Optional[str] = None
+    if link_previous and insert_index > 0 and insert_index == len(children) - 1:
+        candidate = children[insert_index - 1]
+        previous = hierarchy.get(candidate)
+        if previous and previous.get("type") == "phase":
+            linked_phase_id = candidate
+            prev_deps = previous.setdefault(
+                "dependencies",
+                {
+                    "blocks": [],
+                    "blocked_by": [],
+                    "depends": [],
+                },
+            )
+            blocks = prev_deps.setdefault("blocks", [])
+            if phase_id not in blocks:
+                blocks.append(phase_id)
+            phase_node["dependencies"]["blocked_by"].append(candidate)
+
+    _add_phase_verification(hierarchy, phase_num, phase_id)
+
+    phase_task_total = phase_node.get("total_tasks", 0)
+    total_tasks = spec_root.get("total_tasks", 0)
+    spec_root["total_tasks"] = total_tasks + phase_task_total
+
+    # Update spec-level estimated hours if provided
+    if estimated_hours is not None:
+        spec_metadata = spec_data.setdefault("metadata", {})
+        current_hours = spec_metadata.get("estimated_hours")
+        if isinstance(current_hours, (int, float)):
+            spec_metadata["estimated_hours"] = current_hours + estimated_hours
+        else:
+            spec_metadata["estimated_hours"] = estimated_hours
+
+    saved = save_spec(spec_id, spec_data, specs_dir)
+    if not saved:
+        return None, "Failed to save specification"
+
+    verify_ids = [f"verify-{phase_num}-1", f"verify-{phase_num}-2"]
+
+    return {
+        "spec_id": spec_id,
+        "phase_id": phase_id,
+        "title": title,
+        "position": insert_index,
+        "linked_previous": linked_phase_id,
+        "verify_tasks": verify_ids,
+    }, None
 
 
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
@@ -689,18 +877,27 @@ def create_spec(
     """
     # Validate template
     if template not in TEMPLATES:
-        return None, f"Invalid template '{template}'. Must be one of: {', '.join(TEMPLATES)}"
+        return (
+            None,
+            f"Invalid template '{template}'. Must be one of: {', '.join(TEMPLATES)}",
+        )
 
     # Validate category
     if category not in CATEGORIES:
-        return None, f"Invalid category '{category}'. Must be one of: {', '.join(CATEGORIES)}"
+        return (
+            None,
+            f"Invalid category '{category}'. Must be one of: {', '.join(CATEGORIES)}",
+        )
 
     # Find specs directory
     if specs_dir is None:
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
 
     # Ensure pending directory exists
     pending_dir = specs_dir / "pending"
@@ -817,7 +1014,10 @@ def add_assumption(
     """
     # Validate assumption_type (for API compatibility)
     if assumption_type not in ASSUMPTION_TYPES:
-        return None, f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}"
+        return (
+            None,
+            f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}",
+        )
 
     # Validate text
     if not text or not text.strip():
@@ -828,7 +1028,10 @@ def add_assumption(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -918,7 +1121,10 @@ def add_revision(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -998,14 +1204,20 @@ def list_assumptions(
     """
     # Validate assumption_type if provided
     if assumption_type and assumption_type not in ASSUMPTION_TYPES:
-        return None, f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}"
+        return (
+            None,
+            f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}",
+        )
 
     # Find specs directory
     if specs_dir is None:
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -1023,20 +1235,24 @@ def list_assumptions(
     assumption_list = []
     for i, assumption in enumerate(assumptions, 1):
         if isinstance(assumption, str):
-            assumption_list.append({
-                "id": f"a-{i}",
-                "text": assumption,
-                "index": i,
-            })
+            assumption_list.append(
+                {
+                    "id": f"a-{i}",
+                    "text": assumption,
+                    "index": i,
+                }
+            )
         elif isinstance(assumption, dict):
             # Handle legacy object format
-            assumption_list.append({
-                "id": assumption.get("id", f"a-{i}"),
-                "text": assumption.get("text", str(assumption)),
-                "type": assumption.get("type"),
-                "author": assumption.get("author"),
-                "index": i,
-            })
+            assumption_list.append(
+                {
+                    "id": assumption.get("id", f"a-{i}"),
+                    "text": assumption.get("text", str(assumption)),
+                    "type": assumption.get("type"),
+                    "author": assumption.get("author"),
+                    "index": i,
+                }
+            )
 
     return {
         "spec_id": spec_id,
@@ -1049,9 +1265,16 @@ def list_assumptions(
 # Valid frontmatter keys that can be updated
 # Note: assumptions and revision_history have dedicated functions
 FRONTMATTER_KEYS = (
-    "title", "description", "objectives", "complexity",
-    "estimated_hours", "owner", "status", "category",
-    "progress_percentage", "current_phase"
+    "title",
+    "description",
+    "objectives",
+    "complexity",
+    "estimated_hours",
+    "owner",
+    "status",
+    "category",
+    "progress_percentage",
+    "current_phase",
 )
 
 
@@ -1087,7 +1310,10 @@ def update_frontmatter(
 
     # Block array fields that have dedicated functions
     if key in ("assumptions", "revision_history"):
-        return None, f"Use dedicated function for '{key}' (add_assumption or add_revision)"
+        return (
+            None,
+            f"Use dedicated function for '{key}' (add_assumption or add_revision)",
+        )
 
     # Validate value is not None (but allow empty string, 0, False, etc.)
     if value is None:
@@ -1098,7 +1324,10 @@ def update_frontmatter(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)

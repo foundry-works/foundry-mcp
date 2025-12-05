@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.spec import find_specs_directory, find_spec_file, load_spec
@@ -191,7 +191,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="planning"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -300,7 +300,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="planning"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -480,7 +480,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="planning"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -635,7 +635,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="planning"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -854,7 +854,7 @@ def register_planning_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"planning.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="planning"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",

@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional, Set
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.spec import find_specs_directory, find_spec_file, load_spec
@@ -176,7 +176,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in spec-find-related-files")
             _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="spec helpers"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -292,7 +292,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in spec-find-patterns")
             _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="spec helpers"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -455,7 +455,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in spec-detect-cycles")
             _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="spec helpers"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -561,7 +561,7 @@ def register_spec_helper_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in spec-validate-paths")
             _metrics.counter(f"spec_helpers.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="spec helpers"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",

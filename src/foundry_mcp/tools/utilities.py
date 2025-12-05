@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.cache import CacheManager
 from foundry_mcp.core.observability import (
@@ -132,7 +132,7 @@ def register_utility_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error in cache management")
             return asdict(
                 error_response(
-                    f"Cache management error: {str(e)}",
+                    sanitize_error_message(e, context="cache management"),
                     error_code="INTERNAL_ERROR",
                     error_type="internal",
                     remediation="Check logs for details",
@@ -216,7 +216,7 @@ def register_utility_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error parsing schema file")
             return asdict(
                 error_response(
-                    f"Schema file parsing error: {str(e)}",
+                    sanitize_error_message(e, context="schema export"),
                     error_code="PARSE_ERROR",
                     error_type="internal",
                     remediation="Check schema file is valid JSON",
@@ -226,7 +226,7 @@ def register_utility_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error exporting schema")
             return asdict(
                 error_response(
-                    f"Schema export error: {str(e)}",
+                    sanitize_error_message(e, context="schema export"),
                     error_code="INTERNAL_ERROR",
                     error_type="internal",
                     remediation="Check logs for details",

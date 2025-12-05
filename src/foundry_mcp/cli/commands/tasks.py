@@ -579,6 +579,8 @@ def complete_task_cmd(
         )
 
     task_title = task_data.get("title", task_id)
+    # Capture previous status before updating (task_data is a reference)
+    previous_status = task_data.get("status", "unknown")
 
     # Update status to completed
     success = update_task_status(spec_data, task_id, "completed", note)
@@ -600,7 +602,7 @@ def complete_task_cmd(
         entry_type="status_change",
         task_id=task_id,
         author="claude-code",
-        metadata={"previous_status": task_data.get("status", "unknown")},
+        metadata={"previous_status": previous_status},
     )
 
     # Save changes

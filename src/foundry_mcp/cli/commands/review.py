@@ -528,8 +528,7 @@ def _run_ai_review(
             code="AI_NOT_AVAILABLE",
             error_type="unavailable",
             remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
-            details={"import_error": str(exc)},
-        )
+                    )
 
     # Initialize orchestrator with preferred provider if specified
     preferred_providers = [ai_provider] if ai_provider else []
@@ -576,15 +575,15 @@ def _run_ai_review(
     try:
         result = orchestrator.consult(request, use_cache=consultation_cache)
     except Exception as exc:
+        logger.exception(f"AI consultation failed for {spec_id}")
         emit_error(
-            f"AI consultation failed: {exc}",
+            "AI consultation failed",
             code="AI_CONSULTATION_ERROR",
             error_type="error",
             remediation="Check provider configuration and try again",
             details={
                 "spec_id": spec_id,
                 "review_type": review_type,
-                "error": str(exc),
             },
         )
 
@@ -622,7 +621,8 @@ def _get_llm_status() -> dict:
     except ImportError:
         return {"configured": False, "error": "LLM config not available"}
     except Exception as e:
-        return {"configured": False, "error": str(e)}
+        logger.debug(f"Failed to get LLM config: {e}")
+        return {"configured": False, "error": "Failed to load LLM configuration"}
 
 
 def _run_fidelity_review(
@@ -674,8 +674,7 @@ def _run_fidelity_review(
             code="AI_NOT_AVAILABLE",
             error_type="unavailable",
             remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
-            details={"import_error": str(exc)},
-        )
+                    )
 
     # Load spec
     try:
@@ -691,12 +690,13 @@ def _run_fidelity_review(
             )
         spec_data = load_spec(spec_file)
     except Exception as exc:
+        logger.exception(f"Failed to load spec {spec_id}")
         emit_error(
-            f"Failed to load spec: {exc}",
+            "Failed to load spec",
             code="SPEC_LOAD_ERROR",
             error_type="error",
             remediation="Check that the spec file is valid JSON",
-            details={"spec_id": spec_id, "error": str(exc)},
+            details={"spec_id": spec_id},
         )
 
     # Determine review scope
@@ -771,15 +771,15 @@ def _run_fidelity_review(
     try:
         result = orchestrator.consult(request, use_cache=consultation_cache)
     except Exception as exc:
+        logger.exception(f"AI fidelity consultation failed for {spec_id}")
         emit_error(
-            f"AI consultation failed: {exc}",
+            "AI consultation failed",
             code="AI_CONSULTATION_ERROR",
             error_type="error",
             remediation="Check provider configuration and try again",
             details={
                 "spec_id": spec_id,
                 "review_scope": review_scope,
-                "error": str(exc),
             },
         )
 

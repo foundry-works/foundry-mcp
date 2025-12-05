@@ -31,6 +31,7 @@ def mock_mcp():
             tool_name = kwargs.get("name", func.__name__)
             mcp._tools[tool_name] = func
             return func
+
         return decorator
 
     mcp.tool = mock_tool
@@ -109,7 +110,9 @@ def temp_project(tmp_path):
 class TestSpecDoc:
     """Tests for spec-doc tool."""
 
-    def test_invalid_output_format_returns_error(self, mock_mcp, mock_config, assert_response_contract):
+    def test_invalid_output_format_returns_error(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Should return validation error for invalid output_format."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -123,7 +126,9 @@ class TestSpecDoc:
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
         assert result["data"].get("error_type") == "validation"
 
-    def test_invalid_mode_returns_error(self, mock_mcp, mock_config, assert_response_contract):
+    def test_invalid_mode_returns_error(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Should return validation error for invalid mode."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -136,7 +141,9 @@ class TestSpecDoc:
         assert result["success"] is False
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
 
-    def test_specs_dir_not_found(self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch):
+    def test_specs_dir_not_found(
+        self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch
+    ):
         """Should handle missing specs directory."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -152,7 +159,9 @@ class TestSpecDoc:
         assert result["success"] is False
         assert result["data"].get("error_code") == "SPECS_DIR_NOT_FOUND"
 
-    def test_spec_not_found(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_spec_not_found(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Should handle spec not found."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -168,7 +177,9 @@ class TestSpecDoc:
         assert result["success"] is False
         assert result["data"].get("error_code") == "SPEC_NOT_FOUND"
 
-    def test_successful_documentation_generation(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_successful_documentation_generation(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Should generate documentation successfully."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -187,7 +198,9 @@ class TestSpecDoc:
         assert "output_path" in result["data"]
         assert "stats" in result["data"]
 
-    def test_custom_output_path(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_custom_output_path(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Should use custom output path when provided."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -213,7 +226,9 @@ class TestSpecDoc:
 class TestSpecDocLlm:
     """Tests for spec-doc-llm tool."""
 
-    def test_generates_documentation_successfully(self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch):
+    def test_generates_documentation_successfully(
+        self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch
+    ):
         """Should generate documentation for a valid directory."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -233,7 +248,9 @@ class TestSpecDocLlm:
         assert "files_generated" in result["data"]
         assert "generation" in result["data"]
 
-    def test_includes_ai_generation_settings(self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch):
+    def test_includes_ai_generation_settings(
+        self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch
+    ):
         """Should include AI generation settings in response."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -253,7 +270,9 @@ class TestSpecDocLlm:
         assert result["data"]["generation"]["use_ai"] is False
         assert result["data"]["generation"]["ai_timeout"] == 60.0
 
-    def test_missing_directory_validation(self, mock_mcp, mock_config, assert_response_contract):
+    def test_missing_directory_validation(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Should return error for missing directory."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -266,7 +285,9 @@ class TestSpecDocLlm:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_invalid_batch_size_validation(self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch):
+    def test_invalid_batch_size_validation(
+        self, mock_mcp, mock_config, tmp_path, assert_response_contract, monkeypatch
+    ):
         """Should return error for invalid batch_size."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -303,7 +324,9 @@ class TestSpecDocLlm:
 class TestSpecReviewFidelity:
     """Tests for spec-review-fidelity tool."""
 
-    def test_successful_fidelity_review_with_provider(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_successful_fidelity_review_with_provider(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Should successfully run fidelity review when providers are available."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -325,9 +348,14 @@ class TestSpecReviewFidelity:
             assert "consensus" in result["data"]
         else:
             # No providers available - acceptable in test environment
-            assert result["data"].get("error_code") in ("AI_NO_PROVIDER", "AI_NOT_AVAILABLE")
+            assert result["data"].get("error_code") in (
+                "AI_NO_PROVIDER",
+                "AI_NOT_AVAILABLE",
+            )
 
-    def test_includes_fidelity_response_fields(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_includes_fidelity_response_fields(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Should include expected response fields when successful."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -351,7 +379,9 @@ class TestSpecReviewFidelity:
             assert "deviations" in data
             assert "recommendations" in data
 
-    def test_missing_spec_id_validation(self, mock_mcp, mock_config, assert_response_contract):
+    def test_missing_spec_id_validation(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Should return error for missing spec_id."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -364,7 +394,9 @@ class TestSpecReviewFidelity:
         assert result["success"] is False
         assert result["data"].get("error_code") == "MISSING_REQUIRED"
 
-    def test_mutual_exclusivity_validation(self, mock_mcp, mock_config, assert_response_contract):
+    def test_mutual_exclusivity_validation(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Should return error when both task_id and phase_id are provided."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -381,7 +413,9 @@ class TestSpecReviewFidelity:
         assert result["success"] is False
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
 
-    def test_invalid_consensus_threshold_validation(self, mock_mcp, mock_config, assert_response_contract):
+    def test_invalid_consensus_threshold_validation(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Should return error for invalid consensus_threshold."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -397,7 +431,9 @@ class TestSpecReviewFidelity:
         assert result["success"] is False
         assert result["data"].get("error_code") == "VALIDATION_ERROR"
 
-    def test_spec_not_found(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_spec_not_found(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Should handle spec not found."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -485,41 +521,42 @@ class TestSpecReviewFidelity:
     def test_fidelity_review_never_returns_unknown_on_success(
         self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
     ):
-        """Successful fidelity review should never have 'unknown' verdict."""
+        """Successful fidelity review should never have 'unknown' verdict when properly mocked."""
+        from unittest.mock import patch, MagicMock
         from foundry_mcp.tools.documentation import register_documentation_tools
 
         project_path, _ = temp_project
         monkeypatch.chdir(project_path)
 
-        register_documentation_tools(mock_mcp, mock_config)
+        # Mock consultation to return a proper response with verdict
+        mock_result = MagicMock()
+        mock_result.content = (
+            '{"verdict": "pass", "deviations": [], "recommendations": []}'
+        )
+        mock_result.error = None
+        mock_result.provider_id = "test-provider"
+        mock_result.model_used = "test-model"
+        mock_result.cache_hit = True
 
-        spec_review_fidelity = mock_mcp._tools["spec-review-fidelity"]
-        result = spec_review_fidelity(spec_id="test-spec-001")
+        with patch(
+            "foundry_mcp.core.ai_consultation.ConsultationOrchestrator"
+        ) as MockOrch:
+            mock_orchestrator = MagicMock()
+            mock_orchestrator.is_available.return_value = True
+            mock_orchestrator.consult.return_value = mock_result
+            MockOrch.return_value = mock_orchestrator
 
-        assert_response_contract(result)
-        # If success, verdict must not be "unknown"
-        if result["success"] is True:
+            register_documentation_tools(mock_mcp, mock_config)
+
+            spec_review_fidelity = mock_mcp._tools["spec-review-fidelity"]
+            result = spec_review_fidelity(spec_id="test-spec-001")
+
+            assert_response_contract(result)
+            # With proper mock, should succeed with valid verdict
+            assert result["success"] is True
             verdict = result["data"].get("verdict")
-            assert verdict != "unknown", (
-                "Success response should not have 'unknown' verdict - "
-                "this indicates a silent consultation failure"
-            )
-        else:
-            # If not success, it should be a proper error response
-            # (not a pseudo-success with unknown verdict)
-            error_code = result["data"].get("error_code")
-            # These are acceptable error codes
-            acceptable_errors = {
-                "AI_NO_PROVIDER",
-                "AI_NOT_AVAILABLE",
-                "AI_CONSULTATION_FAILED",
-                "AI_EMPTY_RESPONSE",
-                "AI_CONSULTATION_ERROR",
-                "AI_INVALID_RESPONSE",
-                "AI_INCOMPLETE_RESPONSE",
-            }
-            assert error_code in acceptable_errors or error_code is not None, (
-                f"Error response should have a proper error_code, got: {error_code}"
+            assert verdict == "pass", (
+                f"Expected 'pass' verdict from mocked response, got: {verdict}"
             )
 
 
@@ -564,7 +601,9 @@ class TestDocumentationToolRegistration:
 class TestResponseContractCompliance:
     """Test that all responses comply with the response-v2 contract."""
 
-    def test_validation_error_response_structure(self, mock_mcp, mock_config, assert_response_contract):
+    def test_validation_error_response_structure(
+        self, mock_mcp, mock_config, assert_response_contract
+    ):
         """Validation error responses should have correct structure."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -580,7 +619,9 @@ class TestResponseContractCompliance:
         assert "meta" in result
         assert result["meta"]["version"] == "response-v2"
 
-    def test_success_response_has_required_fields(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_success_response_has_required_fields(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Success responses should have all required fields."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -597,7 +638,9 @@ class TestResponseContractCompliance:
         assert result["error"] is None
         assert result["meta"]["version"] == "response-v2"
 
-    def test_fidelity_review_response_structure(self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch):
+    def test_fidelity_review_response_structure(
+        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
+    ):
         """Fidelity review responses should have correct structure."""
         from foundry_mcp.tools.documentation import register_documentation_tools
 
@@ -620,7 +663,10 @@ class TestResponseContractCompliance:
             assert "spec_id" in result["data"]
         else:
             # Expected error codes when no provider available
-            assert result["data"].get("error_code") in ("AI_NO_PROVIDER", "AI_NOT_AVAILABLE")
+            assert result["data"].get("error_code") in (
+                "AI_NO_PROVIDER",
+                "AI_NOT_AVAILABLE",
+            )
 
 
 # =============================================================================
@@ -639,6 +685,7 @@ class TestTelemetryMetrics:
         assert metrics is not None
         assert hasattr(metrics, "counter")
         assert hasattr(metrics, "timer")
+        assert hasattr(metrics, "histogram")
 
     def test_metrics_collector_accepts_labels(self):
         """Metrics collector should accept labels."""
@@ -648,10 +695,20 @@ class TestTelemetryMetrics:
 
         # Counter should accept labels
         metrics.counter("documentation.success", labels={"tool": "spec-doc"})
-        metrics.counter("documentation.errors", labels={"tool": "spec-doc", "error_type": "not_found"})
+        metrics.counter(
+            "documentation.errors",
+            labels={"tool": "spec-doc", "error_type": "not_found"},
+        )
 
         # Timer should also accept labels
         metrics.timer("documentation.spec_doc_time", 100.5, labels={"mode": "basic"})
+
+        # Histogram should mirror timer-style usage
+        metrics.histogram(
+            "documentation.duration_distribution",
+            42.0,
+            labels={"mode": "basic"},
+        )
 
 
 # =============================================================================
@@ -667,11 +724,13 @@ class TestResponseEnvelopeCompliance:
         from foundry_mcp.core.responses import success_response
         from dataclasses import asdict
 
-        response = asdict(success_response(
-            spec_id="test-spec",
-            format="markdown",
-            output_path="test.md",
-        ))
+        response = asdict(
+            success_response(
+                spec_id="test-spec",
+                format="markdown",
+                output_path="test.md",
+            )
+        )
 
         assert "success" in response
         assert response["success"] is True
@@ -683,11 +742,13 @@ class TestResponseEnvelopeCompliance:
         from foundry_mcp.core.responses import error_response
         from dataclasses import asdict
 
-        response = asdict(error_response(
-            "Test error message",
-            error_code="VALIDATION_ERROR",
-            error_type="validation",
-        ))
+        response = asdict(
+            error_response(
+                "Test error message",
+                error_code="VALIDATION_ERROR",
+                error_type="validation",
+            )
+        )
 
         assert "success" in response
         assert response["success"] is False

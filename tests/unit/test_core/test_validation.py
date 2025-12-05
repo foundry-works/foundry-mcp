@@ -380,8 +380,8 @@ class TestValidationConstants:
 
     def test_valid_verification_types(self):
         """Test that valid verification types are defined."""
-        assert "auto" in VALID_VERIFICATION_TYPES
-        assert "manual" in VALID_VERIFICATION_TYPES
+        # Current valid types are run-tests and fidelity
+        assert "run-tests" in VALID_VERIFICATION_TYPES
         assert "fidelity" in VALID_VERIFICATION_TYPES
 
 

@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.modifications import apply_modifications, load_modifications_file
@@ -126,9 +126,10 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     remediation="Verify the modifications file path exists",
                 ))
             except json.JSONDecodeError as e:
+                logger.debug(f"JSON decode error in modifications file: {e}")
                 _metrics.counter(f"mutations.{tool_name}", labels={"status": "invalid_json"})
                 return asdict(error_response(
-                    f"Invalid modifications JSON format: {str(e)}",
+                    "Invalid modifications JSON format",
                     error_code="VALIDATION_ERROR",
                     error_type="validation",
                     remediation="Ensure the modifications file contains valid JSON",
@@ -154,9 +155,10 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     dry_run=dry_run,
                 )
             except ValueError as e:
+                logger.debug(f"ValueError in spec-apply-plan: {e}")
                 _metrics.counter(f"mutations.{tool_name}", labels={"status": "spec_not_found"})
                 return asdict(error_response(
-                    str(e),
+                    "Specification not found or invalid",
                     error_code="SPEC_NOT_FOUND",
                     error_type="not_found",
                     remediation="Verify the spec ID exists using spec-list",
@@ -191,7 +193,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in spec-apply-plan")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -386,7 +388,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in verification-add")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -555,7 +557,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in verification-execute")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -639,9 +641,10 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     with open(file_path, "r") as f:
                         verification_data = json.load(f)
                 except json.JSONDecodeError as e:
+                    logger.debug(f"JSON decode error in verification file: {e}")
                     _metrics.counter(f"mutations.{tool_name}", labels={"status": "invalid_json"})
                     return asdict(error_response(
-                        f"Invalid JSON in file: {e}",
+                        "Invalid JSON in verification file",
                         error_code="VALIDATION_ERROR",
                         error_type="validation",
                         remediation="Ensure the file contains valid JSON",
@@ -650,9 +653,10 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 try:
                     verification_data = json.loads(json_input)
                 except json.JSONDecodeError as e:
+                    logger.debug(f"JSON decode error in verification input: {e}")
                     _metrics.counter(f"mutations.{tool_name}", labels={"status": "invalid_json"})
                     return asdict(error_response(
-                        f"Invalid JSON input: {e}",
+                        "Invalid JSON input",
                         error_code="VALIDATION_ERROR",
                         error_type="validation",
                         remediation="Ensure the input contains valid JSON",
@@ -670,7 +674,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in verification-format-summary")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -875,7 +879,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in task-update-estimate")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -987,8 +991,9 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                             remediation="Provide a JSON object like {\"key\": \"value\"}",
                         ))
                 except json.JSONDecodeError as e:
+                    logger.debug(f"JSON decode error in metadata_json: {e}")
                     return asdict(error_response(
-                        f"Invalid JSON in metadata_json: {e}",
+                        "Invalid JSON in metadata_json",
                         error_code="VALIDATION_ERROR",
                         error_type="validation",
                         remediation="Ensure metadata_json contains valid JSON",
@@ -1126,7 +1131,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in task-update-metadata")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",
@@ -1263,9 +1268,10 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             return asdict(success_response(data))
 
         except PermissionError as e:
+            logger.debug(f"Permission error in spec-sync-metadata: {e}")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Permission denied while syncing metadata: {str(e)}",
+                "Permission denied while syncing metadata",
                 error_code="PERMISSION_DENIED",
                 error_type="validation",
                 remediation="Check file permissions and access rights",
@@ -1274,7 +1280,7 @@ def register_mutation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Unexpected error in spec-sync-metadata")
             _metrics.counter(f"mutations.{tool_name}", labels={"status": "error"})
             return asdict(error_response(
-                f"Unexpected error: {str(e)}",
+                sanitize_error_message(e, context="mutations"),
                 error_code="INTERNAL_ERROR",
                 error_type="internal",
                 remediation="Check logs for details",

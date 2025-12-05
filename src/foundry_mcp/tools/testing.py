@@ -12,7 +12,7 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.testing import TestRunner, get_presets
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error running tests: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="testing")))
 
     @canonical_tool(
         mcp,
@@ -179,7 +179,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error discovering tests: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="testing")))
 
     @canonical_tool(
         mcp,
@@ -203,7 +203,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting presets: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="testing")))
 
     @canonical_tool(
         mcp,
@@ -247,7 +247,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error running quick tests: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="testing")))
 
     @canonical_tool(
         mcp,
@@ -291,7 +291,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error running unit tests: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="testing")))
 
     logger.debug(
         "Registered testing tools: test-run/test-discover/test-presets/test-run-quick/"

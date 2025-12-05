@@ -30,7 +30,7 @@ from foundry_mcp.core.progress import (
     update_parent_status,
     list_phases,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error preparing task: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -160,7 +160,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error finding next task: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -215,7 +215,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting task info: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -254,7 +254,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error checking dependencies: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -348,7 +348,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error updating status: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -437,7 +437,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error completing task: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -529,7 +529,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error starting task: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     @canonical_tool(
         mcp,
@@ -575,7 +575,7 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting progress: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
     logger.debug(
         "Registered task tools: task-prepare/task-next/task-info/task-check-deps/"

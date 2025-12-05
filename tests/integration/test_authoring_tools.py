@@ -169,6 +169,12 @@ class TestAuthoringToolsRegistration:
         assert "task-add" in tools
         assert callable(tools["task-add"].fn)
 
+    def test_phase_add_registered(self, mcp_server):
+        """Test that phase-add tool is registered."""
+        tools = mcp_server._tool_manager._tools
+        assert "phase-add" in tools
+        assert callable(tools["phase-add"].fn)
+
     def test_task_remove_registered(self, mcp_server):
         """Test that task-remove tool is registered."""
         tools = mcp_server._tool_manager._tools
@@ -200,12 +206,13 @@ class TestAuthoringToolsRegistration:
         assert callable(tools["spec-update-frontmatter"].fn)
 
     def test_all_authoring_tools_count(self, mcp_server):
-        """Test that all 8 authoring tools are registered."""
+        """Test that all 9 authoring tools are registered."""
         tools = mcp_server._tool_manager._tools
         authoring_tools = [
             "spec-create",
             "spec-template",
             "task-add",
+            "phase-add",
             "task-remove",
             "assumption-add",
             "assumption-list",
@@ -213,7 +220,9 @@ class TestAuthoringToolsRegistration:
             "spec-update-frontmatter",
         ]
         registered = [t for t in authoring_tools if t in tools]
-        assert len(registered) == 8, f"Expected 8 authoring tools, got {len(registered)}: {registered}"
+        assert len(registered) == 9, (
+            f"Expected 9 authoring tools, got {len(registered)}: {registered}"
+        )
 
 
 # =============================================================================
@@ -234,7 +243,9 @@ class TestResponseEnvelopeCompliance:
         assert isinstance(response["success"], bool), "success must be boolean"
         assert isinstance(response["data"], dict), "data must be dict"
         assert isinstance(response["meta"], dict), "meta must be dict"
-        assert response["meta"].get("version") == "response-v2", "meta.version must be 'response-v2'"
+        assert response["meta"].get("version") == "response-v2", (
+            "meta.version must be 'response-v2'"
+        )
 
         if response["success"]:
             assert response["error"] is None, "error must be null on success"
@@ -294,7 +305,9 @@ class TestHierarchyIntegrity:
         )
 
         assert result["success"] is False
-        assert "not found" in result["error"].lower() or "NOT_FOUND" in str(result["data"].get("error_code", ""))
+        assert "not found" in result["error"].lower() or "NOT_FOUND" in str(
+            result["data"].get("error_code", "")
+        )
 
     def test_task_remove_validates_task_exists(self, mcp_server):
         """Test that task-remove validates task exists."""
@@ -307,7 +320,9 @@ class TestHierarchyIntegrity:
         )
 
         assert result["success"] is False
-        assert "not found" in result["error"].lower() or "NOT_FOUND" in str(result["data"].get("error_code", ""))
+        assert "not found" in result["error"].lower() or "NOT_FOUND" in str(
+            result["data"].get("error_code", "")
+        )
 
     def test_task_remove_cascade_warning(self, mcp_server):
         """Test that removing task with children requires cascade flag."""
@@ -326,9 +341,9 @@ class TestHierarchyIntegrity:
             # Accept either cascade warning or not found (CLI path mismatch)
             error_lower = result["error"].lower()
             assert (
-                "children" in error_lower or
-                "cascade" in error_lower or
-                "not found" in error_lower
+                "children" in error_lower
+                or "cascade" in error_lower
+                or "not found" in error_lower
             )
 
     def test_spec_not_found_error_handling(self, mcp_server):
@@ -347,11 +362,11 @@ class TestHierarchyIntegrity:
         error_code = str(result["data"].get("error_code", ""))
         # Accept: not found error, spec not found code, or circuit breaker (transient)
         assert (
-            "not found" in error_msg or
-            "SPEC_NOT_FOUND" in error_code or
-            "NOT_FOUND" in error_code or
-            "circuit breaker" in error_msg or  # Transient circuit breaker state
-            "CIRCUIT_OPEN" in error_code
+            "not found" in error_msg
+            or "SPEC_NOT_FOUND" in error_code
+            or "NOT_FOUND" in error_code
+            or "circuit breaker" in error_msg  # Transient circuit breaker state
+            or "CIRCUIT_OPEN" in error_code
         )
 
 
@@ -525,15 +540,21 @@ class TestSpecCreation:
             )
             # May fail due to CLI not being available, but should not fail validation
             if result["success"] is False:
-                assert "VALIDATION_ERROR" not in str(result["data"].get("error_code", "")), (
-                    f"Template '{template}' should be valid"
-                )
+                assert "VALIDATION_ERROR" not in str(
+                    result["data"].get("error_code", "")
+                ), f"Template '{template}' should be valid"
 
     def test_spec_create_valid_categories_accepted(self, mcp_server):
         """Test spec-create accepts all valid categories."""
         tools = mcp_server._tool_manager._tools
 
-        valid_categories = ["investigation", "implementation", "refactoring", "decision", "research"]
+        valid_categories = [
+            "investigation",
+            "implementation",
+            "refactoring",
+            "decision",
+            "research",
+        ]
         for category in valid_categories:
             result = tools["spec-create"].fn(
                 name=f"test-{category}",
@@ -671,6 +692,63 @@ class TestTaskOperations:
 
         result = tools["task-remove"].fn(
             spec_id="authoring-test-spec-001",
+            task_id="task-1-2",
+            dry_run=True,
+        )
+
+        if result["success"]:
+            assert result["data"].get("dry_run") is True
+
+
+class TestPhaseOperations:
+    """Test phase-add operations."""
+
+    def test_phase_add_validates_spec_id(self, mcp_server):
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-add"].fn(spec_id="", title="Phase")
+
+        assert result["success"] is False
+        assert "spec_id" in result["error"].lower()
+
+    def test_phase_add_validates_title(self, mcp_server):
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-add"].fn(spec_id="test-spec", title="")
+
+        assert result["success"] is False
+        assert "title" in result["error"].lower()
+
+    def test_phase_add_validates_hours(self, mcp_server):
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-add"].fn(
+            spec_id="test-spec",
+            title="Phase",
+            estimated_hours=-2,
+        )
+
+        assert result["success"] is False
+        assert "estimated_hours" in result["error"].lower()
+
+    def test_phase_add_dry_run_option(self, mcp_server):
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-add"].fn(
+            spec_id="authoring-test-spec-001",
+            title="Dry run phase",
+            dry_run=True,
+        )
+
+        if result["success"]:
+            assert result["data"].get("dry_run") is True
+
+    def test_task_remove_dry_run_option(self, mcp_server):
+        """Test task-remove supports dry_run option."""
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["task-remove"].fn(
+            spec_id="authoring-test-spec-001",
             task_id="task-1-1",
             dry_run=True,
         )
@@ -783,7 +861,9 @@ class TestErrorHandling:
         )
 
         # If it failed with timeout, check remediation
-        if result["success"] is False and "TIMEOUT" in str(result["data"].get("error_code", "")):
+        if result["success"] is False and "TIMEOUT" in str(
+            result["data"].get("error_code", "")
+        ):
             assert "remediation" in result["data"]
 
     def test_not_found_errors_include_remediation(self, mcp_server):
@@ -798,5 +878,8 @@ class TestErrorHandling:
 
         if result["success"] is False:
             # Should include remediation for not found errors
-            if "NOT_FOUND" in str(result["data"].get("error_code", "")) or "not found" in result["error"].lower():
+            if (
+                "NOT_FOUND" in str(result["data"].get("error_code", ""))
+                or "not found" in result["error"].lower()
+            ):
                 assert "remediation" in result["data"]

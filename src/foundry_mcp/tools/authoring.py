@@ -19,13 +19,18 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.spec import (
     find_specs_directory,
     create_spec,
     add_assumption,
+    add_phase,
     list_assumptions,
     add_revision,
     update_frontmatter,
@@ -94,35 +99,45 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not name:
-                return asdict(error_response(
-                    "name is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a specification name",
-                ))
+                return asdict(
+                    error_response(
+                        "name is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a specification name",
+                    )
+                )
 
             # Validate template if provided
             effective_template = template or "medium"
             if effective_template not in TEMPLATES:
-                return asdict(error_response(
-                    f"Invalid template '{effective_template}'. Must be one of: {', '.join(TEMPLATES)}",
-                    error_code="VALIDATION_ERROR",
-                    error_type="validation",
-                    remediation=f"Use one of: {', '.join(TEMPLATES)}",
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid template '{effective_template}'. Must be one of: {', '.join(TEMPLATES)}",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation=f"Use one of: {', '.join(TEMPLATES)}",
+                    )
+                )
 
             # Validate category if provided
             effective_category = category or "implementation"
             if effective_category not in CATEGORIES:
-                return asdict(error_response(
-                    f"Invalid category '{effective_category}'. Must be one of: {', '.join(CATEGORIES)}",
-                    error_code="VALIDATION_ERROR",
-                    error_type="validation",
-                    remediation=f"Use one of: {', '.join(CATEGORIES)}",
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid category '{effective_category}'. Must be one of: {', '.join(CATEGORIES)}",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation=f"Use one of: {', '.join(CATEGORIES)}",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             # Log the operation
             audit_log(
@@ -151,27 +166,33 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
                 # Check for common errors
                 if "already exists" in error.lower():
-                    return asdict(error_response(
-                        f"A specification with name '{name}' already exists",
-                        error_code="DUPLICATE_ENTRY",
-                        error_type="conflict",
-                        remediation="Use a different name or update the existing spec",
-                    ))
+                    return asdict(
+                        error_response(
+                            f"A specification with name '{name}' already exists",
+                            error_code="DUPLICATE_ENTRY",
+                            error_type="conflict",
+                            remediation="Use a different name or update the existing spec",
+                        )
+                    )
 
                 if "no specs directory" in error.lower():
-                    return asdict(error_response(
-                        error,
-                        error_code="NOT_FOUND",
-                        error_type="not_found",
-                        remediation="Create a specs directory or provide a valid path",
-                    ))
+                    return asdict(
+                        error_response(
+                            error,
+                            error_code="NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Create a specs directory or provide a valid path",
+                        )
+                    )
 
-                return asdict(error_response(
-                    f"Failed to create specification: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the project path is valid",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to create specification: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the project path is valid",
+                    )
+                )
 
             # Build response data
             data: Dict[str, Any] = {
@@ -196,12 +217,14 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Unexpected error in spec-create")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -242,21 +265,25 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Validate action
             valid_actions = ("list", "show", "apply")
             if action not in valid_actions:
-                return asdict(error_response(
-                    f"Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}",
-                    error_code="VALIDATION_ERROR",
-                    error_type="validation",
-                    remediation=f"Use one of: {', '.join(valid_actions)}",
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid action '{action}'. Must be one of: {', '.join(valid_actions)}",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation=f"Use one of: {', '.join(valid_actions)}",
+                    )
+                )
 
             # Validate template_name for show/apply
             if action in ("show", "apply") and not template_name:
-                return asdict(error_response(
-                    f"template_name is required for '{action}' action",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a template_name parameter",
-                ))
+                return asdict(
+                    error_response(
+                        f"template_name is required for '{action}' action",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a template_name parameter",
+                    )
+                )
 
             # Log the operation
             audit_log(
@@ -278,22 +305,39 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if action == "list":
                 # Return list of available templates
                 data["templates"] = [
-                    {"name": "simple", "description": "Minimal spec with 1 phase and basic tasks"},
-                    {"name": "medium", "description": "Standard spec with 2-3 phases (default)"},
-                    {"name": "complex", "description": "Multi-phase spec with groups and subtasks"},
-                    {"name": "security", "description": "Security-focused spec with audit tasks"},
+                    {
+                        "name": "simple",
+                        "description": "Minimal spec with 1 phase and basic tasks",
+                    },
+                    {
+                        "name": "medium",
+                        "description": "Standard spec with 2-3 phases (default)",
+                    },
+                    {
+                        "name": "complex",
+                        "description": "Multi-phase spec with groups and subtasks",
+                    },
+                    {
+                        "name": "security",
+                        "description": "Security-focused spec with audit tasks",
+                    },
                 ]
                 data["total_count"] = len(data["templates"])
             elif action == "show":
                 # Validate template exists
                 if template_name not in TEMPLATES:
-                    _metrics.counter(f"authoring.{tool_name}", labels={"status": "error", "action": action})
-                    return asdict(error_response(
-                        f"Template '{template_name}' not found",
-                        error_code="NOT_FOUND",
-                        error_type="not_found",
-                        remediation=f"Use 'list' action to see available templates. Valid: {', '.join(TEMPLATES)}",
-                    ))
+                    _metrics.counter(
+                        f"authoring.{tool_name}",
+                        labels={"status": "error", "action": action},
+                    )
+                    return asdict(
+                        error_response(
+                            f"Template '{template_name}' not found",
+                            error_code="NOT_FOUND",
+                            error_type="not_found",
+                            remediation=f"Use 'list' action to see available templates. Valid: {', '.join(TEMPLATES)}",
+                        )
+                    )
                 data["template_name"] = template_name
                 data["content"] = {
                     "name": template_name,
@@ -303,34 +347,45 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             elif action == "apply":
                 # Validate template exists
                 if template_name not in TEMPLATES:
-                    _metrics.counter(f"authoring.{tool_name}", labels={"status": "error", "action": action})
-                    return asdict(error_response(
-                        f"Template '{template_name}' not found",
-                        error_code="NOT_FOUND",
-                        error_type="not_found",
-                        remediation=f"Use 'list' action to see available templates. Valid: {', '.join(TEMPLATES)}",
-                    ))
+                    _metrics.counter(
+                        f"authoring.{tool_name}",
+                        labels={"status": "error", "action": action},
+                    )
+                    return asdict(
+                        error_response(
+                            f"Template '{template_name}' not found",
+                            error_code="NOT_FOUND",
+                            error_type="not_found",
+                            remediation=f"Use 'list' action to see available templates. Valid: {', '.join(TEMPLATES)}",
+                        )
+                    )
                 data["template_name"] = template_name
                 data["generated"] = {
                     "template": template_name,
                     "message": f"Use spec-create with template='{template_name}' to create a new spec",
                 }
-                data["instructions"] = f"Call spec-create with name='your-spec-name' and template='{template_name}'"
+                data["instructions"] = (
+                    f"Call spec-create with name='your-spec-name' and template='{template_name}'"
+                )
 
             # Track metrics
-            _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "action": action})
+            _metrics.counter(
+                f"authoring.{tool_name}", labels={"status": "success", "action": action}
+            )
 
             return asdict(success_response(data))
 
         except Exception as e:
             logger.exception("Unexpected error in spec-template")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -385,41 +440,53 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
 
             if not parent:
-                return asdict(error_response(
-                    "parent is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a parent node ID (e.g., phase-1, task-2-1)",
-                ))
+                return asdict(
+                    error_response(
+                        "parent is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a parent node ID (e.g., phase-1, task-2-1)",
+                    )
+                )
 
             if not title:
-                return asdict(error_response(
-                    "title is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a task title",
-                ))
+                return asdict(
+                    error_response(
+                        "title is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a task title",
+                    )
+                )
 
             # Validate task_type if provided
             effective_task_type = task_type or "task"
             if effective_task_type not in ("task", "subtask", "verify"):
-                return asdict(error_response(
-                    f"Invalid task_type '{effective_task_type}'. Must be one of: task, subtask, verify",
-                    error_code="VALIDATION_ERROR",
-                    error_type="validation",
-                    remediation="Use one of: task, subtask, verify",
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid task_type '{effective_task_type}'. Must be one of: task, subtask, verify",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation="Use one of: task, subtask, verify",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             # Log the operation
             audit_log(
@@ -435,15 +502,22 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Note: dry_run is not supported in direct API - document this
             if dry_run:
                 # Return preview without actually adding
-                _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "dry_run": "true"})
-                return asdict(success_response({
-                    "task_id": "(preview)",
-                    "parent": parent,
-                    "title": title,
-                    "type": effective_task_type,
-                    "dry_run": True,
-                    "note": "Dry run - no changes made",
-                }))
+                _metrics.counter(
+                    f"authoring.{tool_name}",
+                    labels={"status": "success", "dry_run": "true"},
+                )
+                return asdict(
+                    success_response(
+                        {
+                            "task_id": "(preview)",
+                            "parent": parent,
+                            "title": title,
+                            "type": effective_task_type,
+                            "dry_run": True,
+                            "note": "Dry run - no changes made",
+                        }
+                    )
+                )
 
             # Call the core function
             result, error = add_task(
@@ -467,26 +541,32 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 # Check for common errors
                 if "not found" in error.lower():
                     if "spec" in error.lower():
-                        return asdict(error_response(
-                            f"Specification '{spec_id}' not found",
-                            error_code="SPEC_NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the spec ID exists using spec-list",
-                        ))
+                        return asdict(
+                            error_response(
+                                f"Specification '{spec_id}' not found",
+                                error_code="SPEC_NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the spec ID exists using spec-list",
+                            )
+                        )
                     elif "parent" in error.lower() or parent in error:
-                        return asdict(error_response(
-                            f"Parent node '{parent}' not found in spec",
-                            error_code="NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the parent node ID exists in the specification",
-                        ))
+                        return asdict(
+                            error_response(
+                                f"Parent node '{parent}' not found in spec",
+                                error_code="NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the parent node ID exists in the specification",
+                            )
+                        )
 
-                return asdict(error_response(
-                    f"Failed to add task: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec and parent node exist",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to add task: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec and parent node exist",
+                    )
+                )
 
             # Build response data
             data: Dict[str, Any] = {
@@ -507,19 +587,175 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 data["hours"] = hours
 
             # Track metrics
-            _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "dry_run": "false"})
+            _metrics.counter(
+                f"authoring.{tool_name}",
+                labels={"status": "success", "dry_run": "false"},
+            )
 
             return asdict(success_response(data))
 
         except Exception as e:
             logger.exception("Unexpected error in task-add")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
+
+    @canonical_tool(
+        mcp,
+        canonical_name="phase-add",
+    )
+    def phase_add_tool(
+        spec_id: str,
+        title: str,
+        description: Optional[str] = None,
+        purpose: Optional[str] = None,
+        estimated_hours: Optional[float] = None,
+        position: Optional[int] = None,
+        link_previous: bool = True,
+        dry_run: bool = False,
+        path: Optional[str] = None,
+    ) -> dict:
+        """Add a new phase to spec-root, including verification scaffolding."""
+        tool_name = "phase_add"
+        start_time = time.perf_counter()
+
+        try:
+            if not spec_id:
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
+
+            if not title:
+                return asdict(
+                    error_response(
+                        "title is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a phase title",
+                    )
+                )
+
+            if estimated_hours is not None and estimated_hours < 0:
+                return asdict(
+                    error_response(
+                        "estimated_hours must be non-negative",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation="Provide a non-negative value",
+                    )
+                )
+
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
+
+            audit_log(
+                "tool_invocation",
+                tool="phase-add",
+                action="add_phase",
+                spec_id=spec_id,
+                title=title,
+                dry_run=dry_run,
+                link_previous=link_previous,
+            )
+
+            if dry_run:
+                _metrics.counter(
+                    f"authoring.{tool_name}",
+                    labels={"status": "success", "dry_run": "true"},
+                )
+                return asdict(
+                    success_response(
+                        {
+                            "phase_id": "(preview)",
+                            "title": title,
+                            "dry_run": True,
+                            "note": "Dry run - no changes made",
+                        }
+                    )
+                )
+
+            if specs_dir is None:
+                return asdict(
+                    error_response(
+                        "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+                        error_code="NOT_FOUND",
+                        error_type="not_found",
+                        remediation="Use --specs-dir or set SDD_SPECS_DIR",
+                    )
+                )
+
+            result, error = add_phase(
+                spec_id=spec_id,
+                title=title,
+                description=description,
+                purpose=purpose,
+                estimated_hours=estimated_hours,
+                position=position,
+                link_previous=link_previous,
+                specs_dir=specs_dir,
+            )
+
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            _metrics.timer(f"authoring.{tool_name}.duration_ms", elapsed_ms)
+
+            if error:
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+                lowered = error.lower()
+                if "specification" in lowered and "not found" in lowered:
+                    return asdict(
+                        error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        )
+                    )
+                return asdict(
+                    error_response(
+                        f"Failed to add phase: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check input parameters and retry",
+                    )
+                )
+
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "success"})
+            return asdict(
+                success_response(
+                    {
+                        "spec_id": spec_id,
+                        "dry_run": False,
+                        **(result or {}),
+                        "telemetry": {"duration_ms": round(elapsed_ms, 2)},
+                    }
+                )
+            )
+
+        except Exception as e:
+            logger.exception("Unexpected error in phase-add")
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -565,23 +801,31 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
 
             if not task_id:
-                return asdict(error_response(
-                    "task_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a task_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "task_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a task_id parameter",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             # Log the operation
             audit_log(
@@ -597,14 +841,21 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Note: dry_run is not supported in direct API - document this
             if dry_run:
                 # Return preview without actually removing
-                _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "cascade": str(cascade)})
-                return asdict(success_response({
-                    "task_id": task_id,
-                    "spec_id": spec_id,
-                    "cascade": cascade,
-                    "dry_run": True,
-                    "note": "Dry run - no changes made",
-                }))
+                _metrics.counter(
+                    f"authoring.{tool_name}",
+                    labels={"status": "success", "cascade": str(cascade)},
+                )
+                return asdict(
+                    success_response(
+                        {
+                            "task_id": task_id,
+                            "spec_id": spec_id,
+                            "cascade": cascade,
+                            "dry_run": True,
+                            "note": "Dry run - no changes made",
+                        }
+                    )
+                )
 
             # Call the core function
             result, error = remove_task(
@@ -624,34 +875,46 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 # Check for common errors
                 if "not found" in error.lower():
                     if "spec" in error.lower():
-                        return asdict(error_response(
-                            f"Specification '{spec_id}' not found",
-                            error_code="SPEC_NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the spec ID exists using spec-list",
-                        ))
+                        return asdict(
+                            error_response(
+                                f"Specification '{spec_id}' not found",
+                                error_code="SPEC_NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the spec ID exists using spec-list",
+                            )
+                        )
                     else:
-                        return asdict(error_response(
-                            f"Task '{task_id}' not found in spec",
-                            error_code="TASK_NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the task ID exists in the specification",
-                        ))
+                        return asdict(
+                            error_response(
+                                f"Task '{task_id}' not found in spec",
+                                error_code="TASK_NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the task ID exists in the specification",
+                            )
+                        )
 
-                if "has children" in error.lower() or "has" in error.lower() and "children" in error.lower():
-                    return asdict(error_response(
-                        f"Task '{task_id}' has children. Use cascade=True to remove recursively",
-                        error_code="CONFLICT",
-                        error_type="conflict",
-                        remediation="Set cascade=True to remove task and all children",
-                    ))
+                if (
+                    "has children" in error.lower()
+                    or "has" in error.lower()
+                    and "children" in error.lower()
+                ):
+                    return asdict(
+                        error_response(
+                            f"Task '{task_id}' has children. Use cascade=True to remove recursively",
+                            error_code="CONFLICT",
+                            error_type="conflict",
+                            remediation="Set cascade=True to remove task and all children",
+                        )
+                    )
 
-                return asdict(error_response(
-                    f"Failed to remove task: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec and task exist",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to remove task: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec and task exist",
+                    )
+                )
 
             # Build response data
             data: Dict[str, Any] = {
@@ -665,19 +928,24 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 data["children_removed"] = result.get("children_removed", 0)
 
             # Track metrics
-            _metrics.counter(f"authoring.{tool_name}", labels={"status": "success", "cascade": str(cascade)})
+            _metrics.counter(
+                f"authoring.{tool_name}",
+                labels={"status": "success", "cascade": str(cascade)},
+            )
 
             return asdict(success_response(data))
 
         except Exception as e:
             logger.exception("Unexpected error in task-remove")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -726,33 +994,43 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
 
             if not text:
-                return asdict(error_response(
-                    "text is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide assumption text",
-                ))
+                return asdict(
+                    error_response(
+                        "text is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide assumption text",
+                    )
+                )
 
             # Validate assumption_type if provided
             effective_type = assumption_type or "constraint"
             if effective_type not in ("constraint", "requirement"):
-                return asdict(error_response(
-                    f"Invalid assumption_type '{effective_type}'. Must be one of: constraint, requirement",
-                    error_code="VALIDATION_ERROR",
-                    error_type="validation",
-                    remediation="Use one of: constraint, requirement",
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid assumption_type '{effective_type}'. Must be one of: constraint, requirement",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation="Use one of: constraint, requirement",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             # Log the operation
             audit_log(
@@ -767,14 +1045,18 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Note: dry_run is not supported in direct API
             if dry_run:
                 _metrics.counter(f"authoring.{tool_name}", labels={"status": "success"})
-                return asdict(success_response({
-                    "spec_id": spec_id,
-                    "assumption_id": "(preview)",
-                    "text": text,
-                    "type": effective_type,
-                    "dry_run": True,
-                    "note": "Dry run - no changes made",
-                }))
+                return asdict(
+                    success_response(
+                        {
+                            "spec_id": spec_id,
+                            "assumption_id": "(preview)",
+                            "text": text,
+                            "type": effective_type,
+                            "dry_run": True,
+                            "note": "Dry run - no changes made",
+                        }
+                    )
+                )
 
             # Call the core function
             result, error = add_assumption(
@@ -793,19 +1075,23 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
 
                 if "not found" in error.lower():
-                    return asdict(error_response(
-                        f"Specification '{spec_id}' not found",
-                        error_code="SPEC_NOT_FOUND",
-                        error_type="not_found",
-                        remediation="Verify the spec ID exists using spec-list",
-                    ))
+                    return asdict(
+                        error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        )
+                    )
 
-                return asdict(error_response(
-                    f"Failed to add assumption: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec exists",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to add assumption: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec exists",
+                    )
+                )
 
             # Build response data
             data: Dict[str, Any] = {
@@ -827,12 +1113,14 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Unexpected error in assumption-add")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -872,24 +1160,32 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
 
             # Validate assumption_type if provided
             if assumption_type and assumption_type not in ("constraint", "requirement"):
-                return asdict(error_response(
-                    f"Invalid assumption_type '{assumption_type}'. Must be one of: constraint, requirement",
-                    error_code="VALIDATION_ERROR",
-                    error_type="validation",
-                    remediation="Use one of: constraint, requirement",
-                ))
+                return asdict(
+                    error_response(
+                        f"Invalid assumption_type '{assumption_type}'. Must be one of: constraint, requirement",
+                        error_code="VALIDATION_ERROR",
+                        error_type="validation",
+                        remediation="Use one of: constraint, requirement",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             # Log the operation
             audit_log(
@@ -915,19 +1211,23 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
 
                 if "not found" in error.lower():
-                    return asdict(error_response(
-                        f"Specification '{spec_id}' not found",
-                        error_code="SPEC_NOT_FOUND",
-                        error_type="not_found",
-                        remediation="Verify the spec ID exists using spec-list",
-                    ))
+                    return asdict(
+                        error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        )
+                    )
 
-                return asdict(error_response(
-                    f"Failed to list assumptions: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec exists",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to list assumptions: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec exists",
+                    )
+                )
 
             # Build response data
             assumptions = result.get("assumptions", [])
@@ -948,12 +1248,14 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Unexpected error in assumption-list")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -999,31 +1301,41 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         try:
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
 
             if not version:
-                return asdict(error_response(
-                    "version is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a version parameter (e.g., 1.1, 2.0)",
-                ))
+                return asdict(
+                    error_response(
+                        "version is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a version parameter (e.g., 1.1, 2.0)",
+                    )
+                )
 
             if not changes:
-                return asdict(error_response(
-                    "changes is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a changes summary",
-                ))
+                return asdict(
+                    error_response(
+                        "changes is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a changes summary",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             audit_log(
                 "tool_invocation",
@@ -1065,19 +1377,23 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
 
                 if "not found" in error.lower():
-                    return asdict(error_response(
-                        f"Specification '{spec_id}' not found",
-                        error_code="SPEC_NOT_FOUND",
-                        error_type="not_found",
-                        remediation="Verify the spec ID exists using spec-list",
-                    ))
+                    return asdict(
+                        error_response(
+                            f"Specification '{spec_id}' not found",
+                            error_code="SPEC_NOT_FOUND",
+                            error_type="not_found",
+                            remediation="Verify the spec ID exists using spec-list",
+                        )
+                    )
 
-                return asdict(error_response(
-                    f"Failed to add revision: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec exists",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to add revision: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec exists",
+                    )
+                )
 
             data = {
                 "spec_id": spec_id,
@@ -1095,12 +1411,14 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Unexpected error in revision-add")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -1147,31 +1465,41 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
 
             if not key:
-                return asdict(error_response(
-                    "key is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a frontmatter key (e.g., title, status, version)",
-                ))
+                return asdict(
+                    error_response(
+                        "key is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a frontmatter key (e.g., title, status, version)",
+                    )
+                )
 
             if value is None:
-                return asdict(error_response(
-                    "value is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a value for the frontmatter key",
-                ))
+                return asdict(
+                    error_response(
+                        "value is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a value for the frontmatter key",
+                    )
+                )
 
             # Find specs directory
-            specs_dir = find_specs_directory(path) if path else (config.specs_dir or find_specs_directory())
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
 
             # Log the operation
             audit_log(
@@ -1186,13 +1514,17 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Note: dry_run is not supported in direct API
             if dry_run:
                 _metrics.counter(f"authoring.{tool_name}", labels={"status": "success"})
-                return asdict(success_response({
-                    "spec_id": spec_id,
-                    "key": key,
-                    "value": value,
-                    "dry_run": True,
-                    "note": "Dry run - no changes made",
-                }))
+                return asdict(
+                    success_response(
+                        {
+                            "spec_id": spec_id,
+                            "key": key,
+                            "value": value,
+                            "dry_run": True,
+                            "note": "Dry run - no changes made",
+                        }
+                    )
+                )
 
             # Call the core function
             result, error = update_frontmatter(
@@ -1212,34 +1544,42 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 # Check for common errors
                 if "not found" in error.lower():
                     if "spec" in error.lower():
-                        return asdict(error_response(
-                            f"Specification '{spec_id}' not found",
-                            error_code="SPEC_NOT_FOUND",
-                            error_type="not_found",
-                            remediation="Verify the spec ID exists using spec-list",
-                        ))
+                        return asdict(
+                            error_response(
+                                f"Specification '{spec_id}' not found",
+                                error_code="SPEC_NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the spec ID exists using spec-list",
+                            )
+                        )
                     elif "key" in error.lower():
-                        return asdict(error_response(
-                            f"Frontmatter key '{key}' not found or invalid",
-                            error_code="INVALID_KEY",
-                            error_type="validation",
-                            remediation="Use a valid frontmatter key (e.g., title, status, version)",
-                        ))
+                        return asdict(
+                            error_response(
+                                f"Frontmatter key '{key}' not found or invalid",
+                                error_code="INVALID_KEY",
+                                error_type="validation",
+                                remediation="Use a valid frontmatter key (e.g., title, status, version)",
+                            )
+                        )
 
                 if "dedicated function" in error.lower():
-                    return asdict(error_response(
-                        error,
-                        error_code="VALIDATION_ERROR",
-                        error_type="validation",
-                        remediation="Use assumption-add or revision-add for those fields",
-                    ))
+                    return asdict(
+                        error_response(
+                            error,
+                            error_code="VALIDATION_ERROR",
+                            error_type="validation",
+                            remediation="Use assumption-add or revision-add for those fields",
+                        )
+                    )
 
-                return asdict(error_response(
-                    f"Failed to update frontmatter: {error}",
-                    error_code="COMMAND_FAILED",
-                    error_type="internal",
-                    remediation="Check that the spec exists and key/value are valid",
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to update frontmatter: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec exists and key/value are valid",
+                    )
+                )
 
             # Build response data
             data: Dict[str, Any] = {
@@ -1261,11 +1601,15 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             logger.exception("Unexpected error in spec-update-frontmatter")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                f"Unexpected error: {str(e)}",
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
-    logger.debug("Registered authoring tools: spec-create, spec-template, task-add, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter")
+    logger.debug(
+        "Registered authoring tools: spec-create, spec-template, task-add, phase-add, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter"
+    )

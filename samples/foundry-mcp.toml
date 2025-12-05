@@ -53,10 +53,14 @@ name = "foundry-mcp"
 version = "0.2.0"
 
 # =============================================================================
-# LLM Provider Configuration
+# LLM Provider Configuration (Legacy - see [consultation] for new priority system)
 # =============================================================================
 
 [llm]
+# NOTE: The [llm] section is being deprecated in favor of [consultation].priority
+# which provides unified API/CLI provider configuration with model selection.
+# See the [consultation] section below for the recommended configuration.
+
 # Provider type: "openai", "anthropic", or "local"
 provider = "openai"
 
@@ -111,6 +115,91 @@ batch_size = 5
 context_threshold = 85
 
 # =============================================================================
+# AI Consultation Configuration
+# =============================================================================
+
+[consultation]
+# =============================================================================
+# Provider Priority Configuration (NEW - Unified API/CLI providers)
+# =============================================================================
+#
+# Provider priority list - first available provider wins.
+# Supports both API providers and CLI tools with model selection.
+#
+# Format: "[api]provider/model" or "[cli]transport[:backend/model|:model]"
+#
+# Examples:
+#   [api]openai/gpt-4.1              - Direct OpenAI API with gpt-4.1
+#   [api]anthropic/claude-sonnet-4   - Direct Anthropic API with Claude
+#   [cli]gemini:gemini-2.5-flash     - Gemini CLI with specific model
+#   [cli]opencode:openai/gpt-5.1     - opencode CLI routing to OpenAI backend
+#   [cli]opencode:gemini/gemini-2.5  - opencode CLI routing to Gemini backend
+#   [cli]codex                       - Codex CLI with default model
+#
+# priority = [
+#     "[cli]opencode:openai/gpt-5.1-codex",
+#     "[cli]gemini:gemini-2.5-flash",
+#     "[api]openai/gpt-4.1",
+#     "[api]anthropic/claude-sonnet-4",
+# ]
+
+# Per-provider overrides (optional)
+# Override timeout, temperature, or other settings for specific providers
+# [consultation.overrides]
+# "[cli]opencode:openai/gpt-5.1-codex" = { timeout = 600 }
+# "[api]openai/gpt-4.1" = { temperature = 0.3 }
+
+# =============================================================================
+# Operational Settings
+# =============================================================================
+
+# Default timeout for AI consultations in seconds
+# Increased from 120s to handle longer fidelity reviews
+default_timeout = 300
+
+# Number of retry attempts per provider for transient failures
+# (timeouts, rate limits, 5xx errors)
+max_retries = 2
+
+# Delay between retry attempts in seconds
+retry_delay = 5.0
+
+# Enable fallback to next available provider when one fails
+# Set to false to only use the requested/first provider
+fallback_enabled = true
+
+# Cache time-to-live in seconds for consultation results
+cache_ttl = 3600
+
+# =============================================================================
+# Per-Workflow Consultation Configuration
+# =============================================================================
+#
+# Override consultation settings for specific workflows.
+# Each workflow can specify minimum model requirements for consensus
+# and optional timeout overrides.
+#
+# Available settings:
+#   min_models      - Minimum models required for consensus (default: 1)
+#   timeout_override - Override default_timeout for this workflow (optional)
+
+# --- Fidelity Review Workflow ---
+# Requires 2 models for consensus to catch implementation deviations
+[consultation.workflows.fidelity_review]
+min_models = 2
+timeout_override = 600.0  # Longer timeout for comprehensive code analysis
+
+# --- Plan Review Workflow ---
+# Requires 3 models for consensus on architectural decisions
+[consultation.workflows.plan_review]
+min_models = 3
+# Uses default_timeout (no override)
+
+# --- Quick Check Workflow (example of minimal config) ---
+# [consultation.workflows.quick_check]
+# min_models = 1  # Single model is sufficient for quick validation
+
+# =============================================================================
 # Git Workflow Configuration
 # =============================================================================
 
@@ -131,7 +220,42 @@ auto_pr = false
 show_before_commit = true
 
 # =============================================================================
-# Provider-Specific Examples
+# Provider Priority Examples
+# =============================================================================
+
+# --- Example 1: Prefer CLI tools, fallback to API ---
+# [consultation]
+# priority = [
+#     "[cli]opencode:openai/gpt-5.1-codex",    # First choice: opencode with OpenAI
+#     "[cli]gemini:gemini-2.5-flash",          # Second: Gemini CLI
+#     "[api]openai/gpt-4.1",                   # Fallback: direct API
+# ]
+
+# --- Example 2: API-only configuration ---
+# [consultation]
+# priority = [
+#     "[api]anthropic/claude-sonnet-4",        # Prefer Anthropic
+#     "[api]openai/gpt-4.1",                   # Fallback to OpenAI
+# ]
+
+# --- Example 3: Single CLI provider with backend routing ---
+# [consultation]
+# priority = [
+#     "[cli]opencode:gemini/gemini-2.5-pro",   # Use opencode with Gemini backend
+# ]
+
+# --- Example 4: Mixed with per-provider overrides ---
+# [consultation]
+# priority = [
+#     "[cli]opencode:openai/gpt-5.1-codex",
+#     "[api]openai/gpt-4.1",
+# ]
+# [consultation.overrides]
+# "[cli]opencode:openai/gpt-5.1-codex" = { timeout = 600, temperature = 0.3 }
+# "[api]openai/gpt-4.1" = { timeout = 120, max_tokens = 4096 }
+
+# =============================================================================
+# Legacy [llm] Examples (deprecated - use [consultation].priority instead)
 # =============================================================================
 
 # --- OpenAI Configuration ---

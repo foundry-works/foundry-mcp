@@ -665,6 +665,7 @@ class TestModifyCommands:
         assert result.exit_code == 0
         assert "apply" in result.output
         assert "task" in result.output
+        assert "phase" in result.output
         assert "assumption" in result.output
         assert "revision" in result.output
         assert "frontmatter" in result.output
@@ -677,6 +678,14 @@ class TestModifyCommands:
         assert result.exit_code == 0
         assert "add" in result.output
         assert "remove" in result.output
+
+    def test_modify_phase_subgroup_exists(self, cli_runner, temp_specs_dir):
+        """modify phase subgroup is available."""
+        result = cli_runner.invoke(
+            cli, ["--specs-dir", str(temp_specs_dir), "modify", "phase", "--help"]
+        )
+        assert result.exit_code == 0
+        assert "add" in result.output
 
 
 class TestDocQueryCommands:

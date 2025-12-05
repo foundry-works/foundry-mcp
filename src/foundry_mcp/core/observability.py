@@ -51,38 +51,41 @@ logger = logging.getLogger(__name__)
 SENSITIVE_PATTERNS: Final[List[Tuple[str, str]]] = [
     # API Keys and Tokens
     (r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?", "API_KEY"),
-    (r"(?i)(secret[_-]?key|secretkey)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?", "SECRET_KEY"),
-    (r"(?i)(access[_-]?token|accesstoken)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]{20,})['\"]?", "ACCESS_TOKEN"),
+    (
+        r"(?i)(secret[_-]?key|secretkey)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-]{20,})['\"]?",
+        "SECRET_KEY",
+    ),
+    (
+        r"(?i)(access[_-]?token|accesstoken)\s*[:=]\s*['\"]?([a-zA-Z0-9_\-\.]{20,})['\"]?",
+        "ACCESS_TOKEN",
+    ),
     (r"(?i)bearer\s+([a-zA-Z0-9_\-\.]+)", "BEARER_TOKEN"),
-
     # Passwords
     (r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"]?([^\s'\"]{4,})['\"]?", "PASSWORD"),
-
     # AWS Credentials
     (r"AKIA[0-9A-Z]{16}", "AWS_ACCESS_KEY"),
-    (r"(?i)(aws[_-]?secret[_-]?access[_-]?key)\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{40})['\"]?", "AWS_SECRET"),
-
+    (
+        r"(?i)(aws[_-]?secret[_-]?access[_-]?key)\s*[:=]\s*['\"]?([a-zA-Z0-9/+=]{40})['\"]?",
+        "AWS_SECRET",
+    ),
     # Private Keys
     (r"-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", "PRIVATE_KEY"),
-
     # Email Addresses (for PII protection)
     (r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", "EMAIL"),
-
     # Social Security Numbers (US)
     (r"\b\d{3}-\d{2}-\d{4}\b", "SSN"),
-
     # Credit Card Numbers (basic pattern)
     (r"\b(?:\d{4}[- ]?){3}\d{4}\b", "CREDIT_CARD"),
-
     # Phone Numbers (various formats)
     (r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b", "PHONE"),
-
     # GitHub/GitLab Tokens
     (r"gh[pousr]_[a-zA-Z0-9]{36,}", "GITHUB_TOKEN"),
     (r"glpat-[a-zA-Z0-9\-]{20,}", "GITLAB_TOKEN"),
-
     # Generic Base64-encoded secrets (long base64 strings in key contexts)
-    (r"(?i)(token|secret|key|credential)\s*[:=]\s*['\"]?([a-zA-Z0-9+/]{40,}={0,2})['\"]?", "BASE64_SECRET"),
+    (
+        r"(?i)(token|secret|key|credential)\s*[:=]\s*['\"]?([a-zA-Z0-9+/]{40,}={0,2})['\"]?",
+        "BASE64_SECRET",
+    ),
 ]
 """Patterns for detecting sensitive data that should be redacted.
 
@@ -141,10 +144,24 @@ def redact_sensitive_data(
     elif isinstance(data, dict):
         # Check for sensitive key names and redact their values entirely
         sensitive_keys = {
-            "password", "passwd", "pwd", "secret", "token", "api_key",
-            "apikey", "api-key", "access_token", "refresh_token",
-            "private_key", "secret_key", "auth", "authorization",
-            "credential", "credentials", "ssn", "credit_card"
+            "password",
+            "passwd",
+            "pwd",
+            "secret",
+            "token",
+            "api_key",
+            "apikey",
+            "api-key",
+            "access_token",
+            "refresh_token",
+            "private_key",
+            "secret_key",
+            "auth",
+            "authorization",
+            "credential",
+            "credentials",
+            "ssn",
+            "credit_card",
         }
         result = {}
         for key, value in data.items():
@@ -200,11 +217,12 @@ def redact_for_logging(data: Any) -> str:
         return str(redacted)
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class MetricType(Enum):
     """Types of metrics that can be emitted."""
+
     COUNTER = "counter"
     GAUGE = "gauge"
     HISTOGRAM = "histogram"
@@ -213,6 +231,7 @@ class MetricType(Enum):
 
 class AuditEventType(Enum):
     """Types of audit events for security logging."""
+
     AUTH_SUCCESS = "auth_success"
     AUTH_FAILURE = "auth_failure"
     RATE_LIMIT = "rate_limit"
@@ -225,11 +244,14 @@ class AuditEventType(Enum):
 @dataclass
 class Metric:
     """Structured metric data."""
+
     name: str
     value: Union[int, float]
     metric_type: MetricType
     labels: Dict[str, str] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -245,9 +267,12 @@ class Metric:
 @dataclass
 class AuditEvent:
     """Structured audit event for security logging."""
+
     event_type: AuditEventType
     details: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     client_id: Optional[str] = None
     user_id: Optional[str] = None
     ip_address: Optional[str] = None
@@ -283,51 +308,66 @@ class MetricsCollector:
     def emit(self, metric: Metric) -> None:
         """Emit a metric to the logger."""
         self._logger.info(
-            f"METRIC: {self.prefix}.{metric.name}",
-            extra={"metric": metric.to_dict()}
+            f"METRIC: {self.prefix}.{metric.name}", extra={"metric": metric.to_dict()}
         )
 
     def counter(
-        self,
-        name: str,
-        value: int = 1,
-        labels: Optional[Dict[str, str]] = None
+        self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None
     ) -> None:
         """Emit a counter metric."""
-        self.emit(Metric(
-            name=name,
-            value=value,
-            metric_type=MetricType.COUNTER,
-            labels=labels or {},
-        ))
+        self.emit(
+            Metric(
+                name=name,
+                value=value,
+                metric_type=MetricType.COUNTER,
+                labels=labels or {},
+            )
+        )
 
     def gauge(
         self,
         name: str,
         value: Union[int, float],
-        labels: Optional[Dict[str, str]] = None
+        labels: Optional[Dict[str, str]] = None,
     ) -> None:
         """Emit a gauge metric."""
-        self.emit(Metric(
-            name=name,
-            value=value,
-            metric_type=MetricType.GAUGE,
-            labels=labels or {},
-        ))
+        self.emit(
+            Metric(
+                name=name,
+                value=value,
+                metric_type=MetricType.GAUGE,
+                labels=labels or {},
+            )
+        )
 
     def timer(
-        self,
-        name: str,
-        duration_ms: float,
-        labels: Optional[Dict[str, str]] = None
+        self, name: str, duration_ms: float, labels: Optional[Dict[str, str]] = None
     ) -> None:
         """Emit a timer metric (duration in milliseconds)."""
-        self.emit(Metric(
-            name=name,
-            value=duration_ms,
-            metric_type=MetricType.TIMER,
-            labels=labels or {},
-        ))
+        self.emit(
+            Metric(
+                name=name,
+                value=duration_ms,
+                metric_type=MetricType.TIMER,
+                labels=labels or {},
+            )
+        )
+
+    def histogram(
+        self,
+        name: str,
+        value: Union[int, float],
+        labels: Optional[Dict[str, str]] = None,
+    ) -> None:
+        """Emit a histogram metric for distribution tracking."""
+        self.emit(
+            Metric(
+                name=name,
+                value=value,
+                metric_type=MetricType.HISTOGRAM,
+                labels=labels or {},
+            )
+        )
 
 
 # Global metrics collector
@@ -353,85 +393,86 @@ class AuditLogger:
     def log(self, event: AuditEvent) -> None:
         """Log an audit event."""
         self._logger.info(
-            f"AUDIT: {event.event_type.value}",
-            extra={"audit": event.to_dict()}
+            f"AUDIT: {event.event_type.value}", extra={"audit": event.to_dict()}
         )
 
-    def auth_success(
-        self,
-        client_id: Optional[str] = None,
-        **details: Any
-    ) -> None:
+    def auth_success(self, client_id: Optional[str] = None, **details: Any) -> None:
         """Log successful authentication."""
-        self.log(AuditEvent(
-            event_type=AuditEventType.AUTH_SUCCESS,
-            client_id=client_id,
-            details=details,
-        ))
+        self.log(
+            AuditEvent(
+                event_type=AuditEventType.AUTH_SUCCESS,
+                client_id=client_id,
+                details=details,
+            )
+        )
 
     def auth_failure(
         self,
         reason: str,
         client_id: Optional[str] = None,
         ip_address: Optional[str] = None,
-        **details: Any
+        **details: Any,
     ) -> None:
         """Log failed authentication."""
-        self.log(AuditEvent(
-            event_type=AuditEventType.AUTH_FAILURE,
-            client_id=client_id,
-            ip_address=ip_address,
-            details={"reason": reason, **details},
-        ))
+        self.log(
+            AuditEvent(
+                event_type=AuditEventType.AUTH_FAILURE,
+                client_id=client_id,
+                ip_address=ip_address,
+                details={"reason": reason, **details},
+            )
+        )
 
     def rate_limit(
         self,
         client_id: Optional[str] = None,
         limit: Optional[int] = None,
-        **details: Any
+        **details: Any,
     ) -> None:
         """Log rate limit event."""
-        self.log(AuditEvent(
-            event_type=AuditEventType.RATE_LIMIT,
-            client_id=client_id,
-            details={"limit": limit, **details},
-        ))
+        self.log(
+            AuditEvent(
+                event_type=AuditEventType.RATE_LIMIT,
+                client_id=client_id,
+                details={"limit": limit, **details},
+            )
+        )
 
     def resource_access(
-        self,
-        resource_type: str,
-        resource_id: str,
-        action: str = "read",
-        **details: Any
+        self, resource_type: str, resource_id: str, action: str = "read", **details: Any
     ) -> None:
         """Log resource access."""
-        self.log(AuditEvent(
-            event_type=AuditEventType.RESOURCE_ACCESS,
-            details={
-                "resource_type": resource_type,
-                "resource_id": resource_id,
-                "action": action,
-                **details
-            },
-        ))
+        self.log(
+            AuditEvent(
+                event_type=AuditEventType.RESOURCE_ACCESS,
+                details={
+                    "resource_type": resource_type,
+                    "resource_id": resource_id,
+                    "action": action,
+                    **details,
+                },
+            )
+        )
 
     def tool_invocation(
         self,
         tool_name: str,
         success: bool = True,
         duration_ms: Optional[float] = None,
-        **details: Any
+        **details: Any,
     ) -> None:
         """Log tool invocation."""
-        self.log(AuditEvent(
-            event_type=AuditEventType.TOOL_INVOCATION,
-            details={
-                "tool": tool_name,
-                "success": success,
-                "duration_ms": duration_ms,
-                **details
-            },
-        ))
+        self.log(
+            AuditEvent(
+                event_type=AuditEventType.TOOL_INVOCATION,
+                details={
+                    "tool": tool_name,
+                    "success": success,
+                    "duration_ms": duration_ms,
+                    **details,
+                },
+            )
+        )
 
 
 # Global audit logger
@@ -443,10 +484,7 @@ def get_audit_logger() -> AuditLogger:
     return _audit
 
 
-def audit_log(
-    event_type: str,
-    **details: Any
-) -> None:
+def audit_log(event_type: str, **details: Any) -> None:
     """
     Convenience function for audit logging.
 
@@ -465,9 +503,7 @@ def audit_log(
 
 
 def mcp_tool(
-    tool_name: Optional[str] = None,
-    emit_metrics: bool = True,
-    audit: bool = True
+    tool_name: Optional[str] = None, emit_metrics: bool = True, audit: bool = True
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator for MCP tool handlers with observability.
@@ -482,6 +518,7 @@ def mcp_tool(
         emit_metrics: Whether to emit metrics
         audit: Whether to create audit log entries
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         name = tool_name or func.__name__
 
@@ -545,6 +582,7 @@ def mcp_tool(
 
         # Return appropriate wrapper based on whether func is async
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
@@ -553,9 +591,7 @@ def mcp_tool(
 
 
 def mcp_resource(
-    resource_type: Optional[str] = None,
-    emit_metrics: bool = True,
-    audit: bool = True
+    resource_type: Optional[str] = None, emit_metrics: bool = True, audit: bool = True
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Decorator for MCP resource handlers with observability.
@@ -570,6 +606,7 @@ def mcp_resource(
         emit_metrics: Whether to emit metrics
         audit: Whether to create audit log entries
     """
+
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         rtype = resource_type or "resource"
 
@@ -591,9 +628,14 @@ def mcp_resource(
                 duration_ms = (time.perf_counter() - start) * 1000
 
                 if emit_metrics:
-                    labels = {"resource_type": rtype, "status": "success" if success else "error"}
+                    labels = {
+                        "resource_type": rtype,
+                        "status": "success" if success else "error",
+                    }
                     _metrics.counter("resource.access", labels=labels)
-                    _metrics.timer("resource.latency", duration_ms, labels={"resource_type": rtype})
+                    _metrics.timer(
+                        "resource.latency", duration_ms, labels={"resource_type": rtype}
+                    )
 
                 if audit:
                     _audit.resource_access(
@@ -623,9 +665,14 @@ def mcp_resource(
                 duration_ms = (time.perf_counter() - start) * 1000
 
                 if emit_metrics:
-                    labels = {"resource_type": rtype, "status": "success" if success else "error"}
+                    labels = {
+                        "resource_type": rtype,
+                        "status": "success" if success else "error",
+                    }
                     _metrics.counter("resource.access", labels=labels)
-                    _metrics.timer("resource.latency", duration_ms, labels={"resource_type": rtype})
+                    _metrics.timer(
+                        "resource.latency", duration_ms, labels={"resource_type": rtype}
+                    )
 
                 if audit:
                     _audit.resource_access(
@@ -638,6 +685,7 @@ def mcp_resource(
                     )
 
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper

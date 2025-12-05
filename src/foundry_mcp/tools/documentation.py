@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (
     get_metrics,
@@ -236,29 +236,31 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
         except PermissionError as e:
+            logger.debug(f"Permission error in spec-doc: {e}")
             metrics.counter(
                 "documentation.errors",
                 labels={"tool": "spec-doc", "error_type": "permission"},
             )
             return asdict(
                 error_response(
-                    f"Permission denied writing documentation: {str(e)}",
+                    "Permission denied writing documentation",
                     error_code="PERMISSION_DENIED",
                     error_type="validation",
                     remediation="Check file permissions for the output path.",
                 )
             )
         except Exception as e:
-            logger.error(f"Error generating documentation: {e}")
+            logger.exception("Error generating documentation")
             metrics.counter(
                 "documentation.errors",
                 labels={"tool": "spec-doc", "error_type": "internal"},
             )
             return asdict(
                 error_response(
-                    str(e),
+                    sanitize_error_message(e, context="documentation"),
                     error_code="INTERNAL_ERROR",
                     error_type="internal",
+                    remediation="Check logs for details",
                 )
             )
 
@@ -439,9 +441,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             try:
                 generator = DocumentationGenerator(dir_path, dest_path)
             except FileNotFoundError as exc:
+                logger.debug(f"Directory not found for documentation: {exc}")
                 return asdict(
                     error_response(
-                        str(exc),
+                        "Required directory or file not found for documentation generation",
                         error_code="NOT_FOUND",
                         error_type="not_found",
                         remediation="Verify the directory path exists.",
@@ -535,16 +538,17 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
         except Exception as e:
-            logger.error(f"Error in spec-doc-llm: {e}")
+            logger.exception("Error in spec-doc-llm")
             metrics.counter(
                 "documentation.errors",
                 labels={"tool": "spec-doc-llm", "error_type": "internal"},
             )
             return asdict(
                 error_response(
-                    str(e),
+                    sanitize_error_message(e, context="LLM documentation"),
                     error_code="INTERNAL_ERROR",
                     error_type="internal",
+                    remediation="Check logs for details",
                 )
             )
 
@@ -728,6 +732,7 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     ConsultationWorkflow,
                 )
             except ImportError as exc:
+                logger.debug(f"AI consultation import error: {exc}")
                 metrics.counter(
                     "documentation.errors",
                     labels={"tool": "spec-review-fidelity", "error_type": "import_error"},
@@ -737,7 +742,6 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         "AI consultation layer not available",
                         error_code="AI_NOT_AVAILABLE",
                         error_type="unavailable",
-                        data={"import_error": str(exc)},
                         remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
                     )
                 )
@@ -823,19 +827,19 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             try:
                 result = orchestrator.consult(request, use_cache=True)
             except Exception as exc:
+                logger.exception("AI consultation failed")
                 metrics.counter(
                     "documentation.errors",
                     labels={"tool": "spec-review-fidelity", "error_type": "consultation_error"},
                 )
                 return asdict(
                     error_response(
-                        f"AI consultation failed: {exc}",
+                        "AI consultation failed",
                         error_code="AI_CONSULTATION_ERROR",
                         error_type="error",
                         data={
                             "spec_id": spec_id,
                             "review_scope": review_scope,
-                            "error": str(exc),
                         },
                         remediation="Check provider configuration and try again",
                     )
@@ -921,6 +925,7 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     parsed_response = json.loads(content)
                 except (json.JSONDecodeError, ValueError) as exc:
                     # JSON parsing failed - return error instead of unknown verdict
+                    logger.debug(f"JSON parse error in fidelity review: {exc}")
                     metrics.counter(
                         "documentation.errors",
                         labels={"tool": "spec-review-fidelity", "error_type": "invalid_response"},
@@ -935,8 +940,6 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                                 "review_scope": review_scope,
                                 "provider_id": result.provider_id,
                                 "model_used": result.model_used,
-                                "parse_error": str(exc),
-                                "raw_response_preview": result.content[:500] if result.content else None,
                             },
                             remediation=(
                                 "The AI provider returned a response that could not be parsed "
@@ -979,16 +982,17 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
         except Exception as e:
-            logger.error(f"Error in spec-review-fidelity: {e}")
+            logger.exception("Error in spec-review-fidelity")
             metrics.counter(
                 "documentation.errors",
                 labels={"tool": "spec-review-fidelity", "error_type": "internal"},
             )
             return asdict(
                 error_response(
-                    str(e),
+                    sanitize_error_message(e, context="fidelity review"),
                     error_code="INTERNAL_ERROR",
                     error_type="internal",
+                    remediation="Check logs for details",
                 )
             )
 

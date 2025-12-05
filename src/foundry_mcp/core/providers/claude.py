@@ -9,9 +9,12 @@ token usage normalization. Restricts to read-only operations for security.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     ModelDescriptor,
@@ -310,7 +313,10 @@ class ClaudeProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise ProviderTimeoutError(str(exc), provider=self.metadata.provider_id) from exc
+            raise ProviderTimeoutError(
+                f"Command timed out after {exc.timeout} seconds",
+                provider=self.metadata.provider_id,
+            ) from exc
 
     def _parse_output(self, raw: str) -> Dict[str, Any]:
         text = raw.strip()
@@ -322,8 +328,9 @@ class ClaudeProvider(ProviderContext):
         try:
             return json.loads(text)
         except json.JSONDecodeError as exc:
+            logger.debug(f"Claude CLI JSON parse error: {exc}")
             raise ProviderExecutionError(
-                f"Claude CLI returned invalid JSON: {exc}",
+                "Claude CLI returned invalid JSON response",
                 provider=self.metadata.provider_id,
             ) from exc
 
@@ -366,8 +373,9 @@ class ClaudeProvider(ProviderContext):
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
+            logger.debug(f"Claude CLI stderr: {stderr or 'no stderr'}")
             raise ProviderExecutionError(
-                f"Claude CLI exited with code {completed.returncode}: {stderr or 'no stderr'}",
+                f"Claude CLI exited with code {completed.returncode}",
                 provider=self.metadata.provider_id,
             )
 

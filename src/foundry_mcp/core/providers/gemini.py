@@ -9,9 +9,12 @@ token usage normalization.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     ModelDescriptor,
@@ -266,7 +269,10 @@ class GeminiProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise ProviderTimeoutError(str(exc), provider=self.metadata.provider_id) from exc
+            raise ProviderTimeoutError(
+                f"Command timed out after {exc.timeout} seconds",
+                provider=self.metadata.provider_id,
+            ) from exc
 
     def _parse_output(self, raw: str) -> Dict[str, Any]:
         text = raw.strip()
@@ -278,8 +284,9 @@ class GeminiProvider(ProviderContext):
         try:
             return json.loads(text)
         except json.JSONDecodeError as exc:
+            logger.debug(f"Gemini CLI JSON parse error: {exc}")
             raise ProviderExecutionError(
-                f"Gemini CLI returned invalid JSON: {exc}",
+                "Gemini CLI returned invalid JSON response",
                 provider=self.metadata.provider_id,
             ) from exc
 
@@ -315,8 +322,9 @@ class GeminiProvider(ProviderContext):
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
+            logger.debug(f"Gemini CLI stderr: {stderr or 'no stderr'}")
             raise ProviderExecutionError(
-                f"Gemini CLI exited with code {completed.returncode}: {stderr or 'no stderr'}",
+                f"Gemini CLI exited with code {completed.returncode}",
                 provider=self.metadata.provider_id,
             )
 

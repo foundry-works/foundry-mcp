@@ -22,7 +22,7 @@ from foundry_mcp.core.validation import (
     validate_spec,
     calculate_stats,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.resilience import (
     CircuitBreaker,
@@ -474,7 +474,7 @@ def register_reporting_tools(mcp: FastMCP, config: ServerConfig) -> None:
         except Exception as e:
             _report_breaker.record_failure()
             logger.error(f"Error generating report: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="reporting")))
 
     @canonical_tool(
         mcp,
@@ -560,6 +560,6 @@ def register_reporting_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error generating summary: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="reporting")))
 
     logger.debug("Registered reporting tools: spec-report/spec-report-summary")

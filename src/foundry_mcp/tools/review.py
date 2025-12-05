@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import (
@@ -88,7 +88,8 @@ def _get_llm_status() -> Dict[str, Any]:
     except ImportError:
         return {"configured": False, "error": "LLM config not available"}
     except Exception as e:
-        return {"configured": False, "error": str(e)}
+        logger.debug(f"Failed to get LLM config: {e}")
+        return {"configured": False, "error": "Failed to load LLM configuration"}
 
 
 def _run_quick_review(
@@ -269,12 +270,12 @@ def _run_ai_review(
             ConsultationWorkflow,
         )
     except ImportError as exc:
+        logger.debug(f"AI consultation import error: {exc}")
         return asdict(
             error_response(
                 "AI consultation layer not available",
                 error_code="AI_NOT_AVAILABLE",
                 error_type="unavailable",
-                data={"import_error": str(exc)},
                 remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
             )
         )
@@ -333,13 +334,12 @@ def _run_ai_review(
         logger.exception(f"AI consultation failed for {spec_id}")
         return asdict(
             error_response(
-                f"AI consultation failed: {exc}",
+                "AI consultation failed",
                 error_code="AI_CONSULTATION_ERROR",
                 error_type="error",
                 data={
                     "spec_id": spec_id,
                     "review_type": review_type,
-                    "error": str(exc),
                 },
                 remediation="Check provider configuration and try again",
             )
@@ -533,8 +533,7 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error listing review tools")
             return asdict(
                 error_response(
-                    f"Error listing tools: {str(e)}",
-                    data={"error_type": type(e).__name__},
+                    sanitize_error_message(e, context="review tools"),
                 )
             )
 
@@ -639,7 +638,6 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.exception("Error listing plan tools")
             return asdict(
                 error_response(
-                    f"Error listing plan tools: {str(e)}",
-                    data={"error_type": type(e).__name__},
+                    sanitize_error_message(e, context="plan tools"),
                 )
             )

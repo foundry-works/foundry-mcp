@@ -23,7 +23,12 @@ from foundry_mcp.cli.resilience import (
 )
 from foundry_mcp.core.modifications import apply_modifications, load_modifications_file
 from foundry_mcp.core.task import add_task, remove_task
-from foundry_mcp.core.spec import add_assumption, add_revision, update_frontmatter
+from foundry_mcp.core.spec import (
+    add_assumption,
+    add_phase,
+    add_revision,
+    update_frontmatter,
+)
 
 logger = get_cli_logger()
 
@@ -98,15 +103,17 @@ def modify_apply_cmd(
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
-        emit_success({
-            "spec_id": spec_id,
-            "dry_run": dry_run,
-            "modifications_applied": applied,
-            "modifications_skipped": skipped,
-            "changes": changes,
-            "output_path": output_file if output_file else str(specs_dir),
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "dry_run": dry_run,
+                "modifications_applied": applied,
+                "modifications_skipped": skipped,
+                "changes": changes,
+                "output_path": output_file if output_file else str(specs_dir),
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
 
     except FileNotFoundError as e:
         emit_error(
@@ -141,6 +148,136 @@ def modify_apply_cmd(
                 "modifications_file": modifications_file,
             },
         )
+
+
+# Phase subgroup
+@modify_group.group("phase")
+def modify_phase_group() -> None:
+    """Phase modification commands."""
+    pass
+
+
+@modify_phase_group.command("add")
+@click.argument("spec_id")
+@click.option(
+    "--title",
+    required=True,
+    help="Phase title.",
+)
+@click.option(
+    "--description",
+    help="Phase description or scope.",
+)
+@click.option(
+    "--purpose",
+    help="Phase purpose metadata.",
+)
+@click.option(
+    "--estimated-hours",
+    "estimated_hours",
+    type=float,
+    help="Estimated hours for this phase.",
+)
+@click.option(
+    "--position",
+    type=int,
+    help="Insertion index under spec-root children (0-based).",
+)
+@click.option(
+    "--link-previous/--no-link-previous",
+    default=True,
+    show_default=True,
+    help="Automatically block on the previous phase when appending.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview changes without applying.",
+)
+@click.pass_context
+@cli_command("modify-phase-add")
+@handle_keyboard_interrupt()
+@with_sync_timeout(MEDIUM_TIMEOUT, "Add phase timed out")
+def modify_phase_add_cmd(
+    ctx: click.Context,
+    spec_id: str,
+    title: str,
+    description: Optional[str],
+    purpose: Optional[str],
+    estimated_hours: Optional[float],
+    position: Optional[int],
+    link_previous: bool,
+    dry_run: bool,
+) -> None:
+    """Add a new phase to a specification."""
+    start_time = time.perf_counter()
+    cli_ctx = get_context(ctx)
+    specs_dir = cli_ctx.specs_dir
+
+    if specs_dir is None:
+        emit_error(
+            "No specs directory found",
+            code="VALIDATION_ERROR",
+            error_type="validation",
+            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+        )
+        return
+
+    if dry_run:
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "title": title,
+                "dry_run": True,
+                "preview": {
+                    "action": "add_phase",
+                    "description": description,
+                    "purpose": purpose,
+                    "estimated_hours": estimated_hours,
+                    "position": position,
+                    "link_previous": link_previous,
+                },
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
+        return
+
+    result, error = add_phase(
+        spec_id=spec_id,
+        title=title,
+        description=description,
+        purpose=purpose,
+        estimated_hours=estimated_hours,
+        position=position,
+        link_previous=link_previous,
+        specs_dir=specs_dir,
+    )
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    if error:
+        emit_error(
+            f"Add phase failed: {error}",
+            code="ADD_FAILED",
+            error_type="internal",
+            remediation="Check that the spec exists and parameters are valid",
+            details={
+                "spec_id": spec_id,
+                "title": title,
+            },
+        )
+        return
+
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "dry_run": False,
+            **result,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 # Task subgroup
@@ -226,20 +363,22 @@ def modify_task_add_cmd(
         # The native add_task function doesn't support dry_run directly,
         # so we emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-        emit_success({
-            "spec_id": spec_id,
-            "parent": parent,
-            "title": title,
-            "type": task_type,
-            "dry_run": True,
-            "preview": {
-                "action": "add_task",
-                "description": description,
-                "estimated_hours": hours,
-                "position": position,
-            },
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "parent": parent,
+                "title": title,
+                "type": task_type,
+                "dry_run": True,
+                "preview": {
+                    "action": "add_task",
+                    "description": description,
+                    "estimated_hours": hours,
+                    "position": position,
+                },
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
         return
 
     # Use native add_task function
@@ -269,15 +408,17 @@ def modify_task_add_cmd(
         )
         return
 
-    emit_success({
-        "spec_id": spec_id,
-        "parent": parent,
-        "title": title,
-        "type": task_type,
-        "dry_run": False,
-        **result,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "parent": parent,
+            "title": title,
+            "type": task_type,
+            "dry_run": False,
+            **result,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 @modify_task_group.command("remove")
@@ -326,17 +467,19 @@ def modify_task_remove_cmd(
     if dry_run:
         # For dry_run, emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-        emit_success({
-            "spec_id": spec_id,
-            "task_id": task_id,
-            "cascade": cascade,
-            "dry_run": True,
-            "preview": {
-                "action": "remove_task",
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "task_id": task_id,
                 "cascade": cascade,
-            },
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+                "dry_run": True,
+                "preview": {
+                    "action": "remove_task",
+                    "cascade": cascade,
+                },
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
         return
 
     # Use native remove_task function
@@ -362,14 +505,16 @@ def modify_task_remove_cmd(
         )
         return
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "cascade": cascade,
-        "dry_run": False,
-        **result,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "cascade": cascade,
+            "dry_run": False,
+            **result,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 @modify_group.command("assumption")
@@ -427,17 +572,19 @@ def modify_assumption_cmd(
     if dry_run:
         # For dry_run, emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-        emit_success({
-            "spec_id": spec_id,
-            "text": text,
-            "type": assumption_type or "constraint",
-            "dry_run": True,
-            "preview": {
-                "action": "add_assumption",
-                "author": author,
-            },
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "text": text,
+                "type": assumption_type or "constraint",
+                "dry_run": True,
+                "preview": {
+                    "action": "add_assumption",
+                    "author": author,
+                },
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
         return
 
     # Use native add_assumption function
@@ -463,14 +610,16 @@ def modify_assumption_cmd(
         )
         return
 
-    emit_success({
-        "spec_id": spec_id,
-        "text": text,
-        "type": assumption_type or "constraint",
-        "dry_run": False,
-        **result,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "text": text,
+            "type": assumption_type or "constraint",
+            "dry_run": False,
+            **result,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 @modify_group.command("revision")
@@ -527,17 +676,19 @@ def modify_revision_cmd(
     if dry_run:
         # For dry_run, emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-        emit_success({
-            "spec_id": spec_id,
-            "version": version,
-            "changes": changes,
-            "dry_run": True,
-            "preview": {
-                "action": "add_revision",
-                "author": author,
-            },
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "version": version,
+                "changes": changes,
+                "dry_run": True,
+                "preview": {
+                    "action": "add_revision",
+                    "author": author,
+                },
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
         return
 
     # Use native add_revision function
@@ -563,14 +714,16 @@ def modify_revision_cmd(
         )
         return
 
-    emit_success({
-        "spec_id": spec_id,
-        "version": version,
-        "changes": changes,
-        "dry_run": False,
-        **result,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "version": version,
+            "changes": changes,
+            "dry_run": False,
+            **result,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 @modify_group.command("frontmatter")
@@ -622,16 +775,18 @@ def modify_frontmatter_cmd(
     if dry_run:
         # For dry_run, emit a preview response
         duration_ms = (time.perf_counter() - start_time) * 1000
-        emit_success({
-            "spec_id": spec_id,
-            "key": key,
-            "value": value,
-            "dry_run": True,
-            "preview": {
-                "action": "update_frontmatter",
-            },
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "key": key,
+                "value": value,
+                "dry_run": True,
+                "preview": {
+                    "action": "update_frontmatter",
+                },
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
         return
 
     # Use native update_frontmatter function
@@ -657,11 +812,13 @@ def modify_frontmatter_cmd(
         )
         return
 
-    emit_success({
-        "spec_id": spec_id,
-        "key": key,
-        "value": value,
-        "dry_run": False,
-        **result,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "key": key,
+            "value": value,
+            "dry_run": False,
+            **result,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )

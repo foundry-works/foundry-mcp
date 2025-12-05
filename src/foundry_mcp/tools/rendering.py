@@ -11,7 +11,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.pagination import (
     encode_cursor,
     decode_cursor,
@@ -113,7 +113,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error rendering spec: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec rendering")))
 
     @canonical_tool(
         mcp,
@@ -198,7 +198,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error rendering progress: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec rendering")))
 
     @canonical_tool(
         mcp,
@@ -326,7 +326,7 @@ def register_rendering_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error listing tasks: {e}")
-            return asdict(error_response(str(e)))
+            return asdict(error_response(sanitize_error_message(e, context="spec rendering")))
 
     logger.debug(
         "Registered rendering tools: spec-render/spec-render-progress/task-list"
