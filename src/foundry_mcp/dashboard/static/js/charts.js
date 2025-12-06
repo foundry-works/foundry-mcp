@@ -12,6 +12,7 @@ if (typeof Chart !== 'undefined') {
 // Chart instances
 let errorRateChart = null;
 let invocationsChart = null;
+let overviewInvocationsChart = null;
 
 // Chart colors
 const chartColors = {
@@ -30,10 +31,12 @@ const chartColors = {
 document.addEventListener('DOMContentLoaded', () => {
     initErrorRateChart();
     initInvocationsChart();
+    initOverviewInvocationsChart();
 
     // Load initial chart data
     loadErrorRateData();
     loadInvocationsData();
+    loadOverviewInvocationsData();
 });
 
 /**
@@ -166,6 +169,114 @@ function initInvocationsChart() {
             },
         },
     });
+}
+
+/**
+ * Initialize overview invocations chart (bar chart for Overview tab)
+ */
+function initOverviewInvocationsChart() {
+    const ctx = document.getElementById('overviewInvocationsChart');
+    if (!ctx) return;
+
+    overviewInvocationsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Invocations',
+                data: [],
+                backgroundColor: chartColors.primary,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false,
+                },
+                tooltip: {
+                    backgroundColor: '#0f3460',
+                    titleColor: '#e8e8e8',
+                    bodyColor: '#a0a0a0',
+                    borderColor: '#2a2a4a',
+                    borderWidth: 1,
+                    padding: 12,
+                },
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false,
+                    },
+                    ticks: {
+                        color: chartColors.text,
+                        maxRotation: 45,
+                        minRotation: 45,
+                    },
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: chartColors.grid,
+                        drawBorder: false,
+                    },
+                    ticks: {
+                        color: chartColors.text,
+                    },
+                },
+            },
+        },
+    });
+}
+
+/**
+ * Load overview invocations data (same data as metrics tab, for overview)
+ */
+async function loadOverviewInvocationsData() {
+    if (!overviewInvocationsChart) return;
+
+    try {
+        const response = await fetch('/api/metrics/timeseries/tool_invocations_total?limit=500');
+        if (!response.ok) {
+            overviewInvocationsChart.data.labels = ['No data'];
+            overviewInvocationsChart.data.datasets[0].data = [0];
+            overviewInvocationsChart.update('none');
+            return;
+        }
+
+        const data = await response.json();
+        const datapoints = data.datapoints || [];
+
+        if (datapoints.length === 0) {
+            overviewInvocationsChart.data.labels = ['No data'];
+            overviewInvocationsChart.data.datasets[0].data = [0];
+            overviewInvocationsChart.update('none');
+            return;
+        }
+
+        // Group by tool name
+        const toolCounts = {};
+        for (const dp of datapoints) {
+            const toolName = dp.labels?.tool || 'unknown';
+            toolCounts[toolName] = (toolCounts[toolName] || 0) + dp.value;
+        }
+
+        // Sort by count descending and take top 10 for overview
+        const sorted = Object.entries(toolCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        const labels = sorted.map(([name]) => formatToolName(name));
+        const counts = sorted.map(([, count]) => count);
+
+        overviewInvocationsChart.data.labels = labels;
+        overviewInvocationsChart.data.datasets[0].data = counts;
+        overviewInvocationsChart.update('none');
+    } catch (error) {
+        console.error('Error loading overview invocations data:', error);
+    }
 }
 
 /**
@@ -310,16 +421,20 @@ function hexToRgba(hex, alpha) {
 function refreshCharts() {
     loadErrorRateData();
     loadInvocationsData();
+    loadOverviewInvocationsData();
 }
 
-// Refresh charts when overview tab is shown
+// Refresh charts when tabs are shown
 document.addEventListener('DOMContentLoaded', () => {
     const overviewTab = document.querySelector('.tab[data-tab="overview"]');
     const metricsTab = document.querySelector('.tab[data-tab="metrics"]');
 
     if (overviewTab) {
         overviewTab.addEventListener('click', () => {
-            setTimeout(loadErrorRateData, 100);
+            setTimeout(() => {
+                loadErrorRateData();
+                loadOverviewInvocationsData();
+            }, 100);
         });
     }
 

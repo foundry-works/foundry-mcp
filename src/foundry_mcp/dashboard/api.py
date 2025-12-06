@@ -42,6 +42,9 @@ def setup_api_routes(app: Any) -> None:
     # Config endpoint (non-sensitive)
     app.router.add_get("/api/config", handle_config)
 
+    # Overview summary endpoint (aggregated)
+    app.router.add_get("/api/overview/summary", handle_overview_summary)
+
 
 def _json_response(data: Any, status: int = 200) -> Any:
     """Create a JSON response.
@@ -434,3 +437,106 @@ async def handle_config(request: Any) -> Any:
         "host": config.host,
         "port": config.port,
     })
+
+
+# =============================================================================
+# Overview Summary Handler
+# =============================================================================
+
+
+async def handle_overview_summary(request: Any) -> Any:
+    """Get aggregated overview metrics for dashboard summary cards.
+
+    Returns a single response with all overview metrics to reduce API calls.
+    """
+    result = {
+        "invocations": {"total": 0, "last_hour": 0},
+        "active_tools": {"count": 0},
+        "health": {"status": "unknown", "deps_ok": 0, "deps_total": 0},
+        "latency": {"avg_ms": None},
+        "errors": {"total": 0, "last_hour": 0, "failure_rate_pct": 0.0},
+        "providers": {"available": 0, "total": 0, "names": []},
+    }
+
+    # Get invocation metrics
+    metrics_store = _get_metrics_store()
+    if metrics_store is not None:
+        try:
+            # Get total invocations
+            summary = metrics_store.get_summary(metric_name="tool_invocations_total")
+            if summary:
+                result["invocations"]["total"] = int(summary.get("count", 0))
+
+            # Get invocations in last hour
+            now = datetime.now(timezone.utc)
+            hour_ago = (now - timedelta(hours=1)).isoformat()
+            recent_summary = metrics_store.get_summary(
+                metric_name="tool_invocations_total",
+                since=hour_ago,
+            )
+            if recent_summary:
+                result["invocations"]["last_hour"] = int(recent_summary.get("count", 0))
+
+            # Get active tools (unique tool names from recent metrics)
+            records = metrics_store.query(
+                metric_name="tool_invocations_total",
+                since=hour_ago,
+                limit=500,
+            )
+            unique_tools = set()
+            for r in records:
+                if r.labels and "tool" in r.labels:
+                    unique_tools.add(r.labels["tool"])
+            result["active_tools"]["count"] = len(unique_tools)
+
+            # Get latency
+            latency_summary = metrics_store.get_summary(metric_name="tool_duration_ms")
+            if latency_summary and latency_summary.get("avg") is not None:
+                result["latency"]["avg_ms"] = round(latency_summary["avg"], 1)
+        except Exception as e:
+            logger.warning(f"Error getting metrics for overview: {e}")
+
+    # Get error stats
+    error_store = _get_error_store()
+    if error_store is not None:
+        try:
+            stats = error_store.get_stats()
+            result["errors"]["total"] = stats.get("total_errors", 0)
+            result["errors"]["last_hour"] = stats.get("errors_last_hour", 0)
+
+            # Calculate failure rate if we have invocation data
+            total_invocations = result["invocations"]["total"]
+            total_errors = result["errors"]["total"]
+            if total_invocations > 0:
+                result["errors"]["failure_rate_pct"] = round(
+                    (total_errors / total_invocations) * 100, 2
+                )
+        except Exception as e:
+            logger.warning(f"Error getting error stats for overview: {e}")
+
+    # Get health status
+    try:
+        from foundry_mcp.core.health import get_health_manager
+
+        manager = get_health_manager()
+        health_result = manager.check_health()
+        result["health"]["status"] = health_result.status.value
+        deps_ok = sum(1 for d in health_result.dependencies if d.healthy)
+        result["health"]["deps_ok"] = deps_ok
+        result["health"]["deps_total"] = len(health_result.dependencies)
+    except Exception as e:
+        logger.warning(f"Error getting health for overview: {e}")
+
+    # Get provider status
+    try:
+        from foundry_mcp.core.providers import describe_providers
+
+        all_providers = describe_providers()
+        available = [p for p in all_providers if p.get("available", False)]
+        result["providers"]["total"] = len(all_providers)
+        result["providers"]["available"] = len(available)
+        result["providers"]["names"] = [p.get("id", "") for p in available[:3]]
+    except Exception as e:
+        logger.warning(f"Error getting providers for overview: {e}")
+
+    return _json_response(result)

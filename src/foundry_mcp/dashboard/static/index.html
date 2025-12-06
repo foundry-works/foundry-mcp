@@ -29,42 +29,61 @@
 
         <!-- Overview Tab -->
         <div id="overview" class="tab-content active">
-            <div class="metrics-grid">
+            <div class="metrics-grid metrics-grid-6">
                 <div class="metric-card">
-                    <div class="metric-label">Total Errors</div>
-                    <div class="metric-value" id="totalErrors">-</div>
+                    <div class="metric-label">Tool Invocations</div>
+                    <div class="metric-value" id="totalInvocations">-</div>
+                    <div class="metric-subtext" id="invocationsLastHour">-</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Error Rate (1h)</div>
-                    <div class="metric-value" id="errorRate">-</div>
+                    <div class="metric-label">Active Tools</div>
+                    <div class="metric-value" id="activeTools">-</div>
+                    <div class="metric-subtext">last hour</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Health Status</div>
+                    <div class="metric-value" id="healthStatus">-</div>
+                    <div class="metric-subtext" id="healthDeps">-</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Avg Latency</div>
                     <div class="metric-value" id="avgLatency">-</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Health Status</div>
-                    <div class="metric-value" id="healthStatus">-</div>
+                    <div class="metric-label">Error Rate</div>
+                    <div class="metric-value" id="errorRate">-</div>
+                    <div class="metric-subtext" id="failureRate">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Providers</div>
+                    <div class="metric-value" id="providersStatus">-</div>
+                    <div class="metric-subtext" id="providerNames">-</div>
                 </div>
             </div>
 
             <div class="charts-row">
                 <div class="chart-container">
+                    <h3>Tool Invocations</h3>
+                    <canvas id="overviewInvocationsChart"></canvas>
+                </div>
+                <div class="chart-container">
                     <h3>Error Rate (Last Hour)</h3>
                     <canvas id="errorRateChart"></canvas>
                 </div>
+            </div>
+
+            <div class="lists-row">
                 <div class="panel">
                     <h3>Top Error Patterns</h3>
                     <div id="topPatterns" class="patterns-list">
                         <div class="loading">Loading...</div>
                     </div>
                 </div>
-            </div>
-
-            <div class="panel">
-                <h3>Recent Errors</h3>
-                <div id="recentErrors" class="errors-list">
-                    <div class="loading">Loading...</div>
+                <div class="panel">
+                    <h3>Recent Errors</h3>
+                    <div id="recentErrors" class="errors-list">
+                        <div class="loading">Loading...</div>
+                    </div>
                 </div>
             </div>
         </div>

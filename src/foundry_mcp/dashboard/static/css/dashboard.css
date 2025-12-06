@@ -129,6 +129,23 @@ body {
     margin-bottom: 24px;
 }
 
+/* 6-card grid for Overview (3x2 on wide screens) */
+.metrics-grid-6 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 900px) {
+    .metrics-grid-6 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .metrics-grid-6 {
+        grid-template-columns: 1fr;
+    }
+}
+
 .metric-card {
     background: var(--bg-card);
     padding: 20px;
@@ -162,16 +179,36 @@ body {
     color: var(--accent-error);
 }
 
+.metric-subtext {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
 /* Charts Row */
 .charts-row {
     display: grid;
-    grid-template-columns: 2fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 16px;
     margin-bottom: 24px;
 }
 
 @media (max-width: 1024px) {
     .charts-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Lists Row (side-by-side panels) */
+.lists-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+    .lists-row {
         grid-template-columns: 1fr;
     }
 }

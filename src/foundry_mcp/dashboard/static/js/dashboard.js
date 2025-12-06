@@ -157,39 +157,64 @@ function updateLastUpdate() {
 // =============================================================================
 
 /**
- * Load overview metrics
+ * Load overview metrics from aggregated endpoint
  */
 async function loadOverviewMetrics() {
     try {
-        // Load error stats
-        const statsResponse = await fetch('/api/errors/stats');
-        if (statsResponse.ok) {
-            const stats = await statsResponse.json();
-            document.getElementById('totalErrors').textContent = stats.total_errors || 0;
-            document.getElementById('errorRate').textContent =
-                stats.errors_last_hour ? `${stats.errors_last_hour}/hr` : '0/hr';
+        const response = await fetch('/api/overview/summary');
+        if (!response.ok) {
+            console.warn('Failed to load overview summary');
+            return;
         }
 
-        // Load health status
-        const healthResponse = await fetch('/api/health');
-        if (healthResponse.ok) {
-            const health = await healthResponse.json();
-            const healthEl = document.getElementById('healthStatus');
-            healthEl.textContent = health.status || 'unknown';
-            healthEl.className = 'metric-value ' + (health.status || 'unknown');
-        }
+        const data = await response.json();
 
-        // Load metrics for latency (if available)
-        const metricsResponse = await fetch('/api/metrics/summary/tool_duration_ms');
-        if (metricsResponse.ok) {
-            const data = await metricsResponse.json();
-            const avgLatency = data.summary?.avg;
-            document.getElementById('avgLatency').textContent =
-                avgLatency ? `${avgLatency.toFixed(0)}ms` : '-';
-        }
+        // Tool Invocations card
+        document.getElementById('totalInvocations').textContent =
+            formatNumber(data.invocations?.total || 0);
+        document.getElementById('invocationsLastHour').textContent =
+            `${data.invocations?.last_hour || 0} last hour`;
+
+        // Active Tools card
+        document.getElementById('activeTools').textContent =
+            data.active_tools?.count || 0;
+
+        // Health Status card
+        const healthEl = document.getElementById('healthStatus');
+        const healthStatus = data.health?.status || 'unknown';
+        healthEl.textContent = healthStatus;
+        healthEl.className = 'metric-value ' + healthStatus;
+        document.getElementById('healthDeps').textContent =
+            `${data.health?.deps_ok || 0}/${data.health?.deps_total || 0} deps ok`;
+
+        // Avg Latency card
+        const avgMs = data.latency?.avg_ms;
+        document.getElementById('avgLatency').textContent =
+            avgMs !== null ? `${avgMs}ms` : '-';
+
+        // Error Rate card
+        document.getElementById('errorRate').textContent =
+            `${data.errors?.last_hour || 0}/hr`;
+        document.getElementById('failureRate').textContent =
+            `${data.errors?.failure_rate_pct || 0}% failure rate`;
+
+        // Providers card
+        document.getElementById('providersStatus').textContent =
+            `${data.providers?.available || 0}/${data.providers?.total || 0}`;
+        const providerNames = data.providers?.names || [];
+        document.getElementById('providerNames').textContent =
+            providerNames.length > 0 ? providerNames.join(', ') : 'none available';
+
     } catch (error) {
         console.error('Error loading overview metrics:', error);
     }
+}
+
+/**
+ * Format large numbers with commas
+ */
+function formatNumber(num) {
+    return num.toLocaleString();
 }
 
 /**
