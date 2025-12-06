@@ -12,7 +12,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import get_config, ServerConfig
-from foundry_mcp.core.observability import audit_log, get_metrics
+from foundry_mcp.core.observability import audit_log, get_metrics, get_observability_manager
 from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.pagination import (
     encode_cursor,
@@ -52,6 +52,7 @@ from foundry_mcp.tools.docs import register_docs_tools
 from foundry_mcp.tools.testing import register_testing_tools
 from foundry_mcp.tools.discovery import register_discovery_tools
 from foundry_mcp.tools.environment import register_environment_tools
+from foundry_mcp.tools.health import register_health_tools
 from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
 from foundry_mcp.tools.authoring import register_authoring_tools
 from foundry_mcp.tools.analysis import register_analysis_tools
@@ -63,10 +64,120 @@ from foundry_mcp.tools.review import register_review_tools
 from foundry_mcp.tools.pr_workflow import register_pr_workflow_tools
 from foundry_mcp.tools.documentation import register_documentation_tools
 from foundry_mcp.tools.providers import register_provider_tools
+from foundry_mcp.tools.errors import register_error_tools
+from foundry_mcp.tools.metrics import register_metrics_tools
 from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
 
 logger = logging.getLogger(__name__)
+
+
+def _init_observability(config: ServerConfig) -> None:
+    """Initialize the observability stack from server configuration.
+
+    Initializes OpenTelemetry tracing and Prometheus metrics based on
+    the configuration. Gracefully handles missing optional dependencies.
+
+    Args:
+        config: ServerConfig with observability settings
+    """
+    obs_config = config.observability
+
+    # Skip initialization if observability is disabled
+    if not obs_config.enabled:
+        logger.debug("Observability disabled in configuration")
+        return
+
+    # Initialize via ObservabilityManager
+    manager = get_observability_manager()
+    manager.initialize(obs_config)
+
+    # Log initialization status
+    tracing_status = "enabled" if manager.is_tracing_enabled() else "disabled"
+    metrics_status = "enabled" if manager.is_metrics_enabled() else "disabled"
+    logger.info(
+        f"Observability initialized: tracing={tracing_status}, metrics={metrics_status}"
+    )
+
+
+def _init_error_collection(config: ServerConfig) -> None:
+    """Initialize the error collection infrastructure.
+
+    Sets up the ErrorCollector with the configured storage backend
+    and retention settings.
+
+    Args:
+        config: ServerConfig with error collection settings
+    """
+    err_config = config.error_collection
+
+    # Skip initialization if error collection is disabled
+    if not err_config.enabled:
+        logger.debug("Error collection disabled in configuration")
+        return
+
+    try:
+        from foundry_mcp.core.error_collection import get_error_collector
+        from foundry_mcp.core.error_store import get_error_store
+
+        # Initialize the error store with configured path
+        storage_path = err_config.get_storage_path()
+        store = get_error_store(storage_path)
+
+        # Initialize the collector with the store
+        collector = get_error_collector()
+        collector.initialize(store, err_config)
+
+        logger.info(f"Error collection initialized: storage_path={storage_path}")
+    except Exception as e:
+        # Don't fail server startup due to error collection issues
+        logger.warning(f"Failed to initialize error collection: {e}")
+
+
+def _init_metrics_persistence(config: ServerConfig) -> None:
+    """Initialize the metrics persistence infrastructure.
+
+    Sets up the MetricsPersistenceCollector with the configured storage
+    backend and persistence settings. Runs retention cleanup on startup.
+
+    Args:
+        config: ServerConfig with metrics persistence settings
+    """
+    metrics_config = config.metrics_persistence
+
+    # Skip initialization if metrics persistence is disabled
+    if not metrics_config.enabled:
+        logger.debug("Metrics persistence disabled in configuration")
+        return
+
+    try:
+        from foundry_mcp.core.metrics_persistence import initialize_metrics_persistence
+        from foundry_mcp.core.metrics_store import get_metrics_store
+
+        collector = initialize_metrics_persistence(metrics_config)
+
+        if collector is not None:
+            storage_path = metrics_config.get_storage_path()
+
+            # Run retention cleanup on startup
+            store = get_metrics_store(storage_path)
+            deleted_count = store.cleanup(
+                retention_days=metrics_config.retention_days,
+                max_records=metrics_config.max_records,
+            )
+
+            if deleted_count > 0:
+                logger.info(f"Metrics cleanup: removed {deleted_count} old records")
+
+            logger.info(f"Metrics persistence initialized: storage_path={storage_path}")
+    except Exception as e:
+        # Don't fail server startup due to metrics persistence issues
+        logger.warning(f"Failed to initialize metrics persistence: {e}")
+
+
+# Dashboard is now decoupled from MCP server - run separately via:
+#   python -m foundry_mcp.dashboard
+# This avoids any interference with MCP stdio transport.
 
 
 def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
@@ -85,6 +196,18 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     # Setup logging
     config.setup_logging()
 
+    # Initialize observability (OTel + Prometheus)
+    _init_observability(config)
+
+    # Initialize error collection infrastructure
+    _init_error_collection(config)
+
+    # Initialize metrics persistence infrastructure
+    _init_metrics_persistence(config)
+
+    # Note: Dashboard is now decoupled - run separately via:
+    #   python -m foundry_mcp.dashboard
+
     # Create FastMCP server
     mcp = FastMCP(
         name=config.server_name,
@@ -102,6 +225,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     register_testing_tools(mcp, config)
     register_discovery_tools(mcp, config)
     register_environment_tools(mcp, config)
+    register_health_tools(mcp, config)
     register_spec_helper_tools(mcp, config)
     register_authoring_tools(mcp, config)
     register_analysis_tools(mcp, config)
@@ -113,6 +237,8 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     register_pr_workflow_tools(mcp, config)
     register_documentation_tools(mcp, config)
     register_provider_tools(mcp, config)
+    register_error_tools(mcp, config)
+    register_metrics_tools(mcp, config)
 
     # Register resources
     _register_resources(mcp, config)
@@ -497,10 +623,22 @@ def main() -> None:
 
     except KeyboardInterrupt:
         logger.info("Server shutdown requested")
+        # Shutdown observability to flush pending traces/metrics
+        get_observability_manager().shutdown()
         sys.exit(0)
-    except Exception as e:
-        logger.error(f"Server error: {e}")
+    except BaseException as e:
+        # Log detailed error info, especially for ExceptionGroups
+        logger.error(f"Server error: {type(e).__name__}: {e}")
+        if hasattr(e, 'exceptions'):
+            # Handle ExceptionGroup/TaskGroup
+            for i, sub_exc in enumerate(e.exceptions):
+                logger.error(f"  Sub-exception {i}: {type(sub_exc).__name__}: {sub_exc}")
+                import traceback
+                tb_str = ''.join(traceback.format_exception(type(sub_exc), sub_exc, sub_exc.__traceback__))
+                logger.error(f"  Traceback:\n{tb_str}")
         audit_log("tool_invocation", tool="server_error", error=str(e), success=False)
+        # Shutdown observability to flush pending traces/metrics
+        get_observability_manager().shutdown()
         sys.exit(1)
 
 

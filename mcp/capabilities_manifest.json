@@ -452,6 +452,19 @@
         ]
       },
       {
+        "name": "phase-remove",
+        "description": "Remove a phase and all its children from an SDD specification with adjacent phase re-linking",
+        "auth_required": false,
+        "rate_limit": null,
+        "feature_flag": "authoring_tools",
+        "parameters": [
+          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
+          {"name": "phase_id", "type": "string", "required": true, "description": "Phase ID to remove (e.g., phase-1)"},
+          {"name": "force", "type": "boolean", "required": false, "default": false, "description": "Remove even if phase contains non-completed tasks"},
+          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
+        ]
+      },
+      {
         "name": "task-remove",
         "description": "Remove a task from an SDD specification",
         "auth_required": false,
@@ -967,7 +980,7 @@
         "expires_at": null
       },
       "authoring_tools": {
-        "description": "Spec authoring tools for creating specs, adding phases and tasks, managing assumptions, and updating metadata (spec-create, task-add, phase-add, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter)",
+        "description": "Spec authoring tools for creating specs, adding/removing phases and tasks, managing assumptions, and updating metadata (spec-create, task-add, phase-add, phase-remove, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter)",
         "state": "beta",
         "default_enabled": true,
         "percentage_rollout": 100,
@@ -1125,8 +1138,8 @@
       },
       "authoring_tools": {
         "supported": true,
-        "description": "Spec authoring tools for creating specs, managing tasks, and updating metadata",
-        "tools": ["spec-create", "spec-template", "task-add", "phase-add", "task-remove", "assumption-add", "assumption-list", "revision-add", "spec-update-frontmatter"]
+        "description": "Spec authoring tools for creating specs, managing phases and tasks, and updating metadata",
+        "tools": ["spec-create", "spec-template", "task-add", "phase-add", "phase-remove", "task-remove", "assumption-add", "assumption-list", "revision-add", "spec-update-frontmatter"]
       },
       "planning_tools": {
         "supported": true,

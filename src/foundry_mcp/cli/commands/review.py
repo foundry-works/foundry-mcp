@@ -528,7 +528,7 @@ def _run_ai_review(
             code="AI_NOT_AVAILABLE",
             error_type="unavailable",
             remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
-                    )
+        )
 
     # Initialize orchestrator with preferred provider if specified
     preferred_providers = [ai_provider] if ai_provider else []
@@ -602,7 +602,9 @@ def _run_ai_review(
         "stats": {
             "total_tasks": context.stats.total_tasks if context.stats else 0,
             "completed_tasks": context.stats.completed_tasks if context.stats else 0,
-            "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
+            "progress_percentage": context.progress.get("percentage", 0)
+            if context.progress
+            else 0,
         },
     }
 
@@ -674,11 +676,12 @@ def _run_fidelity_review(
             code="AI_NOT_AVAILABLE",
             error_type="unavailable",
             remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
-                    )
+        )
 
     # Load spec
     try:
         from foundry_mcp.core.spec import load_spec, find_spec_file
+
         spec_file = find_spec_file(spec_id, specs_dir)
         if not spec_file:
             emit_error(
@@ -756,7 +759,9 @@ def _run_fidelity_review(
         context={
             "spec_id": spec_id,
             "spec_title": spec_title,
-            "spec_description": f"**Description:** {spec_description}" if spec_description else "",
+            "spec_description": f"**Description:** {spec_description}"
+            if spec_description
+            else "",
             "review_scope": review_scope,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
@@ -812,11 +817,17 @@ def _run_fidelity_review(
         "task_id": task_id,
         "phase_id": phase_id,
         "files": files,
-        "verdict": parsed_response.get("verdict", "unknown") if parsed_response else "unknown",
+        "verdict": parsed_response.get("verdict", "unknown")
+        if parsed_response
+        else "unknown",
         "llm_status": llm_status,
         "ai_provider": result.provider_id if result else ai_provider,
         "consultation_cache": consultation_cache,
-        "response": parsed_response if parsed_response else result.content if result else None,
+        "response": parsed_response
+        if parsed_response
+        else result.content
+        if result
+        else None,
         "raw_response": result.content if result and not parsed_response else None,
         "model": result.model_used if result else None,
         "cached": result.cache_hit if result else False,
@@ -851,10 +862,13 @@ def _build_spec_requirements(
         if phase:
             lines.append(f"### Phase: {phase.get('title', phase_id)}")
             lines.append(f"- **Status:** {phase.get('status', 'unknown')}")
-            if phase.get("children"):
+            child_nodes = _get_child_nodes(spec_data, phase)
+            if child_nodes:
                 lines.append("- **Tasks:**")
-                for child in phase["children"]:
-                    lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
+                for child in child_nodes:
+                    lines.append(
+                        f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}"
+                    )
     else:
         # Full spec
         lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
@@ -896,7 +910,7 @@ def _build_implementation_artifacts(
     elif phase_id:
         phase = _find_phase(spec_data, phase_id)
         if phase:
-            for child in phase.get("children", []):
+            for child in _get_child_nodes(spec_data, phase):
                 if child.get("metadata", {}).get("file_path"):
                     file_paths.append(child["metadata"]["file_path"])
 
@@ -916,7 +930,9 @@ def _build_implementation_artifacts(
                     file_paths = [f for f in file_paths if f in changed_files]
                 else:
                     file_paths = changed_files
-                lines.append(f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n")
+                lines.append(
+                    f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n"
+                )
         except Exception:
             lines.append(f"*Warning: Could not get git diff from {base_branch}*\n")
 
@@ -956,7 +972,8 @@ def _build_test_results(
     # Check journal for test-related entries
     journal = spec_data.get("journal", [])
     test_entries = [
-        entry for entry in journal
+        entry
+        for entry in journal
         if "test" in entry.get("title", "").lower()
         or "verify" in entry.get("title", "").lower()
     ]
@@ -964,7 +981,9 @@ def _build_test_results(
     if test_entries:
         lines = ["*Recent test-related journal entries:*"]
         for entry in test_entries[-3:]:  # Last 3 entries
-            lines.append(f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})")
+            lines.append(
+                f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})"
+            )
             if entry.get("content"):
                 # Truncate long content
                 content = entry["content"][:500]
@@ -986,46 +1005,117 @@ def _build_journal_entries(
 
     if task_id:
         # Filter to task-related entries
-        journal = [
-            entry for entry in journal
-            if entry.get("task_id") == task_id
-        ]
+        journal = [entry for entry in journal if entry.get("task_id") == task_id]
 
     if journal:
         lines = [f"*{len(journal)} journal entries found:*"]
         for entry in journal[-5:]:  # Last 5 entries
             entry_type = entry.get("entry_type", "note")
-            lines.append(f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({entry.get('timestamp', 'unknown')[:10]})")
+            lines.append(
+                f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({entry.get('timestamp', 'unknown')[:10]})"
+            )
         return "\n".join(lines)
 
     return "*No journal entries found*"
 
 
 def _find_task(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict[str, Any]]:
-    """Find a task by ID in the spec hierarchy."""
-    def search_children(children: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        for child in children:
-            if child.get("id") == task_id:
-                return child
-            if child.get("children"):
-                result = search_children(child["children"])
-                if result:
-                    return result
-        return None
+    """Find a task by ID in the spec hierarchy (new or legacy format)."""
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    if task_id in hierarchy_nodes:
+        return hierarchy_nodes[task_id]
 
+    # Legacy tree structure fallback
     hierarchy = spec_data.get("hierarchy", {})
-    if hierarchy.get("children"):
-        return search_children(hierarchy["children"])
+    children = hierarchy.get("children") if isinstance(hierarchy, dict) else None
+    if children:
+        return _search_hierarchy_children(children, task_id)
     return None
 
 
 def _find_phase(spec_data: Dict[str, Any], phase_id: str) -> Optional[Dict[str, Any]]:
-    """Find a phase by ID in the spec hierarchy."""
+    """Find a phase by ID in the spec hierarchy (new or legacy format)."""
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    if phase_id in hierarchy_nodes:
+        return hierarchy_nodes[phase_id]
+
+    # Legacy tree structure fallback
     hierarchy = spec_data.get("hierarchy", {})
-    for child in hierarchy.get("children", []):
-        if child.get("id") == phase_id:
-            return child
+    children = hierarchy.get("children") if isinstance(hierarchy, dict) else None
+    if children:
+        return _search_hierarchy_children(children, phase_id)
     return None
+
+
+def _get_hierarchy_nodes(spec_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return mapping of hierarchy node IDs to node data."""
+    hierarchy = spec_data.get("hierarchy", {})
+    nodes: Dict[str, Dict[str, Any]] = {}
+
+    if isinstance(hierarchy, dict):
+        # New format: dict keyed by node_id -> node
+        if (
+            all(isinstance(value, dict) for value in hierarchy.values())
+            and "children" not in hierarchy
+        ):
+            for node_id, node in hierarchy.items():
+                node_copy = dict(node)
+                node_copy.setdefault("id", node_id)
+                nodes[node_id] = node_copy
+            return nodes
+
+        # Legacy format: nested children arrays
+        if hierarchy.get("children"):
+            _collect_hierarchy_nodes(hierarchy, nodes)
+
+    return nodes
+
+
+def _collect_hierarchy_nodes(
+    node: Dict[str, Any], nodes: Dict[str, Dict[str, Any]]
+) -> None:
+    """Recursively collect nodes for legacy hierarchy structure."""
+    node_id = node.get("id")
+    if node_id:
+        nodes[node_id] = node
+    for child in node.get("children", []) or []:
+        if isinstance(child, dict):
+            _collect_hierarchy_nodes(child, nodes)
+
+
+def _search_hierarchy_children(
+    children: List[Dict[str, Any]], target_id: str
+) -> Optional[Dict[str, Any]]:
+    """Search nested children lists for a target ID."""
+    for child in children:
+        if child.get("id") == target_id:
+            return child
+        nested = child.get("children")
+        if nested:
+            result = _search_hierarchy_children(nested, target_id)
+            if result:
+                return result
+    return None
+
+
+def _get_child_nodes(
+    spec_data: Dict[str, Any], node: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Resolve child references (IDs or embedded dicts) to node data."""
+    children = node.get("children", []) or []
+    if not children:
+        return []
+
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    resolved: List[Dict[str, Any]] = []
+    for child in children:
+        if isinstance(child, dict):
+            resolved.append(child)
+        elif isinstance(child, str):
+            child_node = hierarchy_nodes.get(child)
+            if child_node:
+                resolved.append(child_node)
+    return resolved
 
 
 # Top-level aliases

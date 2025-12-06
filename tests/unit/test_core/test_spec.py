@@ -17,6 +17,7 @@ from foundry_mcp.core.spec import (
     add_revision,
     update_frontmatter,
     add_phase,
+    remove_phase,
 )
 
 
@@ -653,3 +654,445 @@ class TestUpdateFrontmatter:
 
         assert error is None
         assert result["value"] == 0
+
+
+class TestRemovePhase:
+    """Tests for remove_phase function."""
+
+    def _create_spec_with_phases(
+        self,
+        temp_specs_dir,
+        spec_id: str = "test-remove-phase",
+        num_phases: int = 3,
+        add_tasks: bool = True,
+        task_status: str = "completed",
+        link_phases: bool = True,
+    ) -> Path:
+        """Helper to create a spec with multiple phases for testing."""
+        hierarchy = {
+            "spec-root": {
+                "type": "spec",
+                "title": "Test Spec",
+                "status": "pending",
+                "parent": None,
+                "children": [],
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "metadata": {"purpose": "", "category": "implementation"},
+                "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+            },
+        }
+
+        prev_phase_id = None
+        total_tasks = 0
+        completed_tasks = 0
+
+        for i in range(1, num_phases + 1):
+            phase_id = f"phase-{i}"
+            hierarchy["spec-root"]["children"].append(phase_id)
+
+            phase = {
+                "type": "phase",
+                "title": f"Phase {i}",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "metadata": {"purpose": f"Work for phase {i}"},
+                "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+            }
+
+            # Link phases if requested
+            if link_phases and prev_phase_id:
+                phase["dependencies"]["blocked_by"].append(prev_phase_id)
+                hierarchy[prev_phase_id]["dependencies"]["blocks"].append(phase_id)
+
+            if add_tasks:
+                task_id = f"task-{i}-1"
+                phase["children"].append(task_id)
+                phase["total_tasks"] = 1
+                total_tasks += 1
+
+                hierarchy[task_id] = {
+                    "type": "task",
+                    "title": f"Task {i}.1",
+                    "status": task_status,
+                    "parent": phase_id,
+                    "children": [],
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                }
+
+                if task_status == "completed":
+                    phase["completed_tasks"] = 1
+                    completed_tasks += 1
+
+            hierarchy[phase_id] = phase
+            prev_phase_id = phase_id
+
+        hierarchy["spec-root"]["total_tasks"] = total_tasks
+        hierarchy["spec-root"]["completed_tasks"] = completed_tasks
+
+        spec_data = {
+            "spec_id": spec_id,
+            "title": "Test Spec",
+            "metadata": {
+                "title": "Test Spec",
+                "version": "1.0.0",
+                "estimated_hours": 10,
+            },
+            "hierarchy": hierarchy,
+        }
+
+        spec_path = temp_specs_dir / "active" / f"{spec_id}.json"
+        spec_path.write_text(json.dumps(spec_data))
+        return spec_path
+
+    def test_remove_phase_success(self, temp_specs_dir):
+        """Should successfully remove a phase with completed tasks."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-remove",
+            num_phases=3,
+            task_status="completed",
+        )
+
+        result, error = remove_phase(
+            spec_id="test-remove",
+            phase_id="phase-2",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["spec_id"] == "test-remove"
+        assert result["phase_id"] == "phase-2"
+        assert result["phase_title"] == "Phase 2"
+        assert result["children_removed"] == 1  # task-2-1
+        assert result["total_tasks_removed"] == 1
+        assert result["force"] is False
+
+        # Verify phase and task removed from hierarchy
+        spec = load_spec("test-remove", temp_specs_dir)
+        assert "phase-2" not in spec["hierarchy"]
+        assert "task-2-1" not in spec["hierarchy"]
+        assert "phase-1" in spec["hierarchy"]
+        assert "phase-3" in spec["hierarchy"]
+
+    def test_remove_middle_phase_relinks_adjacent(self, temp_specs_dir):
+        """Removing middle phase should re-link prev to next in dependency chain."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-relink",
+            num_phases=3,
+            task_status="completed",
+            link_phases=True,
+        )
+
+        result, error = remove_phase(
+            spec_id="test-relink",
+            phase_id="phase-2",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert "relinked" in result
+        assert result["relinked"]["from"] == "phase-1"
+        assert result["relinked"]["to"] == "phase-3"
+
+        # Verify re-linking
+        spec = load_spec("test-relink", temp_specs_dir)
+        phase1 = spec["hierarchy"]["phase-1"]
+        phase3 = spec["hierarchy"]["phase-3"]
+
+        # phase-1 should now block phase-3
+        assert "phase-3" in phase1["dependencies"]["blocks"]
+        # phase-2 reference should be cleaned
+        assert "phase-2" not in phase1["dependencies"]["blocks"]
+
+        # phase-3 should now be blocked by phase-1
+        assert "phase-1" in phase3["dependencies"]["blocked_by"]
+        assert "phase-2" not in phase3["dependencies"]["blocked_by"]
+
+    def test_remove_first_phase_clears_successor(self, temp_specs_dir):
+        """Removing first phase should clear blocked_by in second phase."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-first",
+            num_phases=3,
+            task_status="completed",
+            link_phases=True,
+        )
+
+        result, error = remove_phase(
+            spec_id="test-first",
+            phase_id="phase-1",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        # No re-linking since there's no predecessor
+        assert "relinked" not in result
+
+        spec = load_spec("test-first", temp_specs_dir)
+        phase2 = spec["hierarchy"]["phase-2"]
+
+        # phase-1 reference should be removed from phase-2's blocked_by
+        assert "phase-1" not in phase2["dependencies"]["blocked_by"]
+
+    def test_remove_last_phase_clears_predecessor(self, temp_specs_dir):
+        """Removing last phase should clear blocks in predecessor."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-last",
+            num_phases=3,
+            task_status="completed",
+            link_phases=True,
+        )
+
+        result, error = remove_phase(
+            spec_id="test-last",
+            phase_id="phase-3",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        # No re-linking since there's no successor
+        assert "relinked" not in result
+
+        spec = load_spec("test-last", temp_specs_dir)
+        phase2 = spec["hierarchy"]["phase-2"]
+
+        # phase-3 reference should be removed from phase-2's blocks
+        assert "phase-3" not in phase2["dependencies"]["blocks"]
+
+    def test_blocked_with_active_tasks(self, temp_specs_dir):
+        """Should refuse to remove phase with pending/in_progress tasks without force."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-active",
+            num_phases=2,
+            task_status="pending",  # Active work
+        )
+
+        result, error = remove_phase(
+            spec_id="test-active",
+            phase_id="phase-1",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert "non-completed task" in error
+        assert "force=True" in error
+        assert "task-1-1" in error
+
+        # Verify phase still exists
+        spec = load_spec("test-active", temp_specs_dir)
+        assert "phase-1" in spec["hierarchy"]
+
+    def test_force_with_active_tasks(self, temp_specs_dir):
+        """Should remove phase with active tasks when force=True."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-force",
+            num_phases=2,
+            task_status="in_progress",
+        )
+
+        result, error = remove_phase(
+            spec_id="test-force",
+            phase_id="phase-1",
+            force=True,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result["force"] is True
+        assert result["total_tasks_removed"] == 1
+
+        # Verify phase removed
+        spec = load_spec("test-force", temp_specs_dir)
+        assert "phase-1" not in spec["hierarchy"]
+
+    def test_updates_spec_root_counts(self, temp_specs_dir):
+        """Should update spec-root total_tasks and completed_tasks."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-counts",
+            num_phases=3,
+            task_status="completed",
+        )
+
+        # Before removal: 3 total, 3 completed
+        spec_before = load_spec("test-counts", temp_specs_dir)
+        assert spec_before["hierarchy"]["spec-root"]["total_tasks"] == 3
+        assert spec_before["hierarchy"]["spec-root"]["completed_tasks"] == 3
+
+        result, error = remove_phase(
+            spec_id="test-counts",
+            phase_id="phase-2",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+
+        # After removal: 2 total, 2 completed
+        spec_after = load_spec("test-counts", temp_specs_dir)
+        assert spec_after["hierarchy"]["spec-root"]["total_tasks"] == 2
+        assert spec_after["hierarchy"]["spec-root"]["completed_tasks"] == 2
+
+    def test_cleans_dependency_references(self, temp_specs_dir):
+        """Should clean all dependency references to removed nodes."""
+        # Create spec with cross-dependencies
+        spec_data = {
+            "spec_id": "test-deps",
+            "title": "Test Deps",
+            "metadata": {"title": "Test Deps"},
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Test Deps",
+                    "status": "pending",
+                    "parent": None,
+                    "children": ["phase-1", "phase-2"],
+                    "total_tasks": 2,
+                    "completed_tasks": 2,
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                },
+                "phase-1": {
+                    "type": "phase",
+                    "title": "Phase 1",
+                    "status": "completed",
+                    "parent": "spec-root",
+                    "children": ["task-1-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 1,
+                    "metadata": {},
+                    "dependencies": {"blocks": ["phase-2"], "blocked_by": [], "depends": []},
+                },
+                "task-1-1": {
+                    "type": "task",
+                    "title": "Task 1.1",
+                    "status": "completed",
+                    "parent": "phase-1",
+                    "children": [],
+                    "metadata": {},
+                    "dependencies": {"blocks": ["task-2-1"], "blocked_by": [], "depends": []},
+                },
+                "phase-2": {
+                    "type": "phase",
+                    "title": "Phase 2",
+                    "status": "pending",
+                    "parent": "spec-root",
+                    "children": ["task-2-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 1,
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": ["phase-1"], "depends": []},
+                },
+                "task-2-1": {
+                    "type": "task",
+                    "title": "Task 2.1",
+                    "status": "completed",
+                    "parent": "phase-2",
+                    "children": [],
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": ["task-1-1"], "depends": []},
+                },
+            },
+        }
+
+        spec_path = temp_specs_dir / "active" / "test-deps.json"
+        spec_path.write_text(json.dumps(spec_data))
+
+        result, error = remove_phase(
+            spec_id="test-deps",
+            phase_id="phase-1",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+
+        # Verify all references to phase-1 and task-1-1 cleaned
+        spec = load_spec("test-deps", temp_specs_dir)
+        phase2 = spec["hierarchy"]["phase-2"]
+        task2 = spec["hierarchy"]["task-2-1"]
+
+        assert "phase-1" not in phase2["dependencies"]["blocked_by"]
+        assert "task-1-1" not in task2["dependencies"]["blocked_by"]
+
+    def test_nonexistent_phase_error(self, temp_specs_dir):
+        """Should return error for nonexistent phase."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-missing",
+            num_phases=1,
+        )
+
+        result, error = remove_phase(
+            spec_id="test-missing",
+            phase_id="phase-99",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert "not found" in error
+
+    def test_non_phase_node_error(self, temp_specs_dir):
+        """Should return error when trying to remove a non-phase node."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-type",
+            num_phases=1,
+            task_status="completed",
+        )
+
+        result, error = remove_phase(
+            spec_id="test-type",
+            phase_id="task-1-1",  # This is a task, not a phase
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert "not a phase" in error
+
+    def test_validates_empty_spec_id(self, temp_specs_dir):
+        """Should return error for empty spec_id."""
+        result, error = remove_phase(
+            spec_id="",
+            phase_id="phase-1",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert "Specification ID is required" in error
+
+    def test_validates_empty_phase_id(self, temp_specs_dir):
+        """Should return error for empty phase_id."""
+        self._create_spec_with_phases(
+            temp_specs_dir,
+            spec_id="test-empty",
+            num_phases=1,
+        )
+
+        result, error = remove_phase(
+            spec_id="test-empty",
+            phase_id="",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert "Phase ID is required" in error
+
+    def test_spec_not_found_error(self, temp_specs_dir):
+        """Should return error for nonexistent spec."""
+        result, error = remove_phase(
+            spec_id="nonexistent-spec",
+            phase_id="phase-1",
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert "not found" in error

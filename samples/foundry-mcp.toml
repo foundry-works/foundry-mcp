@@ -200,6 +200,61 @@ min_models = 3
 # min_models = 1  # Single model is sufficient for quick validation
 
 # =============================================================================
+# Observability Configuration
+# =============================================================================
+#
+# Requires optional dependencies:
+#   - For OpenTelemetry: pip install foundry-mcp[tracing]
+#   - For Prometheus: pip install foundry-mcp[metrics]
+#   - For both: pip install foundry-mcp[observability]
+#
+# When dependencies are not installed, all observability features gracefully
+# degrade to no-ops with zero performance overhead.
+
+[observability]
+# Master switch for all observability features
+# Set to true to enable, then configure individual providers below
+enabled = false
+
+# OpenTelemetry tracing configuration
+otel_enabled = false
+otel_endpoint = "localhost:4317"    # OTLP gRPC endpoint
+otel_service_name = "foundry-mcp"   # Service name in traces
+otel_sample_rate = 1.0              # Sampling rate: 0.0 (none) to 1.0 (all)
+
+# Prometheus metrics configuration
+prometheus_enabled = false
+prometheus_port = 0                  # HTTP port for /metrics (0 = no server)
+prometheus_host = "0.0.0.0"          # HTTP server bind address
+prometheus_namespace = "foundry_mcp" # Metric name prefix
+
+# =============================================================================
+# Observability Examples
+# =============================================================================
+
+# --- Enable OpenTelemetry only ---
+# [observability]
+# enabled = true
+# otel_enabled = true
+# otel_endpoint = "localhost:4317"
+# otel_service_name = "my-foundry-mcp"
+# otel_sample_rate = 0.1  # Sample 10% of traces in production
+
+# --- Enable Prometheus metrics with HTTP server ---
+# [observability]
+# enabled = true
+# prometheus_enabled = true
+# prometheus_port = 9090  # Expose /metrics on port 9090
+
+# --- Enable both for full observability stack ---
+# [observability]
+# enabled = true
+# otel_enabled = true
+# otel_endpoint = "otel-collector:4317"
+# prometheus_enabled = true
+# prometheus_port = 9090
+
+# =============================================================================
 # Git Workflow Configuration
 # =============================================================================
 
@@ -253,6 +308,50 @@ show_before_commit = true
 # [consultation.overrides]
 # "[cli]opencode:openai/gpt-5.1-codex" = { timeout = 600, temperature = 0.3 }
 # "[api]openai/gpt-4.1" = { timeout = 120, max_tokens = 4096 }
+
+# =============================================================================
+# Dashboard Configuration
+# =============================================================================
+#
+# Built-in web dashboard for viewing errors, metrics, and AI provider status.
+# Requires optional dependency: pip install foundry-mcp[dashboard]
+#
+# When aiohttp is not installed, dashboard features gracefully degrade to no-ops.
+
+[dashboard]
+# Enable the built-in web dashboard
+enabled = false
+
+# HTTP server port
+port = 8080
+
+# HTTP server bind address (127.0.0.1 for localhost-only, 0.0.0.0 for all interfaces)
+host = "127.0.0.1"
+
+# Automatically open browser when dashboard starts
+auto_open_browser = false
+
+# Frontend auto-refresh interval in milliseconds
+refresh_interval_ms = 5000
+
+# =============================================================================
+# Dashboard Examples
+# =============================================================================
+
+# --- Enable dashboard with default settings ---
+# [dashboard]
+# enabled = true
+
+# --- Enable with auto-open browser ---
+# [dashboard]
+# enabled = true
+# auto_open_browser = true
+
+# --- Custom port and faster refresh ---
+# [dashboard]
+# enabled = true
+# port = 9000
+# refresh_interval_ms = 2000
 
 # =============================================================================
 # Legacy [llm] Examples (deprecated - use [consultation].priority instead)

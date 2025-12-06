@@ -15,7 +15,11 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (
     get_metrics,
@@ -29,7 +33,11 @@ from foundry_mcp.core.security import (
 from foundry_mcp.core.spec import find_specs_directory, load_spec, find_spec_file
 import json
 import subprocess
-from foundry_mcp.core.rendering import render_spec_to_markdown, RenderOptions, RenderResult
+from foundry_mcp.core.rendering import (
+    render_spec_to_markdown,
+    RenderOptions,
+    RenderResult,
+)
 from foundry_mcp.core.docgen import DocumentationGenerator, resolve_output_directory
 
 logger = logging.getLogger(__name__)
@@ -178,7 +186,9 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
             # Render the spec to markdown
-            render_result: RenderResult = render_spec_to_markdown(spec_data, render_options)
+            render_result: RenderResult = render_spec_to_markdown(
+                spec_data, render_options
+            )
 
             # Determine output path
             if output_path:
@@ -429,6 +439,7 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Clear cache if requested
             if clear_cache and dest_path.exists():
                 from foundry_mcp.core.docgen import DOC_ARTIFACTS
+
                 for artifact_name in DOC_ARTIFACTS:
                     artifact_path = dest_path / artifact_name
                     if artifact_path.exists():
@@ -454,6 +465,7 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Generate documentation with AI if requested
             # AIProviderUnavailableError is raised if use_ai=True but no provider available
             from foundry_mcp.core.docgen import AIProviderUnavailableError
+
             try:
                 result = generator.generate(
                     project_name=project_name,
@@ -471,7 +483,9 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     "documentation.errors",
                     labels={"tool": "spec-doc-llm", "error_type": "ai_no_provider"},
                 )
-                provider_info = f" (requested: {exc.provider_id})" if exc.provider_id else ""
+                provider_info = (
+                    f" (requested: {exc.provider_id})" if exc.provider_id else ""
+                )
                 return asdict(
                     error_response(
                         f"AI-enhanced mode requested but no providers available{provider_info}.",
@@ -500,18 +514,27 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
             metrics.counter(
                 "documentation.success",
-                labels={"tool": "spec-doc-llm", "use_ai": str(use_ai), "ai_used": str(ai_used)},
+                labels={
+                    "tool": "spec-doc-llm",
+                    "use_ai": str(use_ai),
+                    "ai_used": str(ai_used),
+                },
             )
             logger.info(
                 f"spec-doc-llm completed for {project_name}",
-                extra={"project_name": project_name, "duration_ms": round(duration_ms, 2)},
+                extra={
+                    "project_name": project_name,
+                    "duration_ms": round(duration_ms, 2),
+                },
             )
 
             # Build response with documentation metadata
             response_data: Dict[str, Any] = {
                 "output_dir": str(dest_path),
                 "files_generated": len(result.artifacts),
-                "total_shards": result.stats.total_shards if hasattr(result.stats, "total_shards") else 0,
+                "total_shards": result.stats.total_shards
+                if hasattr(result.stats, "total_shards")
+                else 0,
                 "duration_seconds": round(duration_seconds, 2),
                 "project_name": project_name,
                 "statistics": result.stats.to_dict(),
@@ -655,7 +678,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 if field_value and is_prompt_injection(field_value):
                     metrics.counter(
                         "documentation.security_blocked",
-                        labels={"tool": "spec-review-fidelity", "reason": "prompt_injection"},
+                        labels={
+                            "tool": "spec-review-fidelity",
+                            "reason": "prompt_injection",
+                        },
                     )
                     return asdict(
                         error_response(
@@ -672,7 +698,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     if is_prompt_injection(file_path):
                         metrics.counter(
                             "documentation.security_blocked",
-                            labels={"tool": "spec-review-fidelity", "reason": "prompt_injection"},
+                            labels={
+                                "tool": "spec-review-fidelity",
+                                "reason": "prompt_injection",
+                            },
                         )
                         return asdict(
                             error_response(
@@ -689,7 +718,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             if not specs_dir:
                 metrics.counter(
                     "documentation.errors",
-                    labels={"tool": "spec-review-fidelity", "error_type": "specs_dir_not_found"},
+                    labels={
+                        "tool": "spec-review-fidelity",
+                        "error_type": "specs_dir_not_found",
+                    },
                 )
                 return asdict(
                     error_response(
@@ -727,6 +759,7 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Import consultation layer components
             try:
                 from foundry_mcp.core.ai_consultation import (
+                    ConsensusResult,
                     ConsultationOrchestrator,
                     ConsultationRequest,
                     ConsultationWorkflow,
@@ -735,7 +768,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 logger.debug(f"AI consultation import error: {exc}")
                 metrics.counter(
                     "documentation.errors",
-                    labels={"tool": "spec-review-fidelity", "error_type": "import_error"},
+                    labels={
+                        "tool": "spec-review-fidelity",
+                        "error_type": "import_error",
+                    },
                 )
                 return asdict(
                     error_response(
@@ -778,15 +814,21 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Check if providers are available
             first_provider = ai_tools[0] if ai_tools else None
             if not orchestrator.is_available(provider_id=first_provider):
-                provider_msg = f" (requested: {first_provider})" if first_provider else ""
+                provider_msg = (
+                    f" (requested: {first_provider})" if first_provider else ""
+                )
                 metrics.counter(
                     "documentation.errors",
-                    labels={"tool": "spec-review-fidelity", "error_type": "no_provider"},
+                    labels={
+                        "tool": "spec-review-fidelity",
+                        "error_type": "no_provider",
+                    },
                 )
                 # Get detailed unavailability reasons for diagnostics
                 from foundry_mcp.core.providers.detectors import (
                     get_provider_unavailability_reasons,
                 )
+
                 unavailability_reasons = get_provider_unavailability_reasons()
                 return asdict(
                     error_response(
@@ -813,7 +855,9 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 context={
                     "spec_id": spec_id,
                     "spec_title": spec_title,
-                    "spec_description": f"**Description:** {spec_description}" if spec_description else "",
+                    "spec_description": f"**Description:** {spec_description}"
+                    if spec_description
+                    else "",
                     "review_scope": review_scope,
                     "spec_requirements": spec_requirements,
                     "implementation_artifacts": implementation_artifacts,
@@ -830,7 +874,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 logger.exception("AI consultation failed")
                 metrics.counter(
                     "documentation.errors",
-                    labels={"tool": "spec-review-fidelity", "error_type": "consultation_error"},
+                    labels={
+                        "tool": "spec-review-fidelity",
+                        "error_type": "consultation_error",
+                    },
                 )
                 return asdict(
                     error_response(
@@ -845,17 +892,39 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     )
                 )
 
-            # Check for consultation failure (result.error indicates provider/prompt issues)
-            if result is None or result.error:
-                error_msg = result.error if result else "Consultation returned no result"
+            # Determine if this is a multi-model consensus result
+            is_consensus = isinstance(result, ConsensusResult)
+
+            # Check for consultation failure
+            # For ConsensusResult: check .success property
+            # For ConsultationResult: check .error attribute
+            if (
+                result is None
+                or (not is_consensus and result.error)
+                or (is_consensus and not result.success)
+            ):
+                if is_consensus:
+                    error_msg = (
+                        "; ".join(result.warnings)
+                        if result.warnings
+                        else "All providers failed"
+                    )
+                else:
+                    error_msg = (
+                        result.error if result else "Consultation returned no result"
+                    )
                 metrics.counter(
                     "documentation.errors",
-                    labels={"tool": "spec-review-fidelity", "error_type": "consultation_failed"},
+                    labels={
+                        "tool": "spec-review-fidelity",
+                        "error_type": "consultation_failed",
+                    },
                 )
                 # Get detailed provider unavailability reasons for diagnostics
                 from foundry_mcp.core.providers.detectors import (
                     get_provider_unavailability_reasons,
                 )
+
                 unavailability_reasons = get_provider_unavailability_reasons()
                 return asdict(
                     error_response(
@@ -866,8 +935,11 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                             "spec_id": spec_id,
                             "review_scope": review_scope,
                             "error_details": error_msg,
-                            "provider_id": result.provider_id if result else "none",
+                            "provider_id": result.responses[0].provider_id
+                            if is_consensus and result.responses
+                            else (result.provider_id if result else "none"),
                             "provider_status": unavailability_reasons,
+                            "mode": "multi_model" if is_consensus else "single_model",
                         },
                         remediation=(
                             "Check provider availability. Ensure at least one AI provider "
@@ -878,15 +950,31 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 )
 
             # Check for empty content (consultation completed but no response)
-            if not result.content:
+            # For ConsensusResult use primary_content, for ConsultationResult use content
+            result_content = result.primary_content if is_consensus else result.content
+            if not result_content:
                 metrics.counter(
                     "documentation.errors",
-                    labels={"tool": "spec-review-fidelity", "error_type": "empty_response"},
+                    labels={
+                        "tool": "spec-review-fidelity",
+                        "error_type": "empty_response",
+                    },
                 )
                 from foundry_mcp.core.providers.detectors import (
                     get_provider_unavailability_reasons,
                 )
+
                 unavailability_reasons = get_provider_unavailability_reasons()
+                if is_consensus:
+                    provider_info = (
+                        result.responses[0].provider_id if result.responses else "none"
+                    )
+                    model_info = (
+                        result.responses[0].model_used if result.responses else "none"
+                    )
+                else:
+                    provider_info = result.provider_id
+                    model_info = result.model_used
                 return asdict(
                     error_response(
                         "AI consultation returned empty response",
@@ -895,9 +983,10 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         data={
                             "spec_id": spec_id,
                             "review_scope": review_scope,
-                            "provider_id": result.provider_id,
-                            "model_used": result.model_used,
+                            "provider_id": provider_info,
+                            "model_used": model_info,
                             "provider_status": unavailability_reasons,
+                            "mode": "multi_model" if is_consensus else "single_model",
                         },
                         remediation=(
                             "The AI provider returned an empty response. This may indicate "
@@ -907,11 +996,11 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     )
                 )
 
-            # Parse JSON response
+            # Parse JSON response (use result_content which handles both result types)
             parsed_response = None
-            if result and result.content:
+            if result_content:
                 try:
-                    content = result.content
+                    content = result_content
                     if "```json" in content:
                         start = content.find("```json") + 7
                         end = content.find("```", start)
@@ -928,8 +1017,25 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     logger.debug(f"JSON parse error in fidelity review: {exc}")
                     metrics.counter(
                         "documentation.errors",
-                        labels={"tool": "spec-review-fidelity", "error_type": "invalid_response"},
+                        labels={
+                            "tool": "spec-review-fidelity",
+                            "error_type": "invalid_response",
+                        },
                     )
+                    if is_consensus:
+                        provider_info = (
+                            result.responses[0].provider_id
+                            if result.responses
+                            else "none"
+                        )
+                        model_info = (
+                            result.responses[0].model_used
+                            if result.responses
+                            else "none"
+                        )
+                    else:
+                        provider_info = result.provider_id
+                        model_info = result.model_used
                     return asdict(
                         error_response(
                             "AI response could not be parsed as valid JSON",
@@ -938,8 +1044,11 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                             data={
                                 "spec_id": spec_id,
                                 "review_scope": review_scope,
-                                "provider_id": result.provider_id,
-                                "model_used": result.model_used,
+                                "provider_id": provider_info,
+                                "model_used": model_info,
+                                "mode": "multi_model"
+                                if is_consensus
+                                else "single_model",
                             },
                             remediation=(
                                 "The AI provider returned a response that could not be parsed "
@@ -954,6 +1063,44 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 "documentation.success",
                 labels={"tool": "spec-review-fidelity"},
             )
+
+            # Build consensus info based on result type
+            if is_consensus:
+                # Multi-model consensus result
+                responses_data = [
+                    {
+                        "provider_id": r.provider_id,
+                        "model_used": r.model_used,
+                        "success": r.success,
+                        "error": r.error,
+                    }
+                    for r in result.responses
+                ]
+                agreement_data = None
+                if result.agreement:
+                    agreement_data = {
+                        "total_providers": result.agreement.total_providers,
+                        "successful_providers": result.agreement.successful_providers,
+                        "failed_providers": result.agreement.failed_providers,
+                        "success_rate": result.agreement.success_rate,
+                        "has_consensus": result.agreement.has_consensus,
+                    }
+                consensus_info = {
+                    "mode": "multi_model",
+                    "responses": responses_data,
+                    "agreement": agreement_data,
+                    "threshold": consensus_threshold,
+                }
+            else:
+                # Single-model result
+                consensus_info = {
+                    "mode": "single_model",
+                    "provider": result.provider_id if result else None,
+                    "model": result.model_used if result else None,
+                    "cached": result.cache_hit if result else False,
+                    "threshold": consensus_threshold,
+                }
+
             return asdict(
                 success_response(
                     {
@@ -964,17 +1111,20 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                         "task_id": task_id,
                         "phase_id": phase_id,
                         "files": files,
-                        "verdict": parsed_response.get("verdict", "unknown") if parsed_response else "unknown",
-                        "deviations": parsed_response.get("deviations", []) if parsed_response else [],
-                        "recommendations": parsed_response.get("recommendations", []) if parsed_response else [],
-                        "consensus": {
-                            "provider": result.provider_id if result else None,
-                            "model": result.model_used if result else None,
-                            "cached": result.cache_hit if result else False,
-                            "threshold": consensus_threshold,
-                        },
-                        "response": parsed_response if parsed_response else result.content if result else None,
-                        "raw_response": result.content if result and not parsed_response else None,
+                        "verdict": parsed_response.get("verdict", "unknown")
+                        if parsed_response
+                        else "unknown",
+                        "deviations": parsed_response.get("deviations", [])
+                        if parsed_response
+                        else [],
+                        "recommendations": parsed_response.get("recommendations", [])
+                        if parsed_response
+                        else [],
+                        "consensus": consensus_info,
+                        "response": parsed_response
+                        if parsed_response
+                        else result_content,
+                        "raw_response": result_content if not parsed_response else None,
                         "incremental": incremental,
                         "base_branch": base_branch,
                     }
@@ -996,7 +1146,9 @@ def register_documentation_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 )
             )
 
-    logger.debug("Registered documentation tools: spec-doc, spec-doc-llm, spec-review-fidelity")
+    logger.debug(
+        "Registered documentation tools: spec-doc, spec-doc-llm, spec-review-fidelity"
+    )
 
 
 # =============================================================================
@@ -1030,10 +1182,13 @@ def _build_spec_requirements(
         if phase:
             lines.append(f"### Phase: {phase.get('title', phase_id)}")
             lines.append(f"- **Status:** {phase.get('status', 'unknown')}")
-            if phase.get("children"):
+            child_nodes = _get_child_nodes(spec_data, phase)
+            if child_nodes:
                 lines.append("- **Tasks:**")
-                for child in phase["children"]:
-                    lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
+                for child in child_nodes:
+                    lines.append(
+                        f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}"
+                    )
     else:
         # Full spec
         lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
@@ -1072,7 +1227,7 @@ def _build_implementation_artifacts(
     elif phase_id:
         phase = _find_phase(spec_data, phase_id)
         if phase:
-            for child in phase.get("children", []):
+            for child in _get_child_nodes(spec_data, phase):
                 if child.get("metadata", {}).get("file_path"):
                     file_paths.append(child["metadata"]["file_path"])
 
@@ -1092,7 +1247,9 @@ def _build_implementation_artifacts(
                     file_paths = [f for f in file_paths if f in changed_files]
                 else:
                     file_paths = changed_files
-                lines.append(f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n")
+                lines.append(
+                    f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n"
+                )
         except Exception:
             lines.append(f"*Warning: Could not get git diff from {base_branch}*\n")
 
@@ -1132,7 +1289,8 @@ def _build_test_results(
     # Check journal for test-related entries
     journal = spec_data.get("journal", [])
     test_entries = [
-        entry for entry in journal
+        entry
+        for entry in journal
         if "test" in entry.get("title", "").lower()
         or "verify" in entry.get("title", "").lower()
     ]
@@ -1140,7 +1298,9 @@ def _build_test_results(
     if test_entries:
         lines = ["*Recent test-related journal entries:*"]
         for entry in test_entries[-3:]:  # Last 3 entries
-            lines.append(f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})")
+            lines.append(
+                f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})"
+            )
             if entry.get("content"):
                 # Truncate long content
                 content = entry["content"][:500]
@@ -1162,43 +1322,112 @@ def _build_journal_entries(
 
     if task_id:
         # Filter to task-related entries
-        journal = [
-            entry for entry in journal
-            if entry.get("task_id") == task_id
-        ]
+        journal = [entry for entry in journal if entry.get("task_id") == task_id]
 
     if journal:
         lines = [f"*{len(journal)} journal entries found:*"]
         for entry in journal[-5:]:  # Last 5 entries
             entry_type = entry.get("entry_type", "note")
-            lines.append(f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({entry.get('timestamp', 'unknown')[:10] if entry.get('timestamp') else 'unknown'})")
+            lines.append(
+                f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({entry.get('timestamp', 'unknown')[:10] if entry.get('timestamp') else 'unknown'})"
+            )
         return "\n".join(lines)
 
     return "*No journal entries found*"
 
 
 def _find_task(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict[str, Any]]:
-    """Find a task by ID in the spec hierarchy."""
-    def search_children(children: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-        for child in children:
-            if child.get("id") == task_id:
-                return child
-            if child.get("children"):
-                result = search_children(child["children"])
-                if result:
-                    return result
-        return None
+    """Find a task by ID in the spec hierarchy (new or legacy format)."""
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    if task_id in hierarchy_nodes:
+        return hierarchy_nodes[task_id]
 
     hierarchy = spec_data.get("hierarchy", {})
-    if hierarchy.get("children"):
-        return search_children(hierarchy["children"])
+    children = hierarchy.get("children") if isinstance(hierarchy, dict) else None
+    if children:
+        return _search_hierarchy_children(children, task_id)
     return None
 
 
 def _find_phase(spec_data: Dict[str, Any], phase_id: str) -> Optional[Dict[str, Any]]:
-    """Find a phase by ID in the spec hierarchy."""
+    """Find a phase by ID in the spec hierarchy (new or legacy format)."""
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    if phase_id in hierarchy_nodes:
+        return hierarchy_nodes[phase_id]
+
     hierarchy = spec_data.get("hierarchy", {})
-    for child in hierarchy.get("children", []):
-        if child.get("id") == phase_id:
-            return child
+    children = hierarchy.get("children") if isinstance(hierarchy, dict) else None
+    if children:
+        return _search_hierarchy_children(children, phase_id)
     return None
+
+
+def _get_hierarchy_nodes(spec_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return mapping of hierarchy node IDs to node data."""
+    hierarchy = spec_data.get("hierarchy", {})
+    nodes: Dict[str, Dict[str, Any]] = {}
+
+    if isinstance(hierarchy, dict):
+        # New format: dict keyed by node_id -> node metadata
+        if (
+            all(isinstance(value, dict) for value in hierarchy.values())
+            and "children" not in hierarchy
+        ):
+            for node_id, node in hierarchy.items():
+                node_copy = dict(node)
+                node_copy.setdefault("id", node_id)
+                nodes[node_id] = node_copy
+            return nodes
+
+        # Legacy format: nested children arrays
+        if hierarchy.get("children"):
+            _collect_hierarchy_nodes(hierarchy, nodes)
+
+    return nodes
+
+
+def _collect_hierarchy_nodes(
+    node: Dict[str, Any], nodes: Dict[str, Dict[str, Any]]
+) -> None:
+    """Recursively collect nodes for legacy hierarchy structure."""
+    node_id = node.get("id")
+    if node_id:
+        nodes[node_id] = node
+    for child in node.get("children", []) or []:
+        if isinstance(child, dict):
+            _collect_hierarchy_nodes(child, nodes)
+
+
+def _search_hierarchy_children(
+    children: List[Dict[str, Any]], target_id: str
+) -> Optional[Dict[str, Any]]:
+    """Search nested children lists for a target ID."""
+    for child in children:
+        if child.get("id") == target_id:
+            return child
+        nested = child.get("children")
+        if nested:
+            result = _search_hierarchy_children(nested, target_id)
+            if result:
+                return result
+    return None
+
+
+def _get_child_nodes(
+    spec_data: Dict[str, Any], node: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Resolve child references (IDs or embedded dicts) to node data."""
+    children = node.get("children", []) or []
+    if not children:
+        return []
+
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    resolved: List[Dict[str, Any]] = []
+    for child in children:
+        if isinstance(child, dict):
+            resolved.append(child)
+        elif isinstance(child, str):
+            child_node = hierarchy_nodes.get(child)
+            if child_node:
+                resolved.append(child_node)
+    return resolved

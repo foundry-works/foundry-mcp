@@ -519,7 +519,7 @@ def _add_phase_verification(
 
 def _generate_phase_id(hierarchy: Dict[str, Any]) -> Tuple[str, int]:
     """Generate the next phase ID and numeric suffix."""
-    pattern = re.compile(r"^phase-(\\d+)$")
+    pattern = re.compile(r"^phase-(\d+)$")
     max_id = 0
     for node_id in hierarchy.keys():
         match = pattern.match(node_id)
@@ -682,6 +682,283 @@ def add_phase(
         "linked_previous": linked_phase_id,
         "verify_tasks": verify_ids,
     }, None
+
+
+def _collect_descendants(hierarchy: Dict[str, Any], node_id: str) -> List[str]:
+    """
+    Recursively collect all descendant node IDs for a given node.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        node_id: Starting node ID
+
+    Returns:
+        List of all descendant node IDs (not including the starting node)
+    """
+    descendants: List[str] = []
+    node = hierarchy.get(node_id)
+    if not node:
+        return descendants
+
+    children = node.get("children", [])
+    if not isinstance(children, list):
+        return descendants
+
+    for child_id in children:
+        descendants.append(child_id)
+        descendants.extend(_collect_descendants(hierarchy, child_id))
+
+    return descendants
+
+
+def _count_tasks_in_subtree(hierarchy: Dict[str, Any], node_ids: List[str]) -> Tuple[int, int]:
+    """
+    Count total and completed tasks in a list of nodes.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        node_ids: List of node IDs to count
+
+    Returns:
+        Tuple of (total_count, completed_count)
+    """
+    total = 0
+    completed = 0
+
+    for node_id in node_ids:
+        node = hierarchy.get(node_id)
+        if not node:
+            continue
+        node_type = node.get("type")
+        if node_type in ("task", "subtask", "verify"):
+            total += 1
+            if node.get("status") == "completed":
+                completed += 1
+
+    return total, completed
+
+
+def _remove_dependency_references(hierarchy: Dict[str, Any], removed_ids: List[str]) -> None:
+    """
+    Remove references to deleted nodes from all dependency lists.
+
+    Args:
+        hierarchy: The spec hierarchy dict
+        removed_ids: List of node IDs being removed
+    """
+    removed_set = set(removed_ids)
+
+    for node_id, node in hierarchy.items():
+        deps = node.get("dependencies")
+        if not deps or not isinstance(deps, dict):
+            continue
+
+        for key in ("blocks", "blocked_by", "depends"):
+            dep_list = deps.get(key)
+            if isinstance(dep_list, list):
+                deps[key] = [d for d in dep_list if d not in removed_set]
+
+
+def remove_phase(
+    spec_id: str,
+    phase_id: str,
+    force: bool = False,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Remove a phase and all its children from a specification.
+
+    Handles adjacent phase re-linking: if phase B is removed and A blocks B
+    which blocks C, then A will be updated to block C directly.
+
+    Args:
+        spec_id: Specification ID containing the phase.
+        phase_id: Phase ID to remove (e.g., "phase-1").
+        force: If True, remove even if phase contains non-completed tasks.
+               If False (default), refuse to remove phases with active work.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "phase_id": ..., "children_removed": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate inputs
+    if not spec_id or not spec_id.strip():
+        return None, "Specification ID is required"
+
+    if not phase_id or not phase_id.strip():
+        return None, "Phase ID is required"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    # Validate phase exists
+    phase = hierarchy.get(phase_id)
+    if phase is None:
+        return None, f"Phase '{phase_id}' not found"
+
+    # Validate node type is phase
+    node_type = phase.get("type")
+    if node_type != "phase":
+        return None, f"Node '{phase_id}' is not a phase (type: {node_type})"
+
+    # Collect all descendants
+    descendants = _collect_descendants(hierarchy, phase_id)
+
+    # Check for non-completed tasks if force is False
+    if not force:
+        # Count tasks in phase (excluding verify nodes for the active work check)
+        all_nodes = [phase_id] + descendants
+        has_active_work = False
+        active_task_ids: List[str] = []
+
+        for node_id in all_nodes:
+            node = hierarchy.get(node_id)
+            if not node:
+                continue
+            node_status = node.get("status")
+            node_node_type = node.get("type")
+            # Consider in_progress or pending tasks as active work
+            if node_node_type in ("task", "subtask") and node_status in ("pending", "in_progress"):
+                has_active_work = True
+                active_task_ids.append(node_id)
+
+        if has_active_work:
+            return (
+                None,
+                f"Phase '{phase_id}' has {len(active_task_ids)} non-completed task(s). "
+                f"Use force=True to remove anyway. Active tasks: {', '.join(active_task_ids[:5])}"
+                + ("..." if len(active_task_ids) > 5 else ""),
+            )
+
+    # Get spec-root and phase position info for re-linking
+    spec_root = hierarchy.get("spec-root")
+    if spec_root is None:
+        return None, "Specification root node 'spec-root' not found"
+
+    children = spec_root.get("children", [])
+    if not isinstance(children, list):
+        children = []
+
+    # Find phase position
+    try:
+        phase_index = children.index(phase_id)
+    except ValueError:
+        return None, f"Phase '{phase_id}' not found in spec-root children"
+
+    # Identify adjacent phases for re-linking
+    prev_phase_id: Optional[str] = None
+    next_phase_id: Optional[str] = None
+
+    if phase_index > 0:
+        candidate = children[phase_index - 1]
+        if hierarchy.get(candidate, {}).get("type") == "phase":
+            prev_phase_id = candidate
+
+    if phase_index < len(children) - 1:
+        candidate = children[phase_index + 1]
+        if hierarchy.get(candidate, {}).get("type") == "phase":
+            next_phase_id = candidate
+
+    # Re-link adjacent phases: if prev blocks this phase and this phase blocks next,
+    # then prev should now block next directly
+    relinked_from: Optional[str] = None
+    relinked_to: Optional[str] = None
+
+    if prev_phase_id and next_phase_id:
+        prev_phase = hierarchy.get(prev_phase_id)
+        next_phase = hierarchy.get(next_phase_id)
+
+        if prev_phase and next_phase:
+            # Check if prev_phase blocks this phase
+            prev_deps = prev_phase.get("dependencies", {})
+            prev_blocks = prev_deps.get("blocks", [])
+
+            # Check if this phase blocks next_phase
+            phase_deps = phase.get("dependencies", {})
+            phase_blocks = phase_deps.get("blocks", [])
+
+            if phase_id in prev_blocks and next_phase_id in phase_blocks:
+                # Re-link: prev should now block next
+                if next_phase_id not in prev_blocks:
+                    prev_blocks.append(next_phase_id)
+
+                # Update next phase's blocked_by
+                next_deps = next_phase.setdefault("dependencies", {
+                    "blocks": [],
+                    "blocked_by": [],
+                    "depends": [],
+                })
+                next_blocked_by = next_deps.setdefault("blocked_by", [])
+                if prev_phase_id not in next_blocked_by:
+                    next_blocked_by.append(prev_phase_id)
+
+                relinked_from = prev_phase_id
+                relinked_to = next_phase_id
+
+    # Count tasks being removed
+    nodes_to_remove = [phase_id] + descendants
+    total_removed, completed_removed = _count_tasks_in_subtree(hierarchy, descendants)
+
+    # Remove all nodes from hierarchy
+    for node_id in nodes_to_remove:
+        if node_id in hierarchy:
+            del hierarchy[node_id]
+
+    # Remove phase from spec-root children
+    children.remove(phase_id)
+    spec_root["children"] = children
+
+    # Update spec-root task counts
+    current_total = spec_root.get("total_tasks", 0)
+    current_completed = spec_root.get("completed_tasks", 0)
+    spec_root["total_tasks"] = max(0, current_total - total_removed)
+    spec_root["completed_tasks"] = max(0, current_completed - completed_removed)
+
+    # Clean up dependency references to removed nodes
+    _remove_dependency_references(hierarchy, nodes_to_remove)
+
+    # Save the spec
+    saved = save_spec(spec_id, spec_data, specs_dir)
+    if not saved:
+        return None, "Failed to save specification"
+
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "phase_id": phase_id,
+        "phase_title": phase.get("title", ""),
+        "children_removed": len(descendants),
+        "total_tasks_removed": total_removed,
+        "completed_tasks_removed": completed_removed,
+        "force": force,
+    }
+
+    if relinked_from and relinked_to:
+        result["relinked"] = {
+            "from": relinked_from,
+            "to": relinked_to,
+        }
+
+    return result, None
 
 
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:

@@ -1,0 +1,292 @@
+# Prometheus Recording Rules for foundry-mcp
+#
+# These rules pre-compute Service Level Indicators (SLIs) for efficient
+# SLO tracking and alerting. Import into your Prometheus configuration.
+#
+# Usage:
+#   rule_files:
+#     - /path/to/foundry-mcp-recording-rules.yaml
+#
+# SLO Targets:
+#   - Availability: 99.5% over 30 days
+#   - Latency (p99): < 5 seconds
+#   - Error Rate: < 0.5%
+
+groups:
+  - name: foundry_mcp_sli
+    interval: 1m
+    rules:
+      # =======================================================================
+      # Availability SLIs (Success Rate)
+      # =======================================================================
+
+      # 5-minute availability rate
+      - record: foundry_mcp:sli:availability:rate5m
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_invocations_total{status="success"}[5m]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[5m]))
+          ) or vector(1)
+        labels:
+          sli: availability
+
+      # 1-hour availability rate
+      - record: foundry_mcp:sli:availability:rate1h
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_invocations_total{status="success"}[1h]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[1h]))
+          ) or vector(1)
+        labels:
+          sli: availability
+
+      # 6-hour availability rate
+      - record: foundry_mcp:sli:availability:rate6h
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_invocations_total{status="success"}[6h]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[6h]))
+          ) or vector(1)
+        labels:
+          sli: availability
+
+      # 24-hour availability rate
+      - record: foundry_mcp:sli:availability:rate24h
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_invocations_total{status="success"}[24h]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[24h]))
+          ) or vector(1)
+        labels:
+          sli: availability
+
+      # 30-day availability rate (primary SLO window)
+      - record: foundry_mcp:sli:availability:rate30d
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_invocations_total{status="success"}[30d]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[30d]))
+          ) or vector(1)
+        labels:
+          sli: availability
+
+      # =======================================================================
+      # Latency SLIs (P99 response time)
+      # =======================================================================
+
+      # 5-minute P99 latency
+      - record: foundry_mcp:sli:latency_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(foundry_mcp_tool_duration_seconds_bucket[5m])) by (le)
+          ) or vector(0)
+        labels:
+          sli: latency
+
+      # 1-hour P99 latency
+      - record: foundry_mcp:sli:latency_p99:rate1h
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(foundry_mcp_tool_duration_seconds_bucket[1h])) by (le)
+          ) or vector(0)
+        labels:
+          sli: latency
+
+      # 24-hour P99 latency
+      - record: foundry_mcp:sli:latency_p99:rate24h
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(foundry_mcp_tool_duration_seconds_bucket[24h])) by (le)
+          ) or vector(0)
+        labels:
+          sli: latency
+
+      # Latency SLI (fraction of requests under 5s threshold)
+      - record: foundry_mcp:sli:latency_good:rate5m
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_duration_seconds_bucket{le="5"}[5m]))
+            /
+            sum(rate(foundry_mcp_tool_duration_seconds_count[5m]))
+          ) or vector(1)
+        labels:
+          sli: latency
+
+      - record: foundry_mcp:sli:latency_good:rate1h
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_duration_seconds_bucket{le="5"}[1h]))
+            /
+            sum(rate(foundry_mcp_tool_duration_seconds_count[1h]))
+          ) or vector(1)
+        labels:
+          sli: latency
+
+      # =======================================================================
+      # Error Rate SLIs
+      # =======================================================================
+
+      # 5-minute error rate
+      - record: foundry_mcp:sli:error_rate:rate5m
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_errors_total[5m]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[5m]))
+          ) or vector(0)
+        labels:
+          sli: error_rate
+
+      # 1-hour error rate
+      - record: foundry_mcp:sli:error_rate:rate1h
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_errors_total[1h]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[1h]))
+          ) or vector(0)
+        labels:
+          sli: error_rate
+
+      # 24-hour error rate
+      - record: foundry_mcp:sli:error_rate:rate24h
+        expr: |
+          (
+            sum(rate(foundry_mcp_tool_errors_total[24h]))
+            /
+            sum(rate(foundry_mcp_tool_invocations_total[24h]))
+          ) or vector(0)
+        labels:
+          sli: error_rate
+
+      # =======================================================================
+      # Error Budget Tracking
+      # =======================================================================
+
+      # Error budget consumed (availability) - 30-day window
+      # SLO target: 99.5% (0.5% error budget)
+      - record: foundry_mcp:error_budget:availability_consumed
+        expr: |
+          (
+            1 - foundry_mcp:sli:availability:rate30d
+          ) / 0.005
+        labels:
+          slo: availability
+
+      # Error budget remaining (availability)
+      - record: foundry_mcp:error_budget:availability_remaining
+        expr: |
+          1 - foundry_mcp:error_budget:availability_consumed
+        labels:
+          slo: availability
+
+      # Error budget consumed (latency) - 30-day window
+      # SLO target: 99.0% requests under 5s
+      - record: foundry_mcp:error_budget:latency_consumed
+        expr: |
+          (
+            1 - (foundry_mcp:sli:latency_good:rate1h or vector(1))
+          ) / 0.01
+        labels:
+          slo: latency
+
+      # Error budget remaining (latency)
+      - record: foundry_mcp:error_budget:latency_remaining
+        expr: |
+          1 - foundry_mcp:error_budget:latency_consumed
+        labels:
+          slo: latency
+
+      # =======================================================================
+      # Burn Rate Calculations (for multi-burn rate alerts)
+      # =======================================================================
+
+      # Availability burn rate - 5m window
+      # Burn rate = actual error rate / allowed error rate
+      - record: foundry_mcp:burn_rate:availability:5m
+        expr: |
+          (
+            1 - foundry_mcp:sli:availability:rate5m
+          ) / 0.005
+        labels:
+          window: 5m
+
+      # Availability burn rate - 1h window
+      - record: foundry_mcp:burn_rate:availability:1h
+        expr: |
+          (
+            1 - foundry_mcp:sli:availability:rate1h
+          ) / 0.005
+        labels:
+          window: 1h
+
+      # Availability burn rate - 6h window
+      - record: foundry_mcp:burn_rate:availability:6h
+        expr: |
+          (
+            1 - foundry_mcp:sli:availability:rate6h
+          ) / 0.005
+        labels:
+          window: 6h
+
+      # Availability burn rate - 24h window
+      - record: foundry_mcp:burn_rate:availability:24h
+        expr: |
+          (
+            1 - foundry_mcp:sli:availability:rate24h
+          ) / 0.005
+        labels:
+          window: 24h
+
+      # =======================================================================
+      # Health Check SLIs
+      # =======================================================================
+
+      # Health check success rate (5m)
+      - record: foundry_mcp:sli:health_success:rate5m
+        expr: |
+          avg_over_time(foundry_mcp_health_status{check_type="health"}[5m]) / 2
+        labels:
+          sli: health
+
+      # Dependency health aggregate
+      - record: foundry_mcp:sli:dependency_health
+        expr: |
+          avg(foundry_mcp_dependency_health)
+        labels:
+          sli: dependency
+
+      # =======================================================================
+      # Per-Tool Performance
+      # =======================================================================
+
+      # Request rate per tool (5m)
+      - record: foundry_mcp:tool:request_rate:5m
+        expr: |
+          sum by (tool) (rate(foundry_mcp_tool_invocations_total[5m]))
+
+      # Error rate per tool (5m)
+      - record: foundry_mcp:tool:error_rate:5m
+        expr: |
+          sum by (tool) (rate(foundry_mcp_tool_errors_total[5m]))
+          /
+          sum by (tool) (rate(foundry_mcp_tool_invocations_total[5m]))
+
+      # P99 latency per tool (5m)
+      - record: foundry_mcp:tool:latency_p99:5m
+        expr: |
+          histogram_quantile(0.99,
+            sum by (tool, le) (rate(foundry_mcp_tool_duration_seconds_bucket[5m]))
+          )
+
+      # P50 latency per tool (5m)
+      - record: foundry_mcp:tool:latency_p50:5m
+        expr: |
+          histogram_quantile(0.50,
+            sum by (tool, le) (rate(foundry_mcp_tool_duration_seconds_bucket[5m]))
+          )

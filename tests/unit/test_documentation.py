@@ -84,6 +84,10 @@ def temp_project(tmp_path):
                 "status": "completed",
                 "children": [],
                 "parent": "phase-1",
+                "metadata": {
+                    "details": ["Implement foundational structures"],
+                    "file_path": "src/task_one.py",
+                },
             },
             "task-1-2": {
                 "type": "task",
@@ -91,6 +95,10 @@ def temp_project(tmp_path):
                 "status": "pending",
                 "children": [],
                 "parent": "phase-1",
+                "metadata": {
+                    "details": ["Add follow-up improvements"],
+                    "file_path": "src/task_two.py",
+                },
             },
         },
     }
@@ -756,3 +764,38 @@ class TestResponseEnvelopeCompliance:
         assert response["error"] == "Test error message"
         assert "meta" in response
         assert response["meta"]["version"] == "response-v2"
+
+
+class TestFidelityHierarchyHelpers:
+    """Ensure fidelity helper functions handle keyed hierarchy specs."""
+
+    def test_phase_requirements_include_children(self, temp_project):
+        from foundry_mcp.tools.documentation import _build_spec_requirements
+
+        _, spec_data = temp_project
+        output = _build_spec_requirements(spec_data, task_id=None, phase_id="phase-1")
+
+        assert "Phase: Phase 1" in output
+        assert "task-1-1" in output
+        assert "task-1-2" in output
+
+    def test_phase_artifacts_resolve_child_files(self, temp_project, monkeypatch):
+        from foundry_mcp.tools.documentation import _build_implementation_artifacts
+
+        project_path, spec_data = temp_project
+        src_dir = project_path / "src"
+        src_dir.mkdir()
+        (src_dir / "task_one.py").write_text("print('ok')", encoding="utf-8")
+        monkeypatch.chdir(project_path)
+
+        output = _build_implementation_artifacts(
+            spec_data,
+            task_id=None,
+            phase_id="phase-1",
+            files=None,
+            incremental=False,
+            base_branch="main",
+        )
+
+        assert "src/task_one.py" in output
+        assert "print('ok')" in output

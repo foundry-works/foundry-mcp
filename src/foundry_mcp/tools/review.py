@@ -265,6 +265,7 @@ def _run_ai_review(
     # Import consultation layer components
     try:
         from foundry_mcp.core.ai_consultation import (
+            ConsensusResult,
             ConsultationOrchestrator,
             ConsultationRequest,
             ConsultationWorkflow,
@@ -347,27 +348,74 @@ def _run_ai_review(
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
-    # Build response
-    return asdict(
-        success_response(
-            spec_id=spec_id,
-            title=context.title,
-            review_type=review_type,
-            template_id=template_id,
-            llm_status=llm_status,
-            ai_provider=result.provider_id if result else ai_provider,
-            consultation_cache=consultation_cache,
-            response=result.content if result else None,
-            model=result.model_used if result else None,
-            cached=result.cache_hit if result else False,
-            stats={
-                "total_tasks": context.stats.total_tasks if context.stats else 0,
-                "completed_tasks": context.stats.completed_tasks if context.stats else 0,
-                "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
-            },
-            duration_ms=round(duration_ms, 2),
+    # Build response - handle both single-model and multi-model results
+    if isinstance(result, ConsensusResult):
+        # Multi-model consensus result
+        responses_data = [
+            {
+                "provider_id": r.provider_id,
+                "model_used": r.model_used,
+                "content": r.content,
+                "success": r.success,
+                "error": r.error,
+                "tokens": r.tokens,
+                "duration_ms": r.duration_ms,
+            }
+            for r in result.responses
+        ]
+        agreement_data = None
+        if result.agreement:
+            agreement_data = {
+                "total_providers": result.agreement.total_providers,
+                "successful_providers": result.agreement.successful_providers,
+                "failed_providers": result.agreement.failed_providers,
+                "success_rate": result.agreement.success_rate,
+                "has_consensus": result.agreement.has_consensus,
+            }
+        return asdict(
+            success_response(
+                spec_id=spec_id,
+                title=context.title,
+                review_type=review_type,
+                template_id=template_id,
+                llm_status=llm_status,
+                mode="multi_model",
+                consultation_cache=consultation_cache,
+                responses=responses_data,
+                agreement=agreement_data,
+                primary_content=result.primary_content,
+                warnings=result.warnings,
+                stats={
+                    "total_tasks": context.stats.total_tasks if context.stats else 0,
+                    "completed_tasks": context.stats.completed_tasks if context.stats else 0,
+                    "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
+                },
+                duration_ms=round(duration_ms, 2),
+            )
         )
-    )
+    else:
+        # Single-model result (ConsultationResult)
+        return asdict(
+            success_response(
+                spec_id=spec_id,
+                title=context.title,
+                review_type=review_type,
+                template_id=template_id,
+                llm_status=llm_status,
+                mode="single_model",
+                ai_provider=result.provider_id if result else ai_provider,
+                consultation_cache=consultation_cache,
+                response=result.content if result else None,
+                model=result.model_used if result else None,
+                cached=result.cache_hit if result else False,
+                stats={
+                    "total_tasks": context.stats.total_tasks if context.stats else 0,
+                    "completed_tasks": context.stats.completed_tasks if context.stats else 0,
+                    "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
+                },
+                duration_ms=round(duration_ms, 2),
+            )
+        )
 
 
 def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:

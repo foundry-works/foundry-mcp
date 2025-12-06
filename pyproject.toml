@@ -37,6 +37,19 @@ test = [
     "jsonschema>=4.0.0",
     "hypothesis>=6.0.0",
 ]
+tracing = [
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+]
+metrics = [
+    "prometheus-client>=0.17.0",
+]
+observability = [
+    "foundry-mcp[tracing,metrics]",
+]
+dashboard = [
+    "aiohttp>=3.9.0",
+]
 
 [project.scripts]
 foundry-mcp = "foundry_mcp.server:main"

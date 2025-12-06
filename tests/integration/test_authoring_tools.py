@@ -205,14 +205,21 @@ class TestAuthoringToolsRegistration:
         assert "spec-update-frontmatter" in tools
         assert callable(tools["spec-update-frontmatter"].fn)
 
+    def test_phase_remove_registered(self, mcp_server):
+        """Test that phase-remove tool is registered."""
+        tools = mcp_server._tool_manager._tools
+        assert "phase-remove" in tools
+        assert callable(tools["phase-remove"].fn)
+
     def test_all_authoring_tools_count(self, mcp_server):
-        """Test that all 9 authoring tools are registered."""
+        """Test that all 10 authoring tools are registered."""
         tools = mcp_server._tool_manager._tools
         authoring_tools = [
             "spec-create",
             "spec-template",
             "task-add",
             "phase-add",
+            "phase-remove",
             "task-remove",
             "assumption-add",
             "assumption-list",
@@ -220,8 +227,8 @@ class TestAuthoringToolsRegistration:
             "spec-update-frontmatter",
         ]
         registered = [t for t in authoring_tools if t in tools]
-        assert len(registered) == 9, (
-            f"Expected 9 authoring tools, got {len(registered)}: {registered}"
+        assert len(registered) == 10, (
+            f"Expected 10 authoring tools, got {len(registered)}: {registered}"
         )
 
 
@@ -701,7 +708,7 @@ class TestTaskOperations:
 
 
 class TestPhaseOperations:
-    """Test phase-add operations."""
+    """Test phase-add and phase-remove operations."""
 
     def test_phase_add_validates_spec_id(self, mcp_server):
         tools = mcp_server._tool_manager._tools
@@ -742,6 +749,54 @@ class TestPhaseOperations:
 
         if result["success"]:
             assert result["data"].get("dry_run") is True
+
+    def test_phase_remove_validates_spec_id(self, mcp_server):
+        """Test phase-remove validates spec_id."""
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-remove"].fn(spec_id="", phase_id="phase-1")
+
+        assert result["success"] is False
+        assert "spec_id" in result["error"].lower()
+
+    def test_phase_remove_validates_phase_id(self, mcp_server):
+        """Test phase-remove validates phase_id."""
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-remove"].fn(spec_id="test-spec", phase_id="")
+
+        assert result["success"] is False
+        assert "phase_id" in result["error"].lower()
+
+    def test_phase_remove_dry_run_option(self, mcp_server):
+        """Test phase-remove supports dry_run option."""
+        tools = mcp_server._tool_manager._tools
+
+        result = tools["phase-remove"].fn(
+            spec_id="authoring-test-spec-001",
+            phase_id="phase-1",
+            dry_run=True,
+        )
+
+        # Should either succeed with dry_run flag set or fail gracefully
+        if result["success"]:
+            assert result["data"].get("dry_run") is True
+
+    def test_phase_remove_force_option(self, mcp_server):
+        """Test phase-remove accepts force option."""
+        tools = mcp_server._tool_manager._tools
+
+        # This may fail because phase has tasks, but shouldn't fail validation
+        result = tools["phase-remove"].fn(
+            spec_id="authoring-test-spec-001",
+            phase_id="phase-1",
+            force=True,
+        )
+
+        # Should return valid envelope regardless
+        assert "success" in result
+        assert "data" in result
+        assert "meta" in result
 
     def test_task_remove_dry_run_option(self, mcp_server):
         """Test task-remove supports dry_run option."""

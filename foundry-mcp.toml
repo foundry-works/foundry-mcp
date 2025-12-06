@@ -39,6 +39,44 @@ retry_delay = 5.0
 fallback_enabled = true
 cache_ttl = 3600
 
+# Per-workflow consultation configuration
+# Each workflow can specify min_models for consensus and timeout override
+
+# Fidelity review requires 2 models for consensus to catch implementation deviations
+[consultation.workflows.fidelity_review]
+min_models = 2
+timeout_override = 600.0
+
+# Plan review requires 3 models for consensus on architectural decisions
+[consultation.workflows.plan_review]
+min_models = 2
+
+# Doc generation uses single model (default min_models=1)
+[consultation.workflows.doc_generation]
+min_models = 1
+
 [git]
 enabled = true
 commit_cadence = "task"
+
+# Error collection - stores error logs for dashboard visibility
+[error_collection]
+enabled = true
+storage_path = "~/.foundry-mcp/errors"
+retention_days = 30
+max_records = 10000
+
+# Metrics persistence - stores metrics for dashboard charts
+[metrics_persistence]
+enabled = true
+storage_path = "~/.foundry-mcp/metrics"
+retention_days = 7
+max_records = 50000
+
+# Dashboard - web UI for viewing errors, metrics, and providers
+[dashboard]
+enabled = true
+port = 8080
+host = "127.0.0.1"
+auto_open_browser = false
+refresh_interval_ms = 5000

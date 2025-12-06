@@ -1,0 +1,309 @@
+# Prometheus Alerting Rules for foundry-mcp
+#
+# Multi-burn rate alerting strategy for SLO-based monitoring.
+# Implements Google SRE workbook recommendations for error budget alerting.
+#
+# Usage:
+#   rule_files:
+#     - /path/to/foundry-mcp-alerting-rules.yaml
+#
+# Burn Rate Strategy:
+#   - 14.4x burn rate (5m + 1h windows) -> Critical (page immediately)
+#   - 6x burn rate (30m + 6h windows) -> Warning (page during business hours)
+#   - 3x burn rate (6h + 24h windows) -> Ticket (create ticket, no page)
+#
+# SLO Targets:
+#   - Availability: 99.5% over 30 days (0.5% error budget)
+#   - Latency: 99% requests < 5 seconds
+#   - Error Rate: < 0.5%
+
+groups:
+  # ===========================================================================
+  # Critical Alerts (14.4x burn rate - page immediately)
+  # ===========================================================================
+  - name: foundry_mcp_critical
+    interval: 1m
+    rules:
+      # Availability SLO - Critical (14.4x burn rate)
+      # At this rate, entire 30-day error budget consumed in 2 days
+      - alert: FoundryMCP_AvailabilityCritical
+        expr: |
+          foundry_mcp:burn_rate:availability:5m > 14.4
+          and
+          foundry_mcp:burn_rate:availability:1h > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+          team: platform
+        annotations:
+          summary: "foundry-mcp availability SLO critical - 14.4x burn rate"
+          description: |
+            foundry-mcp is burning through error budget at 14.4x the sustainable rate.
+            At this rate, the entire 30-day error budget will be consumed in ~2 days.
+
+            Current burn rates:
+            - 5m: {{ $value | printf "%.2f" }}x
+            - 1h: {{ $labels.burn_rate_1h | printf "%.2f" }}x
+
+            Availability: {{ printf "%.2f" (100 * (index $values "foundry_mcp:sli:availability:rate5m")) }}%
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-availability"
+          dashboard_url: "https://grafana.example.com/d/foundry-mcp-slo"
+
+      # Latency SLO - Critical
+      - alert: FoundryMCP_LatencyCritical
+        expr: |
+          (1 - foundry_mcp:sli:latency_good:rate5m) / 0.01 > 14.4
+          and
+          (1 - foundry_mcp:sli:latency_good:rate1h) / 0.01 > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          slo: latency
+          team: platform
+        annotations:
+          summary: "foundry-mcp latency SLO critical - 14.4x burn rate"
+          description: |
+            foundry-mcp P99 latency is burning through error budget at 14.4x rate.
+            Too many requests are taking longer than 5 seconds.
+
+            Current P99: {{ printf "%.2f" (index $values "foundry_mcp:sli:latency_p99:rate5m") }}s
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-latency"
+
+  # ===========================================================================
+  # Warning Alerts (6x burn rate - page during business hours)
+  # ===========================================================================
+  - name: foundry_mcp_warning
+    interval: 1m
+    rules:
+      # Availability SLO - Warning (6x burn rate)
+      # At this rate, error budget consumed in ~5 days
+      - alert: FoundryMCP_AvailabilityWarning
+        expr: |
+          foundry_mcp:burn_rate:availability:5m > 6
+          and
+          foundry_mcp:burn_rate:availability:6h > 6
+        for: 5m
+        labels:
+          severity: warning
+          slo: availability
+          team: platform
+        annotations:
+          summary: "foundry-mcp availability SLO warning - 6x burn rate"
+          description: |
+            foundry-mcp is burning through error budget at 6x the sustainable rate.
+            At this rate, the 30-day error budget will be consumed in ~5 days.
+
+            Current burn rate (5m): {{ $value | printf "%.2f" }}x
+            Error budget remaining: {{ printf "%.1f" (100 * (index $values "foundry_mcp:error_budget:availability_remaining")) }}%
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-availability"
+
+      # Latency SLO - Warning
+      - alert: FoundryMCP_LatencyWarning
+        expr: |
+          (1 - foundry_mcp:sli:latency_good:rate5m) / 0.01 > 6
+          and
+          (1 - foundry_mcp:sli:latency_good:rate1h) / 0.01 > 6
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+          team: platform
+        annotations:
+          summary: "foundry-mcp latency SLO warning - 6x burn rate"
+          description: |
+            foundry-mcp latency is degraded. Many requests exceeding 5s threshold.
+
+            Current P99: {{ printf "%.2f" (index $values "foundry_mcp:sli:latency_p99:rate5m") }}s
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-latency"
+
+  # ===========================================================================
+  # Ticket Alerts (3x burn rate - create ticket, no page)
+  # ===========================================================================
+  - name: foundry_mcp_ticket
+    interval: 5m
+    rules:
+      # Availability SLO - Ticket (3x burn rate)
+      # At this rate, error budget consumed in ~10 days
+      - alert: FoundryMCP_AvailabilityTicket
+        expr: |
+          foundry_mcp:burn_rate:availability:6h > 3
+          and
+          foundry_mcp:burn_rate:availability:24h > 3
+        for: 30m
+        labels:
+          severity: ticket
+          slo: availability
+          team: platform
+        annotations:
+          summary: "foundry-mcp availability degraded - create ticket"
+          description: |
+            foundry-mcp availability is below SLO at a sustained rate.
+            Error budget consumption: {{ printf "%.1f" (100 * (index $values "foundry_mcp:error_budget:availability_consumed")) }}%
+
+            Consider investigating recent changes or increased load.
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-availability"
+
+  # ===========================================================================
+  # Health Check Alerts
+  # ===========================================================================
+  - name: foundry_mcp_health
+    interval: 1m
+    rules:
+      # Server unhealthy
+      - alert: FoundryMCP_Unhealthy
+        expr: |
+          foundry_mcp_health_status{check_type="health"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "foundry-mcp health check failing"
+          description: |
+            foundry-mcp full health check is returning unhealthy status.
+            One or more critical dependencies are failing.
+
+            Check dependency health metrics for details.
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-health"
+
+      # Server not ready
+      - alert: FoundryMCP_NotReady
+        expr: |
+          foundry_mcp_health_status{check_type="readiness"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "foundry-mcp readiness check failing"
+          description: |
+            foundry-mcp is not ready to serve requests.
+            Critical dependencies (specs_dir, disk space) may be unavailable.
+
+      # Dependency unhealthy
+      - alert: FoundryMCP_DependencyUnhealthy
+        expr: |
+          foundry_mcp_dependency_health == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "foundry-mcp dependency {{ $labels.dependency }} unhealthy"
+          description: |
+            The {{ $labels.dependency }} dependency is reporting unhealthy status.
+
+      # Disk space critical
+      - alert: FoundryMCP_DiskSpaceCritical
+        expr: |
+          foundry_mcp_dependency_health{dependency="disk_space"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "foundry-mcp disk space critically low"
+          description: |
+            Disk space on the foundry-mcp server is critically low.
+            Spec writes and other operations may fail.
+
+  # ===========================================================================
+  # Error Budget Alerts
+  # ===========================================================================
+  - name: foundry_mcp_error_budget
+    interval: 5m
+    rules:
+      # Error budget nearly exhausted (>90% consumed)
+      - alert: FoundryMCP_ErrorBudgetNearlyExhausted
+        expr: |
+          foundry_mcp:error_budget:availability_consumed > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          slo: availability
+          team: platform
+        annotations:
+          summary: "foundry-mcp error budget >90% consumed"
+          description: |
+            foundry-mcp has consumed {{ printf "%.1f" (100 * $value) }}% of its 30-day error budget.
+
+            Consider freezing risky changes until the budget recovers.
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-error-budget"
+
+      # Error budget exhausted (>100% consumed)
+      - alert: FoundryMCP_ErrorBudgetExhausted
+        expr: |
+          foundry_mcp:error_budget:availability_consumed > 1.0
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+          team: platform
+        annotations:
+          summary: "foundry-mcp error budget EXHAUSTED"
+          description: |
+            foundry-mcp has exhausted its 30-day error budget!
+            Error budget consumption: {{ printf "%.1f" (100 * $value) }}%
+
+            Immediate action required:
+            1. Freeze all non-critical changes
+            2. Investigate recent deployments
+            3. Prioritize reliability fixes
+          runbook_url: "https://docs.example.com/runbooks/foundry-mcp-error-budget"
+
+  # ===========================================================================
+  # Operational Alerts
+  # ===========================================================================
+  - name: foundry_mcp_operational
+    interval: 1m
+    rules:
+      # High error rate (immediate)
+      - alert: FoundryMCP_HighErrorRate
+        expr: |
+          foundry_mcp:sli:error_rate:rate5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "foundry-mcp error rate >5%"
+          description: |
+            foundry-mcp is experiencing elevated error rates.
+            Current error rate: {{ printf "%.2f" (100 * $value) }}%
+
+      # No requests (possible outage)
+      - alert: FoundryMCP_NoRequests
+        expr: |
+          sum(rate(foundry_mcp_tool_invocations_total[5m])) == 0
+          and
+          sum(increase(foundry_mcp_tool_invocations_total[1h])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "foundry-mcp receiving no requests"
+          description: |
+            foundry-mcp has not received any requests in the last 10 minutes,
+            but was receiving traffic in the previous hour.
+
+            This may indicate a network issue or upstream problem.
+
+      # Slow health checks
+      - alert: FoundryMCP_SlowHealthChecks
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(foundry_mcp_health_check_duration_seconds_bucket[5m])) by (le, check_type)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "foundry-mcp health checks slow ({{ $labels.check_type }})"
+          description: |
+            Health checks are taking longer than expected.
+            P99 duration: {{ printf "%.2f" $value }}s
+
+            This may indicate infrastructure issues.

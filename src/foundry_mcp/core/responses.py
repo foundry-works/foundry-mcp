@@ -91,6 +91,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
+from foundry_mcp.core.context import get_correlation_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -116,6 +118,7 @@ class ErrorCode(str, Enum):
     NOT_FOUND = "NOT_FOUND"
     SPEC_NOT_FOUND = "SPEC_NOT_FOUND"
     TASK_NOT_FOUND = "TASK_NOT_FOUND"
+    PHASE_NOT_FOUND = "PHASE_NOT_FOUND"
     DUPLICATE_ENTRY = "DUPLICATE_ENTRY"
     CONFLICT = "CONFLICT"
 
@@ -188,12 +191,29 @@ def _build_meta(
     rate_limit: Optional[Mapping[str, Any]] = None,
     telemetry: Optional[Mapping[str, Any]] = None,
     extra: Optional[Mapping[str, Any]] = None,
+    auto_inject_request_id: bool = True,
 ) -> Dict[str, Any]:
-    """Construct a metadata payload that always includes the response version."""
+    """Construct a metadata payload that always includes the response version.
+
+    Args:
+        request_id: Explicit correlation ID (takes precedence if provided)
+        warnings: Non-fatal issues to surface
+        pagination: Cursor metadata for list results
+        rate_limit: Rate limit state
+        telemetry: Timing/performance metadata
+        extra: Arbitrary extra metadata to merge
+        auto_inject_request_id: If True (default), auto-inject correlation_id
+            from context when request_id is not explicitly provided
+    """
     meta: Dict[str, Any] = {"version": "response-v2"}
 
-    if request_id:
-        meta["request_id"] = request_id
+    # Auto-inject request_id from context if not explicitly provided
+    effective_request_id = request_id
+    if effective_request_id is None and auto_inject_request_id:
+        effective_request_id = get_correlation_id() or None
+
+    if effective_request_id:
+        meta["request_id"] = effective_request_id
     if warnings:
         meta["warnings"] = list(warnings)
     if pagination:

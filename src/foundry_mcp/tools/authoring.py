@@ -31,6 +31,7 @@ from foundry_mcp.core.spec import (
     create_spec,
     add_assumption,
     add_phase,
+    remove_phase,
     list_assumptions,
     add_revision,
     update_frontmatter,
@@ -747,6 +748,209 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.exception("Unexpected error in phase-add")
+            _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="authoring"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
+
+    @canonical_tool(
+        mcp,
+        canonical_name="phase-remove",
+    )
+    def phase_remove_tool(
+        spec_id: str,
+        phase_id: str,
+        force: bool = False,
+        dry_run: bool = False,
+        path: Optional[str] = None,
+    ) -> dict:
+        """
+        Remove a phase and all its children from an SDD specification.
+
+        Deletes a phase node and all its child tasks/verifications from the hierarchy.
+        Handles re-linking of adjacent phases when dependency chains exist.
+
+        WHEN TO USE:
+        - Removing phases that are no longer needed
+        - Cleaning up abandoned or duplicate phases
+        - Restructuring specification scope
+        - Pruning completed phases from hierarchy
+
+        Args:
+            spec_id: Specification ID containing the phase
+            phase_id: Phase ID to remove (e.g., phase-1, phase-2)
+            force: Remove even if phase contains non-completed tasks (default: False)
+            dry_run: Preview changes without saving
+            path: Project root path (default: current directory)
+
+        Returns:
+            JSON object with removal results:
+            - spec_id: The specification ID
+            - phase_id: The removed phase ID
+            - phase_title: Title of the removed phase
+            - children_removed: Number of child tasks/verifications removed
+            - total_tasks_removed: Total task count removed
+            - force: Whether force flag was used
+            - relinked: Info about re-linked adjacent phases (if applicable)
+            - dry_run: Whether this was a dry run
+        """
+        tool_name = "phase_remove"
+        start_time = time.perf_counter()
+
+        try:
+            # Validate required parameters
+            if not spec_id:
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter",
+                    )
+                )
+
+            if not phase_id:
+                return asdict(
+                    error_response(
+                        "phase_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a phase_id parameter (e.g., phase-1)",
+                    )
+                )
+
+            # Find specs directory
+            specs_dir = (
+                find_specs_directory(path)
+                if path
+                else (config.specs_dir or find_specs_directory())
+            )
+
+            # Log the operation
+            audit_log(
+                "tool_invocation",
+                tool="phase-remove",
+                action="remove_phase",
+                spec_id=spec_id,
+                phase_id=phase_id,
+                force=force,
+                dry_run=dry_run,
+            )
+
+            # Handle dry_run preview
+            if dry_run:
+                _metrics.counter(
+                    f"authoring.{tool_name}",
+                    labels={"status": "success", "force": str(force)},
+                )
+                return asdict(
+                    success_response(
+                        {
+                            "spec_id": spec_id,
+                            "phase_id": phase_id,
+                            "force": force,
+                            "dry_run": True,
+                            "note": "Dry run - no changes made",
+                        }
+                    )
+                )
+
+            # Call the core function
+            result, error = remove_phase(
+                spec_id=spec_id,
+                phase_id=phase_id,
+                force=force,
+                specs_dir=specs_dir,
+            )
+
+            # Record timing metrics
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            _metrics.timer(f"authoring.{tool_name}.duration_ms", elapsed_ms)
+
+            if error:
+                _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
+
+                # Check for common errors
+                lowered = error.lower()
+                if "not found" in lowered:
+                    if "spec" in lowered:
+                        return asdict(
+                            error_response(
+                                f"Specification '{spec_id}' not found",
+                                error_code="SPEC_NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the spec ID exists using spec-list",
+                            )
+                        )
+                    elif "phase" in lowered:
+                        return asdict(
+                            error_response(
+                                f"Phase '{phase_id}' not found in spec",
+                                error_code="PHASE_NOT_FOUND",
+                                error_type="not_found",
+                                remediation="Verify the phase ID exists in the specification",
+                            )
+                        )
+
+                if "is not a phase" in lowered:
+                    return asdict(
+                        error_response(
+                            f"Node '{phase_id}' is not a phase",
+                            error_code="VALIDATION_ERROR",
+                            error_type="validation",
+                            remediation="Use task-remove for task nodes, phase-remove is only for phases",
+                        )
+                    )
+
+                if "non-completed" in lowered or "has" in lowered and "task" in lowered:
+                    return asdict(
+                        error_response(
+                            f"Phase '{phase_id}' has non-completed tasks. Use force=True to remove anyway",
+                            error_code="CONFLICT",
+                            error_type="conflict",
+                            remediation="Set force=True to remove phase with active tasks",
+                        )
+                    )
+
+                return asdict(
+                    error_response(
+                        f"Failed to remove phase: {error}",
+                        error_code="COMMAND_FAILED",
+                        error_type="internal",
+                        remediation="Check that the spec and phase exist",
+                    )
+                )
+
+            # Build response data
+            data: Dict[str, Any] = {
+                "spec_id": spec_id,
+                "phase_id": phase_id,
+                "phase_title": result.get("phase_title", ""),
+                "children_removed": result.get("children_removed", 0),
+                "total_tasks_removed": result.get("total_tasks_removed", 0),
+                "force": force,
+                "dry_run": False,
+            }
+
+            # Include relinked info if phases were re-linked
+            if "relinked" in result:
+                data["relinked"] = result["relinked"]
+
+            # Track metrics
+            _metrics.counter(
+                f"authoring.{tool_name}",
+                labels={"status": "success", "force": str(force)},
+            )
+
+            return asdict(success_response(data))
+
+        except Exception as e:
+            logger.exception("Unexpected error in phase-remove")
             _metrics.counter(f"authoring.{tool_name}", labels={"status": "error"})
             return asdict(
                 error_response(
@@ -1611,5 +1815,5 @@ def register_authoring_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
     logger.debug(
-        "Registered authoring tools: spec-create, spec-template, task-add, phase-add, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter"
+        "Registered authoring tools: spec-create, spec-template, task-add, phase-add, phase-remove, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter"
     )
