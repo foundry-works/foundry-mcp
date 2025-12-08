@@ -92,6 +92,8 @@ def register_all_commands(cli: click.Group) -> None:
         modify_group,
         move_spec_cmd,
         next_task,
+        plan_group,
+        plan_review_alias_cmd,
         pr_group,
         prepare_task_cmd,
         query_tasks_alias_cmd,
@@ -135,6 +137,7 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(llm_doc_group)
     cli.add_command(dev_group)
     cli.add_command(dashboard_group)
+    cli.add_command(plan_group)
 
     # Add top-level aliases for common commands
     # This allows both `sdd specs create` and `sdd create`
@@ -176,6 +179,7 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(list_blockers_alias_cmd, name="list-blockers")
     cli.add_command(fix_cmd, name="fix")
     cli.add_command(schema_cmd, name="schema")
+    cli.add_command(plan_review_alias_cmd, name="plan-review")
 
     # Placeholder: version command for testing the scaffold
     @cli.command("version")

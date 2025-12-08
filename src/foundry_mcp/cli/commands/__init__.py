@@ -143,6 +143,11 @@ from foundry_mcp.cli.commands.dashboard import (
     dashboard_status_cmd,
     dashboard_stop_cmd,
 )
+from foundry_mcp.cli.commands.plan import (
+    plan_group,
+    plan_review_cmd,
+    plan_review_alias_cmd,
+)
 
 __all__ = [
     # Spec commands
@@ -269,4 +274,8 @@ __all__ = [
     "dashboard_start_cmd",
     "dashboard_status_cmd",
     "dashboard_stop_cmd",
+    # Plan commands
+    "plan_group",
+    "plan_review_cmd",
+    "plan_review_alias_cmd",
 ]

@@ -66,6 +66,7 @@ from foundry_mcp.tools.documentation import register_documentation_tools
 from foundry_mcp.tools.providers import register_provider_tools
 from foundry_mcp.tools.errors import register_error_tools
 from foundry_mcp.tools.metrics import register_metrics_tools
+from foundry_mcp.tools.plan_review import register_plan_review_tools
 from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
 
@@ -239,6 +240,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     register_provider_tools(mcp, config)
     register_error_tools(mcp, config)
     register_metrics_tools(mcp, config)
+    register_plan_review_tools(mcp, config)
 
     # Register resources
     _register_resources(mcp, config)

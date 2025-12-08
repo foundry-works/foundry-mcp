@@ -90,7 +90,7 @@ class TestConsultationWorkflow:
     def test_workflow_count(self):
         """Verify all expected workflows are defined."""
         workflows = list(ConsultationWorkflow)
-        assert len(workflows) == 3
+        assert len(workflows) == 4
 
 
 # =============================================================================

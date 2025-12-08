@@ -117,11 +117,13 @@ class ConsultationWorkflow(str, Enum):
         DOC_GENERATION: Generate documentation from code analysis
         PLAN_REVIEW: Review and critique SDD specifications
         FIDELITY_REVIEW: Compare implementation against specifications
+        MARKDOWN_PLAN_REVIEW: Review markdown plans before spec creation
     """
 
     DOC_GENERATION = "doc_generation"
     PLAN_REVIEW = "plan_review"
     FIDELITY_REVIEW = "fidelity_review"
+    MARKDOWN_PLAN_REVIEW = "markdown_plan_review"
 
 
 # =============================================================================

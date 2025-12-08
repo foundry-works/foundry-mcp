@@ -38,29 +38,47 @@ def canonical_tool(
     """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @functools.wraps(func)
-        async def async_error_collecting_wrapper(*args: Any, **kwargs: Any) -> Any:
-            """Async wrapper that handles both sync and async underlying functions."""
-            start_time = time.perf_counter()
-            try:
-                # Support both sync and async underlying functions during migration
-                if asyncio.iscoroutinefunction(func):
+        if asyncio.iscoroutinefunction(func):
+            # Async function - use async wrapper
+            @functools.wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                """Async wrapper for async underlying functions."""
+                start_time = time.perf_counter()
+                try:
                     return await func(*args, **kwargs)
-                else:
-                    # Run sync function in thread pool to not block event loop
-                    return await asyncio.to_thread(func, *args, **kwargs)
-            except Exception as e:
-                duration_ms = (time.perf_counter() - start_time) * 1000
-                _collect_tool_error(
-                    tool_name=canonical_name,
-                    error=e,
-                    input_params=kwargs,
-                    duration_ms=duration_ms,
-                )
-                raise
+                except Exception as e:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+                    _collect_tool_error(
+                        tool_name=canonical_name,
+                        error=e,
+                        input_params=kwargs,
+                        duration_ms=duration_ms,
+                    )
+                    raise
+
+            wrapper = async_wrapper
+        else:
+            # Sync function - use sync wrapper to preserve sync behavior
+            @functools.wraps(func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                """Sync wrapper for sync underlying functions."""
+                start_time = time.perf_counter()
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+                    _collect_tool_error(
+                        tool_name=canonical_name,
+                        error=e,
+                        input_params=kwargs,
+                        duration_ms=duration_ms,
+                    )
+                    raise
+
+            wrapper = sync_wrapper
 
         # Apply mcp_tool first, then register with FastMCP
-        instrumented = mcp_tool(tool_name=canonical_name)(async_error_collecting_wrapper)
+        instrumented = mcp_tool(tool_name=canonical_name)(wrapper)
         return mcp.tool(name=canonical_name, **tool_kwargs)(instrumented)
 
     return decorator

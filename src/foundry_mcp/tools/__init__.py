@@ -10,6 +10,7 @@ from foundry_mcp.tools.authoring import register_authoring_tools
 from foundry_mcp.tools.mutations import register_mutation_tools
 from foundry_mcp.tools.documentation import register_documentation_tools
 from foundry_mcp.tools.providers import register_provider_tools
+from foundry_mcp.tools.plan_review import register_plan_review_tools
 
 __all__ = [
     "register_query_tools",
@@ -22,4 +23,5 @@ __all__ = [
     "register_mutation_tools",
     "register_documentation_tools",
     "register_provider_tools",
+    "register_plan_review_tools",
 ]

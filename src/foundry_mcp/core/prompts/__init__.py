@@ -433,11 +433,13 @@ def get_prompt_builder(workflow: "ConsultationWorkflow") -> PromptBuilder:
     from foundry_mcp.core.prompts.doc_generation import DocGenerationPromptBuilder
     from foundry_mcp.core.prompts.plan_review import PlanReviewPromptBuilder
     from foundry_mcp.core.prompts.fidelity_review import FidelityReviewPromptBuilder
+    from foundry_mcp.core.prompts.markdown_plan_review import MarkdownPlanReviewPromptBuilder
 
     builders: Dict[ConsultationWorkflow, type[PromptBuilder]] = {
         ConsultationWorkflow.DOC_GENERATION: DocGenerationPromptBuilder,
         ConsultationWorkflow.PLAN_REVIEW: PlanReviewPromptBuilder,
         ConsultationWorkflow.FIDELITY_REVIEW: FidelityReviewPromptBuilder,
+        ConsultationWorkflow.MARKDOWN_PLAN_REVIEW: MarkdownPlanReviewPromptBuilder,
     }
 
     builder_class = builders.get(workflow)
