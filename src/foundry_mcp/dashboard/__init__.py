@@ -1,18 +1,32 @@
-"""
-Built-in web dashboard for foundry-mcp.
+"""Streamlit-based dashboard for foundry-mcp observability.
 
-Provides a web UI for viewing errors, metrics, and AI provider status
-without requiring external tools like Grafana.
+This module provides a web UI for viewing errors, metrics, provider status,
+and SDD workflow progress.
+
+Public API:
+    launch_dashboard: Start the Streamlit dashboard server
+    stop_dashboard: Stop the running dashboard server
+    get_dashboard_status: Check if dashboard is running
+
+Usage:
+    from foundry_mcp.dashboard import launch_dashboard, stop_dashboard
+
+    # Start dashboard
+    result = launch_dashboard(port=8501, open_browser=True)
+    print(f"Dashboard running at {result['url']}")
+
+    # Stop dashboard
+    stop_dashboard()
 """
 
-from foundry_mcp.dashboard.server import (
-    start_dashboard,
+from foundry_mcp.dashboard.launcher import (
+    get_dashboard_status,
+    launch_dashboard,
     stop_dashboard,
-    get_dashboard_url,
 )
 
 __all__ = [
-    "start_dashboard",
+    "launch_dashboard",
     "stop_dashboard",
-    "get_dashboard_url",
+    "get_dashboard_status",
 ]

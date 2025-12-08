@@ -68,6 +68,8 @@ def register_all_commands(cli: click.Group) -> None:
         complete_task_cmd,
         create,
         create_pr_alias_cmd,
+        dashboard_group,
+        dashboard_start_alias_cmd,
         dev_group,
         dev_install_alias_cmd,
         doc_group,
@@ -132,6 +134,7 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(test_group)
     cli.add_command(llm_doc_group)
     cli.add_command(dev_group)
+    cli.add_command(dashboard_group)
 
     # Add top-level aliases for common commands
     # This allows both `sdd specs create` and `sdd create`

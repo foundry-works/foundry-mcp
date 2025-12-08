@@ -136,6 +136,13 @@ from foundry_mcp.cli.commands.tasks import (
     unblock_task_cmd,
     update_status_cmd,
 )
+from foundry_mcp.cli.commands.dashboard import (
+    dashboard_group,
+    dashboard_start_alias_cmd,
+    dashboard_start_cmd,
+    dashboard_status_cmd,
+    dashboard_stop_cmd,
+)
 
 __all__ = [
     # Spec commands
@@ -256,4 +263,10 @@ __all__ = [
     "journal_list_alias_cmd",
     "journal_unjournaled_cmd",
     "journal_unjournaled_alias_cmd",
+    # Dashboard commands
+    "dashboard_group",
+    "dashboard_start_alias_cmd",
+    "dashboard_start_cmd",
+    "dashboard_status_cmd",
+    "dashboard_stop_cmd",
 ]

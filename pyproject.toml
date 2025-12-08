@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foundry-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server for SDD toolkit spec management"
 readme = "README.md"
 license = "MIT"
@@ -48,7 +48,9 @@ observability = [
     "foundry-mcp[tracing,metrics]",
 ]
 dashboard = [
-    "aiohttp>=3.9.0",
+    "streamlit>=1.28.0",
+    "plotly>=5.18.0",
+    "pandas>=2.0.0",
 ]
 
 [project.scripts]

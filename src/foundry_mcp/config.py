@@ -295,7 +295,7 @@ class DashboardConfig:
     """
 
     enabled: bool = False
-    port: int = 8080
+    port: int = 8501  # Streamlit default port
     host: str = "127.0.0.1"
     auto_open_browser: bool = False
     refresh_interval_ms: int = 5000
@@ -312,7 +312,7 @@ class DashboardConfig:
         """
         return cls(
             enabled=_parse_bool(data.get("enabled", False)),
-            port=int(data.get("port", 8080)),
+            port=int(data.get("port", 8501)),  # Streamlit default
             host=str(data.get("host", "127.0.0.1")),
             auto_open_browser=_parse_bool(data.get("auto_open_browser", False)),
             refresh_interval_ms=int(data.get("refresh_interval_ms", 5000)),
