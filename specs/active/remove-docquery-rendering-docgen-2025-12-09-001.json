@@ -1,0 +1,1033 @@
+{
+  "spec_id": "remove-docquery-rendering-docgen-2025-12-09-001",
+  "title": "Remove Doc-Query, Spec Rendering, and Codebase Doc Generation",
+  "generated": "2025-12-09T21:44:28.293950Z",
+  "last_updated": "2025-12-10T14:26:34.978136Z",
+  "metadata": {
+    "description": "",
+    "objectives": [],
+    "complexity": "medium",
+    "estimated_hours": 15,
+    "assumptions": [],
+    "status": "pending",
+    "owner": "",
+    "progress_percentage": 0,
+    "current_phase": "phase-1",
+    "category": "refactoring",
+    "template": "medium",
+    "title": "Remove Doc-Query, Spec Rendering, and Codebase Doc Generation"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": "phase-1",
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "remove-docquery-rendering-docgen",
+      "status": "in_progress",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6"
+      ],
+      "total_tasks": 40,
+      "completed_tasks": 3,
+      "metadata": {
+        "purpose": "",
+        "category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Planning & Discovery",
+      "status": "in_progress",
+      "parent": "spec-root",
+      "children": [
+        "verify-1-1",
+        "verify-1-2",
+        "task-1-1",
+        "task-1-2",
+        "task-1-3"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 3,
+      "metadata": {
+        "purpose": "Initial planning and requirements gathering",
+        "estimated_hours": 2
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass",
+        "started_at": "2025-12-10T14:26:34.978034Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-1-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-1",
+        "expected": "Implementation matches specification"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Implementation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "verify-2-1",
+        "verify-2-2",
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "task-2-5"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Core implementation work",
+        "estimated_hours": 8
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-2-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-2",
+        "expected": "Implementation matches specification"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-2-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Remove Spec Rendering Feature",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "verify-3-1",
+        "verify-3-2",
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4",
+        "task-3-5"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Remove spec-render and spec-render-progress tools after task-list is relocated",
+        "description": "Remove rendering MCP tools, core module, and CLI commands"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-3-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-3",
+        "expected": "Implementation matches specification"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-3-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Remove Doc Generation Feature",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "verify-4-1",
+        "verify-4-2",
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "task-4-5"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Remove spec-doc and spec-doc-llm tools while keeping spec-review-fidelity",
+        "description": "Remove docgen core module, prompts, and CLI commands"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-4-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-4",
+        "expected": "Implementation matches specification"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-4-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "CLI and Test Cleanup",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "verify-5-1",
+        "verify-5-2",
+        "task-5-1",
+        "task-5-2",
+        "task-5-3",
+        "task-5-4",
+        "task-5-5",
+        "task-5-6"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Clean up CLI command registrations and fix test assertions",
+        "description": "Remove all CLI registrations and update remaining tests"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-6"
+        ],
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": []
+      }
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-5-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-5-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-5",
+        "expected": "Implementation matches specification"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-5-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-6": {
+      "type": "phase",
+      "title": "Documentation Cleanup",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "verify-6-1",
+        "verify-6-2",
+        "task-6-1",
+        "task-6-2",
+        "task-6-3",
+        "task-6-4"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "Ensure documentation accurately reflects the codebase after removals",
+        "description": "Update documentation to reflect removed features"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-5"
+        ],
+        "depends": []
+      }
+    },
+    "verify-6-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-6-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-6",
+        "expected": "Implementation matches specification"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-6-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add get_status_icon() function to core/progress.py",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Move the STATUS_ICONS dict and get_status_icon() function from core/rendering.py to core/progress.py so task-list can use it after rendering module is deleted",
+        "file_path": "task-1-1.py",
+        "started_at": "2025-12-10T14:14:47.236928Z",
+        "completed_at": "2025-12-10T14:15:32.013587Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Add task-list tool to tools/tasks.py",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Move the task_list function from tools/rendering.py to tools/tasks.py, updating imports to use get_status_icon from core.progress",
+        "file_path": "task-1-2.py",
+        "started_at": "2025-12-10T14:15:32.240893Z",
+        "completed_at": "2025-12-10T14:16:46.159976Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Update tools/documentation.py - remove spec-doc tools",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Remove spec_doc() and spec_doc_llm() functions while keeping spec_review_fidelity(). Remove imports from core/rendering and core/docgen.",
+        "file_path": "task-1-3.py",
+        "started_at": "2025-12-10T14:16:46.307685Z",
+        "completed_at": "2025-12-10T14:21:21.802107Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Remove register_docs_tools from server.py",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove import and call to register_docs_tools(mcp, config) from server.py",
+        "file_path": "task-2-1.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/tools/docs.py",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the entire docs.py file containing 7 MCP tools: code-find-class, code-find-function, code-trace-calls, code-impact-analysis, code-get-callers, code-get-callees, doc-stats",
+        "file_path": "task-2-2.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/core/docs.py",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the DocsQuery class and all related query functionality",
+        "file_path": "task-2-3.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/cli/commands/docquery.py",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the CLI doc command group with find-class, find-function, trace-calls, impact, stats commands",
+        "file_path": "task-2-4.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-5": {
+      "type": "task",
+      "title": "Delete tests/doc_query/ directory",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete entire test directory including test_codebase_query.py, test_doc_cli_pagination.py, test_scope_command.py",
+        "file_path": "task-2-5.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Remove register_rendering_tools from server.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove import and call to register_rendering_tools(mcp, config) from server.py",
+        "file_path": "task-3-1.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/tools/rendering.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete rendering.py after task-list has been relocated to tools/tasks.py",
+        "file_path": "task-3-2.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/core/rendering.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete rendering.py after get_status_icon has been relocated to core/progress.py",
+        "file_path": "task-3-3.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/cli/commands/render.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the CLI render command group",
+        "file_path": "task-3-4.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-5": {
+      "type": "task",
+      "title": "Delete tests/unit/test_core/test_rendering.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the rendering unit tests",
+        "file_path": "task-3-5.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/core/docgen.py",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the DocumentationGenerator class and all doc generation functionality",
+        "file_path": "task-4-1.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/core/prompts/doc_generation.py",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the doc generation prompt templates (DOC_GEN_PROJECT_OVERVIEW_V1, DOC_GEN_ARCHITECTURE_V1, etc.)",
+        "file_path": "task-4-2.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Update core/prompts/__init__.py",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove DocGenerationPromptBuilder import and DOC_GENERATION workflow entry from builders dict",
+        "file_path": "task-4-3.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Delete src/foundry_mcp/cli/commands/docgen.py",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the CLI llm-doc command group",
+        "file_path": "task-4-4.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "Delete tests/integration/test_llm_docs.py",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the LLM documentation integration tests",
+        "file_path": "task-4-5.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "Update cli/commands/__init__.py - remove imports",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove imports from docquery, render, and docgen modules. Remove corresponding entries from __all__ list.",
+        "file_path": "task-5-1.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "Update cli/main.py - remove command groups",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove registration of render_group, doc_group, and llm_doc_group command groups",
+        "file_path": "task-5-2.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "Update tests/unit/test_documentation.py",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove tests for spec-doc and spec-doc-llm, keep only spec-review-fidelity tests",
+        "file_path": "task-5-3.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-4": {
+      "type": "task",
+      "title": "Update tests/integration/test_mcp_smoke.py",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove TestRenderingToolsRegistration class, update task-list tests to reference tools/tasks.py",
+        "file_path": "task-5-4.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-5": {
+      "type": "task",
+      "title": "Update tests/integration/test_mcp_tools.py",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update tool count assertions and remove references to deleted tools",
+        "file_path": "task-5-5.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-6": {
+      "type": "task",
+      "title": "Update tests/integration/test_llm_tools.py",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update documentation tool tests to only test spec-review-fidelity",
+        "file_path": "task-5-6.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-1": {
+      "type": "task",
+      "title": "Update docs/guides/llm-configuration.md",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove references to spec-doc-llm and documentation generation features",
+        "file_path": "task-6-1.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-2": {
+      "type": "task",
+      "title": "Update docs/guides/development-guide.md",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove references to doc-query and rendering tools",
+        "file_path": "task-6-2.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-3": {
+      "type": "task",
+      "title": "Update docs/codebase_standards/naming-conventions.md",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove references to removed tool naming conventions",
+        "file_path": "task-6-3.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-4": {
+      "type": "task",
+      "title": "Evaluate docs/generated/ directory",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Decide whether to remove the docs/generated/ directory since it was produced by removed doc-gen functionality",
+        "file_path": "task-6-4.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2025-12-10T14:15:32.013587Z",
+      "task_id": "task-1-1",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add get_status_icon() function to core/progress.py",
+      "content": "Added STATUS_ICONS dict and get_status_icon() function to core/progress.py, copied from core/rendering.py",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T14:16:46.159976Z",
+      "task_id": "task-1-2",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add task-list tool to tools/tasks.py",
+      "content": "Added task-list tool to tools/tasks.py with imports for get_status_icon from core.progress and pagination utilities",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T14:21:21.802107Z",
+      "task_id": "task-1-3",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update tools/documentation.py - remove spec-doc tools",
+      "content": "Removed spec_doc() and spec_doc_llm() functions from tools/documentation.py, keeping only spec_review_fidelity(). Removed imports from core/rendering and core/docgen.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T14:26:34.978034Z",
+      "task_id": "verify-1-1",
+      "entry_type": "status_change",
+      "title": "Task Started: Run tests",
+      "content": "Running test suite to verify Phase 1 implementation",
+      "author": "foundry-mcp"
+    }
+  ]
+}

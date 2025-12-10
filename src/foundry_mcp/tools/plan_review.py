@@ -36,6 +36,7 @@ from foundry_mcp.core.ai_consultation import (
     ConsultationResult,
 )
 from foundry_mcp.core.providers import available_providers
+from foundry_mcp.core.spec import find_specs_directory
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,7 @@ def register_plan_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             )
 
             # Handle ConsultationResult
+            consensus_info = None  # Only set for multi-model
             if isinstance(result, ConsultationResult):
                 if not result.success:
                     return asdict(
@@ -348,7 +350,15 @@ def register_plan_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     )
 
                 review_content = result.primary_content
-                provider_used = result.responses[0].provider_id if result.responses else "unknown"
+                # Report all providers consulted for consensus
+                providers_consulted = [r.provider_id for r in result.responses]
+                provider_used = providers_consulted[0] if providers_consulted else "unknown"
+                # Store full consensus info for response
+                consensus_info = {
+                    "providers_consulted": providers_consulted,
+                    "successful": result.agreement.successful_providers,
+                    "failed": result.agreement.failed_providers,
+                }
 
         except Exception as e:
             metrics.counter(
@@ -368,11 +378,22 @@ def register_plan_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
         summary = _parse_review_summary(review_content)
         inline_summary = _format_inline_summary(summary)
 
-        # Ensure ./tmp/ directory exists and write review
-        tmp_dir = Path.cwd() / "tmp"
+        # Find specs directory and write review to specs/.plan-reviews/
+        specs_dir = find_specs_directory()
+        if specs_dir is None:
+            return asdict(
+                error_response(
+                    "No specs directory found for storing plan review",
+                    error_code="SPECS_NOT_FOUND",
+                    error_type="validation",
+                    remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
+                )
+            )
+
+        plan_reviews_dir = specs_dir / ".plan-reviews"
         try:
-            tmp_dir.mkdir(parents=True, exist_ok=True)
-            review_file = tmp_dir / f"{plan_name}-review.md"
+            plan_reviews_dir.mkdir(parents=True, exist_ok=True)
+            review_file = plan_reviews_dir / f"{plan_name}-{review_type}.md"
             review_file.write_text(review_content, encoding="utf-8")
         except Exception as e:
             metrics.counter(
@@ -384,7 +405,7 @@ def register_plan_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     f"Failed to write review file: {e}",
                     error_code="WRITE_ERROR",
                     error_type="internal",
-                    remediation="Check write permissions for ./tmp/ directory",
+                    remediation="Check write permissions for specs/.plan-reviews/ directory",
                 )
             )
 
@@ -395,17 +416,329 @@ def register_plan_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             labels={"tool": "plan-review", "review_type": review_type},
         )
 
+        response_data = {
+            "plan_path": str(plan_file),
+            "plan_name": plan_name,
+            "review_type": review_type,
+            "review_path": str(review_file),
+            "summary": summary,
+            "inline_summary": inline_summary,
+            "llm_status": llm_status,
+            "provider_used": provider_used,
+        }
+        if consensus_info:
+            response_data["consensus"] = consensus_info
+
+        return asdict(
+            success_response(
+                data=response_data,
+                telemetry={"duration_ms": round(duration_ms, 2)},
+            )
+        )
+
+    # Plan templates
+    PLAN_TEMPLATES = {
+        "simple": """# {name}
+
+## Objective
+
+[Describe the primary goal of this plan]
+
+## Scope
+
+[What is included/excluded from this plan]
+
+## Tasks
+
+1. [Task 1]
+2. [Task 2]
+3. [Task 3]
+
+## Success Criteria
+
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+""",
+        "detailed": """# {name}
+
+## Objective
+
+[Describe the primary goal of this plan]
+
+## Scope
+
+### In Scope
+- [Item 1]
+- [Item 2]
+
+### Out of Scope
+- [Item 1]
+
+## Phases
+
+### Phase 1: [Phase Name]
+
+**Purpose**: [Why this phase exists]
+
+**Tasks**:
+1. [Task 1]
+2. [Task 2]
+
+**Verification**: [How to verify phase completion]
+
+### Phase 2: [Phase Name]
+
+**Purpose**: [Why this phase exists]
+
+**Tasks**:
+1. [Task 1]
+2. [Task 2]
+
+**Verification**: [How to verify phase completion]
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| [Risk 1] | [High/Medium/Low] | [Mitigation strategy] |
+
+## Success Criteria
+
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+- [ ] [Criterion 3]
+""",
+    }
+
+    def _slugify(name: str) -> str:
+        """Convert a name to a URL-friendly slug."""
+        slug = name.lower().strip()
+        slug = re.sub(r"[^\w\s-]", "", slug)
+        slug = re.sub(r"[-\s]+", "-", slug)
+        return slug
+
+    @canonical_tool(
+        mcp,
+        canonical_name="plan-create",
+    )
+    @mcp_tool(tool_name="plan-create", emit_metrics=True, audit=True)
+    def plan_create(
+        name: str,
+        template: str = "detailed",
+    ) -> dict:
+        """
+        Create a new markdown implementation plan.
+
+        Creates a plan file in specs/.plans/ with the specified template.
+
+        Args:
+            name: Human-readable name for the plan
+            template: Template to use - "simple" or "detailed" (default: "detailed")
+
+        Returns:
+            JSON object with:
+            - plan_name: The plan name
+            - plan_slug: URL-friendly slug
+            - plan_path: Path to created plan file
+            - template: Template used
+
+        WHEN TO USE:
+        - Create a new implementation plan before starting complex work
+        - Initialize a plan that will be reviewed and refined
+        - Set up a structured document for phased implementation
+
+        LIMITATIONS:
+        - Plan name must be unique (no duplicate slugs)
+        - Template must be "simple" or "detailed"
+        """
+        start_time = time.perf_counter()
+
+        # Validate template
+        if template not in PLAN_TEMPLATES:
+            return asdict(
+                error_response(
+                    f"Invalid template: {template}. Must be one of: simple, detailed",
+                    error_code="INVALID_TEMPLATE",
+                    error_type="validation",
+                    remediation="Use 'simple' or 'detailed' template",
+                )
+            )
+
+        # Input validation: check for prompt injection
+        if is_prompt_injection(name):
+            metrics.counter(
+                "plan_create.security_blocked",
+                labels={"tool": "plan-create", "reason": "prompt_injection"},
+            )
+            return asdict(
+                error_response(
+                    "Input validation failed for name",
+                    error_code="VALIDATION_ERROR",
+                    error_type="security",
+                    remediation="Remove special characters or instruction-like patterns from input.",
+                )
+            )
+
+        # Find specs directory
+        specs_dir = find_specs_directory()
+        if specs_dir is None:
+            return asdict(
+                error_response(
+                    "No specs directory found",
+                    error_code="SPECS_NOT_FOUND",
+                    error_type="validation",
+                    remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
+                )
+            )
+
+        # Create .plans directory if needed
+        plans_dir = specs_dir / ".plans"
+        try:
+            plans_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            return asdict(
+                error_response(
+                    f"Failed to create plans directory: {e}",
+                    error_code="WRITE_ERROR",
+                    error_type="internal",
+                    remediation="Check write permissions for specs/.plans/ directory",
+                )
+            )
+
+        # Generate plan filename
+        plan_slug = _slugify(name)
+        plan_file = plans_dir / f"{plan_slug}.md"
+
+        # Check if plan already exists
+        if plan_file.exists():
+            return asdict(
+                error_response(
+                    f"Plan already exists: {plan_file}",
+                    error_code="DUPLICATE_ENTRY",
+                    error_type="conflict",
+                    remediation="Use a different name or delete the existing plan",
+                    details={"plan_path": str(plan_file)},
+                )
+            )
+
+        # Generate plan content from template
+        plan_content = PLAN_TEMPLATES[template].format(name=name)
+
+        # Write plan file
+        try:
+            plan_file.write_text(plan_content, encoding="utf-8")
+        except Exception as e:
+            return asdict(
+                error_response(
+                    f"Failed to write plan file: {e}",
+                    error_code="WRITE_ERROR",
+                    error_type="internal",
+                    remediation="Check write permissions for specs/.plans/ directory",
+                )
+            )
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        metrics.counter(
+            "plan_create.completed",
+            labels={"tool": "plan-create", "template": template},
+        )
+
         return asdict(
             success_response(
                 data={
+                    "plan_name": name,
+                    "plan_slug": plan_slug,
                     "plan_path": str(plan_file),
-                    "plan_name": plan_name,
-                    "review_type": review_type,
-                    "review_path": str(review_file),
-                    "summary": summary,
-                    "inline_summary": inline_summary,
-                    "llm_status": llm_status,
-                    "provider_used": provider_used,
+                    "template": template,
+                },
+                telemetry={"duration_ms": round(duration_ms, 2)},
+            )
+        )
+
+    @canonical_tool(
+        mcp,
+        canonical_name="plan-list",
+    )
+    @mcp_tool(tool_name="plan-list", emit_metrics=True, audit=True)
+    def plan_list() -> dict:
+        """
+        List all markdown implementation plans.
+
+        Lists plans from specs/.plans/ directory with review status.
+
+        Returns:
+            JSON object with:
+            - plans: Array of plan objects with name, path, size, modified, reviews
+            - count: Total number of plans
+            - plans_dir: Path to plans directory
+
+        WHEN TO USE:
+        - View available plans before starting work
+        - Check which plans have been reviewed
+        - Find a plan to continue working on
+        """
+        start_time = time.perf_counter()
+
+        # Find specs directory
+        specs_dir = find_specs_directory()
+        if specs_dir is None:
+            return asdict(
+                error_response(
+                    "No specs directory found",
+                    error_code="SPECS_NOT_FOUND",
+                    error_type="validation",
+                    remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
+                )
+            )
+
+        plans_dir = specs_dir / ".plans"
+
+        # Check if plans directory exists
+        if not plans_dir.exists():
+            return asdict(
+                success_response(
+                    data={
+                        "plans": [],
+                        "count": 0,
+                        "plans_dir": str(plans_dir),
+                    },
+                    telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
+                )
+            )
+
+        # List all markdown files in plans directory
+        plans = []
+        for plan_file in sorted(plans_dir.glob("*.md")):
+            stat = plan_file.stat()
+            plans.append({
+                "name": plan_file.stem,
+                "path": str(plan_file),
+                "size_bytes": stat.st_size,
+                "modified": stat.st_mtime,
+            })
+
+        # Check for reviews
+        reviews_dir = specs_dir / ".plan-reviews"
+        for plan in plans:
+            plan_name = plan["name"]
+            review_files = list(reviews_dir.glob(f"{plan_name}-*.md")) if reviews_dir.exists() else []
+            plan["reviews"] = [rf.stem for rf in review_files]
+            plan["has_review"] = len(review_files) > 0
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        metrics.counter(
+            "plan_list.completed",
+            labels={"tool": "plan-list"},
+        )
+
+        return asdict(
+            success_response(
+                data={
+                    "plans": plans,
+                    "count": len(plans),
+                    "plans_dir": str(plans_dir),
                 },
                 telemetry={"duration_ms": round(duration_ms, 2)},
             )

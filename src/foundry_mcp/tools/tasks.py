@@ -29,6 +29,14 @@ from foundry_mcp.core.progress import (
     get_progress_summary,
     update_parent_status,
     list_phases,
+    get_status_icon,
+)
+from foundry_mcp.core.pagination import (
+    encode_cursor,
+    decode_cursor,
+    paginated_response,
+    normalize_page_size,
+    CursorError,
 )
 from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
@@ -577,7 +585,135 @@ def register_task_tools(mcp: FastMCP, config: ServerConfig) -> None:
             logger.error(f"Error getting progress: {e}")
             return asdict(error_response(sanitize_error_message(e, context="tasks")))
 
+    @canonical_tool(
+        mcp,
+        canonical_name="task-list",
+    )
+    def task_list(
+        spec_id: str,
+        status_filter: Optional[str] = None,
+        include_completed: bool = True,
+        workspace: Optional[str] = None,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
+    ) -> dict:
+        """
+        Get a flat list of all tasks in a specification.
+
+        Args:
+            spec_id: Specification ID
+            status_filter: Optional filter by status (pending, in_progress, completed, blocked)
+            include_completed: Whether to include completed tasks
+            workspace: Optional workspace path
+            limit: Number of tasks per page (default: 100, max: 1000)
+            cursor: Pagination cursor from previous response
+
+        Returns:
+            JSON object with task list
+        """
+        try:
+            if workspace:
+                specs_dir = find_specs_directory(workspace)
+            else:
+                specs_dir = config.specs_dir or find_specs_directory()
+
+            if not specs_dir:
+                return asdict(error_response("No specs directory found"))
+
+            # Normalize page size
+            page_size = normalize_page_size(limit)
+
+            # Decode cursor if provided
+            start_after_id = None
+            if cursor:
+                try:
+                    cursor_data = decode_cursor(cursor)
+                    start_after_id = cursor_data.get("last_id")
+                except CursorError as e:
+                    return asdict(
+                        error_response(
+                            f"Invalid cursor: {e.reason}",
+                            code="INVALID_CURSOR",
+                            details={"cursor": cursor},
+                        )
+                    )
+
+            spec_data = load_spec(spec_id, specs_dir)
+            if not spec_data:
+                return asdict(error_response(f"Spec not found: {spec_id}"))
+
+            # Extract and filter task data
+            hierarchy = spec_data.get("hierarchy", {})
+            tasks = []
+
+            for node_id, node in hierarchy.items():
+                node_type = node.get("type", "")
+                if node_type not in ("task", "subtask", "verify"):
+                    continue
+
+                status = node.get("status", "pending")
+
+                if status_filter and status != status_filter:
+                    continue
+
+                if not include_completed and status == "completed":
+                    continue
+
+                tasks.append(
+                    {
+                        "id": node_id,
+                        "title": node.get("title", "Untitled"),
+                        "type": node_type,
+                        "status": status,
+                        "icon": get_status_icon(status),
+                        "file_path": node.get("metadata", {}).get("file_path"),
+                        "parent": node.get("parent"),
+                    }
+                )
+
+            # Sort for consistent pagination
+            tasks.sort(key=lambda t: t.get("id", ""))
+            total_count = len(tasks)
+
+            # Find starting position from cursor
+            start_index = 0
+            if start_after_id:
+                for i, task in enumerate(tasks):
+                    if task.get("id") == start_after_id:
+                        start_index = i + 1
+                        break
+
+            # Get page of tasks (fetch one extra to detect has_more)
+            page_tasks = tasks[start_index : start_index + page_size + 1]
+            has_more = len(page_tasks) > page_size
+            if has_more:
+                page_tasks = page_tasks[:page_size]
+
+            # Build next cursor if more pages exist
+            next_cursor = None
+            if has_more and page_tasks:
+                next_cursor = encode_cursor({"last_id": page_tasks[-1].get("id")})
+
+            return paginated_response(
+                data={
+                    "spec_id": spec_id,
+                    "tasks": page_tasks,
+                    "filters": {
+                        "status_filter": status_filter,
+                        "include_completed": include_completed,
+                    },
+                },
+                cursor=next_cursor,
+                has_more=has_more,
+                page_size=page_size,
+                total_count=total_count,
+            )
+
+        except Exception as e:
+            logger.error(f"Error listing tasks: {e}")
+            return asdict(error_response(sanitize_error_message(e, context="tasks")))
+
     logger.debug(
         "Registered task tools: task-prepare/task-next/task-info/task-check-deps/"
-        "task-update-status/task-complete/task-start/task-progress"
+        "task-update-status/task-complete/task-start/task-progress/task-list"
     )

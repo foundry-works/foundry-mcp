@@ -39,6 +39,7 @@ Example Usage:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -1394,14 +1395,31 @@ class ConsultationOrchestrator:
                                 ConsensusResult (min_models>1)
         """
         # Delegate to async implementation
-        return asyncio.run(
-            self.consult_async(
-                request,
-                use_cache=use_cache,
-                cache_ttl=cache_ttl,
-                workflow_name=workflow_name,
+        # Check if we're already in an async context
+        try:
+            asyncio.get_running_loop()
+            # Already in async context - use thread pool to avoid nested asyncio.run()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    asyncio.run,
+                    self.consult_async(
+                        request,
+                        use_cache=use_cache,
+                        cache_ttl=cache_ttl,
+                        workflow_name=workflow_name,
+                    ),
+                )
+                return future.result()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run()
+            return asyncio.run(
+                self.consult_async(
+                    request,
+                    use_cache=use_cache,
+                    cache_ttl=cache_ttl,
+                    workflow_name=workflow_name,
+                )
             )
-        )
 
     def consult_multiple(
         self,

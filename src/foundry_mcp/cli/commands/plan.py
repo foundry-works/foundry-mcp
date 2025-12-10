@@ -17,9 +17,11 @@ from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     SLOW_TIMEOUT,
+    MEDIUM_TIMEOUT,
     with_sync_timeout,
     handle_keyboard_interrupt,
 )
+from foundry_mcp.core.spec import find_specs_directory
 
 logger = get_cli_logger()
 
@@ -173,7 +175,7 @@ def plan_review_cmd(
     """Review a markdown implementation plan with AI feedback.
 
     Analyzes markdown plans before they become formal JSON specifications.
-    Writes review output to ./tmp/<plan-name>-review.md.
+    Writes review output to specs/.plan-reviews/<plan-name>-<review-type>.md.
 
     Examples:
 
@@ -331,18 +333,28 @@ def plan_review_cmd(
     summary = _parse_review_summary(review_content)
     inline_summary = _format_inline_summary(summary)
 
-    # Ensure ./tmp/ directory exists and write review
-    tmp_dir = Path.cwd() / "tmp"
+    # Find specs directory and write review to specs/.plan-reviews/
+    specs_dir = find_specs_directory()
+    if specs_dir is None:
+        emit_error(
+            "No specs directory found for storing plan review",
+            code="SPECS_NOT_FOUND",
+            error_type="validation",
+            remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
+        )
+        return
+
+    plan_reviews_dir = specs_dir / ".plan-reviews"
     try:
-        tmp_dir.mkdir(parents=True, exist_ok=True)
-        review_file = tmp_dir / f"{plan_name}-review.md"
+        plan_reviews_dir.mkdir(parents=True, exist_ok=True)
+        review_file = plan_reviews_dir / f"{plan_name}-{review_type}.md"
         review_file.write_text(review_content, encoding="utf-8")
     except Exception as e:
         emit_error(
             f"Failed to write review file: {e}",
             code="WRITE_ERROR",
             error_type="internal",
-            remediation="Check write permissions for ./tmp/ directory",
+            remediation="Check write permissions for specs/.plan-reviews/ directory",
         )
         return
 
@@ -415,4 +427,255 @@ def plan_review_alias_cmd(
         ai_timeout=ai_timeout,
         no_consultation_cache=no_consultation_cache,
         dry_run=dry_run,
+    )
+
+
+# Plan templates
+PLAN_TEMPLATES = {
+    "simple": """# {name}
+
+## Objective
+
+[Describe the primary goal of this plan]
+
+## Scope
+
+[What is included/excluded from this plan]
+
+## Tasks
+
+1. [Task 1]
+2. [Task 2]
+3. [Task 3]
+
+## Success Criteria
+
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+""",
+    "detailed": """# {name}
+
+## Objective
+
+[Describe the primary goal of this plan]
+
+## Scope
+
+### In Scope
+- [Item 1]
+- [Item 2]
+
+### Out of Scope
+- [Item 1]
+
+## Phases
+
+### Phase 1: [Phase Name]
+
+**Purpose**: [Why this phase exists]
+
+**Tasks**:
+1. [Task 1]
+2. [Task 2]
+
+**Verification**: [How to verify phase completion]
+
+### Phase 2: [Phase Name]
+
+**Purpose**: [Why this phase exists]
+
+**Tasks**:
+1. [Task 1]
+2. [Task 2]
+
+**Verification**: [How to verify phase completion]
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| [Risk 1] | [High/Medium/Low] | [Mitigation strategy] |
+
+## Success Criteria
+
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+- [ ] [Criterion 3]
+""",
+}
+
+
+def _slugify(name: str) -> str:
+    """Convert a name to a URL-friendly slug."""
+    slug = name.lower().strip()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[-\s]+", "-", slug)
+    return slug
+
+
+@plan_group.command("create")
+@click.argument("name")
+@click.option(
+    "--template",
+    type=click.Choice(["simple", "detailed"]),
+    default="detailed",
+    help="Plan template to use.",
+)
+@click.pass_context
+@cli_command("plan-create")
+@handle_keyboard_interrupt()
+@with_sync_timeout(MEDIUM_TIMEOUT, "Plan creation timed out")
+def plan_create_cmd(
+    ctx: click.Context,
+    name: str,
+    template: str,
+) -> None:
+    """Create a new markdown implementation plan.
+
+    Creates a plan file in specs/.plans/ with the specified template.
+
+    Examples:
+
+        sdd plan create "Add user authentication"
+
+        sdd plan create "Refactor database layer" --template simple
+    """
+    start_time = time.perf_counter()
+
+    # Find specs directory
+    specs_dir = find_specs_directory()
+    if specs_dir is None:
+        emit_error(
+            "No specs directory found",
+            code="SPECS_NOT_FOUND",
+            error_type="validation",
+            remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
+        )
+        return
+
+    # Create .plans directory if needed
+    plans_dir = specs_dir / ".plans"
+    try:
+        plans_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        emit_error(
+            f"Failed to create plans directory: {e}",
+            code="WRITE_ERROR",
+            error_type="internal",
+            remediation="Check write permissions for specs/.plans/ directory",
+        )
+        return
+
+    # Generate plan filename
+    plan_slug = _slugify(name)
+    plan_file = plans_dir / f"{plan_slug}.md"
+
+    # Check if plan already exists
+    if plan_file.exists():
+        emit_error(
+            f"Plan already exists: {plan_file}",
+            code="DUPLICATE_ENTRY",
+            error_type="conflict",
+            remediation="Use a different name or delete the existing plan",
+            details={"plan_path": str(plan_file)},
+        )
+        return
+
+    # Generate plan content from template
+    plan_content = PLAN_TEMPLATES[template].format(name=name)
+
+    # Write plan file
+    try:
+        plan_file.write_text(plan_content, encoding="utf-8")
+    except Exception as e:
+        emit_error(
+            f"Failed to write plan file: {e}",
+            code="WRITE_ERROR",
+            error_type="internal",
+            remediation="Check write permissions for specs/.plans/ directory",
+        )
+        return
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    emit_success(
+        {
+            "plan_name": name,
+            "plan_slug": plan_slug,
+            "plan_path": str(plan_file),
+            "template": template,
+        },
+        telemetry={"duration_ms": round(duration_ms, 2)},
+    )
+
+
+@plan_group.command("list")
+@click.pass_context
+@cli_command("plan-list")
+@handle_keyboard_interrupt()
+@with_sync_timeout(MEDIUM_TIMEOUT, "Plan listing timed out")
+def plan_list_cmd(ctx: click.Context) -> None:
+    """List all markdown implementation plans.
+
+    Lists plans from specs/.plans/ directory.
+
+    Examples:
+
+        sdd plan list
+    """
+    start_time = time.perf_counter()
+
+    # Find specs directory
+    specs_dir = find_specs_directory()
+    if specs_dir is None:
+        emit_error(
+            "No specs directory found",
+            code="SPECS_NOT_FOUND",
+            error_type="validation",
+            remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
+        )
+        return
+
+    plans_dir = specs_dir / ".plans"
+
+    # Check if plans directory exists
+    if not plans_dir.exists():
+        emit_success(
+            {
+                "plans": [],
+                "count": 0,
+                "plans_dir": str(plans_dir),
+            },
+            telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
+        )
+        return
+
+    # List all markdown files in plans directory
+    plans = []
+    for plan_file in sorted(plans_dir.glob("*.md")):
+        stat = plan_file.stat()
+        plans.append({
+            "name": plan_file.stem,
+            "path": str(plan_file),
+            "size_bytes": stat.st_size,
+            "modified": stat.st_mtime,
+        })
+
+    # Check for reviews
+    reviews_dir = specs_dir / ".plan-reviews"
+    for plan in plans:
+        plan_name = plan["name"]
+        review_files = list(reviews_dir.glob(f"{plan_name}-*.md")) if reviews_dir.exists() else []
+        plan["reviews"] = [rf.stem for rf in review_files]
+        plan["has_review"] = len(review_files) > 0
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    emit_success(
+        {
+            "plans": plans,
+            "count": len(plans),
+            "plans_dir": str(plans_dir),
+        },
+        telemetry={"duration_ms": round(duration_ms, 2)},
     )

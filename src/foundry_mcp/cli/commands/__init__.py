@@ -147,6 +147,8 @@ from foundry_mcp.cli.commands.plan import (
     plan_group,
     plan_review_cmd,
     plan_review_alias_cmd,
+    plan_create_cmd,
+    plan_list_cmd,
 )
 
 __all__ = [
@@ -278,4 +280,6 @@ __all__ = [
     "plan_group",
     "plan_review_cmd",
     "plan_review_alias_cmd",
+    "plan_create_cmd",
+    "plan_list_cmd",
 ]
