@@ -368,9 +368,8 @@ class TestDocumentationToolRegistration:
 
         register_documentation_tools(mock_mcp, mock_config)
 
+        # spec-doc and spec-doc-llm were removed in the feature removal refactor
         expected_tools = [
-            "spec-doc",
-            "spec-doc-llm",
             "spec-review-fidelity",
         ]
 
@@ -403,33 +402,19 @@ class TestResponseContractCompliance:
 
         register_documentation_tools(mock_mcp, mock_config)
 
-        spec_doc = mock_mcp._tools["spec-doc"]
-        result = spec_doc(spec_id="test-spec", mode="invalid")
+        # Test validation error with spec-review-fidelity (mutual exclusivity)
+        spec_review_fidelity = mock_mcp._tools["spec-review-fidelity"]
+        result = spec_review_fidelity(
+            spec_id="test-spec",
+            task_id="task-1",
+            phase_id="phase-1",  # Cannot specify both
+        )
 
         # Validate structure
         assert "success" in result
         assert "data" in result
         assert "error" in result
         assert "meta" in result
-        assert result["meta"]["version"] == "response-v2"
-
-    def test_success_response_has_required_fields(
-        self, mock_mcp, mock_config, temp_project, assert_response_contract, monkeypatch
-    ):
-        """Success responses should have all required fields."""
-        from foundry_mcp.tools.documentation import register_documentation_tools
-
-        project_path, _ = temp_project
-        monkeypatch.chdir(project_path)
-
-        register_documentation_tools(mock_mcp, mock_config)
-
-        spec_doc = mock_mcp._tools["spec-doc"]
-        result = spec_doc(spec_id="test-spec-001")
-
-        # Validate structure
-        assert result["success"] is True
-        assert result["error"] is None
         assert result["meta"]["version"] == "response-v2"
 
     def test_fidelity_review_response_structure(

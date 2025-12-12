@@ -38,7 +38,17 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Dict, Generator, Optional, Set, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    Optional,
+    ParamSpec,
+    Set,
+    TypeVar,
+    Union,
+)
 
 from foundry_mcp.core.responses import ToolResponse, error_response
 
@@ -105,9 +115,7 @@ class FeatureFlag:
     description: str
     state: FlagState
     default_enabled: bool
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
     owner: str = ""
     percentage_rollout: float = 100.0
@@ -161,7 +169,9 @@ class FeatureFlagRegistry:
     def __init__(self) -> None:
         """Initialize an empty flag registry."""
         self._flags: Dict[str, FeatureFlag] = {}
-        self._overrides: Dict[str, Dict[str, bool]] = {}  # client_id -> flag_name -> value
+        self._overrides: Dict[
+            str, Dict[str, bool]
+        ] = {}  # client_id -> flag_name -> value
 
     def register(self, flag: FeatureFlag) -> None:
         """Register a feature flag.
@@ -231,7 +241,7 @@ class FeatureFlagRegistry:
         if flag.state == FlagState.DEPRECATED:
             logger.warning(
                 f"Deprecated feature flag '{flag_name}' accessed",
-                extra={"client_id": client_id, "flag": flag_name}
+                extra={"client_id": client_id, "flag": flag_name},
             )
 
         # Check expiration
@@ -344,9 +354,7 @@ class FeatureFlagRegistry:
 
             if flag.state == FlagState.DEPRECATED:
                 expires_str = (
-                    flag.expires_at.isoformat()
-                    if flag.expires_at
-                    else "unspecified"
+                    flag.expires_at.isoformat() if flag.expires_at else "unspecified"
                 )
                 status["deprecation_notice"] = (
                     f"This feature is deprecated and will be removed after {expires_str}"
@@ -369,6 +377,53 @@ class FeatureFlagRegistry:
 _default_registry = FeatureFlagRegistry()
 
 
+def _register_builtin_flags(registry: FeatureFlagRegistry) -> None:
+    """Register Foundry MCP built-in flags.
+
+    This keeps commonly-referenced flags discoverable and avoids noisy
+    "Unknown feature flag" warnings when running without env overrides.
+    """
+
+    builtin_flags = [
+        FeatureFlag(
+            name="unified_tools_phase2",
+            description="Enable unified routers for medium tool families",
+            state=FlagState.BETA,
+            default_enabled=False,
+            percentage_rollout=0.0,
+            owner="foundry-mcp core",
+        ),
+        FeatureFlag(
+            name="unified_tools_phase3",
+            description="Enable unified routers for large tool families",
+            state=FlagState.BETA,
+            default_enabled=False,
+            percentage_rollout=0.0,
+            owner="foundry-mcp core",
+        ),
+        FeatureFlag(
+            name="unified_manifest",
+            description="Expose only the 17 unified tools for discovery/token reduction",
+            state=FlagState.BETA,
+            default_enabled=False,
+            percentage_rollout=0.0,
+            owner="foundry-mcp core",
+        ),
+    ]
+
+    for flag in builtin_flags:
+        if registry.get(flag.name) is not None:
+            continue
+        try:
+            registry.register(flag)
+        except ValueError:
+            # Already registered (race or re-import)
+            continue
+
+
+_register_builtin_flags(_default_registry)
+
+
 def get_registry() -> FeatureFlagRegistry:
     """Get the default feature flag registry."""
     return _default_registry
@@ -378,16 +433,16 @@ def get_registry() -> FeatureFlagRegistry:
 get_flag_service = get_registry
 
 
-# Type variable for decorated functions
-F = TypeVar("F", bound=Callable[..., Any])
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def feature_flag(
     flag_name: str,
     *,
-    fallback: Optional[Callable[..., Any]] = None,
+    fallback: Optional[Callable[P, Any]] = None,
     registry: Optional[FeatureFlagRegistry] = None,
-) -> Callable[[F], F]:
+) -> Callable[[Callable[P, R]], Callable[P, Any]]:
     """Decorator to gate function execution behind a feature flag.
 
     When the feature flag is not enabled for the current client, the decorated
@@ -423,9 +478,10 @@ def feature_flag(
         ...
         >>> # When flag is disabled, calls legacy_process instead
     """
-    def decorator(func: F) -> F:
+
+    def decorator(func: Callable[P, R]) -> Callable[P, Any]:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
             reg = registry or get_registry()
 
             if not reg.is_enabled(flag_name):
@@ -451,7 +507,7 @@ def feature_flag(
 
             return func(*args, **kwargs)
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper
 
     return decorator
 
@@ -507,7 +563,7 @@ def flag_override(
 
     # Check if there's an existing override we need to restore
     had_previous_override = False
-    previous_override_value: Optional[bool] = None
+    previous_override_value = False
 
     if cid in reg._overrides and flag_name in reg._overrides[cid]:
         had_previous_override = True
@@ -519,7 +575,7 @@ def flag_override(
     finally:
         # Restore previous state
         if had_previous_override:
-            reg.set_override(cid, flag_name, previous_override_value)  # type: ignore[arg-type]
+            reg.set_override(cid, flag_name, previous_override_value)
         else:
             reg.clear_override(cid, flag_name)
 

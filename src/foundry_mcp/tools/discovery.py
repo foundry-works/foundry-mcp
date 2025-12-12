@@ -14,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.tools.unified.server import legacy_server_action
 from foundry_mcp.core.pagination import (
     DEFAULT_PAGE_SIZE,
     MAX_PAGE_SIZE,
@@ -73,61 +74,15 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with tools list and pagination metadata
         """
         try:
-            # Validate and clamp limit
-            limit = min(max(1, limit), MAX_PAGE_SIZE)
-
-            # Get registry and list tools
-            registry = get_tool_registry()
-            all_tools = registry.list_tools(
+            return legacy_server_action(
+                "tools",
+                config=config,
                 category=category,
                 tag=tag,
                 include_deprecated=include_deprecated,
+                cursor=cursor,
+                limit=limit,
             )
-
-            # Handle cursor-based pagination
-            start_idx = 0
-            if cursor:
-                try:
-                    cursor_data = decode_cursor(cursor)
-                    start_idx = cursor_data.get("offset", 0)
-                except CursorError as e:
-                    return asdict(
-                        error_response(
-                            f"Invalid cursor: {e}",
-                            error_code="INVALID_CURSOR",
-                            error_type="validation",
-                        )
-                    )
-
-            # Paginate results
-            end_idx = start_idx + limit
-            paginated_tools = all_tools[start_idx:end_idx]
-            has_more = end_idx < len(all_tools)
-
-            # Generate next cursor if there are more results
-            next_cursor = None
-            if has_more:
-                next_cursor = encode_cursor({"offset": end_idx})
-
-            # Get categories for response
-            categories = registry.list_categories()
-
-            return paginated_response(
-                data={
-                    "tools": paginated_tools,
-                    "categories": [c["name"] for c in categories],
-                    "filters_applied": {
-                        "category": category,
-                        "tag": tag,
-                        "include_deprecated": include_deprecated,
-                    },
-                },
-                cursor=next_cursor,
-                has_more=has_more,
-                page_size=limit,
-                total_count=len(all_tools),
-            )
-
         except Exception as e:
             logger.exception("Error listing tools")
             return asdict(error_response(f"Failed to list tools: {e}"))
@@ -156,31 +111,7 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with tool schema and metadata
         """
         try:
-            if not tool_name:
-                return asdict(
-                    error_response(
-                        "tool_name is required",
-                        error_code="MISSING_REQUIRED",
-                        error_type="validation",
-                        remediation="Provide a tool name to get its schema",
-                    )
-                )
-
-            registry = get_tool_registry()
-            schema = registry.get_tool_schema(tool_name)
-
-            if schema is None:
-                return asdict(
-                    error_response(
-                        f"Tool '{tool_name}' not found",
-                        error_code="NOT_FOUND",
-                        error_type="not_found",
-                        remediation="Use tool-list to see available tools",
-                    )
-                )
-
-            return asdict(success_response(data=schema))
-
+            return legacy_server_action("schema", config=config, tool_name=tool_name)
         except Exception as e:
             logger.exception(f"Error getting tool schema for {tool_name}")
             return asdict(error_response(f"Failed to get tool schema: {e}"))
@@ -206,9 +137,7 @@ def register_discovery_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with server capabilities and version info
         """
         try:
-            capabilities = get_capabilities()
-            return asdict(success_response(data=capabilities))
-
+            return legacy_server_action("capabilities", config=config)
         except Exception as e:
             logger.exception("Error getting capabilities")
             return asdict(error_response(f"Failed to get capabilities: {e}"))

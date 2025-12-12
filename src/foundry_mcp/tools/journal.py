@@ -32,8 +32,14 @@ from foundry_mcp.core.journal import (
     list_blocked_tasks,
     find_unjournaled_tasks,
 )
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.tools.unified.journal import legacy_journal_action
+from foundry_mcp.tools.unified.task import legacy_task_action
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +81,17 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with created entry details
         """
+        return legacy_journal_action(
+            "add",
+            config=config,
+            spec_id=spec_id,
+            title=title,
+            content=content,
+            entry_type=entry_type,
+            task_id=task_id,
+            workspace=workspace,
+        )
+
         valid_types = ["status_change", "deviation", "blocker", "decision", "note"]
         if entry_type not in valid_types:
             return asdict(
@@ -152,6 +169,17 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with journal entries and pagination metadata
         """
+        return legacy_journal_action(
+            "list",
+            config=config,
+            spec_id=spec_id,
+            task_id=task_id,
+            entry_type=entry_type,
+            cursor=cursor,
+            limit=limit,
+            workspace=workspace,
+        )
+
         try:
             if workspace:
                 specs_dir = find_specs_directory(workspace)
@@ -265,59 +293,16 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with block result
         """
-        valid_types = ["dependency", "technical", "resource", "decision"]
-        if blocker_type not in valid_types:
-            return asdict(
-                error_response(
-                    f"Invalid blocker_type: {blocker_type}. Must be one of: {valid_types}"
-                )
-            )
-
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            spec_data = load_spec(spec_id, specs_dir)
-            if not spec_data:
-                return asdict(error_response(f"Spec not found: {spec_id}"))
-
-            # Mark task as blocked
-            if not mark_blocked(spec_data, task_id, reason, blocker_type, ticket):
-                return asdict(error_response(f"Task not found: {task_id}"))
-
-            # Add journal entry for blocker
-            add_journal_entry(
-                spec_data,
-                title=f"Task Blocked: {task_id}",
-                content=f"Blocker ({blocker_type}): {reason}"
-                + (f" [Ticket: {ticket}]" if ticket else ""),
-                entry_type="blocker",
-                task_id=task_id,
-                author="foundry-mcp",
-            )
-
-            # Save spec
-            if not save_spec(spec_id, spec_data, specs_dir):
-                return asdict(error_response("Failed to save spec"))
-
-            return asdict(
-                success_response(
-                    spec_id=spec_id,
-                    task_id=task_id,
-                    blocker_type=blocker_type,
-                    reason=reason,
-                    ticket=ticket,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error marking task blocked: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="journal")))
+        return legacy_task_action(
+            "block",
+            config=config,
+            spec_id=spec_id,
+            task_id=task_id,
+            reason=reason,
+            blocker_type=blocker_type,
+            ticket=ticket,
+            workspace=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -343,58 +328,14 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with unblock result
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            spec_data = load_spec(spec_id, specs_dir)
-            if not spec_data:
-                return asdict(error_response(f"Spec not found: {spec_id}"))
-
-            # Get blocker info before unblocking
-            blocker = get_blocker_info(spec_data, task_id)
-            if not blocker:
-                return asdict(error_response(f"Task {task_id} is not blocked"))
-
-            # Unblock the task
-            if not unblock(spec_data, task_id, resolution):
-                return asdict(error_response(f"Failed to unblock task: {task_id}"))
-
-            # Add journal entry for resolution
-            add_journal_entry(
-                spec_data,
-                title=f"Task Unblocked: {task_id}",
-                content=f"Resolved: {resolution or 'Blocker resolved'}",
-                entry_type="note",
-                task_id=task_id,
-                author="foundry-mcp",
-            )
-
-            # Save spec
-            if not save_spec(spec_id, spec_data, specs_dir):
-                return asdict(error_response("Failed to save spec"))
-
-            return asdict(
-                success_response(
-                    spec_id=spec_id,
-                    task_id=task_id,
-                    previous_blocker={
-                        "type": blocker.blocker_type,
-                        "description": blocker.description,
-                    },
-                    resolution=resolution or "Blocker resolved",
-                    new_status="pending",
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error unblocking task: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="journal")))
+        return legacy_task_action(
+            "unblock",
+            config=config,
+            spec_id=spec_id,
+            task_id=task_id,
+            resolution=resolution,
+            workspace=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -418,74 +359,14 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with list of blocked tasks and pagination metadata
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            spec_data = load_spec(spec_id, specs_dir)
-            if not spec_data:
-                return asdict(error_response(f"Spec not found: {spec_id}"))
-
-            # Normalize page size
-            page_size = normalize_page_size(limit)
-
-            # Decode cursor if provided
-            start_after_id = None
-            if cursor:
-                try:
-                    cursor_data = decode_cursor(cursor)
-                    start_after_id = cursor_data.get("last_id")
-                except CursorError:
-                    return asdict(error_response("Invalid pagination cursor"))
-
-            all_blocked = list_blocked_tasks(spec_data)
-
-            # Sort by task_id for consistent pagination
-            all_blocked.sort(key=lambda t: t.get("task_id", ""))
-
-            # Apply cursor-based pagination
-            if start_after_id:
-                start_index = 0
-                for i, task in enumerate(all_blocked):
-                    if task.get("task_id") == start_after_id:
-                        start_index = i + 1
-                        break
-                all_blocked = all_blocked[start_index:]
-
-            # Fetch one extra to detect has_more
-            page_tasks = all_blocked[: page_size + 1]
-            has_more = len(page_tasks) > page_size
-            if has_more:
-                page_tasks = page_tasks[:page_size]
-
-            # Build next cursor
-            next_cursor = None
-            if has_more and page_tasks:
-                next_cursor = encode_cursor({"last_id": page_tasks[-1].get("task_id")})
-
-            return asdict(
-                success_response(
-                    data={
-                        "spec_id": spec_id,
-                        "count": len(page_tasks),
-                        "blocked_tasks": page_tasks,
-                    },
-                    pagination={
-                        "cursor": next_cursor,
-                        "has_more": has_more,
-                        "page_size": page_size,
-                    },
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error listing blocked tasks: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="journal")))
+        return legacy_task_action(
+            "list-blocked",
+            config=config,
+            spec_id=spec_id,
+            cursor=cursor,
+            limit=limit,
+            workspace=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -509,6 +390,15 @@ def register_journal_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with list of unjournaled tasks and pagination metadata
         """
+        return legacy_journal_action(
+            "list-unjournaled",
+            config=config,
+            spec_id=spec_id,
+            cursor=cursor,
+            limit=limit,
+            workspace=workspace,
+        )
+
         try:
             if workspace:
                 specs_dir = find_specs_directory(workspace)

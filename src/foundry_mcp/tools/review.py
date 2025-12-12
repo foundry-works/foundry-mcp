@@ -22,7 +22,11 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import (
@@ -64,6 +68,7 @@ def _is_provider_integration_enabled() -> bool:
     # Default to True (use provider integration)
     # This can be overridden by environment variable for rollback
     import os
+
     flag_override = os.environ.get("FOUNDRY_REVIEW_PROVIDER_INTEGRATION", "").lower()
     if flag_override == "false" or flag_override == "0":
         return False
@@ -120,7 +125,7 @@ def _run_quick_review(
     if path:
         specs_dir = Path(path) / "specs"
         if not specs_dir.exists():
-            specs_dir = find_specs_directory(Path(path))
+            specs_dir = find_specs_directory(path)
     else:
         specs_dir = find_specs_directory()
 
@@ -207,7 +212,7 @@ def _run_ai_review(
     if path:
         specs_dir = Path(path) / "specs"
         if not specs_dir.exists():
-            specs_dir = find_specs_directory(Path(path))
+            specs_dir = find_specs_directory(path)
     else:
         specs_dir = find_specs_directory()
 
@@ -257,7 +262,7 @@ def _run_ai_review(
                 consultation_cache=consultation_cache,
                 message=f"Dry run - {review_type} review would use template {template_id}",
                 spec_title=context.title,
-                task_count=context.stats.total_tasks if context.stats else 0,
+                task_count=context.stats.totals.get("tasks", 0) if context.stats else 0,
                 duration_ms=round(duration_ms, 2),
             )
         )
@@ -386,9 +391,15 @@ def _run_ai_review(
                 primary_content=result.primary_content,
                 warnings=result.warnings,
                 stats={
-                    "total_tasks": context.stats.total_tasks if context.stats else 0,
-                    "completed_tasks": context.stats.completed_tasks if context.stats else 0,
-                    "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
+                    "total_tasks": context.stats.totals.get("tasks", 0)
+                    if context.stats
+                    else 0,
+                    "completed_tasks": context.stats.status_counts.get("completed", 0)
+                    if context.stats
+                    else 0,
+                    "progress_percentage": context.progress.get("percentage", 0)
+                    if context.progress
+                    else 0,
                 },
                 duration_ms=round(duration_ms, 2),
             )
@@ -409,9 +420,15 @@ def _run_ai_review(
                 model=result.model_used if result else None,
                 cached=result.cache_hit if result else False,
                 stats={
-                    "total_tasks": context.stats.total_tasks if context.stats else 0,
-                    "completed_tasks": context.stats.completed_tasks if context.stats else 0,
-                    "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
+                    "total_tasks": context.stats.totals.get("tasks", 0)
+                    if context.stats
+                    else 0,
+                    "completed_tasks": context.stats.status_counts.get("completed", 0)
+                    if context.stats
+                    else 0,
+                    "progress_percentage": context.progress.get("percentage", 0)
+                    if context.progress
+                    else 0,
                 },
                 duration_ms=round(duration_ms, 2),
             )
@@ -419,13 +436,10 @@ def _run_ai_review(
 
 
 def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
-    """
-    Register review tools with the FastMCP server.
+    """Register review tools with the FastMCP server."""
 
-    Args:
-        mcp: FastMCP server instance
-        config: Server configuration
-    """
+    # Local import to avoid circular imports with unified routers.
+    from foundry_mcp.tools.unified.review import legacy_review_action
 
     @canonical_tool(
         mcp,
@@ -480,30 +494,18 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
         - Falls back to error if AI unavailable for LLM review types
         - External tools (cursor-agent, gemini, codex) must be installed
         """
-        start_time = time.perf_counter()
-        llm_status = _get_llm_status()
-
-        # Quick review - no LLM required
-        if review_type == "quick":
-            return _run_quick_review(
-                spec_id=spec_id,
-                path=path,
-                dry_run=dry_run,
-                llm_status=llm_status,
-                start_time=start_time,
-            )
-
-        # LLM-powered review types (full, security, feasibility)
-        return _run_ai_review(
+        return legacy_review_action(
+            "spec",
+            config=config,
             spec_id=spec_id,
             review_type=review_type,
+            tools=tools,
+            model=model,
             ai_provider=ai_provider,
             ai_timeout=ai_timeout,
             consultation_cache=consultation_cache,
             path=path,
             dry_run=dry_run,
-            llm_status=llm_status,
-            start_time=start_time,
         )
 
     @canonical_tool(
@@ -528,62 +530,7 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - tools: List of tool objects with name and availability
             - llm_status: Current LLM configuration status
         """
-        start_time = time.perf_counter()
-
-        try:
-            llm_status = _get_llm_status()
-            use_provider_integration = _is_provider_integration_enabled()
-
-            if use_provider_integration:
-                # Get provider statuses from the provider abstraction layer
-                # Note: get_provider_statuses() returns Dict[str, bool]
-                provider_statuses = get_provider_statuses()
-
-                # Build tools info from provider statuses
-                tools_info = []
-                for provider_id, is_available in provider_statuses.items():
-                    tools_info.append({
-                        "name": provider_id,
-                        "available": is_available,
-                        "status": "available" if is_available else "unavailable",
-                        "reason": None,  # Simple API doesn't provide reason
-                        "checked_at": None,  # Simple API doesn't provide timestamp
-                    })
-            else:
-                # Legacy fallback: return static tool list with placeholder availability
-                tools_info = [
-                    {
-                        "name": tool,
-                        "available": None,
-                        "status": "unknown",
-                        "reason": "Legacy mode - external shell check required",
-                        "checked_at": None,
-                    }
-                    for tool in LEGACY_REVIEW_TOOLS
-                ]
-
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            _metrics.timer("review.review_list_tools.duration_ms", duration_ms)
-
-            return asdict(
-                success_response(
-                    tools=tools_info,
-                    llm_status=llm_status,
-                    review_types=REVIEW_TYPES,
-                    available_count=sum(1 for t in tools_info if t.get("available")),
-                    total_count=len(tools_info),
-                    duration_ms=round(duration_ms, 2),
-                    provider_integration=use_provider_integration,
-                )
-            )
-
-        except Exception as e:
-            logger.exception("Error listing review tools")
-            return asdict(
-                error_response(
-                    sanitize_error_message(e, context="review tools"),
-                )
-            )
+        return legacy_review_action("list-tools", config=config)
 
     @canonical_tool(
         mcp,
@@ -608,6 +555,8 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - capabilities: What each toolchain can analyze
             - recommendations: Suggested tool combinations
         """
+        return legacy_review_action("list-plan-tools", config=config)
+
         start_time = time.perf_counter()
 
         try:
@@ -625,7 +574,12 @@ def register_review_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 {
                     "name": "full-review",
                     "description": "Comprehensive review with LLM analysis",
-                    "capabilities": ["structure", "quality", "feasibility", "suggestions"],
+                    "capabilities": [
+                        "structure",
+                        "quality",
+                        "feasibility",
+                        "suggestions",
+                    ],
                     "llm_required": True,
                     "estimated_time": "30-60 seconds",
                 },

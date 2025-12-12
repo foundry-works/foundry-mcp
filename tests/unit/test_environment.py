@@ -46,7 +46,13 @@ class TestVerifyToolchain:
         data = {
             "required": required_status,
             "all_available": True,
-            "optional": {"grep": True, "cat": True, "find": True, "node": True, "npm": True},
+            "optional": {
+                "grep": True,
+                "cat": True,
+                "find": True,
+                "node": True,
+                "npm": True,
+            },
         }
 
         result = asdict(success_response(data=data))
@@ -384,7 +390,7 @@ class TestSddSetup:
                 settings = json.load(f)
             assert "permissions" in settings
             assert "allow" in settings["permissions"]
-            assert "mcp__foundry-mcp__spec-list" in settings["permissions"]["allow"]
+            assert "mcp__foundry-mcp__spec" in settings["permissions"]["allow"]
 
             # Create TOML
             toml_path = base_path / "foundry-mcp.toml"
@@ -423,11 +429,14 @@ class TestSddSetup:
             assert "CustomTool" in new_settings["permissions"]["allow"]
             assert "AnotherCustomTool" in new_settings["permissions"]["allow"]
             # Also verify new permissions added
-            assert "mcp__foundry-mcp__spec-list" in new_settings["permissions"]["allow"]
+            assert "mcp__foundry-mcp__spec" in new_settings["permissions"]["allow"]
 
     def test_dry_run_no_changes(self):
         """Test dry_run mode doesn't create files."""
-        from foundry_mcp.tools.environment import _init_specs_directory, _update_permissions
+        from foundry_mcp.tools.environment import (
+            _init_specs_directory,
+            _update_permissions,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             base_path = Path(tmpdir)
@@ -452,16 +461,17 @@ class TestSddSetup:
         )
 
         # Minimal should have read-only tools
-        assert "mcp__foundry-mcp__spec-list" in _MINIMAL_PERMISSIONS
-        assert "mcp__foundry-mcp__spec-get" in _MINIMAL_PERMISSIONS
-        assert "mcp__foundry-mcp__task-list" in _MINIMAL_PERMISSIONS
-        # Minimal should NOT have write tools
-        assert "mcp__foundry-mcp__spec-create" not in _MINIMAL_PERMISSIONS
+        assert "mcp__foundry-mcp__server" in _MINIMAL_PERMISSIONS
+        assert "mcp__foundry-mcp__spec" in _MINIMAL_PERMISSIONS
+        assert "mcp__foundry-mcp__task" in _MINIMAL_PERMISSIONS
 
-        # Standard should include minimal + write tools
-        assert "mcp__foundry-mcp__spec-list" in _STANDARD_PERMISSIONS
-        assert "mcp__foundry-mcp__spec-create" in _STANDARD_PERMISSIONS
-        assert "mcp__foundry-mcp__task-complete" in _STANDARD_PERMISSIONS
+        # Minimal should NOT have write-intent tools
+        assert "mcp__foundry-mcp__authoring" not in _MINIMAL_PERMISSIONS
+
+        # Standard should include minimal + write-intent tools
+        assert "mcp__foundry-mcp__spec" in _STANDARD_PERMISSIONS
+        assert "mcp__foundry-mcp__authoring" in _STANDARD_PERMISSIONS
+        assert "mcp__foundry-mcp__journal" in _STANDARD_PERMISSIONS
 
         # Full should use wildcard
         assert "mcp__foundry-mcp__*" in _FULL_PERMISSIONS

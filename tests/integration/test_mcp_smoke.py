@@ -7,7 +7,12 @@ Verifies that FastMCP server registers all tools without schema errors.
 import pytest
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.feature_flags import get_flag_service
 from pathlib import Path
+
+
+def _unified_manifest_enabled() -> bool:
+    return get_flag_service().is_enabled("unified_manifest")
 
 
 @pytest.fixture
@@ -47,23 +52,16 @@ class TestMCPServerCreation:
         assert mcp_server.name == test_config.server_name
 
 
-class TestRenderingToolsRegistration:
-    """Tests for rendering tools registration."""
-
-    def test_spec_render_registered(self, mcp_server):
-        """Test that spec_render tool is registered."""
-        tools = mcp_server._tool_manager._tools
-        assert "spec-render" in tools
-
-    def test_spec_render_progress_registered(self, mcp_server):
-        """Test that spec_render_progress tool is registered."""
-        tools = mcp_server._tool_manager._tools
-        assert "spec-render-progress" in tools
+class TestTaskToolsRegistration:
+    """Tests for task tools registration."""
 
     def test_task_list_registered(self, mcp_server):
         """Test that task_list tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "task-list" in tools
+        if _unified_manifest_enabled():
+            assert "task" in tools
+        else:
+            assert "task-list" in tools
 
 
 class TestLifecycleToolsRegistration:
@@ -72,32 +70,50 @@ class TestLifecycleToolsRegistration:
     def test_spec_lifecycle_move_registered(self, mcp_server):
         """Test that spec_lifecycle_move tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-lifecycle-move" in tools
+        if _unified_manifest_enabled():
+            assert "lifecycle" in tools
+        else:
+            assert "spec-lifecycle-move" in tools
 
     def test_spec_lifecycle_activate_registered(self, mcp_server):
         """Test that spec_lifecycle_activate tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-lifecycle-activate" in tools
+        if _unified_manifest_enabled():
+            assert "lifecycle" in tools
+        else:
+            assert "spec-lifecycle-activate" in tools
 
     def test_spec_lifecycle_complete_registered(self, mcp_server):
         """Test that spec_lifecycle_complete tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-lifecycle-complete" in tools
+        if _unified_manifest_enabled():
+            assert "lifecycle" in tools
+        else:
+            assert "spec-lifecycle-complete" in tools
 
     def test_spec_lifecycle_archive_registered(self, mcp_server):
         """Test that spec_lifecycle_archive tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-lifecycle-archive" in tools
+        if _unified_manifest_enabled():
+            assert "lifecycle" in tools
+        else:
+            assert "spec-lifecycle-archive" in tools
 
     def test_spec_lifecycle_state_registered(self, mcp_server):
         """Test that spec_lifecycle_state tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-lifecycle-state" in tools
+        if _unified_manifest_enabled():
+            assert "lifecycle" in tools
+        else:
+            assert "spec-lifecycle-state" in tools
 
     def test_spec_list_by_folder_registered(self, mcp_server):
         """Test that spec_list_by_folder tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-list-by-folder" in tools
+        if _unified_manifest_enabled():
+            assert "spec" in tools
+        else:
+            assert "spec-list-by-folder" in tools
 
 
 class TestCoreToolsRegistration:
@@ -106,17 +122,26 @@ class TestCoreToolsRegistration:
     def test_spec_list_basic_registered(self, mcp_server):
         """Test that spec-list-basic tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-list-basic" in tools
+        if _unified_manifest_enabled():
+            assert "spec" in tools
+        else:
+            assert "spec-list-basic" in tools
 
     def test_spec_get_registered(self, mcp_server):
         """Test that spec-get tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-get" in tools
+        if _unified_manifest_enabled():
+            assert "spec" in tools
+        else:
+            assert "spec-get" in tools
 
     def test_task_get_registered(self, mcp_server):
         """Test that task-get tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "task-get" in tools
+        if _unified_manifest_enabled():
+            assert "task" in tools
+        else:
+            assert "task-get" in tools
 
 
 class TestValidationToolsRegistration:
@@ -125,7 +150,10 @@ class TestValidationToolsRegistration:
     def test_spec_validate_registered(self, mcp_server):
         """Test that spec_validate tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-validate" in tools
+        if _unified_manifest_enabled():
+            assert "spec" in tools
+        else:
+            assert "spec-validate" in tools
 
 
 class TestJournalToolsRegistration:
@@ -134,7 +162,10 @@ class TestJournalToolsRegistration:
     def test_journal_list_registered(self, mcp_server):
         """Test that journal_list tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "journal-list" in tools
+        if _unified_manifest_enabled():
+            assert "journal" in tools
+        else:
+            assert "journal-list" in tools
 
 
 class TestQueryToolsRegistration:
@@ -143,16 +174,22 @@ class TestQueryToolsRegistration:
     def test_task_query_registered(self, mcp_server):
         """Test that task_query tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "task-query" in tools
+        if _unified_manifest_enabled():
+            assert "task" in tools
+        else:
+            assert "task-query" in tools
 
 
-class TestTaskToolsRegistration:
-    """Tests for task tools registration."""
+class TestTaskMutationToolsRegistration:
+    """Tests for task mutation tool registration."""
 
     def test_task_update_status_registered(self, mcp_server):
         """Test that task_update_status tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "task-update-status" in tools
+        if _unified_manifest_enabled():
+            assert "task" in tools
+        else:
+            assert "task-update-status" in tools
 
 
 class TestToolSchemas:
@@ -165,30 +202,34 @@ class TestToolSchemas:
             # Each tool should have a callable function
             assert callable(tool.fn), f"Tool {tool_name} should have callable function"
 
-    def test_rendering_tools_callable(self, mcp_server):
-        """Test that rendering tools are callable without errors."""
+    def test_task_tools_callable(self, mcp_server):
+        """Test that task tools are callable without errors."""
         tools = mcp_server._tool_manager._tools
-        rendering_tools = [
-            "spec-render",
-            "spec-render-progress",
-            "task-list",
-        ]
+        if _unified_manifest_enabled():
+            task_tools = ["task"]
+        else:
+            task_tools = [
+                "task-list",
+            ]
 
-        for tool_name in rendering_tools:
+        for tool_name in task_tools:
             assert tool_name in tools, f"Tool {tool_name} should be registered"
             assert callable(tools[tool_name].fn), f"Tool {tool_name} should be callable"
 
     def test_lifecycle_tools_callable(self, mcp_server):
         """Test that lifecycle tools are callable without errors."""
         tools = mcp_server._tool_manager._tools
-        lifecycle_tools = [
-            "spec-lifecycle-move",
-            "spec-lifecycle-activate",
-            "spec-lifecycle-complete",
-            "spec-lifecycle-archive",
-            "spec-lifecycle-state",
-            "spec-list-by-folder",
-        ]
+        if _unified_manifest_enabled():
+            lifecycle_tools = ["lifecycle"]
+        else:
+            lifecycle_tools = [
+                "spec-lifecycle-move",
+                "spec-lifecycle-activate",
+                "spec-lifecycle-complete",
+                "spec-lifecycle-archive",
+                "spec-lifecycle-state",
+                "spec-list-by-folder",
+            ]
 
         for tool_name in lifecycle_tools:
             assert tool_name in tools, f"Tool {tool_name} should be registered"
@@ -210,60 +251,72 @@ class TestCanonicalToolNames:
 
     def test_canonical_tools_registered(self, mcp_server):
         tools = mcp_server._tool_manager._tools
-        expected = {
-            "sdd-server-capabilities",
-            "spec-list-basic",
-            "spec-get",
-            "spec-get-hierarchy",
-            "task-get",
-            "spec-render",
-            "spec-render-progress",
-            "task-list",
-            "tool-list",
-            "tool-get-schema",
-            "capability-get",
-            "capability-negotiate",
-            "tool-list-categories",
-            "spec-find",
-            "spec-list",
-            "task-query",
-            "spec-validate",
-            "spec-fix",
-            "spec-stats",
-            "spec-validate-fix",
-            "journal-add",
-            "journal-list",
-            "task-block",
-            "task-unblock",
-            "task-list-blocked",
-            "journal-list-unjournaled",
-            "spec-lifecycle-move",
-            "spec-lifecycle-activate",
-            "spec-lifecycle-complete",
-            "spec-lifecycle-archive",
-            "spec-lifecycle-state",
-            "spec-list-by-folder",
-            "task-prepare",
-            "task-next",
-            "task-info",
-            "task-check-deps",
-            "task-update-status",
-            "task-complete",
-            "task-start",
-            "task-progress",
-            "code-find-class",
-            "code-find-function",
-            "code-trace-calls",
-            "code-impact-analysis",
-            "code-get-callers",
-            "code-get-callees",
-            "doc-stats",
-            "test-run",
-            "test-discover",
-            "test-presets",
-            "test-run-quick",
-            "test-run-unit",
-        }
+        if _unified_manifest_enabled():
+            expected = {
+                "health",
+                "plan",
+                "pr",
+                "error",
+                "metrics",
+                "journal",
+                "authoring",
+                "provider",
+                "environment",
+                "lifecycle",
+                "verification",
+                "task",
+                "spec",
+                "review",
+                "code",
+                "server",
+                "test",
+            }
+        else:
+            expected = {
+                "sdd-server-capabilities",
+                "spec-list-basic",
+                "spec-get",
+                "spec-get-hierarchy",
+                "task-get",
+                "task-list",
+                "tool-list",
+                "tool-get-schema",
+                "capability-get",
+                "capability-negotiate",
+                "tool-list-categories",
+                "spec-find",
+                "spec-list",
+                "task-query",
+                "spec-validate",
+                "spec-fix",
+                "spec-stats",
+                "spec-validate-fix",
+                "journal-add",
+                "journal-list",
+                "task-block",
+                "task-unblock",
+                "task-list-blocked",
+                "journal-list-unjournaled",
+                "spec-lifecycle-move",
+                "spec-lifecycle-activate",
+                "spec-lifecycle-complete",
+                "spec-lifecycle-archive",
+                "spec-lifecycle-state",
+                "spec-list-by-folder",
+                "task-prepare",
+                "task-next",
+                "task-info",
+                "task-check-deps",
+                "task-update-status",
+                "task-complete",
+                "task-start",
+                "task-progress",
+                "test-run",
+                "test-discover",
+                "test-presets",
+                "test-run-quick",
+                "test-run-unit",
+            }
         missing = sorted(name for name in expected if name not in tools)
         assert not missing, f"Missing canonical tools: {missing}"
 
@@ -286,11 +339,14 @@ class TestToolCounts:
     def test_minimum_tool_count(self, mcp_server):
         """Test that minimum expected tools are registered."""
         tools = mcp_server._tool_manager._tools
-        # We expect at least: 4 core + 3 rendering + 6 lifecycle + validation + journal + query + task
-        min_expected = 15
-        assert len(tools) >= min_expected, (
-            f"Expected at least {min_expected} tools, got {len(tools)}"
-        )
+        if _unified_manifest_enabled():
+            assert len(tools) == 17
+        else:
+            # We expect at least: 4 core + 6 lifecycle + validation + journal + query + task
+            min_expected = 15
+            assert len(tools) >= min_expected, (
+                f"Expected at least {min_expected} tools, got {len(tools)}"
+            )
 
     def test_tool_names_are_strings(self, mcp_server):
         """Test that all tool names are valid strings."""

@@ -34,6 +34,7 @@ def mock_mcp():
             name = func.__name__
             mcp._tools[name] = MagicMock(fn=func)
             return func
+
         return decorator
 
     mcp.tool = mock_tool
@@ -119,7 +120,10 @@ class TestSpecReviewNotImplemented:
             assert result["data"]["spec_id"] == "my-test-spec"
         else:
             # May fail due to missing spec or AI provider - that's fine
-            assert result.get("data", {}).get("spec_id") == "my-test-spec" or "error" in result
+            assert (
+                result.get("data", {}).get("spec_id") == "my-test-spec"
+                or "error" in result
+            )
 
     def test_spec_review_preserves_all_parameters(self, mock_mcp, mock_config):
         """Test spec_review includes all provided parameters in response."""
@@ -286,7 +290,9 @@ class TestReviewListPlanTools:
         non_llm_tools = [t for t in plan_tools if not t.get("llm_required")]
         assert len(non_llm_tools) >= 1, "Should have at least one non-LLM tool option"
 
-    def test_review_list_plan_tools_includes_recommendations(self, mock_mcp, mock_config):
+    def test_review_list_plan_tools_includes_recommendations(
+        self, mock_mcp, mock_config
+    ):
         """Test review_list_plan_tools includes usage recommendations."""
         from foundry_mcp.tools.review import register_review_tools
 
@@ -323,8 +329,9 @@ class TestPRCreateWithSpec:
         assert result["success"] is False
         # error_code is in the data dict
         assert result.get("data", {}).get("error_code") == "NOT_IMPLEMENTED"
-        assert "sdd-pr" in result.get("error", "").lower() or \
-               "sdd-pr" in result.get("data", {}).get("alternative", "")
+        assert "sdd-pr" in result.get("error", "").lower() or "sdd-pr" in result.get(
+            "data", {}
+        ).get("alternative", "")
 
     def test_pr_create_preserves_parameters(self, mock_mcp, mock_config):
         """Test pr_create_with_spec includes all parameters in response."""
@@ -420,7 +427,9 @@ class TestProviderSystemIntegration:
         for provider_id in provider_statuses.keys():
             assert provider_id in tool_names
 
-    def test_provider_availability_reflected_in_tool_status(self, mock_mcp, mock_config):
+    def test_provider_availability_reflected_in_tool_status(
+        self, mock_mcp, mock_config
+    ):
         """Test tool availability reflects provider availability."""
         from foundry_mcp.tools.review import register_review_tools
         from foundry_mcp.core.providers import check_provider_available
@@ -514,7 +523,7 @@ class TestMetricsEmission:
 
         register_review_tools(mock_mcp, mock_config)
 
-        with patch.object(_metrics, 'timer') as mock_timer:
+        with patch.object(_metrics, "timer") as mock_timer:
             list_tools = mock_mcp._tools["review_list_tools"]
             result = list_tools.fn()
 
@@ -528,7 +537,7 @@ class TestMetricsEmission:
 
         register_review_tools(mock_mcp, mock_config)
 
-        with patch.object(_metrics, 'timer') as mock_timer:
+        with patch.object(_metrics, "timer") as mock_timer:
             list_plan_tools = mock_mcp._tools["review_list_plan_tools"]
             result = list_plan_tools.fn()
 
@@ -542,10 +551,10 @@ class TestMetricsEmission:
         assert _metrics is not None
 
     def test_pr_workflow_metrics_singleton_exists(self):
-        """Test PR workflow tools have metrics singleton available."""
-        from foundry_mcp.tools.pr_workflow import _metrics
+        """Test PR workflow tooling can access metrics singleton."""
+        from foundry_mcp.core.observability import get_metrics
 
-        assert _metrics is not None
+        assert get_metrics() is not None
 
 
 class TestToolRegistration:
@@ -603,8 +612,8 @@ class TestLLMConfigurationStatus:
         assert result["success"] is True
         assert "llm_status" in result["data"]
 
-        # Plan tools should have status information
+        # Plan tools should include llm_required markers.
         plan_tools = result["data"]["plan_tools"]
         for tool in plan_tools:
-            assert "status" in tool
-            assert tool["status"] in ("available", "unavailable")
+            assert "llm_required" in tool
+            assert isinstance(tool["llm_required"], bool)

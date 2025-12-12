@@ -322,23 +322,6 @@ class TestCommandGroupParity:
         violations = validate_envelope_structure(response)
         assert not violations, f"Envelope violations: {violations}"
 
-    def test_render_basic_produces_json(self, cli_runner, temp_specs_dir):
-        """render basic mode produces valid JSON output."""
-        result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "render", "example-spec", "--mode", "basic"]
-        )
-        assert result.exit_code == 0
-
-        response = json.loads(result.output)
-        violations = validate_envelope_structure(response)
-        assert not violations, f"Envelope violations: {violations}"
-
-        # Should have markdown output
-        assert response["success"] is True
-        assert "markdown" in response["data"]
-
-
 class TestOutputStability:
     """Tests for output stability across invocations."""
 
@@ -398,22 +381,3 @@ class TestOutputStability:
 
             # Should be a dict (not list or primitive)
             assert isinstance(data, dict), f"Command {cmd} should return object, got {type(data)}"
-
-
-class TestFeatureFlagGating:
-    """Tests that feature-gated functionality behaves correctly."""
-
-    def test_enhanced_render_gated(self, cli_runner, temp_specs_dir):
-        """Enhanced render mode is properly gated by feature flag."""
-        result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "render", "example-spec", "--mode", "enhanced"]
-        )
-
-        # Should fail with feature disabled error
-        assert result.exit_code == 1
-        response = json.loads(result.output)
-        assert response["success"] is False
-        # Per response-v2: error is string message, error_code is in data
-        assert isinstance(response["error"], str)
-        assert response["data"].get("error_code") == "FEATURE_DISABLED"

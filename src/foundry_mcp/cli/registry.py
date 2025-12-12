@@ -72,11 +72,7 @@ def register_all_commands(cli: click.Group) -> None:
         dashboard_start_alias_cmd,
         dev_group,
         dev_install_alias_cmd,
-        doc_group,
-        find_class_alias_cmd,
-        find_function_alias_cmd,
         find_specs_alias_cmd,
-        generate_docs_alias_cmd,
         generate_marker_cmd,
         journal,
         journal_add_alias_cmd,
@@ -87,7 +83,6 @@ def register_all_commands(cli: click.Group) -> None:
         list_blockers_alias_cmd,
         list_phases_alias_cmd,
         lifecycle_state_cmd,
-        llm_doc_group,
         modify_apply_cmd,
         modify_group,
         move_spec_cmd,
@@ -97,8 +92,6 @@ def register_all_commands(cli: click.Group) -> None:
         pr_group,
         prepare_task_cmd,
         query_tasks_alias_cmd,
-        render_cmd,
-        render_group,
         review_group,
         review_spec_alias_cmd,
         run_tests_alias_cmd,
@@ -128,13 +121,10 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(cache)
     cli.add_command(journal)
     cli.add_command(validate_group)
-    cli.add_command(render_group)
     cli.add_command(review_group)
     cli.add_command(pr_group)
     cli.add_command(modify_group)
-    cli.add_command(doc_group)
     cli.add_command(test_group)
-    cli.add_command(llm_doc_group)
     cli.add_command(dev_group)
     cli.add_command(dashboard_group)
     cli.add_command(plan_group)
@@ -159,14 +149,10 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(session_status_cmd, name="session-status")
     cli.add_command(show_limits_cmd, name="session-limits")
     cli.add_command(session_capabilities_cmd, name="capabilities")
-    cli.add_command(render_cmd, name="render")
     cli.add_command(review_spec_alias_cmd, name="review-spec")
     cli.add_command(create_pr_alias_cmd, name="create-pr")
     cli.add_command(modify_apply_cmd, name="apply-modifications")
-    cli.add_command(find_class_alias_cmd, name="find-class")
-    cli.add_command(find_function_alias_cmd, name="find-function")
     cli.add_command(run_tests_alias_cmd, name="run-tests")
-    cli.add_command(generate_docs_alias_cmd, name="generate-docs")
     cli.add_command(dev_install_alias_cmd, name="dev-install")
     cli.add_command(journal_add_alias_cmd, name="journal-add")
     cli.add_command(journal_add_alias_cmd, name="add-journal")

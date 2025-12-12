@@ -1058,150 +1058,6 @@ LLM_TOOL_METADATA: Dict[str, ToolMetadata] = {
             }
         ],
     ),
-    "spec-doc": ToolMetadata(
-        name="spec-doc",
-        description="Generate human-facing documentation bundle from a specification. "
-        "Creates formatted documentation artifacts (markdown/HTML) from an SDD specification. "
-        "Wraps `sdd render` to produce documentation suitable for stakeholders.",
-        parameters=[
-            ParameterMetadata(
-                name="spec_id",
-                type=ParameterType.STRING,
-                description="Specification ID to document",
-                required=True,
-                examples=["feature-auth-001", "api-v2-migration-001"],
-            ),
-            ParameterMetadata(
-                name="output_format",
-                type=ParameterType.STRING,
-                description="Output format for documentation",
-                required=False,
-                default="markdown",
-                constraints={"enum": ["markdown", "md"]},
-            ),
-            ParameterMetadata(
-                name="output_path",
-                type=ParameterType.STRING,
-                description="Custom output path (default: specs/.human-readable/<spec_id>.md)",
-                required=False,
-            ),
-            ParameterMetadata(
-                name="include_progress",
-                type=ParameterType.BOOLEAN,
-                description="Include visual progress bars and stats",
-                required=False,
-                default=True,
-            ),
-            ParameterMetadata(
-                name="include_journal",
-                type=ParameterType.BOOLEAN,
-                description="Include recent journal entries in output",
-                required=False,
-                default=False,
-            ),
-            ParameterMetadata(
-                name="mode",
-                type=ParameterType.STRING,
-                description="Rendering mode - 'basic' (fast) or 'enhanced' (AI features)",
-                required=False,
-                default="basic",
-                constraints={"enum": ["basic", "enhanced"]},
-            ),
-        ],
-        category="llm",
-        version="1.0.0",
-        tags=["documentation", "rendering", "markdown", "reporting"],
-        related_tools=["spec-doc-llm", "spec-review-fidelity"],
-        examples=[
-            {
-                "description": "Generate markdown documentation",
-                "input": {"spec_id": "feature-auth-001", "output_format": "markdown"},
-                "output": {
-                    "success": True,
-                    "data": {
-                        "spec_id": "feature-auth-001",
-                        "format": "markdown",
-                        "output_path": "specs/.human-readable/feature-auth-001.md",
-                    },
-                },
-            }
-        ],
-    ),
-    "spec-doc-llm": ToolMetadata(
-        name="spec-doc-llm",
-        description="Generate comprehensive LLM-powered documentation for a project. "
-        "Uses Large Language Models to analyze code and generate rich, context-aware "
-        "documentation with explanations, examples, and architectural insights.",
-        parameters=[
-            ParameterMetadata(
-                name="directory",
-                type=ParameterType.STRING,
-                description="Project directory to document",
-                required=True,
-                examples=["src/", "./my-project", "/path/to/codebase"],
-            ),
-            ParameterMetadata(
-                name="output_dir",
-                type=ParameterType.STRING,
-                description="Output directory for documentation (default: ./docs)",
-                required=False,
-            ),
-            ParameterMetadata(
-                name="name",
-                type=ParameterType.STRING,
-                description="Project name (default: directory name)",
-                required=False,
-            ),
-            ParameterMetadata(
-                name="description",
-                type=ParameterType.STRING,
-                description="Project description for documentation context",
-                required=False,
-            ),
-            ParameterMetadata(
-                name="batch_size",
-                type=ParameterType.INTEGER,
-                description="Number of shards to process per batch",
-                required=False,
-                default=3,
-                constraints={"minimum": 1, "maximum": 10},
-            ),
-            ParameterMetadata(
-                name="use_cache",
-                type=ParameterType.BOOLEAN,
-                description="Enable persistent caching of parse results",
-                required=False,
-                default=True,
-            ),
-            ParameterMetadata(
-                name="resume",
-                type=ParameterType.BOOLEAN,
-                description="Resume from previous interrupted generation",
-                required=False,
-                default=False,
-            ),
-        ],
-        category="llm",
-        version="1.0.0",
-        tags=["documentation", "llm", "ai", "code-analysis", "architecture"],
-        related_tools=["spec-doc", "spec-review-fidelity"],
-        rate_limit="10/hour",
-        examples=[
-            {
-                "description": "Generate LLM documentation for a project",
-                "input": {"directory": "src/", "name": "My Project"},
-                "output": {
-                    "success": True,
-                    "data": {
-                        "output_dir": "./docs",
-                        "files_generated": 15,
-                        "total_shards": 42,
-                        "duration_seconds": 120.5,
-                    },
-                },
-            }
-        ],
-    ),
     "spec-review-fidelity": ToolMetadata(
         name="spec-review-fidelity",
         description="Compare implementation against specification and identify deviations. "
@@ -1267,7 +1123,7 @@ LLM_TOOL_METADATA: Dict[str, ToolMetadata] = {
         category="llm",
         version="1.0.0",
         tags=["fidelity", "review", "verification", "compliance", "llm"],
-        related_tools=["spec-review", "spec-doc", "spec-doc-llm"],
+        related_tools=["spec-review"],
         rate_limit="20/hour",
         examples=[
             {
@@ -1333,14 +1189,6 @@ LLM_FEATURE_FLAGS: Dict[str, FeatureFlagDescriptor] = {
         default_enabled=True,
         percentage_rollout=100,
         dependencies=["llm_tools", "llm_multi_provider"],
-    ),
-    "llm_doc_generation": FeatureFlagDescriptor(
-        name="llm_doc_generation",
-        description="LLM-powered documentation generation from code analysis",
-        state="beta",
-        default_enabled=True,
-        percentage_rollout=100,
-        dependencies=["llm_tools"],
     ),
     "llm_data_only_fallback": FeatureFlagDescriptor(
         name="llm_data_only_fallback",

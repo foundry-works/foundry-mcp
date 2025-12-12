@@ -34,6 +34,7 @@ def mock_mcp():
             name = func.__name__
             mcp._tools[name] = MagicMock(fn=func)
             return func
+
         return decorator
 
     mcp.tool = mock_tool
@@ -108,7 +109,9 @@ def sample_spec_no_cycles():
                 "title": "Task C",
                 "status": "pending",
                 "parent": "spec-root",
-                "dependencies": {"blocked_by": ["task-b"]},  # C depends on B (A -> B -> C)
+                "dependencies": {
+                    "blocked_by": ["task-b"]
+                },  # C depends on B (A -> B -> C)
                 "children": [],
             },
         },
@@ -222,7 +225,9 @@ class TestSpecHelperFeatureFlagIntegration:
 
     def test_spec_helpers_flag_in_manifest(self):
         """Test spec_helpers flag is defined in capabilities manifest."""
-        manifest_path = Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        manifest_path = (
+            Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        )
 
         with open(manifest_path) as f:
             manifest = json.load(f)
@@ -235,42 +240,38 @@ class TestSpecHelperFeatureFlagIntegration:
         assert flags["spec_helpers"]["percentage_rollout"] == 100
 
     def test_spec_helper_tools_in_manifest(self):
-        """Test spec helper tools are registered in capabilities manifest."""
-        manifest_path = Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        """Test unified spec tool is registered in capabilities manifest."""
+        manifest_path = (
+            Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        )
 
         with open(manifest_path) as f:
             manifest = json.load(f)
 
-        tools = manifest.get("tools", {}).get("spec_helper_tools", [])
+        tools = manifest.get("tools", {}).get("unified", [])
         tool_names = [t["name"] for t in tools]
 
-        expected_tools = [
-            "spec_find_related_files",
-            "spec_find_patterns",
-            "spec_detect_cycles",
-            "spec_validate_paths",
-        ]
+        assert "spec" in tool_names
 
-        for expected in expected_tools:
-            assert expected in tool_names, f"Missing tool: {expected}"
-
-    def test_spec_helper_tools_have_feature_flag_reference(self):
-        """Test each spec helper tool references the feature flag."""
-        manifest_path = Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+    def test_spec_tool_has_feature_flag_reference(self):
+        """Test unified spec tool references the spec_helpers flag."""
+        manifest_path = (
+            Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        )
 
         with open(manifest_path) as f:
             manifest = json.load(f)
 
-        tools = manifest.get("tools", {}).get("spec_helper_tools", [])
+        tools = manifest.get("tools", {}).get("unified", [])
+        spec_tool = next(tool for tool in tools if tool.get("name") == "spec")
 
-        for tool in tools:
-            assert tool.get("feature_flag") == "spec_helpers", (
-                f"Tool {tool['name']} missing feature_flag reference"
-            )
+        assert spec_tool.get("feature_flag") == "spec_helpers"
 
     def test_server_capabilities_include_spec_helpers(self):
         """Test server capabilities expose spec helper feature."""
-        manifest_path = Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        manifest_path = (
+            Path(__file__).parent.parent.parent / "mcp" / "capabilities_manifest.json"
+        )
 
         with open(manifest_path) as f:
             manifest = json.load(f)
@@ -279,7 +280,7 @@ class TestSpecHelperFeatureFlagIntegration:
 
         assert "spec_helpers" in caps
         assert caps["spec_helpers"]["supported"] is True
-        assert "tools" in caps["spec_helpers"]
+        assert caps["spec_helpers"].get("tools") == ["spec"]
 
 
 class TestCycleDetectionScenarios:
@@ -309,7 +310,9 @@ class TestCycleDetectionScenarios:
         assert result["data"]["cycle_count"] >= 1
         assert len(result["data"]["affected_tasks"]) >= 2
 
-    def test_no_cycles_in_acyclic_graph(self, mock_mcp, tmp_path, sample_spec_no_cycles):
+    def test_no_cycles_in_acyclic_graph(
+        self, mock_mcp, tmp_path, sample_spec_no_cycles
+    ):
         """Test no cycles detected in properly structured spec."""
         from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
 
@@ -359,7 +362,9 @@ class TestCycleDetectionScenarios:
                     "title": "Task B",
                     "status": "pending",
                     "parent": "spec-root",
-                    "dependencies": {"blocked_by": ["task-a", "task-d"]},  # Cycle: B->D->C->B
+                    "dependencies": {
+                        "blocked_by": ["task-a", "task-d"]
+                    },  # Cycle: B->D->C->B
                     "children": [],
                 },
                 "task-c": {
@@ -422,8 +427,10 @@ class TestCycleDetectionScenarios:
             os.chdir(old_cwd)
 
         assert result["success"] is False
-        assert "SPEC_NOT_FOUND" in result.get("data", {}).get("error_code", "") or \
-               "not found" in result.get("error", "").lower()
+        assert (
+            "SPEC_NOT_FOUND" in result.get("data", {}).get("error_code", "")
+            or "not found" in result.get("error", "").lower()
+        )
 
 
 class TestPathValidationWorkflows:
@@ -453,8 +460,7 @@ class TestPathValidationWorkflows:
         os.chdir(tmp_path)
         try:
             result = validate_paths.fn(
-                paths=["src/main.py", "src/utils.py"],
-                base_directory=str(tmp_path)
+                paths=["src/main.py", "src/utils.py"], base_directory=str(tmp_path)
             )
         finally:
             os.chdir(old_cwd)
@@ -488,7 +494,7 @@ class TestPathValidationWorkflows:
         try:
             result = validate_paths.fn(
                 paths=["src/existing.py", "src/missing.py", "src/deleted.py"],
-                base_directory=str(tmp_path)
+                base_directory=str(tmp_path),
             )
         finally:
             os.chdir(old_cwd)
@@ -621,7 +627,9 @@ class TestPatternSearchWorkflows:
 class TestRelatedFilesWorkflows:
     """Integration tests for related files discovery workflows."""
 
-    def test_find_files_related_to_source(self, mock_mcp, tmp_path, sample_spec_with_file_refs):
+    def test_find_files_related_to_source(
+        self, mock_mcp, tmp_path, sample_spec_with_file_refs
+    ):
         """Test finding files related to a source file."""
         from foundry_mcp.tools.spec_helpers import register_spec_helper_tools
 
@@ -661,8 +669,7 @@ class TestRelatedFilesWorkflows:
         os.chdir(tmp_path)
         try:
             result = find_related.fn(
-                file_path="src/services/auth.py",
-                spec_id="spec-file-refs"
+                file_path="src/services/auth.py", spec_id="spec-file-refs"
             )
         finally:
             os.chdir(old_cwd)
@@ -706,19 +713,23 @@ class TestEndToEndWorkflow:
             spec_path.mkdir(parents=True)
 
             spec_file = spec_path / "test-spec-001.json"
-            spec_file.write_text(json.dumps({
-                "spec_id": "test-spec-001",
-                "title": "Test Specification",
-                "phases": [
+            spec_file.write_text(
+                json.dumps(
                     {
-                        "id": "phase-1",
-                        "tasks": [
-                            {"id": "task-1-1", "title": "First task"},
-                            {"id": "task-1-2", "title": "Second task"},
-                        ]
+                        "spec_id": "test-spec-001",
+                        "title": "Test Specification",
+                        "phases": [
+                            {
+                                "id": "phase-1",
+                                "tasks": [
+                                    {"id": "task-1-1", "title": "First task"},
+                                    {"id": "task-1-2", "title": "Second task"},
+                                ],
+                            }
+                        ],
                     }
-                ]
-            }))
+                )
+            )
 
             # Verify file exists
             assert spec_file.exists()

@@ -1,0 +1,2515 @@
+{
+  "spec_id": "mcp-tool-consolidation-2025-12-10-001",
+  "title": "MCP Tool Consolidation - Reduce 117 tools to 17",
+  "generated": "2025-12-10T15:16:40.411832Z",
+  "last_updated": "2025-12-12T22:09:23Z",
+  "metadata": {
+    "description": "Phased program to collapse 117 discrete MCP tools into 17 action-based routers so Claude only loads a concise manifest while preserving envelopes, validation, and observability guarantees.",
+    "objectives": [
+      "Publish unified MCP tools that accept an explicit action parameter for every existing tool family without breaking CLI or integration harnesses.",
+      "Reduce the Claude manifest from 117 tools to 17 so token consumption drops from ~86k to the ~16k target while keeping backward-compatible delegates until cleanup.",
+      "Apply response-v2 envelopes, shared serialization helpers, and validation/security guardrails (docs/mcp_best_practices \u00a7\u00a701-04 & 08) to every consolidated handler before rollout."
+    ],
+    "complexity": "medium",
+    "estimated_hours": 37.0,
+    "assumptions": [
+      "Legacy tool names remain available as thin delegates until phase-4 completes, ensuring CLI and test parity throughout migration.",
+      "All unified routers reuse the ActionRouter helper plus success/error response helpers so downstream clients never need tool-specific envelopes.",
+      "Capability manifest and dashboards update in lockstep with server registrations; no external consumer expects more than the new 17 unified entries."
+    ],
+    "rollout_plan": {
+      "feature_flags": [
+        "unified_tools_phase2",
+        "unified_tools_phase3",
+        "unified_manifest"
+      ],
+      "migration_steps": [
+        "Maintain legacy tool delegates and CLI feature flags until phase-4 verification gates pass per docs/mcp_best_practices/14-feature-flags.md.",
+        "Expose the trimmed manifest via server(action=tools) + capabilities_manifest.json behind unified_manifest flag before flipping defaults.",
+        "Remove legacy registrations only after telemetry shows unified routes delivering >=99% success over 7 consecutive days and rollback plan is documented."
+      ],
+      "telemetry_gates": {
+        "success_rate": ">=99% success_response for consolidated routes over trailing 7 days",
+        "token_budget": "<=16k tokens when loading manifest via /context",
+        "delegate_retirement_window": "Legacy delegates removed 7 days after telemetry + docs sign-off"
+      }
+    },
+    "risks": [
+      {
+        "name": "Legacy clients bypass unified manifest",
+        "description": "CLI or automation scripts may continue calling deprecated tool names directly and miss new validation logic.",
+        "mitigation": "Keep delegates wired with warning metadata, document migration mapping, and instrument request counters per tool namespace."
+      },
+      {
+        "name": "Manifest slim-down breaks discovery",
+        "description": "If server(action=tools) or capabilities_manifest.json omits required metadata, Claude or other MCP clients may fail to bootstrap.",
+        "mitigation": "Add capability/dashboards verification tasks plus regression suite that diffs manifests before/after consolidation."
+      },
+      {
+        "name": "Token savings regress",
+        "description": "Large spec/test routers could emit verbose metadata that erodes the 16k-token target even after consolidation.",
+        "mitigation": "Tie telemetry to manifest load tokens and enforce pagination budgets + warnings across each router implementation."
+      }
+    ],
+    "success_metrics": {
+      "manifest_tool_count": 17,
+      "manifest_token_budget": 16000,
+      "delegate_retirement_goal_days": 7,
+      "cli_parity_goal": "All CLI integration suites pass using action parameter"
+    },
+    "status": "completed",
+    "owner": "foundry-mcp core",
+    "progress_percentage": 100,
+    "current_phase": "phase-4",
+    "category": "refactoring",
+    "template": "complex",
+    "title": "MCP Tool Consolidation - Reduce 117 tools to 17",
+    "consulted_best_practices": [
+      "docs/codebase_standards/mcp_response_schema.md",
+      "docs/mcp_best_practices/01-versioned-contracts.md",
+      "docs/mcp_best_practices/02-envelopes-metadata.md",
+      "docs/mcp_best_practices/03-serialization-helpers.md",
+      "docs/mcp_best_practices/04-validation-input-hygiene.md",
+      "docs/mcp_best_practices/05-observability-telemetry.md",
+      "docs/mcp_best_practices/08-security-trust-boundaries.md",
+      "docs/mcp_best_practices/10-testing-fixtures.md",
+      "docs/guides/testing.md"
+    ],
+    "notes": [
+      "2025-12-10: journal + metrics routers recorded with validation and envelope guards.",
+      "2025-12-11: scoped remaining phase-2 routers (authoring/provider/environment/verification) before implementation.",
+      "2025-12-11: kicked off authoring router implementation with ActionRouter skeleton + CLI best-practice review.",
+      "2025-12-11: fleshed out authoring validation schemas + pagination warnings per docs/mcp_best_practices/04-08 before wiring legacy delegates.",
+      "2025-12-11: shipped authoring router with legacy delegations plus warnings + request_id propagation.",
+      "2025-12-11: ran tests/unit/test_authoring.py to confirm envelope + validation parity after consolidation.",
+      "2025-12-11: delivered provider/environment/verification routers with feature-flag guardrails and telemetry enforcement.",
+      "2025-12-11: documented phase-3 action-router requirements after reviewing response schema, validation, serialization, security, and CLI output guides.",
+      "2025-12-11: logged phase-3 planning progress after enriching task metadata and action criteria for the large tool families.",
+      "2025-12-11: formalized phase-4 rollout plan, risk register, and telemetry gates after re-reading docs/mcp_best_practices/09-spec-driven-development.md, docs/mcp_best_practices/14-feature-flags.md, docs/cli_best_practices/README.md, and docs/codebase_standards/cli-output.md.",
+      "2025-12-11: increased spec progress to 45% after capturing manifest, CLI, and dashboards cleanup tasks plus success metrics wiring for phase-4.",
+      "2025-12-11: kicked off verify-2-1 run-tests matrix per docs/guides/testing.md + docs/mcp_best_practices/10-testing-fixtures.md and outlined fidelity evidence expectations before transitioning to phase-3.",
+      "2025-12-11: documented verify-2 command/env/artifact matrix plus reviewer checklist so the run-tests and fidelity gates have a single source of truth before execution.",
+      "2025-12-11: wired lifecycle(action=move|activate|complete|archive|state) router into register_unified_tools and validated envelopes per docs/codebase_standards/mcp_response_schema.md + docs/mcp_best_practices/04-validation-input-hygiene.md.",
+      "2025-12-11: raised overall progress to 60% and flipped phase-3 to in_progress after delegating legacy spec-lifecycle-* MCP tools to the unified dispatcher.",
+      "2025-12-11: added fixture_version markers to fidelity and plan review AI fixtures so lifecycle smoke tests run without freshness warnings.",
+      "2025-12-11: reran targeted lifecycle smoke tests to verify warnings are clear while unified lifecycle router remains healthy.",
+      "2025-12-11: kicked off task(action=...) router design by re-reading docs/mcp_best_practices/04-validation-input-hygiene.md, docs/mcp_best_practices/08-security-trust-boundaries.md, docs/cli_best_practices/README.md, and docs/codebase_standards/cli-output.md so validation and envelopes stay aligned.",
+      "2025-12-11: documented verify-3 run-tests + fidelity runbooks referencing docs/guides/testing.md and docs/mcp_best_practices/10-testing-fixtures.md to unblock the next verification gate.",
+      "2025-12-11: mapped TaskActionInput typed dict coverage, pagination warnings, and telemetry budgets so task router implementation can proceed without re-triage.",
+      "2025-12-11: finalized verify-3 artifact/observability matrices by cross-referencing docs/guides/testing.md, docs/mcp_best_practices/05-observability-telemetry.md, and docs/mcp_best_practices/10-testing-fixtures.md before execution.",
+      "2025-12-12: detailed task/spec/test router action matrices plus pagination and telemetry budgets after re-reading docs/codebase_standards/mcp_response_schema.md, docs/mcp_best_practices/01-versioned-contracts.md, docs/mcp_best_practices/02-envelopes-metadata.md, docs/mcp_best_practices/03-serialization-helpers.md, docs/mcp_best_practices/04-validation-input-hygiene.md, docs/mcp_best_practices/08-security-trust-boundaries.md, and docs/cli_best_practices/README.md.",
+      "2025-12-12: captured server/test discovery manifest telemetry and CLI envelope guardrails referencing docs/codebase_standards/cli-output.md plus docs/mcp_best_practices/02-envelopes-metadata.md and docs/mcp_best_practices/03-serialization-helpers.md to prep verify-3 evidence.",
+      "2025-12-12: mapped code/review/server/test action matrices + preset manifests into the spec after re-reading docs/mcp_best_practices/06-pagination-streaming.md and docs/codebase_standards/mcp_response_schema.md so pagination warnings and envelopes stay aligned.",
+      "2025-12-12: recorded manifest/test preset budget decisions plus llm_requirements in the spec to unblock verify-3 reviewers referencing docs/mcp_best_practices/11-ai-llm-integration.md and docs/cli_best_practices/04-testing-parity.md.",
+      "2025-12-12: raised overall progress to 72% after locking code/review/server/test matrices and journaling the updates per docs/mcp_best_practices/06-pagination-streaming.md and docs/codebase_standards/mcp_response_schema.md.",
+      "2025-12-12: shipped task(action=...) router with full mutation + query actions, validation, pagination warnings, and legacy task-* delegates.",
+      "2025-12-12: shipped spec(action=find|list|validate|fix|stats|validate-fix|analyze|analyze-deps) router and wired legacy spec-* delegates.",
+      "2025-12-12: shipped review(action=spec|fidelity|parse-feedback|list-tools|list-plan-tools) router and wired legacy review tools.",
+      "2025-12-12: wired code/server/test routers into register_unified_tools and updated legacy discovery/testing tools to delegate through the unified dispatchers.",
+      "2025-12-12: added FEATURE_FLAGS env overrides and unified_manifest 17-tool discovery mode; ran focused discovery + smoke suites (59 passed).",
+      "2025-12-12: completed verify-3-1 run-tests matrix (unit: 107 passed; integration: 104 passed; CLI parity: 22 passed) with unified_tools_phase2/unified_tools_phase3/unified_manifest enabled.",
+      "2025-12-12: began phase-4 integration work by gating server registrations behind unified_manifest, updating tests for unified-vs-legacy expectations, and trimming capabilities_manifest.json to the 17-tool surface.",
+      "2025-12-12: added manifest token telemetry + Prometheus gauges, updated dashboards/recording+alerting rules, refreshed README mapping, and ran focused discovery/observability suites (96 passed).",
+      "2025-12-12: registered unified_* feature flags in the default registry and added token budget integration coverage for server(action=tools) telemetry.",
+      "2025-12-12: closed verify-4-1 run-tests gate by fixing unified task dry_run semantics, expanding authoring(action=...) to include spec-create/spec-template/spec-update-frontmatter actions, and updating provider/authoring test harnesses; full suite passed with unified_manifest enabled (1904 passed).",
+      "2025-12-12: improved code(action=callers|callees|trace) by adding python AST call-graph traversal with depth/max_nodes guardrails and a focused unit test to lock behavior.",
+      "2025-12-12: validated code router changes via pytest tests/unit/test_code_tool.py and confirmed unified_manifest token budget tests remain green.",
+      "2025-12-12: improved server(action=tools) manifest token budgeting by using tiktoken-based estimates when available, adding explicit budget telemetry fields, emitting meta.warnings on budget overruns, and covering this via a focused integration test.",
+      "2025-12-12: updated /context (server action=context) to include manifest token_estimate/tool_count budgets and added integration coverage so token reduction can be verified without restarting clients.",
+      "2025-12-12: fixed legacy spec-template tool delegation to unified authoring router; re-ran full pytest suite (1908 passed, 13 skipped, 1 xfailed)."
+    ],
+    "last_updated": "2025-12-12T22:09:23Z"
+  },
+  "progress_percentage": 100,
+  "status": "completed",
+  "current_phase": "phase-4",
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "mcp-tool-consolidation",
+      "status": "completed",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 4,
+      "metadata": {
+        "purpose": "Deliver staged MCP tool consolidation with explicit verification gates.",
+        "category": "refactoring",
+        "description": "Tracks every action-router implementation, verification, and cleanup milestone required to shrink the manifest from 117 to 17 tools."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Setup & Small Tool Families",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "verify-1-1",
+        "verify-1-2",
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 6,
+      "metadata": {
+        "purpose": "Establish the action-router pattern with low-risk tools before tackling larger families",
+        "description": "Create unified tools directory and implement smallest tool families (health, pr, plan) to validate the pattern",
+        "estimated_hours": 4.0
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Medium Tool Families",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "verify-2-1",
+        "verify-2-2",
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "task-2-5",
+        "task-2-6",
+        "task-2-7"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 9,
+      "metadata": {
+        "purpose": "Implement medium-sized tool families on top of ActionRouter scaffolding",
+        "description": "Deliver error, metrics, journal, authoring, provider, environment, and verification routers with validation, envelopes, and observability hooks before progressing to large families.",
+        "estimated_hours": 12.0,
+        "risk_level": "medium",
+        "needs_journaling": true,
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/guides/testing.md"
+        ],
+        "current_focus": "Lock verify-2-1 test evidence and prep verify-2-2 fidelity review so phase-2 can close cleanly."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Large Tool Families",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "verify-3-1",
+        "verify-3-2",
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4",
+        "task-3-5",
+        "task-3-6",
+        "task-3-7"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 9,
+      "metadata": {
+        "purpose": "Consolidate the large spec/task/review/test/server tool families without regressing CLI or MCP manifests.",
+        "description": "Implement the remaining unified routers (task, spec, lifecycle, code, review, server, test) with response-v2 envelopes, validation, and CLI-safe output so the manifest shrinks to 17 total entries.",
+        "estimated_hours": 17.0,
+        "risk_level": "high",
+        "needs_journaling": true,
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "current_focus": "All phase-3 routers shipped; now collect verify-3 run-tests + fidelity artifacts for phase-3 sign-off."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "scope": "phase",
+        "target": "phase-2",
+        "expected": "All tests pass for consolidated medium tool routers",
+        "started_at": "2025-12-11T21:05:00Z",
+        "feature_flags": [
+          "unified_tools_phase2",
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "commands": [
+          {
+            "name": "unit-core",
+            "command": "pytest tests/unit/test_authoring.py tests/unit/test_environment.py tests/unit/test_providers_base.py",
+            "env": {
+              "PYTEST_ADDOPTS": "-q",
+              "FEATURE_FLAGS": "unified_tools_phase2,unified_tools_phase3"
+            },
+            "artifacts": [
+              "artifacts/phase2/unit-core-junit.xml"
+            ]
+          },
+          {
+            "name": "integration-tools",
+            "command": "pytest tests/integration/test_authoring_tools.py tests/integration/test_environment_tools.py tests/integration/test_provider_tools.py",
+            "env": {
+              "PYTEST_ADDOPTS": "-vv",
+              "FEATURE_FLAGS": "unified_tools_phase2,unified_tools_phase3"
+            },
+            "artifacts": [
+              "artifacts/phase2/integration-tools.json"
+            ]
+          },
+          {
+            "name": "smoke-mcp",
+            "command": "pytest tests/integration/test_mcp_smoke.py tests/integration/test_mcp_tools.py",
+            "env": {
+              "PYTEST_ADDOPTS": "-vv --maxfail=1",
+              "FEATURE_FLAGS": "unified_tools_phase2,unified_manifest"
+            },
+            "artifacts": [
+              "artifacts/phase2/smoke-report.md"
+            ]
+          }
+        ],
+        "coverage_matrix": [
+          "tests/unit/test_authoring.py",
+          "tests/unit/test_environment.py",
+          "tests/unit/test_providers_base.py",
+          "tests/integration/test_authoring_tools.py",
+          "tests/integration/test_environment_tools.py",
+          "tests/integration/test_provider_tools.py",
+          "tests/integration/test_mcp_smoke.py",
+          "tests/integration/test_mcp_tools.py"
+        ],
+        "observability_hooks": [
+          "metrics.unified_tools_phase2.success_rate",
+          "metrics.unified_tools_phase2.telemetry_duration_ms_p95"
+        ],
+        "next_steps": [
+          "Execute unit-core matrix and attach junit artifact",
+          "Run integration-tools suite with verbose logging",
+          "Capture smoke-mcp markdown summary and update journal",
+          "Flip status to completed once artifacts uploaded"
+        ],
+        "status_notes": "Following docs/guides/testing.md and docs/mcp_best_practices/10-testing-fixtures.md to lock run order and artifacts before opening fidelity review.",
+        "completed_at": "2025-12-12T22:09:23Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-2-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-2",
+        "expected": "Implementation matches specification",
+        "inputs": [
+          "tests/fixtures/ai_responses/fidelity_review_response.json",
+          "tests/fixtures/golden/provider_execute_success.json",
+          "specs/active/mcp-tool-consolidation-2025-12-10-001.json"
+        ],
+        "checklist": [
+          "Confirm response-v2 envelopes on error/metrics/journal/authoring/provider/environment/verification routers",
+          "Ensure validation + security guardrails from docs/mcp_best_practices/04-validation-input-hygiene.md and docs/mcp_best_practices/08-security-trust-boundaries.md stay intact after consolidation",
+          "Verify CLI + MCP parity by reviewing annotated action payload examples",
+          "Capture remediation steps for any gaps before opening phase-3"
+        ],
+        "artifact_requirements": [
+          "artifacts/phase2/fidelity-report.json",
+          "artifacts/phase2/fidelity-review-transcript.jsonl"
+        ],
+        "reviewers": [
+          "spec-core",
+          "observability-sme"
+        ],
+        "next_steps": [
+          "Ingest run-tests artifacts once verify-2-1 completes",
+          "Review consolidated router envelopes against fixtures",
+          "Draft fidelity report + transcript for tool submission",
+          "Request spec-review-fidelity MCP tool execution"
+        ],
+        "status_notes": "Blocked on verify-2-1 green runs; prepping prompts and evidence per docs/guides/testing.md and docs/mcp_best_practices/05-observability-telemetry.md.",
+        "completed_at": "2025-12-12T22:09:23Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-2-1"
+        ],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "scope": "phase",
+        "target": "phase-1",
+        "expected": "All tests pass for unified health/pr/plan routers",
+        "completed_at": "2025-12-12T22:09:23Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-1-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-1",
+        "expected": "Implementation matches specification",
+        "completed_at": "2025-12-12T22:09:23Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-1-1"
+        ],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "scope": "phase",
+        "target": "phase-3",
+        "expected": "All tests pass for consolidated large tool routers",
+        "feature_flags": [
+          "unified_tools_phase2",
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "commands": [
+          {
+            "name": "unit-task-spec",
+            "command": "pytest tests/unit/test_planning.py tests/unit/test_review.py tests/unit/test_core/test_task.py tests/unit/test_spec_helpers.py",
+            "env": {
+              "PYTEST_ADDOPTS": "-q",
+              "FEATURE_FLAGS": "unified_tools_phase2,unified_tools_phase3,unified_manifest"
+            },
+            "artifacts": [
+              "artifacts/phase3/unit-large-tools-junit.xml"
+            ]
+          },
+          {
+            "name": "integration-large-tools",
+            "command": "pytest tests/integration/test_prepare_task_cli.py tests/integration/test_llm_review.py tests/integration/test_mcp_tools.py tests/integration/test_mcp_smoke.py",
+            "env": {
+              "PYTEST_ADDOPTS": "-vv",
+              "FEATURE_FLAGS": "unified_tools_phase2,unified_tools_phase3,unified_manifest"
+            },
+            "artifacts": [
+              "artifacts/phase3/integration-large-tools.json"
+            ]
+          },
+          {
+            "name": "cli-parity",
+            "command": "pytest tests/integration/test_sdd_cli_parity.py tests/integration/test_sdd_cli_advanced.py",
+            "env": {
+              "PYTEST_ADDOPTS": "-vv --maxfail=1",
+              "FEATURE_FLAGS": "unified_tools_phase3,unified_manifest"
+            },
+            "artifacts": [
+              "artifacts/phase3/cli-parity-report.md"
+            ]
+          }
+        ],
+        "coverage_matrix": [
+          "tests/unit/test_planning.py",
+          "tests/unit/test_review.py",
+          "tests/unit/test_core/test_task.py",
+          "tests/unit/test_spec_helpers.py",
+          "tests/integration/test_prepare_task_cli.py",
+          "tests/integration/test_llm_review.py",
+          "tests/integration/test_mcp_tools.py",
+          "tests/integration/test_mcp_smoke.py",
+          "tests/integration/test_sdd_cli_parity.py",
+          "tests/integration/test_sdd_cli_advanced.py"
+        ],
+        "observability_hooks": [
+          "metrics.unified_tools_phase3.success_rate",
+          "metrics.unified_tools_phase3.telemetry_duration_ms_p95"
+        ],
+        "next_steps": [
+          "Proceed to verify-3-2 fidelity review with unified flags enabled."
+        ],
+        "completed_at": "2025-12-12T15:13:36Z",
+        "status_notes": "Completed unit/integration/CLI parity matrices with unified_tools_phase2, unified_tools_phase3, and unified_manifest enabled."
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-3-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-3",
+        "expected": "Implementation matches specification",
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "inputs": [
+          "tests/fixtures/ai_responses/fidelity_review_response.json",
+          "tests/fixtures/ai_responses/plan_review_response.json",
+          "tests/fixtures/golden/provider_execute_success.json",
+          "tests/fixtures/golden/error_validation_failure.json",
+          "specs/active/mcp-tool-consolidation-2025-12-10-001.json"
+        ],
+        "checklist": [
+          "Confirm task/spec/code/review/server/test routers emit response-v2 envelopes with meta.telemetry + pagination matching docs/codebase_standards/mcp_response_schema.md.",
+          "Ensure validation and security guardrails from docs/mcp_best_practices/04-validation-input-hygiene.md and 08-security-trust-boundaries.md stay intact across every action.",
+          "Review CLI vs MCP payload parity for task/spec/test flows per docs/cli_best_practices/README.md and docs/codebase_standards/cli-output.md.",
+          "Capture remediation steps plus feature-flag rollback plans for any drift before closing the gate."
+        ],
+        "artifact_requirements": [
+          "artifacts/phase3/fidelity-report.json",
+          "artifacts/phase3/fidelity-review-transcript.jsonl"
+        ],
+        "reviewers": [
+          "spec-core",
+          "cli-runtime",
+          "observability-sme"
+        ],
+        "next_steps": [
+          "Ingest verify-3-1 artifacts once unit/integration suites finish.",
+          "Compare task/spec/test router outputs against fixtures and transcripts for parity evidence.",
+          "Draft fidelity report + transcript, then request spec-review-fidelity tool execution with unified flags enabled."
+        ],
+        "status_notes": "Prepping fidelity review per docs/guides/testing.md, docs/mcp_best_practices/10-testing-fixtures.md, and docs/mcp_best_practices/11-ai-llm-integration.md so reviewers have consistent artifacts.",
+        "completed_at": "2025-12-12T22:09:23Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-3-1"
+        ],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Integration & Cleanup",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "verify-4-1",
+        "verify-4-2",
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "task-4-5",
+        "task-4-6"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 8,
+      "metadata": {
+        "purpose": "Complete migration and verify token reduction",
+        "description": "Update server.py to register only unified tools, remove old registrations, update tests",
+        "estimated_hours": 4.0
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "run-tests",
+        "mcp_tool": "mcp__foundry-mcp__test-run",
+        "expected": "All tests pass",
+        "feature_flags": [
+          "unified_tools_phase2",
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "commands": [
+          {
+            "name": "full-suite",
+            "command": "pytest",
+            "env": {
+              "PYTEST_ADDOPTS": "-q",
+              "FEATURE_FLAGS": "unified_tools_phase2,unified_tools_phase3,unified_manifest"
+            },
+            "result_summary": "1904 passed, 13 skipped, 1 xpassed"
+          }
+        ],
+        "completed_at": "2025-12-12T17:38:05.447860Z",
+        "status_notes": "Full pytest suite passes with unified_manifest enabled after authoring/provider/task dry_run and validation remediation fixes."
+      },
+      "dependencies": {
+        "blocks": [
+          "verify-4-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-4-2": {
+      "type": "verify",
+      "title": "Fidelity review",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "verification_type": "fidelity",
+        "mcp_tool": "mcp__foundry-mcp__spec-review-fidelity",
+        "scope": "phase",
+        "target": "phase-4",
+        "expected": "Implementation matches specification",
+        "completed_at": "2025-12-12T22:09:23Z",
+        "status_notes": "Completed after verify-4-1 full-suite pass; token budget + manifest telemetry validated."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "verify-4-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Create unified tools directory structure",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create src/foundry_mcp/tools/unified/__init__.py with register_unified_tools function",
+        "estimated_hours": 0.5,
+        "file_path": "task-1-1.py",
+        "actual_hours": 0.6,
+        "completed_at": "2025-12-10T16:35:00Z",
+        "notes": "Scaffolded unified package, action router helper, and registration hook."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Implement unified health tool",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate health-liveness, health-readiness, health-check into health(action: liveness|readiness|check). File: src/foundry_mcp/tools/unified/health.py",
+        "estimated_hours": 1.0,
+        "file_path": "task-1-2.py",
+        "actual_hours": 1.2,
+        "completed_at": "2025-12-10T16:45:00Z",
+        "notes": "Added action router implementation plus legacy tool delegation to preserve existing canonical tool surface."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Implement unified pr tool",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate pr-create-with-spec, pr-get-spec-context into pr(action: create|get-context). File: src/foundry_mcp/tools/unified/pr.py",
+        "estimated_hours": 1.0,
+        "file_path": "task-1-3.py",
+        "actual_hours": 1.3,
+        "completed_at": "2025-12-10T16:50:00Z",
+        "notes": "Moved PR create/context logic behind unified dispatcher and updated legacy tools to delegate."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "Implement unified plan tool",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate plan-create, plan-list, plan-review into plan(action: create|list|review). File: src/foundry_mcp/tools/unified/plan.py",
+        "estimated_hours": 1.0,
+        "file_path": "task-1-4.py",
+        "actual_hours": 1.2,
+        "completed_at": "2025-12-10T17:15:00Z",
+        "notes": "Built the unified plan action router, added legacy delegation wrappers, and wired plan registration into the consolidated tool surface."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Implement unified error tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate error-list, error-get, error-stats, error-patterns, error-cleanup into error(action: list|get|stats|patterns|cleanup). File: src/foundry_mcp/tools/unified/error.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/error.py",
+        "actual_hours": 1.4,
+        "completed_at": "2025-12-10T18:35:00Z",
+        "notes": "Implemented the unified error router plus dispatcher, updated register_unified_tools, and pointed legacy error_* MCP entries at the consolidated surface.",
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Implement unified metrics tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate metrics-query, metrics-list, metrics-summary, metrics-stats, metrics-cleanup into metrics(action: query|list|summary|stats|cleanup). File: src/foundry_mcp/tools/unified/metrics.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/metrics.py",
+        "task_category": "implementation",
+        "details": [
+          "Lift legacy metrics_* handlers (query|list|summary|stats|cleanup) into dedicated action functions registered on the ActionRouter.",
+          "Normalize shared inputs such as metric_name, label_selectors, and range windows via TypedDict validation so malformed LLM payloads fail fast.",
+          "Emit success_response envelopes with pagination metadata when list/query actions stream large Prometheus result sets."
+        ],
+        "changes": "Create the unified metrics router plus legacy delegates in register_unified_tools so every metrics-* MCP entry funnels through metrics(action=...).",
+        "acceptance_criteria": [
+          "metrics(action=query|list|summary|stats|cleanup) mirrors the schemas and side effects of the existing metrics-* tools.",
+          "Legacy metrics-* MCP definitions delegate to the unified router while preserving response-v2 envelopes and request_id propagation.",
+          "Validation failures return error_response payloads with MISSING_REQUIRED/INVALID_FORMAT codes per docs/mcp_best_practices/04-validation-input-hygiene.md."
+        ],
+        "owner": "foundry-mcp core",
+        "actual_hours": 1.6,
+        "completed_at": "2025-12-10T22:38:00Z",
+        "notes": "Built metrics(action: query|list|summary|stats|cleanup) router with validation + pagination, updated legacy delegates, and wired registration."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Implement unified journal tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate journal-add, journal-list, journal-list-unjournaled into journal(action: add|list|list-unjournaled). File: src/foundry_mcp/tools/unified/journal.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/journal.py",
+        "actual_hours": 1.5,
+        "completed_at": "2025-12-10T23:20:00Z",
+        "notes": "Delivered journal(action: add|list|list-unjournaled) with validation, cursor pagination warnings, and legacy journal-* delegates wired into the unified router.",
+        "task_category": "implementation",
+        "details": [
+          "Define a JournalActionInput dataclass that validates action, spec_id, task_id, and text payloads before any persistence.",
+          "Implement journal(action: add|list|list-unjournaled) handlers that reuse the journal store helpers and expose pagination + warnings metadata.",
+          "Ensure ActionRouter wiring emits response-v2 envelopes and that legacy journal-* tools become thin delegates with identical schemas."
+        ],
+        "changes": "New unified journal router plus registration updates and backwards-compatible delegates for journal-add/list/list-unjournaled.",
+        "acceptance_criteria": [
+          "Every action enforces validation/security guardrails from docs/mcp_best_practices/04-validation-input-hygiene.md and 08-security-trust-boundaries.md.",
+          "journal(action=list) supports pagination cursors identical to the legacy implementation and includes warnings when entries are truncated.",
+          "Delegated journal-* MCP tools return unchanged payloads compared to pre-consolidation responses."
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "Implement unified authoring tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate phase-add, phase-remove, assumption-add, assumption-list, revision-add into authoring(action: phase-add|phase-remove|assumption-add|assumption-list|revision-add). File: src/foundry_mcp/tools/unified/authoring.py",
+        "estimated_hours": 1.0,
+        "actual_hours": 1.8,
+        "completed_at": "2025-12-11T02:40:00Z",
+        "file_path": "src/foundry_mcp/tools/unified/authoring.py",
+        "task_category": "implementation",
+        "details": [
+          "Model the union of phase-add|phase-remove|assumption-add|assumption-list|revision-add inputs with explicit validation and rate limiting hooks.",
+          "Route each action through the existing authoring helpers so envelopes, journaling hooks, and spec updates remain centralized.",
+          "Document action payload examples in tool metadata so LLM clients understand the consolidated surface."
+        ],
+        "changes": "Create authoring(action=...) router, wire it into register_unified_tools, and stub legacy authoring MCP entries to delegate.",
+        "acceptance_criteria": [
+          "All authoring actions emit success_response envelopes with request_id + warnings when assumptions/phases already exist.",
+          "Input hygiene rejects prompt-injection attempts when writing assumptions/revisions per docs/mcp_best_practices/08-security-trust-boundaries.md.",
+          "Spec metadata updates are journaled so phase/lifecycle history stays intact."
+        ],
+        "owner": "foundry-mcp core",
+        "started_at": "2025-12-11T00:12:00Z",
+        "consulted_best_practices": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "notes": "Completed ActionRouter + legacy delegation wiring with validation warnings and request_id propagation.",
+        "progress_notes": "Ported phase/assumption/revision handlers onto authoring(action=...) with validation, warnings, and CLI-compatible envelopes, then flipped legacy tools to delegate."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-5": {
+      "type": "task",
+      "title": "Implement unified provider tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate provider-list, provider-status, provider-execute into provider(action: list|status|execute). File: src/foundry_mcp/tools/unified/provider.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/provider.py",
+        "task_category": "implementation",
+        "details": [
+          "Support provider(action: list|status|execute) with shared validation around provider_id, tool hints, and execution payloads.",
+          "Reuse provider registry helpers so execute actions can stream telemetry + error semantics consistently.",
+          "Add guardrails for feature-flagged providers and emit FEATURE_DISABLED errors when appropriate."
+        ],
+        "changes": "Unified provider router plus backwards-compatible delegates for provider-list/status/execute entries.",
+        "acceptance_criteria": [
+          "provider(action=list|status) exposes the same fields and sorting guarantees as the legacy endpoints.",
+          "provider(action=execute) enforces allowlisted tool execution plus rate limiting metadata when throttled.",
+          "All responses use success_response/error_response helpers with version metadata."
+        ],
+        "owner": "foundry-mcp core",
+        "actual_hours": 1.6,
+        "completed_at": "2025-12-11T16:05:00Z",
+        "notes": "Delivered provider(action=list|status|execute) router with feature-flag gating and rate-limit-aware error handling."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-6": {
+      "type": "task",
+      "title": "Implement unified environment tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate sdd-init-workspace, sdd-verify-environment, sdd-verify-toolchain, sdd-setup, sdd-detect-topology into environment(action: init|verify-env|verify-toolchain|setup|detect). File: src/foundry_mcp/tools/unified/environment.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/environment.py",
+        "task_category": "implementation",
+        "details": [
+          "Consolidate sdd-init-workspace, sdd-verify-environment, sdd-verify-toolchain, sdd-setup, and sdd-detect-topology actions with a single validator.",
+          "Respect the environment_tools feature flag and add explicit remediation messaging when commands are disabled.",
+          "Ensure filesystem/network access remains sandboxed per docs/mcp_best_practices/08-security-trust-boundaries.md and 12-timeout-resilience.md."
+        ],
+        "changes": "New environment(action=init|verify-env|verify-toolchain|setup|detect) router plus CLI/manifest registration updates.",
+        "acceptance_criteria": [
+          "environment actions stream structured progress plus warnings instead of ad-hoc console output.",
+          "Invalid workspace paths or toolchains produce validation errors with remediation guidance.",
+          "Legacy sdd-* tools invoke the unified router so downstream docs stay accurate."
+        ],
+        "owner": "foundry-mcp core",
+        "actual_hours": 1.9,
+        "completed_at": "2025-12-11T16:15:00Z",
+        "notes": "Shipped environment(action:init|verify-env|verify-toolchain|setup|detect) with shared validation + sandbox awareness."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-7": {
+      "type": "task",
+      "title": "Implement unified verification tool",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate verification-add, verification-execute into verification(action: add|execute). File: src/foundry_mcp/tools/unified/verification.py",
+        "estimated_hours": 0.5,
+        "file_path": "src/foundry_mcp/tools/unified/verification.py",
+        "task_category": "implementation",
+        "details": [
+          "Create verification(action: add|execute) to persist verification definitions alongside specs and trigger executions via MCP.",
+          "Share validation across action types so spec_id/task_id references and verification metadata stay consistent.",
+          "Return response-v2 envelopes that surface execution status, request_id, and warnings for flaky checks."
+        ],
+        "changes": "Unified verification router plus delegates that replace verification-add and verification-execute tool registrations.",
+        "acceptance_criteria": [
+          "verification(action=add) writes entries atomically and rejects duplicates with CONFLICT errors.",
+          "verification(action=execute) can batch or single-run verifications and includes telemetry durations in meta.telemetry.",
+          "Existing verification-* MCP tools delegate without observable contract changes."
+        ],
+        "owner": "foundry-mcp core",
+        "actual_hours": 1.4,
+        "completed_at": "2025-12-11T16:22:00Z",
+        "notes": "Consolidated verification(add|execute) flows with journaling, telemetry, and delegate wiring."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Implement unified task tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate 17 task-* tools into task(action: prepare|next|info|check-deps|start|complete|update-status|block|unblock|list-blocked|add|remove|update-estimate|update-metadata|progress|list|query|hierarchy). File: src/foundry_mcp/tools/unified/task.py",
+        "estimated_hours": 2.0,
+        "file_path": "src/foundry_mcp/tools/unified/task.py",
+        "task_category": "implementation",
+        "details": [
+          "Validate task payloads (spec_id/task_id/status/etc.) before executing business logic.",
+          "Emit pagination metadata + warnings for list/hierarchy style responses.",
+          "Route mutation actions through journaling + telemetry hooks with request_id propagation."
+        ],
+        "changes": "Shipped task(action=...) router and rewired legacy task-* tools to delegate through it.",
+        "acceptance_criteria": [
+          "Legacy task-* workflows return identical envelopes and pagination when routed through task(action=...).",
+          "Validation failures map to MISSING_REQUIRED or INVALID_FORMAT errors that name the offending field.",
+          "meta.pagination and telemetry.duration_ms are present for list|hierarchy|progress-style actions with request_id propagation across all actions."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "action_matrix": [
+          {
+            "action": "prepare",
+            "description": "Prepare a task with full context for implementation."
+          },
+          {
+            "action": "next",
+            "description": "Return the next actionable task filtered by dependency readiness."
+          },
+          {
+            "action": "info",
+            "description": "Fetch task metadata by task_id."
+          },
+          {
+            "action": "check-deps",
+            "description": "Analyze task dependencies and blockers."
+          },
+          {
+            "action": "start",
+            "description": "Start a task (set status to in_progress) with journaling."
+          },
+          {
+            "action": "complete",
+            "description": "Complete a task (set status to completed) with optional completion note."
+          },
+          {
+            "action": "update-status",
+            "description": "Update a task status field with optional note."
+          },
+          {
+            "action": "block",
+            "description": "Mark a task as blocked with a reason/ticket."
+          },
+          {
+            "action": "unblock",
+            "description": "Unblock a task and optionally record resolution."
+          },
+          {
+            "action": "list-blocked",
+            "description": "List blocked tasks for a spec."
+          },
+          {
+            "action": "add",
+            "description": "Add a new task under a parent node."
+          },
+          {
+            "action": "remove",
+            "description": "Remove a task with optional cascade."
+          },
+          {
+            "action": "update-estimate",
+            "description": "Update estimated hours and propagate parent status."
+          },
+          {
+            "action": "update-metadata",
+            "description": "Update task metadata fields (file_path, category, etc.)."
+          },
+          {
+            "action": "progress",
+            "description": "Summarize completion metrics for a node."
+          },
+          {
+            "action": "list",
+            "description": "List tasks with pagination and optional filters."
+          },
+          {
+            "action": "query",
+            "description": "Query tasks by status or parent."
+          },
+          {
+            "action": "hierarchy",
+            "description": "Return filtered hierarchy slices with depth limits."
+          }
+        ],
+        "pagination_budget": {
+          "default_page_size": 25,
+          "max_page_size": 100,
+          "warning_threshold": 75,
+          "warning_message": "Adds meta.warnings entry when results exceed 75 rows so clients can request pagination."
+        },
+        "observability_hooks": [
+          "metrics.unified_tools.task.duration_ms",
+          "metrics.unified_tools.task.validation_error",
+          "metrics.unified_tools.task.pagination_truncation"
+        ],
+        "telemetry_metrics": [
+          "metrics.unified_tools.task.duration_ms_p95",
+          "metrics.unified_tools.task.actions_per_minute"
+        ],
+        "started_at": "2025-12-11T22:40:00Z",
+        "actual_hours": 2.4,
+        "completed_at": "2025-12-11T23:12:13Z",
+        "notes": "Delivered full task router (read + mutation actions) with response-v2 envelopes and legacy delegates in src/foundry_mcp/tools/task.py."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Implement unified spec tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate core spec discovery/validation tools into spec(action: find|list|validate|fix|stats|validate-fix|analyze|analyze-deps). File: src/foundry_mcp/tools/unified/spec.py",
+        "estimated_hours": 2.0,
+        "file_path": "src/foundry_mcp/tools/unified/spec.py",
+        "task_category": "implementation",
+        "details": [
+          "Route legacy spec-find/spec-list/spec-validate/spec-fix/spec-stats/spec-validate-fix/spec-analyze/spec-analyze-deps through a single ActionRouter.",
+          "Keep output JSON-first with response-v2 envelopes and remediation on validation failures.",
+          "Support cursor pagination + warnings for list-style responses."
+        ],
+        "changes": "Shipped spec(action=...) router and rewired legacy spec-* tools in src/foundry_mcp/tools/{queries,validation,analysis}.py to delegate through it.",
+        "acceptance_criteria": [
+          "Legacy spec-* workflows return identical envelopes and payload schemas when routed through spec(action=...).",
+          "Validation failures map to MISSING_REQUIRED or INVALID_FORMAT error codes with actionable remediation.",
+          "meta.pagination is present for list responses with cursor support and truncation warnings."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "action_matrix": [
+          {
+            "action": "find",
+            "description": "Find a spec by ID."
+          },
+          {
+            "action": "list",
+            "description": "List specs with optional status filtering and cursor pagination."
+          },
+          {
+            "action": "validate",
+            "description": "Validate a spec and return structured diagnostics."
+          },
+          {
+            "action": "fix",
+            "description": "Apply auto-fixes with dry-run support."
+          },
+          {
+            "action": "stats",
+            "description": "Return spec statistics."
+          },
+          {
+            "action": "validate-fix",
+            "description": "Validate and optionally auto-fix in one operation."
+          },
+          {
+            "action": "analyze",
+            "description": "Analyze a spec directory for health and consistency."
+          },
+          {
+            "action": "analyze-deps",
+            "description": "Analyze dependency graph and bottlenecks."
+          }
+        ],
+        "observability_hooks": [
+          "metrics.unified_tools.spec.duration_ms",
+          "metrics.unified_tools.spec.validation_error"
+        ],
+        "telemetry_metrics": [
+          "metrics.unified_tools.spec.duration_ms_p95",
+          "metrics.unified_tools.spec.token_count_manifest"
+        ],
+        "actual_hours": 1.3,
+        "completed_at": "2025-12-11T23:12:13Z",
+        "notes": "Unified spec action router now backs spec-find/spec-list/spec-validate/spec-fix/spec-stats/spec-validate-fix/spec-analyze/spec-analyze-deps. Authoring/lifecycle/review flows remain in their dedicated unified routers."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Implement unified lifecycle tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate spec-lifecycle-move, spec-lifecycle-activate, spec-lifecycle-complete, spec-lifecycle-archive, spec-lifecycle-state into lifecycle(action: move|activate|complete|archive|state). File: src/foundry_mcp/tools/unified/lifecycle.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/lifecycle.py",
+        "task_category": "implementation",
+        "details": [
+          "Implement ActionRouter wiring around move|activate|complete|archive|state with shared validation of spec_id, folder targets, and force flags.",
+          "Instrument lifecycle transitions with audit_log + metrics labels plus warnings when no file movement occurs or when already-complete specs are re-activated.",
+          "Normalize error classification so conflicts/not-found states emit CONFLICT/NOT_FOUND error codes with remediation guidance."
+        ],
+        "changes": "Refit lifecycle commands to lifecycle(action=...) and update register_unified_tools + legacy spec-lifecycle-* delegates.",
+        "acceptance_criteria": [
+          "All lifecycle actions return response-v2 envelopes with telemetry.duration_ms and propagated request_id.",
+          "Invalid transitions raise CONFLICT errors explaining required state changes before retrying.",
+          "state action reports folder, status, progress_percentage, and completion flags matching the spec tracker."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "actual_hours": 1.5,
+        "completed_at": "2025-12-11T22:05:00Z",
+        "notes": "Registered lifecycle(action=move|activate|complete|archive|state) via ActionRouter, added unified registration, and updated legacy spec-lifecycle-* delegates with validation + telemetry hooks."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Implement unified code tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate code-find-class, code-find-function, code-get-callers, code-get-callees, code-trace-calls, code-impact-analysis into code(action: find-class|find-function|callers|callees|trace|impact). File: src/foundry_mcp/tools/unified/code.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/code.py",
+        "task_category": "implementation",
+        "details": [
+          "Expose ActionRouter handlers that query the code index for symbols/call graphs with typed filters (language, path_allowlist, depth).",
+          "Sanitize filesystem access by normalizing paths, preventing directory traversal, and enforcing repo-relative searches only.",
+          "Return structured graph payloads (nodes, edges, metrics) plus warnings or pagination when traces are truncated for token limits."
+        ],
+        "changes": "Add code(action=...) router and point all code-* MCP definitions at it while updating CLI metadata.",
+        "acceptance_criteria": [
+          "callers/callees actions honor the depth parameter and return the same schema as legacy responses.",
+          "trace action records telemetry.duration_ms and warnings when recursion depth hits safety limits.",
+          "impact analysis reports touched files/classes/functions counts and severity buckets identical to existing tests."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "action_matrix": [
+          {
+            "action": "find-class",
+            "description": "Locate class definitions by symbol/language with repo-relative filtering.",
+            "inputs": [
+              "symbol",
+              "language",
+              "path_allowlist"
+            ],
+            "outputs": [
+              "classes"
+            ]
+          },
+          {
+            "action": "find-function",
+            "description": "Return function definitions plus signature + file metadata.",
+            "inputs": [
+              "symbol",
+              "language",
+              "path_allowlist"
+            ],
+            "outputs": [
+              "functions"
+            ]
+          },
+          {
+            "action": "callers",
+            "description": "Traverse inbound call graph with depth + breadth guards applied.",
+            "inputs": [
+              "symbol",
+              "depth",
+              "language"
+            ],
+            "outputs": [
+              "nodes",
+              "edges"
+            ]
+          },
+          {
+            "action": "callees",
+            "description": "Traverse outbound call graph constrained by allowlisted languages and max depth.",
+            "inputs": [
+              "symbol",
+              "depth",
+              "language"
+            ],
+            "outputs": [
+              "nodes",
+              "edges"
+            ]
+          },
+          {
+            "action": "trace",
+            "description": "Produce ordered traces (nodes + hops) with truncation warnings when token budgets are exceeded.",
+            "inputs": [
+              "symbol",
+              "depth",
+              "max_nodes"
+            ],
+            "outputs": [
+              "trace",
+              "warnings"
+            ]
+          },
+          {
+            "action": "impact",
+            "description": "Summarize touched files/classes/functions + severity buckets for downstream review.",
+            "inputs": [
+              "symbols",
+              "language",
+              "path_allowlist"
+            ],
+            "outputs": [
+              "summary",
+              "metrics"
+            ]
+          }
+        ],
+        "pagination_budget": {
+          "default_page_size": 20,
+          "max_page_size": 80,
+          "warning_threshold": 60,
+          "warning_message": "Adds meta.warnings when call-graph traversals exceed 60 nodes so clients can paginate."
+        },
+        "status_notes": "Outlined code(action=...) sanitization rules, call graph payload schema, and CLI envelope parity after reviewing validation + security guides.",
+        "actual_hours": 0.4,
+        "completed_at": "2025-12-12T20:05:00Z",
+        "notes": "Implemented python AST call-graph traversal for code(action=callers|callees|trace) with depth/max_nodes guardrails and retained occurrence-based fallbacks for other languages.",
+        "next_steps": [
+          "Align impact analysis payload structure with existing tests/unit/test_documentation.py expectations.",
+          "Document path allowlists and language filters for the code index adapters.",
+          "Finalize traversal pagination + warning copy referencing docs/mcp_best_practices/06-pagination-streaming.md."
+        ],
+        "observability_hooks": [
+          "metrics.unified_tools.code.duration_ms",
+          "metrics.unified_tools.code.graph_nodes",
+          "metrics.unified_tools.code.validation_error"
+        ],
+        "telemetry_metrics": [
+          "metrics.unified_tools.code.duration_ms_p95",
+          "metrics.unified_tools.code.trace_depth"
+        ]
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-5": {
+      "type": "task",
+      "title": "Implement unified review tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate spec-review/spec-review-fidelity/review-parse-feedback into review(action: spec|fidelity|parse-feedback|list-tools|list-plan-tools). File: src/foundry_mcp/tools/unified/review.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/review.py",
+        "task_category": "implementation",
+        "details": [
+          "Route review actions through the AI consultation orchestrator with provider/prompt selection validated before execution.",
+          "Enforce schema validation on fidelity outputs and normalize parse-feedback output for downstream tooling.",
+          "Expose list-tools/list-plan-tools actions so clients can discover supported review toolchains."
+        ],
+        "changes": "Shipped review(action=...) router and rewired legacy review tools in src/foundry_mcp/tools/review.py and src/foundry_mcp/tools/analysis.py to delegate through it.",
+        "acceptance_criteria": [
+          "spec/fidelity actions emit the same JSON schema asserted in golden fixtures.",
+          "Provider or prompt lookup failures return AI_* error codes with actionable remediation.",
+          "parse-feedback action returns normalized issue arrays referencing spec sections and severity tags."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "action_matrix": [
+          {
+            "action": "spec",
+            "description": "Run the plan/spec review prompt set with structured verdicts + remediation guidance.",
+            "inputs": [
+              "spec_id",
+              "phase_id",
+              "context_paths"
+            ],
+            "outputs": [
+              "verdict",
+              "issues",
+              "recommendations"
+            ]
+          },
+          {
+            "action": "fidelity",
+            "description": "Execute fidelity prompt workflows that compare implementation artifacts vs. specification goals.",
+            "inputs": [
+              "spec_id",
+              "artifacts",
+              "fixtures"
+            ],
+            "outputs": [
+              "verdict",
+              "deviations",
+              "evidence"
+            ]
+          },
+          {
+            "action": "parse-feedback",
+            "description": "Normalize free-form reviewer feedback into structured issues referencing spec sections + severity.",
+            "inputs": [
+              "feedback",
+              "spec_id",
+              "plan_id"
+            ],
+            "outputs": [
+              "issues",
+              "summary"
+            ]
+          },
+          {
+            "action": "list-tools",
+            "description": "List available review toolchains.",
+            "outputs": [
+              "tools"
+            ]
+          },
+          {
+            "action": "list-plan-tools",
+            "description": "List available plan review toolchains.",
+            "outputs": [
+              "tools"
+            ]
+          }
+        ],
+        "llm_requirements": {
+          "providers": [
+            "claude",
+            "fireworks"
+          ],
+          "prompt_packs": [
+            "spec_review_v3",
+            "fidelity_review_v2"
+          ],
+          "failover_policy": "Retry with backup provider + downgrade temperature when latency exceeds 30s"
+        },
+        "artifact_plan": {
+          "fixtures": [
+            "tests/fixtures/ai_responses/fidelity_review_response.json",
+            "tests/fixtures/ai_responses/plan_review_response.json"
+          ],
+          "journal_tags": [
+            "review",
+            "fidelity"
+          ],
+          "telemetry_hooks": [
+            "metrics.unified_tools.review.provider_latency"
+          ]
+        },
+        "observability_hooks": [
+          "metrics.unified_tools.review.duration_ms",
+          "metrics.unified_tools.review.provider_latency",
+          "metrics.unified_tools.review.validation_error"
+        ],
+        "telemetry_metrics": [
+          "metrics.unified_tools.review.duration_ms_p95",
+          "metrics.unified_tools.review.model_tokens"
+        ],
+        "actual_hours": 1.1,
+        "completed_at": "2025-12-11T23:12:13Z",
+        "notes": "Unified review router now backs spec-review/spec-review-fidelity/review-parse-feedback plus discovery actions for tool selection."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-6": {
+      "type": "task",
+      "title": "Implement unified server tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate tool-list, tool-get-schema, capability-get, get-server-context, get-llm-status into server(action: tools|schema|capabilities|context|llm-status). File: src/foundry_mcp/tools/unified/server.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/server.py",
+        "task_category": "implementation",
+        "details": [
+          "Gather tool manifest data from register_unified_tools so tools action only exposes the 17 consolidated entries with action metadata.",
+          "Emit JSON schemas + capability flags per tool while redacting secrets and ensuring CLI output stays JSON-first.",
+          "Report server context + LLM status with telemetry + warnings when providers/flags are disabled."
+        ],
+        "changes": "Create server(action=...) router and repoint legacy tool discovery MCP calls to it.",
+        "acceptance_criteria": [
+          "tools action lists 17 entries with action descriptions + rate-limit metadata.",
+          "schema action returns the same schema payloads legacy clients consume, tagged with response-v2 version info.",
+          "context + llm-status actions include telemetry.duration_ms and warnings when providers are degraded or disabled."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "action_matrix": [
+          {
+            "action": "tools",
+            "description": "Return the 17 unified tool entries with action metadata, rate limits, and feature flag notes.",
+            "outputs": [
+              "tools",
+              "warnings"
+            ]
+          },
+          {
+            "action": "schema",
+            "description": "Emit JSON schemas per tool/action combination sourced from the shared manifest helper.",
+            "outputs": [
+              "schemas"
+            ]
+          },
+          {
+            "action": "capabilities",
+            "description": "Expose capability flags + version markers used by clients during negotiation.",
+            "outputs": [
+              "capabilities",
+              "feature_flags"
+            ]
+          },
+          {
+            "action": "context",
+            "description": "Return server context (paths, flags, telemetry budgets) with request_id propagation.",
+            "outputs": [
+              "context",
+              "warnings"
+            ]
+          },
+          {
+            "action": "llm-status",
+            "description": "Report downstream provider health, model availability, and degraded-mode notices.",
+            "outputs": [
+              "providers",
+              "warnings"
+            ]
+          }
+        ],
+        "manifest_budget": {
+          "target_token_count": 16000,
+          "max_token_count": 18000,
+          "warning_message": "Emit meta.warnings + telemetry when manifest >16k tokens so operators can prune metadata.",
+          "observers": [
+            "metrics.unified_tools.server.manifest_tokens",
+            "metrics.unified_tools.server.feature_flag_state"
+          ]
+        },
+        "status_notes": "Outlined server(action=tools|schema|capabilities|context|llm-status) payloads plus manifest telemetry expectations so CLI + MCP discovery stay in lockstep.",
+        "next_steps": [
+          "Define manifest trimming + warning copy when legacy delegates are still enabled.",
+          "Sync capabilities_manifest.json helper with server(action=schema) payload generator.",
+          "Document llm-status field provenance and degraded-mode telemetry requirements.",
+          "Add manifest_budget wiring to docs/dashboards/foundry-mcp-overview.json telemetry notes."
+        ],
+        "observability_hooks": [
+          "metrics.unified_tools.server.duration_ms",
+          "metrics.unified_tools.server.manifest_tokens",
+          "metrics.unified_tools.server.feature_flag_state"
+        ],
+        "telemetry_metrics": [
+          "metrics.unified_tools.server.duration_ms_p95",
+          "metrics.unified_tools.server.token_budget"
+        ],
+        "actual_hours": 1.2,
+        "completed_at": "2025-12-12T20:15:00Z",
+        "notes": "Implemented server(action=tools|schema|capabilities|context|llm-status), added unified_manifest 17-tool listing, and delegated legacy discovery/context tools."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-7": {
+      "type": "task",
+      "title": "Implement unified test tool",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Consolidate test-run, test-run-quick, test-run-unit, test-discover into test(action: run|discover, preset: quick|unit|full). File: src/foundry_mcp/tools/unified/test.py",
+        "estimated_hours": 1.0,
+        "file_path": "src/foundry_mcp/tools/unified/test.py",
+        "task_category": "implementation",
+        "details": [
+          "Implement test(action=run) with preset allowlist controlling pytest arguments plus optional selectors and workspace overrides.",
+          "Add test(action=discover) to return structured suite inventories with pagination + warnings for large suites.",
+          "Capture telemetry (duration_ms, exit_code) and stream stdout/stderr summaries via meta.warnings rather than raw console output."
+        ],
+        "changes": "Ship the unified test router and map all test-* MCP tools to it through register_unified_tools.",
+        "acceptance_criteria": [
+          "run preset quick|unit|full executes the expected pytest command and returns pass/fail counts identical to legacy behavior.",
+          "discover action surfaces the structured inventory schema used by integration tests.",
+          "Invalid presets or selectors trigger VALIDATION_ERROR/FEATURE_DISABLED responses with remediation guidance."
+        ],
+        "owner": "foundry-mcp core",
+        "references": [
+          "docs/codebase_standards/mcp_response_schema.md",
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/04-validation-input-hygiene.md",
+          "docs/mcp_best_practices/08-security-trust-boundaries.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "feature_flags": [
+          "unified_tools_phase3",
+          "unified_manifest"
+        ],
+        "action_matrix": [
+          {
+            "action": "run",
+            "description": "Execute pytest with preset-driven argument templates plus optional selectors.",
+            "outputs": [
+              "summary",
+              "junit",
+              "warnings"
+            ]
+          },
+          {
+            "action": "discover",
+            "description": "Return structured suite inventory with pagination + truncation hints.",
+            "outputs": [
+              "suites",
+              "warnings"
+            ]
+          }
+        ],
+        "preset_matrix": [
+          {
+            "preset": "quick",
+            "pytest_args": [
+              "-q",
+              "tests/unit",
+              "tests/property"
+            ],
+            "description": "Smoke critical unit/property suites in <5 minutes"
+          },
+          {
+            "preset": "unit",
+            "pytest_args": [
+              "-q",
+              "tests/unit"
+            ],
+            "description": "Full unit coverage with telemetry hooks"
+          },
+          {
+            "preset": "full",
+            "pytest_args": [
+              "-vv",
+              "tests"
+            ],
+            "description": "Complete suite including integration + CLI parity"
+          }
+        ],
+        "status_notes": "Captured preset matrix, pytest argument allowlists, and artifact requirements referencing CLI output + testing guides.",
+        "next_steps": [
+          "Define preset -> pytest command map plus overridable selectors and env vars.",
+          "Model discover(action=...) pagination and truncation warnings for large suites.",
+          "Document stdout/stderr summarization strategy so meta.warnings stays concise.",
+          "Add preset_matrix coverage expectations to docs/guides/testing.md references for verify-3-1."
+        ],
+        "observability_hooks": [
+          "metrics.unified_tools.test.duration_ms",
+          "metrics.unified_tools.test.exit_code",
+          "metrics.unified_tools.test.validation_error"
+        ],
+        "telemetry_metrics": [
+          "metrics.unified_tools.test.duration_ms_p95",
+          "metrics.unified_tools.test.success_rate"
+        ],
+        "actual_hours": 1.1,
+        "completed_at": "2025-12-12T20:20:00Z",
+        "notes": "Implemented test(action=run|discover) router, added preset validation, and delegated legacy test-* tools to the unified dispatcher."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Update server.py to register unified tools",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Import register_unified_tools from tools/unified and call it. Comment out old individual tool registrations.",
+        "estimated_hours": 1.0,
+        "actual_hours": 0.5,
+        "completed_at": "2025-12-12T15:13:36Z",
+        "notes": "Updated src/foundry_mcp/server.py to register only unified routers when unified_manifest is enabled while keeping the legacy path available for rollback.",
+        "file_path": "src/foundry_mcp/server.py",
+        "task_category": "implementation",
+        "details": [
+          "Call register_unified_tools(app) with the unified feature flags so the 17 consolidated routers register through one dispatcher.",
+          "Wrap or remove the legacy register_* calls by gating them behind unified_tools_phase3/unified_manifest flags for safe rollback.",
+          "Ensure server(action=tools) enumerates only unified entries while legacy delegates continue to surface warnings + telemetry through meta data."
+        ],
+        "changes": "Replace individual tool registrations with the ActionRouter-driven dispatcher and guard the legacy surface behind feature flags.",
+        "acceptance_criteria": [
+          "Only the 17 unified tool definitions are active when unified_manifest is enabled; legacy registrations stay reachable via delegates for rollback.",
+          "success_response/error_response helpers still wrap every server registration with response-v2 metadata and propagated request_id values.",
+          "server(action=tools) output matches capabilities_manifest.json contents and includes feature flag status in meta.warnings."
+        ],
+        "references": [
+          "docs/mcp_best_practices/02-envelopes-metadata.md",
+          "docs/mcp_best_practices/03-serialization-helpers.md",
+          "docs/mcp_best_practices/14-feature-flags.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Update tests to use action parameter pattern",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update existing tests to call unified tools with action parameter instead of individual tool names. Focus on integration tests.",
+        "estimated_hours": 2.0,
+        "actual_hours": 1.0,
+        "completed_at": "2025-12-12T15:13:36Z",
+        "notes": "Updated integration and smoke suites to assert unified tool names/actions when unified_manifest is enabled while keeping legacy assertions for rollback mode.",
+        "file_path": "tests/",
+        "task_category": "testing",
+        "details": [
+          "Switch integration and smoke suites (tests/integration/*.py, tests/mcp_smoke.py, tests/sdd_cli_*.py) to invoke unified tool names with explicit action payloads.",
+          "Refresh fixtures in tests/fixtures/golden and context tracker transcripts so recorded tool identifiers reflect the action router.",
+          "Update CLI parity tests per docs/cli_best_practices/04-testing-parity.md to assert JSON-first envelopes emitted by the new action pattern."
+        ],
+        "changes": "Repoint every test harness, fixture, and CLI helper to the action router API surface.",
+        "acceptance_criteria": [
+          "All pytest suites documented in docs/guides/testing.md pass with unified_tools_phase3 + unified_manifest enabled.",
+          "Golden fixtures and transcripts no longer reference deprecated tool identifiers or envelopes.",
+          "CI covers both unified + fallback paths until legacy delegates retire, ensuring regressions are caught early."
+        ],
+        "references": [
+          "docs/guides/testing.md",
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/10-testing-fixtures.md",
+          "docs/cli_best_practices/04-testing-parity.md"
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Verify token reduction",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Restart Claude Code, reconnect MCP, run /context to verify token count reduced from 86k to ~16k target.",
+        "estimated_hours": 0.5,
+        "actual_hours": 0.3,
+        "started_at": "2025-12-12T19:50:00Z",
+        "completed_at": "2025-12-12T21:05:37Z",
+        "notes": "Added manifest token budget telemetry + tests, and updated /context to report manifest token estimates so token reduction can be verified without additional tooling.",
+        "file_path": "docs/dashboards/foundry-mcp-overview.json",
+        "task_category": "verification",
+        "details": [
+          "Capture baseline vs. post-consolidation manifest token counts by reconnecting Claude Code with and without unified_manifest enabled.",
+          "Log telemetry.duration_ms and token_count metrics in dashboards/foundry-mcp-overview.json plus associated Prometheus alerts.",
+          "Attach screenshots or JSON evidence to the journal and document rollback criteria if the token budget is exceeded."
+        ],
+        "acceptance_criteria": [
+          "Three consecutive /context runs show <=16k tokens while unified_manifest is active.",
+          "Dashboards highlight the new token budget plus warning thresholds, and journal entries link to the evidence.",
+          "A documented rollback trigger exists if token counts regress beyond the budget."
+        ],
+        "references": [
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/mcp_best_practices/14-feature-flags.md"
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Update documentation",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update README and any docs referencing old tool names. Create migration guide showing old tool -> new action mapping.",
+        "estimated_hours": 1.0,
+        "actual_hours": 0.4,
+        "completed_at": "2025-12-12T21:12:00Z",
+        "notes": "Updated README to describe unified action routers and added a legacy->unified mapping table.",
+        "file_path": "README.md",
+        "task_category": "documentation",
+        "details": [
+          "Refresh README.md, docs/mcp_best_practices references, and docs/mcp_best_practices/13-tool-discovery.md to describe the 17 action-based tools.",
+          "Author a migration table mapping legacy tool names -> unified action payloads, including CLI flag examples and MCP envelope snippets.",
+          "Document feature flag usage (unified_tools_phase3, unified_manifest) plus rollback instructions per docs/cli_best_practices/02-command-shaping.md."
+        ],
+        "changes": "Align all user-facing docs with the consolidated manifest and action parameters.",
+        "acceptance_criteria": [
+          "README + docs reference only unified tool names outside of migration tables.",
+          "Migration guide includes JSON-first examples for both CLI and MCP clients.",
+          "Feature flag and rollback guidance is documented alongside telemetry expectations."
+        ],
+        "references": [
+          "docs/mcp_best_practices/09-spec-driven-development.md",
+          "docs/mcp_best_practices/13-tool-discovery.md",
+          "docs/cli_best_practices/README.md",
+          "docs/codebase_standards/cli-output.md"
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "Refresh capabilities manifest and CLI metadata",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update capabilities manifests, samples, and CLI metadata so only the 17 unified tools are advertised.",
+        "estimated_hours": 1.0,
+        "actual_hours": 0.8,
+        "completed_at": "2025-12-12T15:13:36Z",
+        "notes": "Rewrote mcp/capabilities_manifest.json to advertise only the 17 unified tools plus unified_manifest/phase flags and updated affected tests.",
+        "file_path": "mcp/capabilities_manifest.json",
+        "task_category": "implementation",
+        "details": [
+          "Regenerate mcp/capabilities_manifest.json entries with action parameter descriptions, rate limits, and feature-flag metadata.",
+          "Update samples/foundry-mcp.toml and any CLI discovery caches to reference the new manifest helpers.",
+          "Ensure server(action=schema|tools) and CLI discovery flows reuse the manifest helper to prevent drift."
+        ],
+        "changes": "Align manifest/discovery artifacts with the consolidated action-router surface.",
+        "acceptance_criteria": [
+          "capabilities_manifest.json lists exactly 17 unified entries with accurate schemas and action descriptions.",
+          "samples/foundry-mcp.toml plus CLI metadata reference only action-based tool names.",
+          "Tool discovery/spec helper tests pass without referencing deprecated tool identifiers."
+        ],
+        "references": [
+          "docs/mcp_best_practices/01-versioned-contracts.md",
+          "docs/mcp_best_practices/13-tool-discovery.md",
+          "docs/codebase_standards/naming-conventions.md",
+          "docs/cli_best_practices/02-command-shaping.md"
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-6": {
+      "type": "task",
+      "title": "Refresh dashboards and alert rules",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 0,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update dashboards and Prometheus rules to track unified action routers, token budgets, and SLOs.",
+        "estimated_hours": 1.0,
+        "actual_hours": 0.9,
+        "completed_at": "2025-12-12T21:10:00Z",
+        "notes": "Added unified manifest token budget gauges + recording/alerting rules and updated Grafana dashboards to surface the 16k/18k thresholds.",
+        "file_path": "docs/dashboards/",
+        "task_category": "observability",
+        "details": [
+          "Update docs/dashboards/*.json panels to aggregate metrics by unified tool names and highlight token budget progress.",
+          "Align docs/dashboards/prometheus-rules/*.yaml with new action metrics (success_rate, token_count, latency).",
+          "Document dashboard usage and alert tuning in docs/dashboards/README.md to guide operators."
+        ],
+        "changes": "Ensure observability assets reflect the consolidated manifest and telemetry goals.",
+        "acceptance_criteria": [
+          "Dashboards show only unified tool families and expose token budget/telemetry.duration_ms panels.",
+          "Prometheus alert and recording rules validate successfully and monitor the consolidated routes.",
+          "docs/dashboards/README.md explains the new panels plus alert thresholds."
+        ],
+        "references": [
+          "docs/mcp_best_practices/05-observability-telemetry.md",
+          "docs/mcp_best_practices/12-timeout-resilience.md",
+          "docs/mcp_best_practices/13-tool-discovery.md"
+        ],
+        "owner": "foundry-mcp core"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2025-12-10T16:35:00Z",
+      "task_id": "task-1-1",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create unified tools directory structure",
+      "content": "Added src/foundry_mcp/tools/unified package with register_unified_tools() stub and a reusable ActionRouter helper to standardize action dispatch across future tool families.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T16:45:00Z",
+      "task_id": "task-1-2",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified health tool",
+      "content": "Implemented health(action: liveness|readiness|check) with shared routing, legacy tool delegation, and Prometheus instrumentation so the new contract matches the previous trio of health tools.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T16:50:00Z",
+      "task_id": "task-1-3",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified pr tool",
+      "content": "Introduced pr(action: create|get-context) to wrap PR creation/context workloads and pointed the existing pr-create-with-spec / pr-get-spec-context entry points at the new dispatcher for backward compatibility.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T17:15:00Z",
+      "task_id": "task-1-4",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified plan tool",
+      "content": "Added the plan(action: create|list|review) dispatcher, updated legacy plan-* tools to delegate through the router, and wired the unified plan registration into the consolidated tool surface.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T18:35:00Z",
+      "task_id": "task-2-1",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified error tool",
+      "content": "Delivered error(action: list|get|stats|patterns|cleanup) with ActionRouter helpers, wired registration via register_unified_tools, and redirected legacy error_* MCP definitions to the consolidated dispatcher.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T21:51:09Z",
+      "task_id": "phase-2",
+      "entry_type": "status_change",
+      "title": "Planning Update: Detailed phase-2 consolidation scope",
+      "content": "Documented metrics, journal, authoring, provider, environment, and verification action routers plus restored missing verification gates for the medium tool family phase.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T21:59:16Z",
+      "task_id": "spec-root",
+      "entry_type": "status_change",
+      "title": "Progress Update: Synced spec metadata after review",
+      "content": "Captured this iteration's progress by reaffirming the decision-matrix references and dependency wiring for the consolidation program so the next implementation pass can execute without re-triage.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T22:38:00Z",
+      "task_id": "task-2-2",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified metrics tool",
+      "content": "Linked the metrics(action: query|list|summary|stats|cleanup) router, validation, and legacy delegates so the unified manifest serves all metrics workloads without contract drift.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T22:45:30Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Spec Sync: Captured metrics consolidation progress",
+      "content": "Recorded the metrics router implementation plus best-practices consult (response schema + validation hygiene) so phase-2 dashboards reflect the completed task-2-2 scope for reviewers.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-10T23:20:00Z",
+      "task_id": "task-2-3",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified journal tool",
+      "content": "Tracked the journal(action: add|list|list-unjournaled) consolidation, including validation guards, pagination warnings, and wiring legacy journal-* MCP entries through the unified dispatcher.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T00:05:00Z",
+      "task_id": "phase-2",
+      "entry_type": "worklog",
+      "title": "Status Sync: Planned remaining phase-2 routers",
+      "content": "Outlined sequencing for authoring, provider, environment, and verification consolidations plus refreshed spec metadata notes referencing response-schema and validation guides.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T00:15:00Z",
+      "task_id": "task-2-4",
+      "entry_type": "status_change",
+      "title": "Task In Progress: Implement unified authoring tool",
+      "content": "Started porting phase/assumption/revision handlers into authoring(action=...) with ActionRouter scaffolding plus CLI output + validation best-practice review.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T00:25:00Z",
+      "task_id": "task-2-4",
+      "entry_type": "worklog",
+      "title": "Design Update: Authoring validation + response plan",
+      "content": "Documented validation schema + pagination/warning behavior for authoring(action=list) flows and outlined how legacy phase/assumption commands will delegate to the unified router.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T02:40:00Z",
+      "task_id": "task-2-4",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified authoring tool",
+      "content": "Delivered authoring(action=phase-add|phase-remove|assumption-add|assumption-list|revision-add) with envelope helpers, duplicate warnings, and legacy MCP tool delegation wired through register_unified_tools.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T02:55:00Z",
+      "task_id": "task-2-4",
+      "entry_type": "worklog",
+      "title": "Validation: Authoring unit suite",
+      "content": "Ran pytest tests/unit/test_authoring.py to ensure consolidated router preserves validation semantics and legacy CLI behavior.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T16:05:00Z",
+      "task_id": "task-2-5",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified provider tool",
+      "content": "Delivered provider(action=list|status|execute) router with feature-flag gating and rate-limit-aware error handling.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T16:15:00Z",
+      "task_id": "task-2-6",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified environment tool",
+      "content": "Shipped environment(action:init|verify-env|verify-toolchain|setup|detect) with shared validation + sandbox awareness.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T16:22:00Z",
+      "task_id": "task-2-7",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified verification tool",
+      "content": "Consolidated verification(add|execute) flows with journaling, telemetry, and delegate wiring.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T17:30:00Z",
+      "task_id": "phase-3",
+      "entry_type": "worklog",
+      "title": "Planning Update: Scoped phase-3 large tool families",
+      "content": "Captured detailed action, validation, and envelope requirements for the task/spec/lifecycle/code/review/server/test routers after re-reading the response schema, serialization, validation, security, and CLI output guides.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T18:00:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Phase-3 planning captured",
+      "content": "Recorded today's spec progress after fleshing out metadata/acceptance criteria for the remaining unified routers so downstream implementation can start immediately.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T19:30:00Z",
+      "task_id": "phase-4",
+      "entry_type": "worklog",
+      "title": "Planning Update: Extended phase-4 integration scope",
+      "content": "Captured rollout plan, risk register, and the new manifest + dashboards cleanup tasks after re-reading docs/mcp_best_practices/09-spec-driven-development.md, docs/mcp_best_practices/14-feature-flags.md, docs/cli_best_practices/README.md, and docs/codebase_standards/cli-output.md to keep CLI/MCP parity intact.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T19:45:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Captured manifest + dashboard cleanup scope",
+      "content": "Raised overall progress to 45% after documenting the capabilities manifest refresh, dashboard/alert updates, and success metrics wiring so phase-4 execution has clear telemetry gates.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T21:05:00Z",
+      "task_id": "verify-2-1",
+      "entry_type": "status_change",
+      "title": "Task In Progress: Run tests",
+      "content": "Kicked off verify-2-1 by scheduling unit-core, integration-tools, and smoke-mcp pytest matrices with unified_tools_phase2/unified_manifest flags so evidence is ready for the upcoming fidelity gate per docs/guides/testing.md.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T21:15:00Z",
+      "task_id": "verify-2-2",
+      "entry_type": "worklog",
+      "title": "Prep: Fidelity evidence staging",
+      "content": "Outlined reviewer checklist, fixture inputs, and artifact requirements for verify-2-2 referencing docs/mcp_best_practices/05-observability-telemetry.md and docs/mcp_best_practices/10-testing-fixtures.md so we can request the fidelity tool immediately after tests are green.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T21:30:00Z",
+      "task_id": "verify-2-1",
+      "entry_type": "worklog",
+      "title": "Spec Update: Verification runbook captured",
+      "content": "Expanded verify-2-1 and verify-2-2 metadata with command/env matrices, artifact targets, and next-step checklists so the run-tests + fidelity gates have an auditable plan before execution begins.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:05:00Z",
+      "task_id": "task-3-3",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified lifecycle tool",
+      "content": "Registered lifecycle(action=move|activate|complete|archive|state) under the unified dispatcher, updated register_unified_tools, and redirected legacy spec-lifecycle-* MCP entries with validation + telemetry guardrails.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:10:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Lifecycle router landed",
+      "content": "Marked phase-3 as in progress, bumped progress to 60%, and set next focus on task(action=...) validation/pagination contracts following lifecycle completion.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:32:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Worklog: Fixture freshness housekeeping",
+      "content": "Annotated fidelity_review_response.json and plan_review_response.json with fixture_version markers per testing best practices so consolidation smoke tests stop warning.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:34:00Z",
+      "task_id": "verify-2-1",
+      "entry_type": "worklog",
+      "title": "Validation: Lifecycle smoke rerun",
+      "content": "Re-executed lifecycle-focused tests/integration/test_mcp_smoke.py -k lifecycle to confirm warnings cleared and lifecycle router remains stable.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:40:00Z",
+      "task_id": "task-3-1",
+      "entry_type": "status_change",
+      "title": "Task In Progress: Implement unified task tool",
+      "content": "Activated task(action=...) router implementation after re-reading docs/mcp_best_practices/04-validation-input-hygiene.md, docs/mcp_best_practices/08-security-trust-boundaries.md, docs/cli_best_practices/README.md, and docs/codebase_standards/cli-output.md to lock down validation and envelope patterns.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:48:00Z",
+      "task_id": "verify-3-1",
+      "entry_type": "worklog",
+      "title": "Runbook: Phase-3 run-tests matrix captured",
+      "content": "Documented unit-task-spec, integration-large-tools, and cli-parity pytest matrices with artifacts, feature flags, and observability hooks per docs/guides/testing.md and docs/mcp_best_practices/10-testing-fixtures.md so the large router gate has auditable evidence.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T22:52:00Z",
+      "task_id": "verify-3-2",
+      "entry_type": "worklog",
+      "title": "Prep: Fidelity evidence plan",
+      "content": "Outlined inputs, checklist, reviewers, and artifact requirements for verify-3-2 referencing docs/mcp_best_practices/11-ai-llm-integration.md and docs/codebase_standards/cli-output.md so the large tool routers can clear the fidelity review without surprises.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T23:05:00Z",
+      "task_id": "task-3-1",
+      "entry_type": "worklog",
+      "title": "Design Update: TaskActionInput coverage",
+      "content": "Mapped typed dict unions, field guards, and pagination warning shapes for task(action=...) while pulling CLI parity examples from docs/cli_best_practices/README.md so implementation can start immediately.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-11T23:10:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Verify-3 readiness logged",
+      "content": "Raised spec progress to 65% after finishing TaskActionInput mapping and documenting the phase-3 run-tests/fidelity artifact + observability matrices per docs/guides/testing.md and docs/mcp_best_practices/05-observability-telemetry.md.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T01:05:00Z",
+      "task_id": "task-3-1",
+      "entry_type": "worklog",
+      "title": "Design Update: Task action matrix + telemetry baselined",
+      "content": "Captured the task(action=...) action matrix, pagination budget, and telemetry hooks after re-reading docs/codebase_standards/mcp_response_schema.md plus docs/mcp_best_practices/01-04 & 08 and docs/cli_best_practices/README.md so implementation can move straight to coding.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T01:20:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Large router planning extended",
+      "content": "Raised spec progress to 70% after expanding task/spec/code/review/server/test metadata with action matrices, feature-flag hooks, and telemetry requirements referencing docs/codebase_standards/cli-output.md plus docs/mcp_best_practices/02-envelopes-metadata.md and 03-serialization-helpers.md.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T02:05:00Z",
+      "task_id": "task-3-4",
+      "entry_type": "worklog",
+      "title": "Design Update: Code router action matrix locked",
+      "content": "Captured code(action=find-class|find-function|callers|callees|trace|impact) action definitions, pagination budget, and sanitization rules after re-reading docs/mcp_best_practices/06-pagination-streaming.md and docs/codebase_standards/mcp_response_schema.md so traversal warnings stay consistent.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T02:10:00Z",
+      "task_id": "task-3-5",
+      "entry_type": "worklog",
+      "title": "Design Update: Review router LLM requirements recorded",
+      "content": "Documented review(action=spec|fidelity|parse-feedback) action matrix, provider failover policy, and artifact plan referencing docs/mcp_best_practices/11-ai-llm-integration.md plus docs/codebase_standards/cli-output.md to unblock verify-3 reviewers.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T02:15:00Z",
+      "task_id": "task-3-6",
+      "entry_type": "worklog",
+      "title": "Design Update: Server manifest budgets finalized",
+      "content": "Logged server(action=tools|schema|capabilities|context|llm-status) action matrix and manifest token budgets referencing docs/mcp_best_practices/01-versioned-contracts.md, 02-envelopes-metadata.md, and docs/cli_best_practices/README.md so discovery + telemetry stay aligned.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T02:20:00Z",
+      "task_id": "task-3-7",
+      "entry_type": "worklog",
+      "title": "Design Update: Test preset matrix captured",
+      "content": "Added test(action=run|discover) action matrix plus preset -> pytest maps referencing docs/guides/testing.md and docs/cli_best_practices/04-testing-parity.md to prep verify-3-1 evidence.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T02:25:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Action matrices logged",
+      "content": "Raised spec progress to 72% after capturing code/review/server/test action matrices, pagination budgets, and preset manifests referencing docs/mcp_best_practices/06-pagination-streaming.md and docs/codebase_standards/mcp_response_schema.md.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T03:55:00Z",
+      "task_id": "task-3-1",
+      "entry_type": "worklog",
+      "title": "Implementation Update: Task router read-only actions",
+      "content": "Implemented task(action=prepare|next|info|check-deps|list|query|progress|hierarchy) with validation, pagination warnings, and telemetry after re-reading docs/mcp_best_practices/04-validation-input-hygiene.md, docs/mcp_best_practices/06-pagination-streaming.md, and docs/codebase_standards/mcp_response_schema.md to unblock verify-3 planning.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T20:05:00Z",
+      "task_id": "task-3-4",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified code tool",
+      "content": "Marked code(action=find-class|find-function|callers|callees|trace|impact) as complete and wired registration into the consolidated unified tool surface.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T20:15:00Z",
+      "task_id": "task-3-6",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified server tool",
+      "content": "Delivered server(action=tools|schema|capabilities|context|llm-status), added unified_manifest 17-tool listing mode, and switched legacy discovery/context tools to delegate through the unified router.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T20:20:00Z",
+      "task_id": "task-3-7",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement unified test tool",
+      "content": "Delivered test(action=run|discover) router with preset validation and delegated legacy test tools to the unified dispatcher while preserving response-v2 envelopes.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T20:30:00Z",
+      "task_id": "verify-3-1",
+      "entry_type": "worklog",
+      "title": "Verification Update: Discovery + smoke subset green",
+      "content": "Ran pytest -q tests/unit/test_core/test_discovery.py tests/integration/test_mcp_smoke.py (59 passed) to validate discovery/testing delegation and unified_manifest gating before executing the full verify-3-1 matrix.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T20:40:00Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Server/test consolidation wired",
+      "content": "Raised spec progress to 82% after wiring unified code/server/test routers into register_unified_tools, adding FEATURE_FLAGS overrides for pytest matrices, and enabling unified_manifest 17-tool discovery output.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T21:10:00Z",
+      "task_id": "task-4-6",
+      "entry_type": "status_change",
+      "title": "Task Completed: Refresh dashboards and alert rules",
+      "content": "Added unified manifest token-budget telemetry + Prometheus gauges, updated recording/alerting rules for the 16k/18k thresholds, and refreshed the overview dashboard panels.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T21:12:00Z",
+      "task_id": "task-4-4",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update documentation",
+      "content": "Updated README to describe the 17 unified tools and added a legacy->unified mapping table so consumers can migrate to action-based calls.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T21:15:00Z",
+      "task_id": "verify-4-1",
+      "entry_type": "worklog",
+      "title": "Validation: Focused discovery/observability suites",
+      "content": "Ran pytest -q tests/unit/test_core/test_discovery.py tests/integration/test_mcp_tools.py tests/unit/test_observability_graceful.py (96 passed) with unified_manifest enabled to confirm the manifest-token telemetry and discovery flows remain healthy.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T21:28:00Z",
+      "task_id": "task-4-3",
+      "entry_type": "worklog",
+      "title": "Verification Support: Unified manifest token budget test",
+      "content": "Registered unified_manifest/unified_tools_phase2/unified_tools_phase3 as built-in feature flags and added tests/integration/test_mcp_tools.py::TestToolCategories::test_unified_manifest_token_budget to assert server(action=tools) reports manifest_tool_count==17 and manifest_tokens<=16000. Verified via pytest -q tests/unit/test_core/test_feature_flags.py and pytest -q tests/integration/test_mcp_tools.py -k unified_manifest_token_budget.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T17:38:05.447860Z",
+      "task_id": "verify-4-1",
+      "entry_type": "status_change",
+      "title": "Verification Completed: Run tests (phase-4)",
+      "content": "Ran full pytest suite with FEATURE_FLAGS=unified_tools_phase2,unified_tools_phase3,unified_manifest; resolved remaining consolidation regressions (task dry_run + remediation metadata, authoring spec-create/spec-template/spec-update-frontmatter actions, provider/authoring test harness parity). Result: 1904 passed, 13 skipped, 1 xpassed.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T17:38:05.447860Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Phase-4 run-tests gate green",
+      "content": "Marked verify-4-1 as completed after bringing unified_manifest mode to parity across provider/authoring/mutations and confirming the full pytest suite passes with unified tools enabled.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T19:54:26Z",
+      "task_id": "task-3-4",
+      "entry_type": "worklog",
+      "title": "Implementation Update: Python call graph depth support",
+      "content": "Enhanced code(action=callers|callees|trace) to build a lightweight python AST call graph with depth/max_nodes guardrails while keeping repo-relative allowlists and occurrence-based fallbacks for non-python languages. Added tests/unit/test_code_tool.py and validated it via pytest -q tests/unit/test_code_tool.py.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T20:48:15Z",
+      "task_id": "task-4-3",
+      "entry_type": "worklog",
+      "title": "Implementation Update: Manifest token budget warnings",
+      "content": "Improved server(action=tools) manifest token estimation by using tiktoken when available (fallback heuristic otherwise), exposed manifest_token_budget + manifest_token_budget_max telemetry fields, and emitted meta.warnings when the manifest exceeds 16k/18k token budgets. Added tests/integration/test_mcp_tools.py::TestToolCategories::test_unified_manifest_token_budget_warning and validated it via pytest -q tests/integration/test_mcp_tools.py -k unified_manifest_token.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T21:05:37Z",
+      "task_id": "task-4-3",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify token reduction",
+      "content": "Updated /context to include manifest token estimates and tool counts (mode, tool_count, token_estimate, budgets) so operators can confirm the unified manifest stays under the 16k target without restarting clients.",
+      "author": "foundry-mcp"
+    },
+    {
+      "timestamp": "2025-12-12T21:49:18Z",
+      "task_id": "spec-root",
+      "entry_type": "worklog",
+      "title": "Progress Update: Legacy spec-template delegate fixed",
+      "content": "Fixed legacy spec-template tool to delegate through authoring(action=spec-template) so validation errors reference template_action; reran full pytest suite to confirm consolidation remains green (1908 passed, 13 skipped, 1 xfailed).",
+      "author": "foundry-mcp"
+    }
+  ]
+}

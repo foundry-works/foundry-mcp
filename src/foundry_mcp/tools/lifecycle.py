@@ -11,7 +11,12 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    ErrorCode,
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.pagination import (
     encode_cursor,
     decode_cursor,
@@ -22,15 +27,10 @@ from foundry_mcp.core.pagination import (
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.lifecycle import (
-    move_spec,
-    activate_spec,
-    complete_spec,
-    archive_spec,
-    get_lifecycle_state,
     list_specs_by_folder,
-    get_folder_for_spec,
     VALID_FOLDERS,
 )
+from foundry_mcp.tools.unified.lifecycle import legacy_lifecycle_action
 
 logger = logging.getLogger(__name__)
 
@@ -65,33 +65,13 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with move result
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            result = move_spec(spec_id, to_folder, specs_dir)
-
-            if not result.success:
-                return asdict(error_response(result.error or "Failed to move spec"))
-
-            return asdict(
-                success_response(
-                    spec_id=result.spec_id,
-                    from_folder=result.from_folder,
-                    to_folder=result.to_folder,
-                    old_path=result.old_path,
-                    new_path=result.new_path,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error moving spec: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
+        return legacy_lifecycle_action(
+            "move",
+            config=config,
+            spec_id=spec_id,
+            to_folder=to_folder,
+            path=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -108,32 +88,12 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with activation result
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            result = activate_spec(spec_id, specs_dir)
-
-            if not result.success:
-                return asdict(error_response(result.error or "Failed to activate spec"))
-
-            return asdict(
-                success_response(
-                    spec_id=result.spec_id,
-                    from_folder=result.from_folder,
-                    to_folder=result.to_folder,
-                    new_path=result.new_path,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error activating spec: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
+        return legacy_lifecycle_action(
+            "activate",
+            config=config,
+            spec_id=spec_id,
+            path=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -156,32 +116,13 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with completion result
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            result = complete_spec(spec_id, specs_dir, force=force)
-
-            if not result.success:
-                return asdict(error_response(result.error or "Failed to complete spec"))
-
-            return asdict(
-                success_response(
-                    spec_id=result.spec_id,
-                    from_folder=result.from_folder,
-                    to_folder=result.to_folder,
-                    new_path=result.new_path,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error completing spec: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
+        return legacy_lifecycle_action(
+            "complete",
+            config=config,
+            spec_id=spec_id,
+            force=force,
+            path=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -200,32 +141,12 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with archive result
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            result = archive_spec(spec_id, specs_dir)
-
-            if not result.success:
-                return asdict(error_response(result.error or "Failed to archive spec"))
-
-            return asdict(
-                success_response(
-                    spec_id=result.spec_id,
-                    from_folder=result.from_folder,
-                    to_folder=result.to_folder,
-                    new_path=result.new_path,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error archiving spec: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
+        return legacy_lifecycle_action(
+            "archive",
+            config=config,
+            spec_id=spec_id,
+            path=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -244,36 +165,12 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with lifecycle state
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            state = get_lifecycle_state(spec_id, specs_dir)
-
-            if not state:
-                return asdict(error_response(f"Spec not found: {spec_id}"))
-
-            return asdict(
-                success_response(
-                    spec_id=state.spec_id,
-                    folder=state.folder,
-                    status=state.status,
-                    progress_percentage=state.progress_percentage,
-                    total_tasks=state.total_tasks,
-                    completed_tasks=state.completed_tasks,
-                    can_complete=state.can_complete,
-                    can_archive=state.can_archive,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error getting lifecycle state: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
+        return legacy_lifecycle_action(
+            "state",
+            config=config,
+            spec_id=spec_id,
+            path=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -326,7 +223,7 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
                     return asdict(
                         error_response(
                             f"Invalid cursor: {e.reason}",
-                            code="INVALID_CURSOR",
+                            error_code=ErrorCode.VALIDATION_ERROR,
                             details={"cursor": cursor},
                         )
                     )
@@ -375,7 +272,9 @@ def register_lifecycle_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error listing specs by folder: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec lifecycle")))
+            return asdict(
+                error_response(sanitize_error_message(e, context="spec lifecycle"))
+            )
 
     logger.debug(
         "Registered lifecycle tools: spec-lifecycle-move/spec-lifecycle-activate/"

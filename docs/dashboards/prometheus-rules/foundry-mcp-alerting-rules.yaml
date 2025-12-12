@@ -307,3 +307,35 @@ groups:
             P99 duration: {{ printf "%.2f" $value }}s
 
             This may indicate infrastructure issues.
+
+      # Unified manifest token budget warning (>16k)
+      - alert: FoundryMCP_ManifestTokenBudgetWarning
+        expr: |
+          foundry_mcp:manifest_tokens:unified > 16000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "foundry-mcp unified manifest exceeds 16k tokens"
+          description: |
+            The unified tool manifest is above the 16k token budget.
+
+            Current estimate: {{ $value | printf "%.0f" }} tokens.
+            Consider trimming tool descriptions/action summaries.
+
+      # Unified manifest token budget critical (>18k)
+      - alert: FoundryMCP_ManifestTokenBudgetCritical
+        expr: |
+          foundry_mcp:manifest_tokens:unified > 18000
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "foundry-mcp unified manifest exceeds 18k tokens"
+          description: |
+            The unified tool manifest is above the hard 18k token ceiling.
+
+            Current estimate: {{ $value | printf "%.0f" }} tokens.
+            Roll back or prune manifest metadata until within budget.

@@ -135,6 +135,7 @@ from foundry_mcp.core.providers import codex as _codex_provider  # noqa: F401
 from foundry_mcp.core.providers import cursor_agent as _cursor_agent_provider  # noqa: F401
 from foundry_mcp.core.providers import claude as _claude_provider  # noqa: F401
 from foundry_mcp.core.providers import opencode as _opencode_provider  # noqa: F401
+from foundry_mcp.core.providers import test_provider as _test_provider  # noqa: F401
 
 __all__ = [
     # === Base Types (base.py) ===

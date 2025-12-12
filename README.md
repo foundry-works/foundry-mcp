@@ -72,26 +72,26 @@ specs/
 └── archived/     # Historical reference
 ```
 
-- Scaffold, validate, activate, complete, and archive specs via `spec-*` tools.
+- Discover and validate specs via `spec(action=...)`.
+- Transition spec folders/states via `lifecycle(action=...)`.
 - Automatically journal decisions, blockers, and dependency updates with audit metadata.
-- Cursor-based pagination and metadata envelopes keep long-running specs manageable.
 
 ### Task operations & execution
 
-- `task-next`, `task-prepare`, `task-start`, `task-complete`, and blocker flows expose the full dependency graph.
-- Planning helpers (`plan_format`, `phase_list`, `phase_report_time`, etc.) provide progress metrics powered by `planning_tools` feature flags.
+- `task(action=next|prepare|start|complete|...)` and blocker flows expose the full dependency graph.
+- `plan(action=create|list|review)` supports lightweight planning and review flows.
 - Notifications and sampling channels surface phase completions to MCP clients.
 
 ### Code, docs, and testing intelligence
 
-- Doc query tools (`doc-query`, `doc-stats`, scoped search utilities) surface architecture docs generated under `docs/generated/`.
-- Testing tools (`test-run`, `test-run-quick`, `test-presets`, `test-discover`) run pytest presets or quick validations with structured output.
+- Code navigation tools via `code(action=...)` support symbol lookup and call-graph tracing.
+- Testing tools via `test(action=run|discover, preset=quick|unit|full)` run pytest presets with structured output.
 - Shared adapters mirror claude-sdd-toolkit behavior and integrate with the regression testing harness.
 
 ### LLM-powered workflows
 
 - Configurable provider abstraction with OpenAI, Anthropic, and local backends (Ollama, etc.) plus prompt shielding and observability hooks.
-- AI-enhanced review (`spec-review`, `spec-review-fidelity`), documentation (`spec-doc-llm`, `doc-query-llm`), and PR helpers degrade gracefully when no LLM is configured.
+- AI-enhanced review via `review(action=spec|fidelity|parse-feedback)` and PR helpers degrade gracefully when no LLM is configured.
 - Timeouts, retries, and circuit breakers follow the resilience patterns from the remediation specs.
 
 ### CLI + MCP integration
@@ -130,7 +130,17 @@ All MCP tools emit the standardized envelope defined in `docs/codebase_standards
 
 - `success`, `data`, `error`, and `meta` are always present so clients never guess at output shape.
 - `response_contract_v2` is feature-flagged; clients advertise support via capability negotiation.
-- `mcp/capabilities_manifest.json` lists every tool, resource, prompt, feature flag, and response contract so MCP clients can auto-configure themselves.
+- `mcp/capabilities_manifest.json` advertises the 17 unified tools (plus feature flags like `unified_manifest`).
+
+**Legacy → unified mapping (examples)**
+
+| Legacy tool | Unified call |
+|---|---|
+| `task-next` | `task(action="next")` |
+| `spec-validate` | `spec(action="validate")` |
+| `test-run` | `test(action="run", preset="full")` |
+| `tool-list` | `server(action="tools")` |
+| `get-server-context` | `server(action="context")` |
 
 ## ⚙️ Configuration
 

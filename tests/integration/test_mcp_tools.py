@@ -10,8 +10,14 @@ Tests:
 import json
 import pytest
 from pathlib import Path
-from foundry_mcp.server import create_server
+
 from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.feature_flags import flag_override, get_flag_service
+from foundry_mcp.server import create_server
+
+
+def _unified_manifest_enabled() -> bool:
+    return get_flag_service().is_enabled("unified_manifest")
 
 
 @pytest.fixture
@@ -134,38 +140,63 @@ class TestToolInputSchemas:
     def test_spec_list_basic_has_status_param(self, mcp_server):
         """Test that spec_list_basic has status parameter."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-list-basic")
-        assert tool is not None
-        # Tool should accept status parameter
-        assert callable(tool.fn)
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            assert tool is not None
+            assert callable(tool.fn)
+        else:
+            tool = tools.get("spec-list-basic")
+            assert tool is not None
+            # Tool should accept status parameter
+            assert callable(tool.fn)
 
     def test_spec_get_requires_spec_id(self, mcp_server):
         """Test that spec_get requires spec_id."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-get")
-        assert tool is not None
-        assert callable(tool.fn)
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            assert tool is not None
+            assert callable(tool.fn)
+        else:
+            tool = tools.get("spec-get")
+            assert tool is not None
+            assert callable(tool.fn)
 
     def test_task_get_requires_both_ids(self, mcp_server):
         """Test that task_get requires spec_id and task_id."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("task-get")
-        assert tool is not None
-        assert callable(tool.fn)
+        if _unified_manifest_enabled():
+            tool = tools.get("task")
+            assert tool is not None
+            assert callable(tool.fn)
+        else:
+            tool = tools.get("task-get")
+            assert tool is not None
+            assert callable(tool.fn)
 
     def test_spec_validate_schema(self, mcp_server):
         """Test spec_validate tool has correct schema."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-validate")
-        assert tool is not None
-        assert callable(tool.fn)
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            assert tool is not None
+            assert callable(tool.fn)
+        else:
+            tool = tools.get("spec-validate")
+            assert tool is not None
+            assert callable(tool.fn)
 
     def test_task_update_status_schema(self, mcp_server):
         """Test task_update_status tool has correct schema."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("task-update-status")
-        assert tool is not None
-        assert callable(tool.fn)
+        if _unified_manifest_enabled():
+            tool = tools.get("task")
+            assert tool is not None
+            assert callable(tool.fn)
+        else:
+            tool = tools.get("task-update-status")
+            assert tool is not None
+            assert callable(tool.fn)
 
 
 class TestToolOutputSchemas:
@@ -174,8 +205,12 @@ class TestToolOutputSchemas:
     def test_list_specs_returns_dict(self, mcp_server):
         """Test that list_specs returns a dict with v2 response format."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-list-basic")
-        result = tool.fn(status="all")
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            result = tool.fn(action="list", status="all")
+        else:
+            tool = tools.get("spec-list-basic")
+            result = tool.fn(status="all")
         assert isinstance(result, dict)
         assert result["success"] is True
         assert "specs" in result["data"]
@@ -184,8 +219,12 @@ class TestToolOutputSchemas:
     def test_list_specs_with_active_filter(self, mcp_server):
         """Test list_specs with active status filter."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-list-basic")
-        result = tool.fn(status="active")
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            result = tool.fn(action="list", status="active")
+        else:
+            tool = tools.get("spec-list-basic")
+            result = tool.fn(status="active")
         assert result["success"] is True
         assert "specs" in result["data"]
         assert isinstance(result["data"]["specs"], list)
@@ -193,26 +232,40 @@ class TestToolOutputSchemas:
     def test_get_spec_returns_progress(self, mcp_server):
         """Test that get_spec returns progress information."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-get")
-        result = tool.fn(spec_id="test-spec-001")
-        assert result["success"] is True
-        assert "total_tasks" in result["data"]
-        assert "completed_tasks" in result["data"]
-        assert "progress_percentage" in result["data"]
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            result = tool.fn(action="stats", spec_id="test-spec-001")
+            assert result["success"] is True
+            assert "progress" in result["data"]
+        else:
+            tool = tools.get("spec-get")
+            result = tool.fn(spec_id="test-spec-001")
+            assert result["success"] is True
+            assert "total_tasks" in result["data"]
+            assert "completed_tasks" in result["data"]
+            assert "progress_percentage" in result["data"]
 
     def test_get_spec_not_found_error(self, mcp_server):
         """Test that get_spec returns error for non-existent spec."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-get")
-        result = tool.fn(spec_id="nonexistent-spec")
+        if _unified_manifest_enabled():
+            tool = tools.get("spec")
+            result = tool.fn(action="stats", spec_id="nonexistent-spec")
+        else:
+            tool = tools.get("spec-get")
+            result = tool.fn(spec_id="nonexistent-spec")
         assert result["success"] is False
         assert result["error"] is not None
 
     def test_get_task_returns_task_data(self, mcp_server):
         """Test that get_task returns task data."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("task-get")
-        result = tool.fn(spec_id="test-spec-001", task_id="task-1-1")
+        if _unified_manifest_enabled():
+            tool = tools.get("task")
+            result = tool.fn(action="info", spec_id="test-spec-001", task_id="task-1-1")
+        else:
+            tool = tools.get("task-get")
+            result = tool.fn(spec_id="test-spec-001", task_id="task-1-1")
         assert result["success"] is True
         assert "task" in result["data"]
         assert result["data"]["task"]["title"] == "First task"
@@ -221,16 +274,26 @@ class TestToolOutputSchemas:
     def test_get_task_not_found_error(self, mcp_server):
         """Test that get_task returns error for non-existent task."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("task-get")
-        result = tool.fn(spec_id="test-spec-001", task_id="nonexistent-task")
+        if _unified_manifest_enabled():
+            tool = tools.get("task")
+            result = tool.fn(
+                action="info", spec_id="test-spec-001", task_id="nonexistent-task"
+            )
+        else:
+            tool = tools.get("task-get")
+            result = tool.fn(spec_id="test-spec-001", task_id="nonexistent-task")
         assert result["success"] is False
         assert result["error"] is not None
 
     def test_get_spec_hierarchy_returns_hierarchy(self, mcp_server):
         """Test that get_spec_hierarchy returns hierarchy data."""
         tools = mcp_server._tool_manager._tools
-        tool = tools.get("spec-get-hierarchy")
-        result = tool.fn(spec_id="test-spec-001")
+        if _unified_manifest_enabled():
+            tool = tools.get("task")
+            result = tool.fn(action="hierarchy", spec_id="test-spec-001")
+        else:
+            tool = tools.get("spec-get-hierarchy")
+            result = tool.fn(spec_id="test-spec-001")
         assert result["success"] is True
         assert "hierarchy" in result["data"]
         assert "spec-root" in result["data"]["hierarchy"]
@@ -252,7 +315,10 @@ class TestResourceAccess:
         resources = mcp_server._resource_manager._resources
         # Find the specs list resource
         for uri, resource in resources.items():
-            if "foundry://specs/" in str(uri) and resource.fn.__name__ == "resource_specs_list":
+            if (
+                "foundry://specs/" in str(uri)
+                and resource.fn.__name__ == "resource_specs_list"
+            ):
                 result = resource.fn()
                 data = json.loads(result)
                 assert "success" in data
@@ -383,7 +449,7 @@ class TestPromptExpansion:
         result = prompt.fn(
             feature_name="Test Feature",
             description="A test feature description",
-            template="feature"
+            template="feature",
         )
         assert "Test Feature" in result
         assert "A test feature description" in result
@@ -412,7 +478,7 @@ class TestPromptExpansion:
         result = prompt.fn(
             test_name="test_example",
             error_message="AssertionError: expected True",
-            spec_id="test-spec-001"
+            spec_id="test-spec-001",
         )
         assert "test_example" in result
         assert "AssertionError" in result
@@ -471,28 +537,48 @@ class TestToolInteraction:
         tools = mcp_server._tool_manager._tools
 
         # List specs (returns v2 response format)
-        list_result = tools["spec-list-basic"].fn(status="active")
+        if _unified_manifest_enabled():
+            list_result = tools["spec"].fn(action="list", status="active")
+        else:
+            list_result = tools["spec-list-basic"].fn(status="active")
         assert list_result["success"] is True
         assert "specs" in list_result["data"]
 
         # Get specific spec
         if list_result["data"]["specs"]:
             spec_id = list_result["data"]["specs"][0]["spec_id"]
-            get_result = tools["spec-get"].fn(spec_id=spec_id)
-            assert get_result["success"] is True
-            assert get_result["data"]["spec_id"] == spec_id
+            if _unified_manifest_enabled():
+                get_result = tools["spec"].fn(action="stats", spec_id=spec_id)
+                assert get_result["success"] is True
+                assert get_result["data"]["spec_id"] == spec_id
+            else:
+                get_result = tools["spec-get"].fn(spec_id=spec_id)
+                assert get_result["success"] is True
+                assert get_result["data"]["spec_id"] == spec_id
 
     def test_get_spec_then_task_workflow(self, mcp_server):
         """Test getting spec then getting task."""
         tools = mcp_server._tool_manager._tools
 
         # Get spec hierarchy (returns v2 response format)
-        hierarchy_result = tools["spec-get-hierarchy"].fn(spec_id="test-spec-001")
+        if _unified_manifest_enabled():
+            hierarchy_result = tools["task"].fn(
+                action="hierarchy", spec_id="test-spec-001"
+            )
+        else:
+            hierarchy_result = tools["spec-get-hierarchy"].fn(spec_id="test-spec-001")
         assert hierarchy_result["success"] is True
         assert "hierarchy" in hierarchy_result["data"]
 
         # Get specific task (returns v2 response format)
-        task_result = tools["task-get"].fn(spec_id="test-spec-001", task_id="task-1-1")
+        if _unified_manifest_enabled():
+            task_result = tools["task"].fn(
+                action="info", spec_id="test-spec-001", task_id="task-1-1"
+            )
+        else:
+            task_result = tools["task-get"].fn(
+                spec_id="test-spec-001", task_id="task-1-1"
+            )
         assert task_result["success"] is True
         assert "task" in task_result["data"]
 
@@ -506,7 +592,10 @@ class TestResourceIntegrity:
         resources = mcp_server._resource_manager._resources
 
         # Get via tool (returns dict directly)
-        tool_result = tools["spec-get"].fn(spec_id="test-spec-001")
+        if _unified_manifest_enabled():
+            tool_result = tools["spec"].fn(action="stats", spec_id="test-spec-001")
+        else:
+            tool_result = tools["spec-get"].fn(spec_id="test-spec-001")
 
         # Get via resource (resources still return JSON strings)
         for uri, resource in resources.items():
@@ -516,8 +605,24 @@ class TestResourceIntegrity:
                 )
                 if resource_result["success"]:
                     # Compare progress percentages
-                    assert tool_result["progress_percentage"] == resource_result["progress_percentage"]
-                    assert tool_result["total_tasks"] == resource_result["total_tasks"]
+                    if _unified_manifest_enabled():
+                        assert (
+                            tool_result["data"]["progress"]["percentage"]
+                            == resource_result["progress_percentage"]
+                        )
+                        assert (
+                            tool_result["data"]["progress"]["total_tasks"]
+                            == resource_result["total_tasks"]
+                        )
+                    else:
+                        assert (
+                            tool_result["data"]["progress_percentage"]
+                            == resource_result["progress_percentage"]
+                        )
+                        assert (
+                            tool_result["data"]["total_tasks"]
+                            == resource_result["total_tasks"]
+                        )
                 break
 
     def test_schema_version_consistency(self, mcp_server):
@@ -530,14 +635,20 @@ class TestResourceIntegrity:
                 try:
                     # Call with appropriate args based on function
                     fn = resource.fn
-                    if "spec_id" in fn.__code__.co_varnames[:fn.__code__.co_argcount]:
-                        if "status" in fn.__code__.co_varnames[:fn.__code__.co_argcount]:
+                    if "spec_id" in fn.__code__.co_varnames[: fn.__code__.co_argcount]:
+                        if (
+                            "status"
+                            in fn.__code__.co_varnames[: fn.__code__.co_argcount]
+                        ):
                             result = fn(status="active", spec_id="test-spec-001")
                         else:
                             result = fn(spec_id="test-spec-001")
-                    elif "status" in fn.__code__.co_varnames[:fn.__code__.co_argcount]:
+                    elif "status" in fn.__code__.co_varnames[: fn.__code__.co_argcount]:
                         result = fn(status="active")
-                    elif "template_id" in fn.__code__.co_varnames[:fn.__code__.co_argcount]:
+                    elif (
+                        "template_id"
+                        in fn.__code__.co_varnames[: fn.__code__.co_argcount]
+                    ):
                         result = fn(template_id="basic")
                     else:
                         result = fn()
@@ -559,17 +670,18 @@ class TestDocsToolsRegistration:
     def test_test_discover_registered(self, mcp_server):
         """Test that test_discover tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "test-discover" in tools
+        if _unified_manifest_enabled():
+            assert "test" in tools
+        else:
+            assert "test-discover" in tools
 
     def test_test_run_registered(self, mcp_server):
         """Test that test_run tool is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "test-run" in tools
-
-    def test_code_impact_analysis_registered(self, mcp_server):
-        """Test that code-impact-analysis tool is registered."""
-        tools = mcp_server._tool_manager._tools
-        assert "code-impact-analysis" in tools
+        if _unified_manifest_enabled():
+            assert "test" in tools
+        else:
+            assert "test-run" in tools
 
 
 class TestToolCategories:
@@ -578,43 +690,112 @@ class TestToolCategories:
     def test_core_tools_count(self, mcp_server):
         """Test that core tools are registered."""
         tools = mcp_server._tool_manager._tools
-        core_tools = [
-            "spec-list-basic",
-            "spec-get",
-            "spec-get-hierarchy",
-            "task-get",
-        ]
+        if _unified_manifest_enabled():
+            core_tools = [
+                "spec",
+                "task",
+                "server",
+            ]
+        else:
+            core_tools = [
+                "spec-list-basic",
+                "spec-get",
+                "spec-get-hierarchy",
+                "task-get",
+            ]
         for tool_name in core_tools:
             assert tool_name in tools, f"Core tool {tool_name} missing"
 
-    def test_rendering_tools_count(self, mcp_server):
-        """Test that rendering tools are registered."""
+    def test_task_tools_count(self, mcp_server):
+        """Test that task tools are registered."""
         tools = mcp_server._tool_manager._tools
-        rendering_tools = [
-            "spec-render",
-            "spec-render-progress",
-            "task-list",
-        ]
-        for tool_name in rendering_tools:
-            assert tool_name in tools, f"Rendering tool {tool_name} missing"
+        if _unified_manifest_enabled():
+            task_tools = [
+                "task",
+            ]
+        else:
+            task_tools = [
+                "task-list",
+            ]
+        for tool_name in task_tools:
+            assert tool_name in tools, f"Task tool {tool_name} missing"
 
     def test_lifecycle_tools_count(self, mcp_server):
         """Test that lifecycle tools are registered."""
         tools = mcp_server._tool_manager._tools
-        lifecycle_tools = [
-            "spec-lifecycle-move",
-            "spec-lifecycle-activate",
-            "spec-lifecycle-complete",
-            "spec-lifecycle-archive",
-            "spec-lifecycle-state",
-            "spec-list-by-folder",
-        ]
+        if _unified_manifest_enabled():
+            lifecycle_tools = [
+                "lifecycle",
+            ]
+        else:
+            lifecycle_tools = [
+                "spec-lifecycle-move",
+                "spec-lifecycle-activate",
+                "spec-lifecycle-complete",
+                "spec-lifecycle-archive",
+                "spec-lifecycle-state",
+                "spec-list-by-folder",
+            ]
         for tool_name in lifecycle_tools:
             assert tool_name in tools, f"Lifecycle tool {tool_name} missing"
 
     def test_total_tool_count_minimum(self, mcp_server):
         """Test that we have expected minimum number of tools."""
         tools = mcp_server._tool_manager._tools
-        # Core (4) + Rendering (3) + Lifecycle (6) + Validation (1) + Journal (1) + Query (1) + Task (1) + Testing (3)
-        min_expected = 20
-        assert len(tools) >= min_expected, f"Expected at least {min_expected} tools, got {len(tools)}"
+
+        if _unified_manifest_enabled():
+            assert len(tools) == 17
+        else:
+            # Core (4) + Task (1) + Lifecycle (6) + Validation (1) + Journal (1) + Query (1) + Testing (3)
+            min_expected = 17
+            assert len(tools) >= min_expected, (
+                f"Expected at least {min_expected} tools, got {len(tools)}"
+            )
+
+    def test_unified_manifest_token_budget(self, test_config):
+        """Unified manifest stays within token budget telemetry."""
+        with flag_override("unified_manifest", True):
+            mcp_server = create_server(test_config)
+            server_tool = mcp_server._tool_manager._tools["server"]
+            response = server_tool.fn(action="tools")
+
+        assert response["success"] is True
+        telemetry = response["meta"]["telemetry"]
+        assert telemetry["manifest_tool_count"] == 17
+        assert telemetry["manifest_tokens"] <= 16000
+
+    def test_server_context_includes_manifest_budget(self, test_config):
+        """/context includes manifest token estimate for verification."""
+        with flag_override("unified_manifest", True):
+            mcp_server = create_server(test_config)
+            server_tool = mcp_server._tool_manager._tools["server"]
+            response = server_tool.fn(
+                action="context",
+                include_llm=False,
+                include_workflow=False,
+                include_workspace=False,
+                include_capabilities=False,
+            )
+
+        assert response["success"] is True
+        manifest = response["data"]["manifest"]
+        assert manifest["mode"] == "unified"
+        assert manifest["tool_count"] == 17
+        assert manifest["token_budget"] == 16000
+
+    def test_unified_manifest_token_budget_warning(self, test_config, monkeypatch):
+        """Manifest budget overruns emit meta.warnings."""
+        from foundry_mcp.tools.unified import server as unified_server
+
+        monkeypatch.setattr(unified_server, "_estimate_tokens", lambda _: 20001)
+        with flag_override("unified_manifest", True):
+            mcp_server = create_server(test_config)
+            server_tool = mcp_server._tool_manager._tools["server"]
+            response = server_tool.fn(action="tools")
+
+        assert response["success"] is True
+        assert "warnings" in response["meta"]
+        assert any(
+            "exceeds" in warning and "budget" in warning
+            for warning in response["meta"]["warnings"]
+        )

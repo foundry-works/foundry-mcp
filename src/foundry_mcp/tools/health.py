@@ -5,34 +5,17 @@ These tools expose the health check system via MCP for monitoring and orchestrat
 """
 
 import logging
-import time
 from dataclasses import asdict
-from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.health import (
-    HealthStatus,
-    check_health,
-    check_liveness,
-    check_readiness,
-    get_health_manager,
-)
+from foundry_mcp.core.health import get_health_manager
 from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.prometheus import get_prometheus_exporter
 from foundry_mcp.core.responses import error_response, success_response
+from foundry_mcp.tools.unified.health import legacy_health_action
 
 logger = logging.getLogger(__name__)
-
-
-def _status_to_int(status: HealthStatus) -> int:
-    """Convert HealthStatus to integer for Prometheus metrics.
-
-    Returns:
-        0 for unhealthy, 1 for degraded, 2 for healthy
-    """
-    return {"unhealthy": 0, "degraded": 1, "healthy": 2}.get(status.value, 0)
 
 
 def register_health_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -66,34 +49,7 @@ def register_health_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - message: Human-readable status message
             - timestamp: Unix timestamp of check
         """
-        try:
-            start_time = time.perf_counter()
-            result = check_liveness()
-            duration = time.perf_counter() - start_time
-
-            # Record metrics
-            exporter = get_prometheus_exporter()
-            exporter.record_health_check(
-                check_type="liveness",
-                status=_status_to_int(result.status),
-                duration_seconds=duration,
-            )
-
-            return asdict(
-                success_response(
-                    data=result.to_dict(),
-                )
-            )
-
-        except Exception as e:
-            logger.exception("Error during liveness check")
-            return asdict(
-                error_response(
-                    f"Liveness check failed: {e}",
-                    error_code="HEALTH_CHECK_ERROR",
-                    error_type="internal",
-                )
-            )
+        return legacy_health_action(action="liveness")
 
     @canonical_tool(
         mcp,
@@ -119,41 +75,7 @@ def register_health_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - timestamp: Unix timestamp of check
             - dependencies: List of dependency check results
         """
-        try:
-            start_time = time.perf_counter()
-            result = check_readiness()
-            duration = time.perf_counter() - start_time
-
-            # Record metrics
-            exporter = get_prometheus_exporter()
-
-            # Build dependency map for metrics
-            deps: Dict[str, bool] = {}
-            for dep in result.dependencies:
-                deps[dep.name] = dep.healthy
-
-            exporter.record_health_check_batch(
-                check_type="readiness",
-                status=_status_to_int(result.status),
-                dependencies=deps,
-                duration_seconds=duration,
-            )
-
-            return asdict(
-                success_response(
-                    data=result.to_dict(),
-                )
-            )
-
-        except Exception as e:
-            logger.exception("Error during readiness check")
-            return asdict(
-                error_response(
-                    f"Readiness check failed: {e}",
-                    error_code="HEALTH_CHECK_ERROR",
-                    error_type="internal",
-                )
-            )
+        return legacy_health_action(action="readiness")
 
     @canonical_tool(
         mcp,
@@ -190,47 +112,7 @@ def register_health_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - dependencies: List of dependency check results (if include_details)
             - details: Aggregate counts (healthy, degraded, unhealthy)
         """
-        try:
-            start_time = time.perf_counter()
-            result = check_health()
-            duration = time.perf_counter() - start_time
-
-            # Record metrics
-            exporter = get_prometheus_exporter()
-
-            # Build dependency map for metrics
-            deps: Dict[str, bool] = {}
-            for dep in result.dependencies:
-                deps[dep.name] = dep.healthy
-
-            exporter.record_health_check_batch(
-                check_type="health",
-                status=_status_to_int(result.status),
-                dependencies=deps,
-                duration_seconds=duration,
-            )
-
-            # Build response data
-            data = result.to_dict()
-            if not include_details:
-                # Remove detailed dependency info for lighter response
-                data.pop("dependencies", None)
-
-            return asdict(
-                success_response(
-                    data=data,
-                )
-            )
-
-        except Exception as e:
-            logger.exception("Error during health check")
-            return asdict(
-                error_response(
-                    f"Health check failed: {e}",
-                    error_code="HEALTH_CHECK_ERROR",
-                    error_type="internal",
-                )
-            )
+        return legacy_health_action(action="check", include_details=include_details)
 
     @canonical_tool(
         mcp,

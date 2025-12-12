@@ -121,6 +121,18 @@ foundry_mcp:tool:latency_p99:5m
 foundry_mcp:tool:latency_p50:5m
 ```
 
+### Manifest Budget Metrics
+
+```promql
+# Unified tool manifest size (token estimate)
+foundry_mcp:manifest_tokens:unified
+foundry_mcp:manifest_tool_count:unified
+foundry_mcp:manifest_tokens:budget_ratio
+
+# Feature-flag state exported as gauges
+foundry_mcp:feature_flag:unified_manifest
+```
+
 ## Alertmanager Configuration
 
 Example routing configuration for alertmanager:

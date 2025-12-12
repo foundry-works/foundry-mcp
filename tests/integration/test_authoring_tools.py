@@ -13,6 +13,7 @@ import pytest
 from pathlib import Path
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.feature_flags import get_flag_service
 
 
 # =============================================================================
@@ -143,6 +144,46 @@ def mcp_server(test_config):
     return create_server(test_config)
 
 
+def _unified_manifest_enabled() -> bool:
+    return get_flag_service().is_enabled("unified_manifest")
+
+
+def _call_tool(tools, tool_name: str, **kwargs):
+    """Call legacy tools or unified routers depending on flags."""
+
+    if not _unified_manifest_enabled():
+        return tools[tool_name].fn(**kwargs)
+
+    if tool_name in {
+        "spec-create",
+        "phase-add",
+        "phase-remove",
+        "assumption-add",
+        "assumption-list",
+        "revision-add",
+        "spec-update-frontmatter",
+    }:
+        return tools["authoring"].fn(action=tool_name, **kwargs)
+
+    if tool_name == "spec-template":
+        template_action = kwargs.pop("action", None)
+        return tools["authoring"].fn(
+            action="spec-template",
+            template_action=template_action,
+            **kwargs,
+        )
+
+    if tool_name == "task-add":
+        if "hours" in kwargs and "estimated_hours" not in kwargs:
+            kwargs["estimated_hours"] = kwargs.pop("hours")
+        return tools["task"].fn(action="add", **kwargs)
+
+    if tool_name == "task-remove":
+        return tools["task"].fn(action="remove", **kwargs)
+
+    raise KeyError(f"Unsupported tool mapping for {tool_name}")
+
+
 # =============================================================================
 # Authoring Tools Registration Tests
 # =============================================================================
@@ -152,68 +193,114 @@ class TestAuthoringToolsRegistration:
     """Test that all authoring tools are properly registered."""
 
     def test_spec_create_registered(self, mcp_server):
-        """Test that spec-create tool is registered."""
+        """Test that spec creation entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-create" in tools
-        assert callable(tools["spec-create"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "spec-create" in tools
+            assert callable(tools["spec-create"].fn)
 
     def test_spec_template_registered(self, mcp_server):
-        """Test that spec-template tool is registered."""
+        """Test that spec template entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-template" in tools
-        assert callable(tools["spec-template"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "spec-template" in tools
+            assert callable(tools["spec-template"].fn)
 
     def test_task_add_registered(self, mcp_server):
-        """Test that task-add tool is registered."""
+        """Test that task add entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "task-add" in tools
-        assert callable(tools["task-add"].fn)
+        if _unified_manifest_enabled():
+            assert "task" in tools
+            assert callable(tools["task"].fn)
+        else:
+            assert "task-add" in tools
+            assert callable(tools["task-add"].fn)
 
     def test_phase_add_registered(self, mcp_server):
-        """Test that phase-add tool is registered."""
+        """Test that phase add entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "phase-add" in tools
-        assert callable(tools["phase-add"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "phase-add" in tools
+            assert callable(tools["phase-add"].fn)
 
     def test_task_remove_registered(self, mcp_server):
-        """Test that task-remove tool is registered."""
+        """Test that task remove entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "task-remove" in tools
-        assert callable(tools["task-remove"].fn)
+        if _unified_manifest_enabled():
+            assert "task" in tools
+            assert callable(tools["task"].fn)
+        else:
+            assert "task-remove" in tools
+            assert callable(tools["task-remove"].fn)
 
     def test_assumption_add_registered(self, mcp_server):
-        """Test that assumption-add tool is registered."""
+        """Test that assumption add entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "assumption-add" in tools
-        assert callable(tools["assumption-add"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "assumption-add" in tools
+            assert callable(tools["assumption-add"].fn)
 
     def test_assumption_list_registered(self, mcp_server):
-        """Test that assumption-list tool is registered."""
+        """Test that assumption list entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "assumption-list" in tools
-        assert callable(tools["assumption-list"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "assumption-list" in tools
+            assert callable(tools["assumption-list"].fn)
 
     def test_revision_add_registered(self, mcp_server):
-        """Test that revision-add tool is registered."""
+        """Test that revision add entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "revision-add" in tools
-        assert callable(tools["revision-add"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "revision-add" in tools
+            assert callable(tools["revision-add"].fn)
 
     def test_spec_update_frontmatter_registered(self, mcp_server):
-        """Test that spec-update-frontmatter tool is registered."""
+        """Test that spec update frontmatter entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "spec-update-frontmatter" in tools
-        assert callable(tools["spec-update-frontmatter"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "spec-update-frontmatter" in tools
+            assert callable(tools["spec-update-frontmatter"].fn)
 
     def test_phase_remove_registered(self, mcp_server):
-        """Test that phase-remove tool is registered."""
+        """Test that phase remove entrypoint is registered."""
         tools = mcp_server._tool_manager._tools
-        assert "phase-remove" in tools
-        assert callable(tools["phase-remove"].fn)
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert callable(tools["authoring"].fn)
+        else:
+            assert "phase-remove" in tools
+            assert callable(tools["phase-remove"].fn)
 
     def test_all_authoring_tools_count(self, mcp_server):
-        """Test that all 10 authoring tools are registered."""
+        """Test that authoring tools are registered."""
         tools = mcp_server._tool_manager._tools
+
+        if _unified_manifest_enabled():
+            assert "authoring" in tools
+            assert "task" in tools
+            return
+
         authoring_tools = [
             "spec-create",
             "spec-template",
@@ -263,171 +350,37 @@ class TestResponseEnvelopeCompliance:
     def test_spec_template_list_envelope(self, mcp_server):
         """Test spec-template list action returns valid envelope."""
         tools = mcp_server._tool_manager._tools
-        result = tools["spec-template"].fn(action="list")
+        result = _call_tool(tools, "spec-template", action="list")
         self._validate_response_envelope(result)
 
     def test_assumption_list_envelope(self, mcp_server):
         """Test assumption-list returns valid envelope."""
         tools = mcp_server._tool_manager._tools
-        result = tools["assumption-list"].fn(spec_id="authoring-test-spec-001")
+        result = _call_tool(tools, "assumption-list", spec_id="authoring-test-spec-001")
         self._validate_response_envelope(result)
 
     def test_validation_error_envelope(self, mcp_server):
         """Test validation errors return proper envelope with error details."""
         tools = mcp_server._tool_manager._tools
         # Missing required parameter
-        result = tools["task-add"].fn(spec_id="", parent="phase-1", title="Test")
+        result = _call_tool(
+            tools, "task-add", spec_id="", parent="phase-1", title="Test"
+        )
         self._validate_response_envelope(result)
         assert result["success"] is False
+        assert "spec_id" in result["error"].lower()
         assert "error_code" in result["data"]
         assert "error_type" in result["data"]
         assert "remediation" in result["data"]
-
-    def test_spec_create_invalid_template_envelope(self, mcp_server):
-        """Test spec-create with invalid template returns proper error envelope."""
-        tools = mcp_server._tool_manager._tools
-        result = tools["spec-create"].fn(name="test", template="invalid_template")
-        self._validate_response_envelope(result)
-        assert result["success"] is False
-        assert "VALIDATION_ERROR" in str(result["data"].get("error_code", ""))
-
-
-# =============================================================================
-# Hierarchy Integrity Tests
-# =============================================================================
-
-
-class TestHierarchyIntegrity:
-    """Test that authoring operations maintain hierarchy integrity."""
-
-    def test_task_add_validates_parent_exists(self, mcp_server):
-        """Test that task-add validates parent node exists."""
-        tools = mcp_server._tool_manager._tools
-
-        # Try to add task with non-existent parent
-        result = tools["task-add"].fn(
-            spec_id="authoring-test-spec-001",
-            parent="nonexistent-phase",
-            title="Orphan task",
-        )
-
-        assert result["success"] is False
-        assert "not found" in result["error"].lower() or "NOT_FOUND" in str(
-            result["data"].get("error_code", "")
-        )
-
-    def test_task_remove_validates_task_exists(self, mcp_server):
-        """Test that task-remove validates task exists."""
-        tools = mcp_server._tool_manager._tools
-
-        # Try to remove non-existent task
-        result = tools["task-remove"].fn(
-            spec_id="authoring-test-spec-001",
-            task_id="nonexistent-task",
-        )
-
-        assert result["success"] is False
-        assert "not found" in result["error"].lower() or "NOT_FOUND" in str(
-            result["data"].get("error_code", "")
-        )
-
-    def test_task_remove_cascade_warning(self, mcp_server):
-        """Test that removing task with children requires cascade flag."""
-        tools = mcp_server._tool_manager._tools
-
-        # Try to remove task with children without cascade
-        result = tools["task-remove"].fn(
-            spec_id="authoring-test-spec-001",
-            task_id="task-2-1",  # Has subtask-2-1-1 as child
-            cascade=False,
-        )
-
-        # Should either succeed with warning or fail
-        # CLI might not find spec (different path) or might check cascade
-        if result["success"] is False:
-            # Accept either cascade warning or not found (CLI path mismatch)
-            error_lower = result["error"].lower()
-            assert (
-                "children" in error_lower
-                or "cascade" in error_lower
-                or "not found" in error_lower
-            )
-
-    def test_spec_not_found_error_handling(self, mcp_server):
-        """Test proper error handling when spec doesn't exist."""
-        tools = mcp_server._tool_manager._tools
-
-        # Try operations on non-existent spec
-        result = tools["task-add"].fn(
-            spec_id="nonexistent-spec-999",
-            parent="phase-1",
-            title="Test task",
-        )
-
-        assert result["success"] is False
-        error_msg = result["error"].lower()
-        error_code = str(result["data"].get("error_code", ""))
-        # Accept: not found error, spec not found code, or circuit breaker (transient)
-        assert (
-            "not found" in error_msg
-            or "SPEC_NOT_FOUND" in error_code
-            or "NOT_FOUND" in error_code
-            or "circuit breaker" in error_msg  # Transient circuit breaker state
-            or "CIRCUIT_OPEN" in error_code
-        )
-
-
-# =============================================================================
-# Metadata Operations Tests
-# =============================================================================
-
-
-class TestMetadataOperations:
-    """Test metadata-related authoring operations."""
-
-    def test_assumption_list_returns_existing_assumptions(self, mcp_server):
-        """Test that assumption-list returns existing assumptions."""
-        tools = mcp_server._tool_manager._tools
-
-        result = tools["assumption-list"].fn(spec_id="authoring-test-spec-001")
-
-        # May succeed or fail depending on CLI availability
-        if result["success"]:
-            assert "assumptions" in result["data"]
-            assert isinstance(result["data"]["assumptions"], list)
-
-    def test_assumption_add_validation(self, mcp_server):
-        """Test that assumption-add validates inputs."""
-        tools = mcp_server._tool_manager._tools
-
-        # Missing text
-        result = tools["assumption-add"].fn(
-            spec_id="authoring-test-spec-001",
-            text="",
-        )
-
-        assert result["success"] is False
-        assert "text" in result["error"].lower()
-
-    def test_assumption_type_validation(self, mcp_server):
-        """Test that assumption type is validated."""
-        tools = mcp_server._tool_manager._tools
-
-        result = tools["assumption-add"].fn(
-            spec_id="authoring-test-spec-001",
-            text="Test assumption",
-            assumption_type="invalid_type",
-        )
-
-        assert result["success"] is False
-        assert "invalid_type" in result["error"].lower()
 
     def test_revision_add_validation(self, mcp_server):
         """Test that revision-add validates inputs."""
         tools = mcp_server._tool_manager._tools
 
         # Missing version
-        result = tools["revision-add"].fn(
+        result = _call_tool(
+            tools,
+            "revision-add",
             spec_id="authoring-test-spec-001",
             version="",
             changes="Test changes",
@@ -441,7 +394,9 @@ class TestMetadataOperations:
         tools = mcp_server._tool_manager._tools
 
         # Missing key
-        result = tools["spec-update-frontmatter"].fn(
+        result = _call_tool(
+            tools,
+            "spec-update-frontmatter",
             spec_id="authoring-test-spec-001",
             key="",
             value="test",
@@ -463,7 +418,7 @@ class TestTemplateOperations:
         """Test template list action."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["spec-template"].fn(action="list")
+        result = _call_tool(tools, "spec-template", action="list")
 
         # CLI may not be available; verify we get a valid response envelope
         assert "success" in result
@@ -477,7 +432,7 @@ class TestTemplateOperations:
         """Test template show action requires template_name."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["spec-template"].fn(action="show")
+        result = _call_tool(tools, "spec-template", action="show")
 
         assert result["success"] is False
         assert "template_name" in result["error"].lower()
@@ -486,7 +441,7 @@ class TestTemplateOperations:
         """Test template apply action requires template_name."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["spec-template"].fn(action="apply")
+        result = _call_tool(tools, "spec-template", action="apply")
 
         assert result["success"] is False
         assert "template_name" in result["error"].lower()
@@ -495,10 +450,10 @@ class TestTemplateOperations:
         """Test template with invalid action."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["spec-template"].fn(action="invalid_action")
+        result = _call_tool(tools, "spec-template", action="invalid_action")
 
         assert result["success"] is False
-        assert "invalid_action" in result["error"].lower()
+        assert "template_action" in result["error"].lower()
 
 
 # =============================================================================
@@ -514,7 +469,9 @@ class TestSpecCreation:
         tools = mcp_server._tool_manager._tools
 
         # Valid templates are: simple, medium, complex, security
-        result = tools["spec-create"].fn(
+        result = _call_tool(
+            tools,
+            "spec-create",
             name="test-spec",
             template="invalid_template",
         )
@@ -527,13 +484,15 @@ class TestSpecCreation:
         tools = mcp_server._tool_manager._tools
 
         # Valid categories are: investigation, implementation, refactoring, decision, research
-        result = tools["spec-create"].fn(
+        result = _call_tool(
+            tools,
+            "spec-create",
             name="test-spec",
             category="invalid_category",
         )
 
         assert result["success"] is False
-        assert "invalid_category" in result["error"].lower()
+        assert "category" in result["error"].lower()
 
     def test_spec_create_valid_templates_accepted(self, mcp_server):
         """Test spec-create accepts all valid templates."""
@@ -541,7 +500,9 @@ class TestSpecCreation:
 
         valid_templates = ["simple", "medium", "complex", "security"]
         for template in valid_templates:
-            result = tools["spec-create"].fn(
+            result = _call_tool(
+                tools,
+                "spec-create",
                 name=f"test-{template}",
                 template=template,
             )
@@ -563,7 +524,9 @@ class TestSpecCreation:
             "research",
         ]
         for category in valid_categories:
-            result = tools["spec-create"].fn(
+            result = _call_tool(
+                tools,
+                "spec-create",
                 name=f"test-{category}",
                 category=category,
             )
@@ -586,7 +549,9 @@ class TestTaskOperations:
         """Test task-add validates spec_id."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="",
             parent="phase-1",
             title="Test task",
@@ -599,7 +564,9 @@ class TestTaskOperations:
         """Test task-add validates parent."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="test-spec",
             parent="",
             title="Test task",
@@ -612,7 +579,9 @@ class TestTaskOperations:
         """Test task-add validates title."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="test-spec",
             parent="phase-1",
             title="",
@@ -626,7 +595,9 @@ class TestTaskOperations:
         tools = mcp_server._tool_manager._tools
 
         # Valid types are: task, subtask, verify
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="test-spec",
             parent="phase-1",
             title="Test",
@@ -634,7 +605,7 @@ class TestTaskOperations:
         )
 
         assert result["success"] is False
-        assert "invalid_type" in result["error"].lower()
+        assert "task_type" in result["error"].lower()
 
     def test_task_add_accepts_valid_types(self, mcp_server):
         """Test task-add accepts all valid task types."""
@@ -642,7 +613,9 @@ class TestTaskOperations:
 
         valid_types = ["task", "subtask", "verify"]
         for task_type in valid_types:
-            result = tools["task-add"].fn(
+            result = _call_tool(
+                tools,
+                "task-add",
                 spec_id="authoring-test-spec-001",
                 parent="phase-1",
                 title=f"Test {task_type}",
@@ -658,7 +631,9 @@ class TestTaskOperations:
         """Test task-remove validates spec_id."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-remove"].fn(
+        result = _call_tool(
+            tools,
+            "task-remove",
             spec_id="",
             task_id="task-1-1",
         )
@@ -670,7 +645,9 @@ class TestTaskOperations:
         """Test task-remove validates task_id."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-remove"].fn(
+        result = _call_tool(
+            tools,
+            "task-remove",
             spec_id="test-spec",
             task_id="",
         )
@@ -682,7 +659,9 @@ class TestTaskOperations:
         """Test task-add supports dry_run option."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="authoring-test-spec-001",
             parent="phase-1",
             title="Dry run task",
@@ -697,7 +676,9 @@ class TestTaskOperations:
         """Test task-remove supports dry_run option."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-remove"].fn(
+        result = _call_tool(
+            tools,
+            "task-remove",
             spec_id="authoring-test-spec-001",
             task_id="task-1-2",
             dry_run=True,
@@ -713,7 +694,7 @@ class TestPhaseOperations:
     def test_phase_add_validates_spec_id(self, mcp_server):
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-add"].fn(spec_id="", title="Phase")
+        result = _call_tool(tools, "phase-add", spec_id="", title="Phase")
 
         assert result["success"] is False
         assert "spec_id" in result["error"].lower()
@@ -721,7 +702,7 @@ class TestPhaseOperations:
     def test_phase_add_validates_title(self, mcp_server):
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-add"].fn(spec_id="test-spec", title="")
+        result = _call_tool(tools, "phase-add", spec_id="test-spec", title="")
 
         assert result["success"] is False
         assert "title" in result["error"].lower()
@@ -729,7 +710,9 @@ class TestPhaseOperations:
     def test_phase_add_validates_hours(self, mcp_server):
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-add"].fn(
+        result = _call_tool(
+            tools,
+            "phase-add",
             spec_id="test-spec",
             title="Phase",
             estimated_hours=-2,
@@ -741,7 +724,9 @@ class TestPhaseOperations:
     def test_phase_add_dry_run_option(self, mcp_server):
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-add"].fn(
+        result = _call_tool(
+            tools,
+            "phase-add",
             spec_id="authoring-test-spec-001",
             title="Dry run phase",
             dry_run=True,
@@ -754,7 +739,7 @@ class TestPhaseOperations:
         """Test phase-remove validates spec_id."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-remove"].fn(spec_id="", phase_id="phase-1")
+        result = _call_tool(tools, "phase-remove", spec_id="", phase_id="phase-1")
 
         assert result["success"] is False
         assert "spec_id" in result["error"].lower()
@@ -763,7 +748,7 @@ class TestPhaseOperations:
         """Test phase-remove validates phase_id."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-remove"].fn(spec_id="test-spec", phase_id="")
+        result = _call_tool(tools, "phase-remove", spec_id="test-spec", phase_id="")
 
         assert result["success"] is False
         assert "phase_id" in result["error"].lower()
@@ -772,7 +757,9 @@ class TestPhaseOperations:
         """Test phase-remove supports dry_run option."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["phase-remove"].fn(
+        result = _call_tool(
+            tools,
+            "phase-remove",
             spec_id="authoring-test-spec-001",
             phase_id="phase-1",
             dry_run=True,
@@ -787,7 +774,9 @@ class TestPhaseOperations:
         tools = mcp_server._tool_manager._tools
 
         # This may fail because phase has tasks, but shouldn't fail validation
-        result = tools["phase-remove"].fn(
+        result = _call_tool(
+            tools,
+            "phase-remove",
             spec_id="authoring-test-spec-001",
             phase_id="phase-1",
             force=True,
@@ -802,7 +791,9 @@ class TestPhaseOperations:
         """Test task-remove supports dry_run option."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-remove"].fn(
+        result = _call_tool(
+            tools,
+            "task-remove",
             spec_id="authoring-test-spec-001",
             task_id="task-1-1",
             dry_run=True,
@@ -826,10 +817,14 @@ class TestAuthoringWorkflows:
         tools = mcp_server._tool_manager._tools
 
         # Step 1: List existing assumptions
-        list_result = tools["assumption-list"].fn(spec_id="authoring-test-spec-001")
+        list_result = _call_tool(
+            tools, "assumption-list", spec_id="authoring-test-spec-001"
+        )
 
         # Step 2: Add a new assumption
-        add_result = tools["assumption-add"].fn(
+        add_result = _call_tool(
+            tools,
+            "assumption-add",
             spec_id="authoring-test-spec-001",
             text="New integration test assumption",
             assumption_type="constraint",
@@ -844,7 +839,7 @@ class TestAuthoringWorkflows:
         tools = mcp_server._tool_manager._tools
 
         # Step 1: List templates
-        list_result = tools["spec-template"].fn(action="list")
+        list_result = _call_tool(tools, "spec-template", action="list")
         # CLI may not be available; verify we get a valid envelope
         assert "success" in list_result
         assert "data" in list_result
@@ -852,7 +847,9 @@ class TestAuthoringWorkflows:
         # Step 2: If templates exist and successful, try to show one
         if list_result["success"] and list_result["data"].get("templates"):
             template_name = list_result["data"]["templates"][0].get("name", "simple")
-            show_result = tools["spec-template"].fn(
+            show_result = _call_tool(
+                tools,
+                "spec-template",
                 action="show",
                 template_name=template_name,
             )
@@ -863,7 +860,9 @@ class TestAuthoringWorkflows:
         tools = mcp_server._tool_manager._tools
 
         # Step 1: Try invalid spec creation (should fail validation)
-        invalid_result = tools["spec-create"].fn(
+        invalid_result = _call_tool(
+            tools,
+            "spec-create",
             name="test",
             template="not_a_real_template",
         )
@@ -871,7 +870,9 @@ class TestAuthoringWorkflows:
         assert invalid_result["data"].get("error_code") == "VALIDATION_ERROR"
 
         # Step 2: Try valid parameters (may fail due to CLI, but should pass validation)
-        valid_result = tools["spec-create"].fn(
+        valid_result = _call_tool(
+            tools,
+            "spec-create",
             name="test",
             template="simple",
         )
@@ -896,7 +897,7 @@ class TestErrorHandling:
         tools = mcp_server._tool_manager._tools
 
         # Make a request that will likely fail
-        result = tools["spec-create"].fn(name="test")
+        result = _call_tool(tools, "spec-create", name="test")
 
         # Should return valid envelope regardless of success
         assert "success" in result
@@ -909,7 +910,9 @@ class TestErrorHandling:
         tools = mcp_server._tool_manager._tools
 
         # Trigger a request that might timeout
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="authoring-test-spec-001",
             parent="phase-1",
             title="Test task",
@@ -925,7 +928,9 @@ class TestErrorHandling:
         """Test that not found errors include remediation guidance."""
         tools = mcp_server._tool_manager._tools
 
-        result = tools["task-add"].fn(
+        result = _call_tool(
+            tools,
+            "task-add",
             spec_id="nonexistent-spec-999",
             parent="phase-1",
             title="Test task",

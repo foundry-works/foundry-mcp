@@ -77,3 +77,13 @@ scrape_configs:
 ## Metric Namespace
 
 All foundry-mcp metrics use the `foundry_mcp_` prefix by default. This can be customized via the `prometheus_namespace` configuration option.
+
+## Unified Manifest Budget
+
+When the `unified_manifest` feature flag is enabled, the server exports gauges to track the advertised tool manifest size:
+
+- `foundry_mcp_manifest_tokens{manifest="unified"}`: Estimated token count (rough `len(json)//4` heuristic)
+- `foundry_mcp_manifest_tool_count{manifest="unified"}`: Tool count (target: 17)
+- `foundry_mcp_feature_flag_state{flag="unified_manifest"}`: 1 when unified manifest is enabled
+
+The bundled alert rules trigger warnings above 16k tokens and critical above 18k.

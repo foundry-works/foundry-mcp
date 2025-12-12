@@ -12,8 +12,13 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.testing import TestRunner, get_presets
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.tools.unified.test import legacy_test_action, list_test_presets
 
 logger = logging.getLogger(__name__)
 
@@ -72,59 +77,18 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with test results
         """
         try:
-            runner = _get_runner(workspace)
-            result = runner.run_tests(
+            return legacy_test_action(
+                "run",
+                config=config,
                 target=target,
                 preset=preset,
                 timeout=timeout,
                 verbose=verbose,
                 fail_fast=fail_fast,
                 markers=markers,
+                workspace=workspace,
+                include_passed=include_passed,
             )
-
-            # Only return error for actual errors (not test failures)
-            # Test failures are reported in the success response with tests_passed=False
-            if result.error:
-                return asdict(error_response(result.error))
-
-            # Filter tests for concise response - only failures/errors by default
-            # This keeps responses small for LLM context windows
-            if include_passed:
-                filtered_tests = result.tests
-            else:
-                filtered_tests = [
-                    t for t in result.tests
-                    if t.outcome in ("failed", "error")
-                ]
-
-            return asdict(
-                success_response(
-                    execution_id=result.execution_id,
-                    timestamp=result.timestamp,
-                    tests_passed=result.success,  # True if all tests passed
-                    summary={
-                        "total": result.total,
-                        "passed": result.passed,
-                        "failed": result.failed,
-                        "skipped": result.skipped,
-                        "errors": result.errors,
-                    },
-                    tests=[
-                        {
-                            "name": t.name,
-                            "outcome": t.outcome,
-                            "duration": t.duration,
-                            "message": t.message,
-                        }
-                        for t in filtered_tests
-                    ],
-                    filtered=not include_passed,  # Indicate if results were filtered
-                    command=result.command,
-                    duration=result.duration,
-                    metadata=result.metadata,
-                )
-            )
-
         except Exception as e:
             logger.error(f"Error running tests: {e}")
             return asdict(error_response(sanitize_error_message(e, context="testing")))
@@ -152,31 +116,13 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with discovered tests
         """
         try:
-            runner = _get_runner(workspace)
-            result = runner.discover_tests(target=target, pattern=pattern)
-
-            # Only return error for actual errors
-            if result.error:
-                return asdict(error_response(result.error))
-
-            return asdict(
-                success_response(
-                    timestamp=result.timestamp,
-                    total=result.total,
-                    test_files=result.test_files,
-                    tests=[
-                        {
-                            "name": t.name,
-                            "file_path": t.file_path,
-                            "line_number": t.line_number,
-                            "markers": t.markers,
-                        }
-                        for t in result.tests
-                    ],
-                    metadata=result.metadata,
-                )
+            return legacy_test_action(
+                "discover",
+                config=config,
+                target=target,
+                pattern=pattern,
+                workspace=workspace,
             )
-
         except Exception as e:
             logger.error(f"Error discovering tests: {e}")
             return asdict(error_response(sanitize_error_message(e, context="testing")))
@@ -195,12 +141,7 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with preset configurations
         """
         try:
-            presets = get_presets()
-
-            return asdict(
-                success_response(presets=presets, available=list(presets.keys()))
-            )
-
+            return list_test_presets()
         except Exception as e:
             logger.error(f"Error getting presets: {e}")
             return asdict(error_response(sanitize_error_message(e, context="testing")))
@@ -225,26 +166,23 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with test results
         """
         try:
-            runner = _get_runner(workspace)
-            result = runner.run_tests(target=target, preset="quick")
-
-            # Only return error for actual errors (not test failures)
-            if result.error:
-                return asdict(error_response(result.error))
-
+            result = legacy_test_action(
+                "run",
+                config=config,
+                target=target,
+                preset="quick",
+                workspace=workspace,
+            )
+            if not result.get("success"):
+                return result
+            data = result.get("data", {})
             return asdict(
                 success_response(
-                    execution_id=result.execution_id,
-                    tests_passed=result.success,
-                    summary={
-                        "total": result.total,
-                        "passed": result.passed,
-                        "failed": result.failed,
-                        "skipped": result.skipped,
-                    },
+                    execution_id=data.get("execution_id"),
+                    tests_passed=data.get("tests_passed"),
+                    summary=data.get("summary"),
                 )
             )
-
         except Exception as e:
             logger.error(f"Error running quick tests: {e}")
             return asdict(error_response(sanitize_error_message(e, context="testing")))
@@ -269,26 +207,23 @@ def register_testing_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with test results
         """
         try:
-            runner = _get_runner(workspace)
-            result = runner.run_tests(target=target, preset="unit")
-
-            # Only return error for actual errors (not test failures)
-            if result.error:
-                return asdict(error_response(result.error))
-
+            result = legacy_test_action(
+                "run",
+                config=config,
+                target=target,
+                preset="unit",
+                workspace=workspace,
+            )
+            if not result.get("success"):
+                return result
+            data = result.get("data", {})
             return asdict(
                 success_response(
-                    execution_id=result.execution_id,
-                    tests_passed=result.success,
-                    summary={
-                        "total": result.total,
-                        "passed": result.passed,
-                        "failed": result.failed,
-                        "skipped": result.skipped,
-                    },
+                    execution_id=data.get("execution_id"),
+                    tests_passed=data.get("tests_passed"),
+                    summary=data.get("summary"),
                 )
             )
-
         except Exception as e:
             logger.error(f"Error running unit tests: {e}")
             return asdict(error_response(sanitize_error_message(e, context="testing")))

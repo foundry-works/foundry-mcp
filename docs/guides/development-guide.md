@@ -370,12 +370,11 @@ Follow the [naming conventions](../codebase_standards/naming-conventions.md):
 | Domain | Prefix | Examples |
 |--------|--------|----------|
 | Environment | `sdd-` | `sdd-verify-toolchain`, `sdd-init-workspace` |
-| Spec-wide | `spec-` | `spec-create`, `spec-validate`, `spec-render` |
+| Spec-wide | `spec-` | `spec-create`, `spec-validate`, `spec-list` |
 | Task | `task-` | `task-add`, `task-complete`, `task-block` |
 | Planning | `plan-`/`phase-` | `plan-format`, `phase-check-complete` |
 | Review | `review-`/`pr-` | `review-parse-feedback`, `pr-create-with-spec` |
 | Testing | `test-` | `test-run`, `test-discover` |
-| Code docs | `code-`/`doc-` | `code-find-class`, `doc-stats` |
 | Journal | `journal-` | `journal-add`, `journal-list` |
 
 ---

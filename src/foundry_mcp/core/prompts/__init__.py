@@ -7,7 +7,6 @@ This package provides:
 3. Workflow-specific prompt builders for different consultation use cases
 
 Workflow Coverage:
-    - doc_generation: Generate documentation from code analysis
     - plan_review: Review and critique SDD specifications
     - fidelity_review: Compare implementation against specifications
 
@@ -31,8 +30,8 @@ Example Usage:
     registry.register(template)
 
     # Or use workflow-specific builders
-    builder = get_prompt_builder(ConsultationWorkflow.DOC_GENERATION)
-    prompt = builder.build("analyze_module", {"content": "def foo(): pass"})
+    builder = get_prompt_builder(ConsultationWorkflow.PLAN_REVIEW)
+    prompt = builder.build("spec_review", {"spec_content": "..."})
 """
 
 from __future__ import annotations
@@ -430,13 +429,11 @@ def get_prompt_builder(workflow: "ConsultationWorkflow") -> PromptBuilder:
     """
     # Import here to avoid circular imports
     from foundry_mcp.core.ai_consultation import ConsultationWorkflow
-    from foundry_mcp.core.prompts.doc_generation import DocGenerationPromptBuilder
     from foundry_mcp.core.prompts.plan_review import PlanReviewPromptBuilder
     from foundry_mcp.core.prompts.fidelity_review import FidelityReviewPromptBuilder
     from foundry_mcp.core.prompts.markdown_plan_review import MarkdownPlanReviewPromptBuilder
 
     builders: Dict[ConsultationWorkflow, type[PromptBuilder]] = {
-        ConsultationWorkflow.DOC_GENERATION: DocGenerationPromptBuilder,
         ConsultationWorkflow.PLAN_REVIEW: PlanReviewPromptBuilder,
         ConsultationWorkflow.FIDELITY_REVIEW: FidelityReviewPromptBuilder,
         ConsultationWorkflow.MARKDOWN_PLAN_REVIEW: MarkdownPlanReviewPromptBuilder,

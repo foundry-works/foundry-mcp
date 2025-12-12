@@ -510,67 +510,6 @@ class TestLifecycleCommands:
         assert "folder" in data["data"]
 
 
-class TestRenderCommands:
-    """Tests for sdd render commands."""
-
-    def test_render_basic_mode_allowed(self, cli_runner, temp_specs_dir):
-        """render with basic mode works without feature flag."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "render",
-                "test-spec-001",
-                "--mode",
-                "basic",
-            ],
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        assert data["data"]["mode"] == "basic"
-
-    def test_render_enhanced_mode_requires_flag(self, cli_runner, temp_specs_dir):
-        """render with enhanced mode requires feature flag."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "render",
-                "test-spec-001",
-                "--mode",
-                "enhanced",
-            ],
-        )
-        assert result.exit_code == 1
-        data = json.loads(result.output)
-        assert data["success"] is False
-        assert data["data"]["error_code"] == "FEATURE_DISABLED"
-        assert "enhanced_render" in data["data"]["details"]["flag"]
-
-    def test_render_enhanced_mode_with_flag_enabled(self, cli_runner, temp_specs_dir):
-        """render with enhanced mode works when flag is enabled."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "render",
-                "test-spec-001",
-                "--mode",
-                "enhanced",
-                "--enable-feature",
-                "enhanced_render",
-            ],
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        assert data["data"]["mode"] == "enhanced"
-
-
 class TestPRCommands:
     """Tests for sdd pr commands."""
 
@@ -686,31 +625,6 @@ class TestModifyCommands:
         )
         assert result.exit_code == 0
         assert "add" in result.output
-
-
-class TestDocQueryCommands:
-    """Tests for sdd doc commands."""
-
-    def test_doc_group_exists(self, cli_runner, temp_specs_dir):
-        """doc group is available with expected subcommands."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "doc", "--help"]
-        )
-        assert result.exit_code == 0
-        assert "find-class" in result.output
-        assert "find-function" in result.output
-        assert "trace-calls" in result.output
-        assert "impact" in result.output
-        assert "stats" in result.output
-
-    def test_doc_stats_returns_json(self, cli_runner, temp_specs_dir):
-        """doc stats returns valid JSON output."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "doc", "stats"]
-        )
-        # Will fail gracefully if docs not available but still output JSON
-        data = json.loads(result.output)
-        assert "success" in data
 
 
 class TestTestingCommands:
@@ -869,62 +783,6 @@ class TestTestingCommands:
         assert result.exit_code == 0, result.output
         assert captured["seconds"] == 42
         assert "42" in captured["message"]
-
-
-class TestLLMDocGenCommands:
-    """Tests for sdd llm-doc commands."""
-
-    def test_llm_doc_group_exists(self, cli_runner, temp_specs_dir):
-        """llm-doc group is available with expected subcommands."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "llm-doc", "--help"]
-        )
-        assert result.exit_code == 0
-        assert "generate" in result.output
-        assert "status" in result.output
-        assert "cache" in result.output
-
-    def test_llm_doc_status_reports_artifacts(self, cli_runner, temp_specs_dir):
-        """llm-doc status returns artifact summary and paths."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "llm-doc", "status"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        assert "output_dir" in data["data"]
-        assert "artifacts" in data["data"]
-
-    def test_llm_doc_generate_creates_artifacts(self, cli_runner, temp_specs_dir):
-        """llm-doc generate creates structured documentation artifacts."""
-        project_root = temp_specs_dir.parent
-        demo_dir = project_root / "src" / "demo"
-        demo_dir.mkdir(parents=True, exist_ok=True)
-        (demo_dir / "__init__.py").write_text(
-            "class Sample:\n    pass\n", encoding="utf-8"
-        )
-
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "llm-doc",
-                "generate",
-                str(project_root),
-            ],
-        )
-        assert result.exit_code == 0, result.output
-        payload = json.loads(result.output)
-        assert payload["success"] is True
-        data = payload["data"]
-        assert data["project"]["name"] == project_root.name
-        assert "statistics" in data
-        assert data["artifacts"], "expected artifacts list"
-
-        output_dir = Path(data["output_dir"])
-        assert (output_dir / "codebase.json").exists()
-        assert (output_dir / "project-overview.md").exists()
 
 
 class TestDevCommands:

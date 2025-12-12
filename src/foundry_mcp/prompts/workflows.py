@@ -246,8 +246,6 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "Use these MCP tools to help debug:",
                 "- `test-run`: Run tests with various options",
                 "- `test-discover`: Find related tests",
-                "- `code-trace-calls`: Trace function call graph",
-                "- `code-impact-analysis`: See what else might be affected",
                 "",
             ]
         )

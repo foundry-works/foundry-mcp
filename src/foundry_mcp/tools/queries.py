@@ -20,7 +20,11 @@ from foundry_mcp.core.pagination import (
     CursorError,
     normalize_page_size,
 )
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.spec import (
     find_specs_directory,
     find_spec_file,
@@ -28,6 +32,7 @@ from foundry_mcp.core.spec import (
     load_spec,
 )
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.tools.unified.spec import legacy_spec_action
 
 logger = logging.getLogger(__name__)
 
@@ -128,37 +133,12 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with found status, path, and status folder
         """
-        try:
-            # Determine specs directory
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            # Find the spec file
-            spec_file = find_spec_file(spec_id, specs_dir)
-
-            if spec_file:
-                # Determine status folder from path
-                status_folder = spec_file.parent.name
-
-                return asdict(
-                    success_response(
-                        found=True,
-                        spec_id=spec_id,
-                        path=str(spec_file),
-                        status_folder=status_folder,
-                    )
-                )
-            else:
-                return asdict(success_response(found=False, spec_id=spec_id))
-
-        except Exception as e:
-            logger.error(f"Error finding spec {spec_id}: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec queries")))
+        return legacy_spec_action(
+            "find",
+            config=config,
+            spec_id=spec_id,
+            workspace=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -187,81 +167,15 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with list of specs, count, and pagination metadata
         """
-        try:
-            # Determine specs directory
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            # Normalize page size
-            page_size = normalize_page_size(limit)
-
-            # Decode cursor if provided
-            start_after_id = None
-            if cursor:
-                try:
-                    cursor_data = decode_cursor(cursor)
-                    start_after_id = cursor_data.get("last_id")
-                except CursorError:
-                    return asdict(error_response("Invalid pagination cursor"))
-
-            # List all specs (sorted by spec_id)
-            filter_status = None if status == "all" else status
-            all_specs = list_specs(specs_dir=specs_dir, status=filter_status)
-
-            # Sort by spec_id for consistent pagination
-            all_specs.sort(key=lambda s: s.get("spec_id", ""))
-
-            # Apply cursor-based pagination
-            if start_after_id:
-                # Find index of cursor position
-                start_index = 0
-                for i, spec in enumerate(all_specs):
-                    if spec.get("spec_id") == start_after_id:
-                        start_index = i + 1
-                        break
-                all_specs = all_specs[start_index:]
-
-            # Fetch one extra to detect has_more
-            specs = all_specs[: page_size + 1]
-            has_more = len(specs) > page_size
-            if has_more:
-                specs = specs[:page_size]
-
-            # Optionally strip progress info
-            if not include_progress:
-                specs = [
-                    {
-                        "spec_id": s["spec_id"],
-                        "title": s["title"],
-                        "status": s["status"],
-                    }
-                    for s in specs
-                ]
-
-            # Build next cursor
-            next_cursor = None
-            if has_more and specs:
-                next_cursor = encode_cursor({"last_id": specs[-1]["spec_id"]})
-
-            return asdict(
-                success_response(
-                    data={"specs": specs, "count": len(specs)},
-                    pagination={
-                        "cursor": next_cursor,
-                        "has_more": has_more,
-                        "page_size": page_size,
-                    },
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error listing specs: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec queries")))
+        return legacy_spec_action(
+            "list",
+            config=config,
+            status=status,
+            workspace=workspace,
+            include_progress=include_progress,
+            cursor=cursor,
+            limit=limit,
+        )
 
     @canonical_tool(
         mcp,
@@ -379,6 +293,8 @@ def register_query_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error querying tasks in {spec_id}: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec queries")))
+            return asdict(
+                error_response(sanitize_error_message(e, context="spec queries"))
+            )
 
     logger.debug("Registered query tools: spec-find/spec-list/task-query")

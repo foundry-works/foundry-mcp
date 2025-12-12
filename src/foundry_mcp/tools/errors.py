@@ -6,26 +6,13 @@ for debugging and system improvement.
 
 from __future__ import annotations
 
-import logging
-from dataclasses import asdict
-from typing import Any, Optional
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.responses import success_response, error_response, ErrorCode
-from foundry_mcp.core.pagination import (
-    encode_cursor,
-    decode_cursor,
-    paginated_response,
-    normalize_page_size,
-    CursorError,
-    DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-)
-
-logger = logging.getLogger(__name__)
+from foundry_mcp.tools.unified.error import legacy_error_action
 
 
 def register_error_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -76,80 +63,22 @@ def register_error_tools(mcp: FastMCP, config: ServerConfig) -> None:
         until: Optional[str] = None,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
-    ) -> dict[str, Any]:
+    ) -> dict:
         """Query error records with filtering."""
-        # Check if error collection is enabled
-        if not config.error_collection.enabled:
-            return asdict(error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Error collection is disabled",
-                details={"config_key": "error_collection.enabled"},
-            ))
 
-        try:
-            from foundry_mcp.core.error_collection import get_error_collector
-
-            collector = get_error_collector()
-            if not collector.is_enabled():
-                return asdict(error_response(
-                    error_code=ErrorCode.UNAVAILABLE,
-                    message="Error collector is not enabled",
-                ))
-
-            # Handle pagination
-            page_size = normalize_page_size(limit)
-            offset = 0
-            if cursor:
-                try:
-                    cursor_data = decode_cursor(cursor)
-                    offset = cursor_data.get("offset", 0)
-                except CursorError as e:
-                    return asdict(error_response(
-                        error_code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Invalid cursor: {e}",
-                    ))
-
-            # Query errors from store
-            store = collector.store
-            records = store.query(
-                tool_name=tool_name,
-                error_code=error_code,
-                error_type=error_type,
-                fingerprint=fingerprint,
-                provider_id=provider_id,
-                since=since,
-                until=until,
-                limit=page_size + 1,  # +1 to detect if there are more
-                offset=offset,
-            )
-
-            # Check if there are more results
-            has_more = len(records) > page_size
-            if has_more:
-                records = records[:page_size]
-
-            # Generate next cursor if needed
-            next_cursor = None
-            if has_more:
-                next_cursor = encode_cursor({"offset": offset + page_size})
-
-            # Convert records to dicts
-            error_dicts = [record.to_dict() for record in records]
-
-            return paginated_response(
-                items=error_dicts,
-                total_count=store.count(),
-                cursor=next_cursor,
-                limit=page_size,
-                item_key="errors",
-            )
-
-        except Exception as e:
-            logger.exception("Error querying errors")
-            return asdict(error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to query errors: {e}",
-            ))
+        return legacy_error_action(
+            action="list",
+            config=config,
+            tool_name=tool_name,
+            error_code=error_code,
+            error_type=error_type,
+            fingerprint=fingerprint,
+            provider_id=provider_id,
+            since=since,
+            until=until,
+            limit=limit,
+            cursor=cursor,
+        )
 
     @canonical_tool(
         mcp,
@@ -172,43 +101,10 @@ def register_error_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with complete error record
         """,
     )
-    def error_get(error_id: str) -> dict[str, Any]:
+    def error_get(error_id: str) -> dict:
         """Get detailed error record by ID."""
-        if not config.error_collection.enabled:
-            return asdict(error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Error collection is disabled",
-            ))
 
-        if not error_id:
-            return asdict(error_response(
-                error_code=ErrorCode.VALIDATION_ERROR,
-                message="error_id is required",
-            ))
-
-        try:
-            from foundry_mcp.core.error_collection import get_error_collector
-
-            collector = get_error_collector()
-            store = collector.store
-            record = store.get(error_id)
-
-            if record is None:
-                return asdict(error_response(
-                    error_code=ErrorCode.NOT_FOUND,
-                    message=f"Error record not found: {error_id}",
-                ))
-
-            return asdict(success_response(
-                data={"error": record.to_dict()},
-            ))
-
-        except Exception as e:
-            logger.exception("Error retrieving error record")
-            return asdict(error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to retrieve error: {e}",
-            ))
+        return legacy_error_action(action="get", config=config, error_id=error_id)
 
     @canonical_tool(
         mcp,
@@ -234,29 +130,10 @@ def register_error_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - top_patterns: Most frequent error patterns
         """,
     )
-    def error_stats() -> dict[str, Any]:
+    def error_stats() -> dict:
         """Get aggregated error statistics."""
-        if not config.error_collection.enabled:
-            return asdict(error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Error collection is disabled",
-            ))
 
-        try:
-            from foundry_mcp.core.error_collection import get_error_collector
-
-            collector = get_error_collector()
-            store = collector.store
-            stats = store.get_stats()
-
-            return asdict(success_response(data=stats))
-
-        except Exception as e:
-            logger.exception("Error getting error stats")
-            return asdict(error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to get error stats: {e}",
-            ))
+        return legacy_error_action(action="stats", config=config)
 
     @canonical_tool(
         mcp,
@@ -286,38 +163,14 @@ def register_error_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - sample_ids: Recent error IDs for investigation
         """,
     )
-    def error_patterns(min_count: int = 3) -> dict[str, Any]:
+    def error_patterns(min_count: int = 3) -> dict:
         """Get recurring error patterns."""
-        if not config.error_collection.enabled:
-            return asdict(error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Error collection is disabled",
-            ))
 
-        if min_count < 1:
-            min_count = 1
-
-        try:
-            from foundry_mcp.core.error_collection import get_error_collector
-
-            collector = get_error_collector()
-            store = collector.store
-            patterns = store.get_patterns(min_count=min_count)
-
-            return asdict(success_response(
-                data={
-                    "patterns": patterns,
-                    "pattern_count": len(patterns),
-                    "min_count_filter": min_count,
-                },
-            ))
-
-        except Exception as e:
-            logger.exception("Error getting error patterns")
-            return asdict(error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to get error patterns: {e}",
-            ))
+        return legacy_error_action(
+            action="patterns",
+            config=config,
+            min_count=min_count,
+        )
 
     @canonical_tool(
         mcp,
@@ -348,54 +201,13 @@ def register_error_tools(mcp: FastMCP, config: ServerConfig) -> None:
         retention_days: Optional[int] = None,
         max_errors: Optional[int] = None,
         dry_run: bool = False,
-    ) -> dict[str, Any]:
+    ) -> dict:
         """Clean up old error records."""
-        if not config.error_collection.enabled:
-            return asdict(error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Error collection is disabled",
-            ))
 
-        # Use config defaults if not specified
-        effective_retention = retention_days or config.error_collection.retention_days
-        effective_max = max_errors or config.error_collection.max_errors
-
-        try:
-            from foundry_mcp.core.error_collection import get_error_collector
-
-            collector = get_error_collector()
-            store = collector.store
-
-            if dry_run:
-                # For dry run, just return current count vs what would remain
-                current_count = store.count()
-                return asdict(success_response(
-                    data={
-                        "current_count": current_count,
-                        "retention_days": effective_retention,
-                        "max_errors": effective_max,
-                        "dry_run": True,
-                        "message": "Dry run - no records deleted",
-                    },
-                ))
-
-            deleted_count = store.cleanup(
-                retention_days=effective_retention,
-                max_errors=effective_max,
-            )
-
-            return asdict(success_response(
-                data={
-                    "deleted_count": deleted_count,
-                    "retention_days": effective_retention,
-                    "max_errors": effective_max,
-                    "dry_run": False,
-                },
-            ))
-
-        except Exception as e:
-            logger.exception("Error cleaning up errors")
-            return asdict(error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to cleanup errors: {e}",
-            ))
+        return legacy_error_action(
+            action="cleanup",
+            config=config,
+            retention_days=retention_days,
+            max_errors=max_errors,
+            dry_run=dry_run,
+        )

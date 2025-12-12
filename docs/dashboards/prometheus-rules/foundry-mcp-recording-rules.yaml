@@ -290,3 +290,23 @@ groups:
           histogram_quantile(0.50,
             sum by (tool, le) (rate(foundry_mcp_tool_duration_seconds_bucket[5m]))
           )
+
+      # =======================================================================
+      # Manifest Token Budget (Unified tools)
+      # =======================================================================
+
+      - record: foundry_mcp:manifest_tokens:unified
+        expr: |
+          max(foundry_mcp_manifest_tokens{manifest="unified"})
+
+      - record: foundry_mcp:manifest_tool_count:unified
+        expr: |
+          max(foundry_mcp_manifest_tool_count{manifest="unified"})
+
+      - record: foundry_mcp:manifest_tokens:budget_ratio
+        expr: |
+          (foundry_mcp:manifest_tokens:unified / 16000) or vector(0)
+
+      - record: foundry_mcp:feature_flag:unified_manifest
+        expr: |
+          max(foundry_mcp_feature_flag_state{flag="unified_manifest"})

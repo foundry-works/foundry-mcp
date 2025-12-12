@@ -5,7 +5,7 @@ Tests the core consultation infrastructure including:
 - ConsultationWorkflow enum
 - ConsultationConfig dataclass
 - PromptTemplate and PromptRegistry
-- Workflow-specific prompt builders (doc_generation, plan_review, fidelity_review)
+- Workflow-specific prompt builders (plan_review, fidelity_review)
 - AI error response helpers
 """
 
@@ -32,14 +32,6 @@ from foundry_mcp.core.prompts import (
 )
 
 # Workflow-specific prompt builders
-from foundry_mcp.core.prompts.doc_generation import (
-    DOC_GEN_PROJECT_OVERVIEW_V1,
-    DOC_GEN_ARCHITECTURE_V1,
-    DOC_GEN_COMPONENT_INVENTORY_V1,
-    DOC_GEN_TEMPLATES,
-    DocGenerationPromptBuilder,
-)
-
 from foundry_mcp.core.prompts.plan_review import (
     PLAN_REVIEW_FULL_V1,
     PLAN_REVIEW_QUICK_V1,
@@ -83,14 +75,13 @@ class TestConsultationWorkflow:
 
     def test_workflow_values(self):
         """Workflow enum has expected values."""
-        assert ConsultationWorkflow.DOC_GENERATION.value == "doc_generation"
         assert ConsultationWorkflow.PLAN_REVIEW.value == "plan_review"
         assert ConsultationWorkflow.FIDELITY_REVIEW.value == "fidelity_review"
 
     def test_workflow_count(self):
         """Verify all expected workflows are defined."""
         workflows = list(ConsultationWorkflow)
-        assert len(workflows) == 4
+        assert len(workflows) == 3
 
 
 # =============================================================================
@@ -115,7 +106,7 @@ class TestConsultationRequest:
     def test_request_defaults(self):
         """Request has expected defaults."""
         request = ConsultationRequest(
-            workflow=ConsultationWorkflow.DOC_GENERATION,
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
             prompt_id="test",
             context={},
         )
@@ -286,11 +277,6 @@ class TestPromptRegistry:
 class TestPromptBuilderFactory:
     """Tests for get_prompt_builder factory."""
 
-    def test_factory_returns_doc_generation_builder(self):
-        """Factory returns DocGenerationPromptBuilder for DOC_GENERATION."""
-        builder = get_prompt_builder(ConsultationWorkflow.DOC_GENERATION)
-        assert isinstance(builder, DocGenerationPromptBuilder)
-
     def test_factory_returns_plan_review_builder(self):
         """Factory returns PlanReviewPromptBuilder for PLAN_REVIEW."""
         builder = get_prompt_builder(ConsultationWorkflow.PLAN_REVIEW)
@@ -300,47 +286,6 @@ class TestPromptBuilderFactory:
         """Factory returns FidelityReviewPromptBuilder for FIDELITY_REVIEW."""
         builder = get_prompt_builder(ConsultationWorkflow.FIDELITY_REVIEW)
         assert isinstance(builder, FidelityReviewPromptBuilder)
-
-
-# =============================================================================
-# DocGenerationPromptBuilder Tests
-# =============================================================================
-
-
-class TestDocGenerationPromptBuilder:
-    """Tests for DocGenerationPromptBuilder."""
-
-    def test_builder_list_prompts(self):
-        """Builder lists available prompts."""
-        builder = DocGenerationPromptBuilder()
-        prompts = builder.list_prompts()
-
-        # Should include both new and legacy prompts
-        assert "DOC_GEN_PROJECT_OVERVIEW_V1" in prompts
-        assert "DOC_GEN_ARCHITECTURE_V1" in prompts
-        assert "DOC_GEN_COMPONENT_INVENTORY_V1" in prompts
-
-    def test_builder_build_overview_prompt(self):
-        """Builder renders DOC_GEN_PROJECT_OVERVIEW_V1."""
-        builder = DocGenerationPromptBuilder()
-        context = {
-            "project_context": "A test project for demonstration",
-            "key_files": "main.py, utils.py",
-        }
-        result = builder.build("DOC_GEN_PROJECT_OVERVIEW_V1", context)
-
-        # Verify context was injected
-        assert "A test project for demonstration" in result
-        assert "main.py, utils.py" in result
-        # Verify template structure
-        assert "Project Overview Research" in result
-        assert "Research Findings" in result
-
-    def test_templates_have_metadata(self):
-        """DOC_GEN templates have expected metadata."""
-        # Check workflow is present in metadata
-        assert "workflow" in DOC_GEN_PROJECT_OVERVIEW_V1.metadata
-        assert "workflow" in DOC_GEN_ARCHITECTURE_V1.metadata
 
 
 # =============================================================================
@@ -806,14 +751,14 @@ class TestBackwardCompatibility:
         Legacy pattern: accessing result.content directly.
         """
         result = ConsultationResult(
-            workflow=ConsultationWorkflow.DOC_GENERATION,
-            content="Generated documentation...",
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Generated review...",
             provider_id="openai",
             model_used="gpt-4",
         )
 
         # Direct attribute access - legacy pattern
-        assert result.content == "Generated documentation..."
+        assert result.content == "Generated review..."
         assert len(result.content) > 0
 
     def test_existing_code_accessing_provider_id(self):
@@ -895,7 +840,7 @@ class TestBackwardCompatibility:
         Ensures no attributes were removed or renamed.
         """
         result = ConsultationResult(
-            workflow=ConsultationWorkflow.DOC_GENERATION,
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
             content="test",
             provider_id="test-provider",
             model_used="test-model",
@@ -914,7 +859,7 @@ class TestBackwardCompatibility:
         assert hasattr(result, "tokens")
 
         # Values match
-        assert result.workflow == ConsultationWorkflow.DOC_GENERATION
+        assert result.workflow == ConsultationWorkflow.PLAN_REVIEW
         assert result.content == "test"
         assert result.provider_id == "test-provider"
         assert result.model_used == "test-model"

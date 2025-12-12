@@ -5,6 +5,7 @@ Provides MCP tools for querying server capabilities, workspace info,
 and configuration (with sensitive data masked).
 """
 
+import json
 import logging
 import time
 from dataclasses import asdict
@@ -13,12 +14,39 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
-from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.resilience import CircuitBreaker
+from foundry_mcp.core.capabilities import get_capabilities_registry
+from foundry_mcp.core.discovery import get_tool_registry
+from foundry_mcp.core.feature_flags import get_flag_service
 from foundry_mcp.core.observability import get_metrics, mcp_tool
+from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
+from foundry_mcp.core.resilience import CircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+MANIFEST_TOKEN_BUDGET = 16_000
+MANIFEST_TOKEN_BUDGET_MAX = 18_000
+
+
+def _estimate_tokens(text: str) -> int:
+    """Estimate token usage for manifest budget reporting.
+
+    Uses `tiktoken` when available, otherwise falls back to a conservative
+    ~4-chars-per-token heuristic.
+    """
+
+    try:
+        import tiktoken
+
+        encoding = tiktoken.get_encoding("cl100k_base")
+        return len(encoding.encode(text))
+    except Exception:
+        return max(1, len(text) // 4)
+
 
 # Circuit breaker for context operations
 _context_breaker = CircuitBreaker(
@@ -28,7 +56,9 @@ _context_breaker = CircuitBreaker(
 )
 
 
-def _mask_sensitive_value(value: Optional[str], visible_chars: int = 4) -> Optional[str]:
+def _mask_sensitive_value(
+    value: Optional[str], visible_chars: int = 4
+) -> Optional[str]:
     """Mask a sensitive string value, showing only first few characters.
 
     Args:
@@ -116,6 +146,210 @@ def _get_workflow_config_safe() -> Dict[str, Any]:
         return {"error": "Failed to load workflow configuration"}
 
 
+def build_server_context_response(
+    config: ServerConfig,
+    *,
+    include_llm: bool = True,
+    include_workflow: bool = True,
+    include_workspace: bool = True,
+    include_capabilities: bool = True,
+    request_id: Optional[str] = None,
+) -> dict:
+    """Return server context payload using response-v2 envelope."""
+
+    metrics = get_metrics()
+    start_time = time.perf_counter()
+
+    try:
+        if not _context_breaker.can_execute():
+            status = _context_breaker.get_status()
+            metrics.counter(
+                "context.circuit_breaker_open",
+                labels={"tool": "get-server-context"},
+            )
+            return asdict(
+                error_response(
+                    "Context operations temporarily unavailable",
+                    data={
+                        "retry_after_seconds": status.get("retry_after_seconds"),
+                        "breaker_state": status.get("state"),
+                    },
+                    request_id=request_id,
+                )
+            )
+
+        warnings: list[str] = []
+
+        result: Dict[str, Any] = {
+            "server": {
+                "name": config.server_name,
+                "version": config.server_version,
+            },
+        }
+
+        if include_workspace:
+            result["workspace"] = {
+                "specs_dir": str(config.specs_dir) if config.specs_dir else None,
+                "workspace_roots": [str(p) for p in config.workspace_roots],
+                "journals_path": str(config.journals_path)
+                if config.journals_path
+                else None,
+            }
+
+        if include_llm:
+            result["llm"] = _get_llm_config_safe()
+
+        if include_workflow:
+            result["workflow"] = _get_workflow_config_safe()
+
+        if include_capabilities:
+            # Keep this lightweight: downstream discovery tools provide the full schema.
+            result["capabilities"] = {
+                "tools": {
+                    "spec_management": True,
+                    "task_operations": True,
+                    "validation": True,
+                    "journaling": True,
+                    "lifecycle": True,
+                    "documentation": True,
+                    "testing": True,
+                    "llm_integration": True,
+                },
+                "resources": {
+                    "specs": True,
+                    "templates": True,
+                    "journals": True,
+                },
+                "prompts": {
+                    "start_feature": True,
+                    "debug_test": True,
+                    "complete_phase": True,
+                    "review_spec": True,
+                },
+                "features": {
+                    "auth_enabled": config.require_auth,
+                    "structured_logging": config.structured_logging,
+                },
+            }
+
+        # Report manifest size so `/context` can validate token reduction.
+        flag_service = get_flag_service()
+        unified_enabled = flag_service.is_enabled("unified_manifest")
+        manifest_mode = "unified" if unified_enabled else "legacy"
+
+        manifest_payload: list[Any]
+        if unified_enabled:
+            manifest = get_capabilities_registry().load_manifest()
+            manifest_payload = (
+                manifest.get("tools", {}).get("unified", [])
+                if isinstance(manifest, dict)
+                else []
+            )
+        else:
+            registry = get_tool_registry()
+            manifest_payload = registry.list_tools(include_deprecated=True)
+
+        manifest_tokens = _estimate_tokens(
+            json.dumps(
+                manifest_payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        )
+        result["manifest"] = {
+            "mode": manifest_mode,
+            "tool_count": len(manifest_payload),
+            "token_estimate": manifest_tokens,
+            "token_budget": MANIFEST_TOKEN_BUDGET,
+            "token_budget_max": MANIFEST_TOKEN_BUDGET_MAX,
+        }
+
+        if unified_enabled and manifest_tokens > MANIFEST_TOKEN_BUDGET:
+            warnings.append(
+                "Manifest token estimate exceeds budget; run server(action=tools) to inspect action metadata."
+            )
+
+        _context_breaker.record_success()
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        metrics.histogram(
+            "context.duration_ms",
+            duration_ms,
+            labels={"tool": "get-server-context"},
+        )
+
+        return asdict(
+            success_response(
+                result,
+                request_id=request_id,
+                warnings=warnings if warnings else None,
+                telemetry={"duration_ms": round(duration_ms, 2)},
+            )
+        )
+
+    except Exception as exc:
+        _context_breaker.record_failure()
+        logger.exception("Error getting server context")
+        return asdict(
+            error_response(
+                sanitize_error_message(exc, context="server context"),
+                request_id=request_id,
+            )
+        )
+
+
+def build_llm_status_response(*, request_id: Optional[str] = None) -> dict:
+    """Return LLM provider status payload using response-v2 envelope."""
+
+    metrics = get_metrics()
+    start_time = time.perf_counter()
+
+    try:
+        llm_config = _get_llm_config_safe()
+
+        result = {
+            "provider": llm_config.get("provider"),
+            "model": llm_config.get("model"),
+            "configured": llm_config.get("api_key_configured", False),
+            "source": llm_config.get("api_key_source"),
+            "timeout": llm_config.get("timeout"),
+            "max_tokens": llm_config.get("max_tokens"),
+        }
+
+        if not result["configured"] and result["provider"] != "local":
+            result["health"] = "unconfigured"
+            result["hint"] = (
+                "Set FOUNDRY_MCP_LLM_API_KEY or provider-specific env var "
+                f"to enable {result['provider']} provider"
+            )
+        else:
+            result["health"] = "ready"
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        metrics.histogram(
+            "context.duration_ms",
+            duration_ms,
+            labels={"tool": "get-llm-status"},
+        )
+
+        return asdict(
+            success_response(
+                result,
+                request_id=request_id,
+                telemetry={"duration_ms": round(duration_ms, 2)},
+            )
+        )
+
+    except Exception as exc:
+        logger.exception("Error getting LLM status")
+        return asdict(
+            error_response(
+                sanitize_error_message(exc, context="llm status"),
+                request_id=request_id,
+            )
+        )
+
+
 def register_context_tools(mcp: FastMCP, config: ServerConfig) -> None:
     """
     Register context tools with the FastMCP server.
@@ -164,97 +398,13 @@ def register_context_tools(mcp: FastMCP, config: ServerConfig) -> None:
         - Debug configuration issues
         - Check workflow mode before starting tasks
         """
-        start_time = time.perf_counter()
-
-        try:
-            # Circuit breaker check
-            if not _context_breaker.can_execute():
-                status = _context_breaker.get_status()
-                metrics.counter(
-                    "context.circuit_breaker_open",
-                    labels={"tool": "get-server-context"},
-                )
-                return asdict(
-                    error_response(
-                        "Context operations temporarily unavailable",
-                        data={
-                            "retry_after_seconds": status.get("retry_after_seconds"),
-                            "breaker_state": status.get("state"),
-                        },
-                    )
-                )
-
-            result: Dict[str, Any] = {
-                "server": {
-                    "name": config.server_name,
-                    "version": config.server_version,
-                },
-            }
-
-            # Workspace info
-            if include_workspace:
-                result["workspace"] = {
-                    "specs_dir": str(config.specs_dir) if config.specs_dir else None,
-                    "workspace_roots": [str(p) for p in config.workspace_roots],
-                    "journals_path": str(config.journals_path) if config.journals_path else None,
-                }
-
-            # LLM configuration (masked)
-            if include_llm:
-                result["llm"] = _get_llm_config_safe()
-
-            # Workflow configuration
-            if include_workflow:
-                result["workflow"] = _get_workflow_config_safe()
-
-            # Server capabilities
-            if include_capabilities:
-                result["capabilities"] = {
-                    "tools": {
-                        "spec_management": True,
-                        "task_operations": True,
-                        "validation": True,
-                        "journaling": True,
-                        "lifecycle": True,
-                        "documentation": True,
-                        "testing": True,
-                        "llm_integration": True,
-                    },
-                    "resources": {
-                        "specs": True,
-                        "templates": True,
-                        "journals": True,
-                    },
-                    "prompts": {
-                        "start_feature": True,
-                        "debug_test": True,
-                        "complete_phase": True,
-                        "review_spec": True,
-                    },
-                    "features": {
-                        "auth_enabled": config.require_auth,
-                        "structured_logging": config.structured_logging,
-                    },
-                }
-
-            _context_breaker.record_success()
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            metrics.histogram(
-                "context.duration_ms",
-                duration_ms,
-                labels={"tool": "get-server-context"},
-            )
-
-            return asdict(success_response(result))
-
-        except Exception as e:
-            _context_breaker.record_failure()
-            logger.exception("Error getting server context")
-            return asdict(
-                error_response(
-                    sanitize_error_message(e, context="server context"),
-                )
-            )
+        return build_server_context_response(
+            config,
+            include_llm=include_llm,
+            include_workflow=include_workflow,
+            include_workspace=include_workspace,
+            include_capabilities=include_capabilities,
+        )
 
     @canonical_tool(
         mcp,
@@ -281,43 +431,4 @@ def register_context_tools(mcp: FastMCP, config: ServerConfig) -> None:
         - Check API key availability before LLM operations
         - Debug LLM connection issues
         """
-        start_time = time.perf_counter()
-
-        try:
-            llm_config = _get_llm_config_safe()
-
-            result = {
-                "provider": llm_config.get("provider"),
-                "model": llm_config.get("model"),
-                "configured": llm_config.get("api_key_configured", False),
-                "source": llm_config.get("api_key_source"),
-                "timeout": llm_config.get("timeout"),
-                "max_tokens": llm_config.get("max_tokens"),
-            }
-
-            # Add health check hint
-            if not result["configured"] and result["provider"] != "local":
-                result["health"] = "unconfigured"
-                result["hint"] = (
-                    f"Set FOUNDRY_MCP_LLM_API_KEY or provider-specific env var "
-                    f"to enable {result['provider']} provider"
-                )
-            else:
-                result["health"] = "ready"
-
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            metrics.histogram(
-                "context.duration_ms",
-                duration_ms,
-                labels={"tool": "get-llm-status"},
-            )
-
-            return asdict(success_response(result))
-
-        except Exception as e:
-            logger.exception("Error getting LLM status")
-            return asdict(
-                error_response(
-                    sanitize_error_message(e, context="LLM status"),
-                )
-            )
+        return build_llm_status_response()

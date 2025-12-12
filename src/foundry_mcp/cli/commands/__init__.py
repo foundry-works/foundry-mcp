@@ -51,10 +51,6 @@ from foundry_mcp.cli.commands.pr import (
     pr_group,
     pr_status_cmd,
 )
-from foundry_mcp.cli.commands.render import (
-    render_cmd,
-    render_group,
-)
 from foundry_mcp.cli.commands.review import (
     review_fidelity_cmd,
     review_group,
@@ -80,16 +76,6 @@ from foundry_mcp.cli.commands.modify import (
     modify_task_group,
     modify_task_remove_cmd,
 )
-from foundry_mcp.cli.commands.docquery import (
-    doc_find_class_cmd,
-    doc_find_function_cmd,
-    doc_group,
-    doc_impact_cmd,
-    doc_stats_cmd,
-    doc_trace_calls_cmd,
-    find_class_alias_cmd,
-    find_function_alias_cmd,
-)
 from foundry_mcp.cli.commands.testing import (
     run_tests_alias_cmd,
     test_check_tools_cmd,
@@ -99,13 +85,6 @@ from foundry_mcp.cli.commands.testing import (
     test_quick_cmd,
     test_run_cmd,
     test_unit_cmd,
-)
-from foundry_mcp.cli.commands.docgen import (
-    generate_docs_alias_cmd,
-    llm_doc_cache_cmd,
-    llm_doc_generate_cmd,
-    llm_doc_group,
-    llm_doc_status_cmd,
 )
 from foundry_mcp.cli.commands.dev import (
     dev_check_cmd,
@@ -204,9 +183,6 @@ __all__ = [
     "pr_create_cmd",
     "pr_group",
     "pr_status_cmd",
-    # Render commands
-    "render_cmd",
-    "render_group",
     # Review commands
     "review_fidelity_cmd",
     "review_group",
@@ -229,15 +205,6 @@ __all__ = [
     "modify_task_add_cmd",
     "modify_task_group",
     "modify_task_remove_cmd",
-    # Doc-query commands
-    "doc_find_class_cmd",
-    "doc_find_function_cmd",
-    "doc_group",
-    "doc_impact_cmd",
-    "doc_stats_cmd",
-    "doc_trace_calls_cmd",
-    "find_class_alias_cmd",
-    "find_function_alias_cmd",
     # Testing commands
     "run_tests_alias_cmd",
     "test_check_tools_cmd",
@@ -247,12 +214,6 @@ __all__ = [
     "test_quick_cmd",
     "test_run_cmd",
     "test_unit_cmd",
-    # LLM doc generation commands
-    "generate_docs_alias_cmd",
-    "llm_doc_cache_cmd",
-    "llm_doc_generate_cmd",
-    "llm_doc_group",
-    "llm_doc_status_cmd",
     # Dev utility commands
     "dev_check_cmd",
     "dev_gendocs_cmd",

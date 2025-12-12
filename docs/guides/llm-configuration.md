@@ -20,7 +20,7 @@ A comprehensive guide for configuring and using LLM-powered features in foundry-
 
 ## Overview
 
-foundry-mcp provides LLM-powered features for intelligent spec review, documentation generation, and fidelity analysis. These features are designed with resilience in mind, supporting multiple LLM providers and graceful degradation when LLM services are unavailable.
+foundry-mcp provides LLM-powered features for intelligent spec review and fidelity analysis. These features are designed with resilience in mind, supporting multiple LLM providers and graceful degradation when LLM services are unavailable.
 
 ### Key Features
 
@@ -350,55 +350,6 @@ Enumerate review toolchains for plan analysis.
 }
 ```
 
-### spec-doc
-
-Generate documentation from a specification.
-
-```json
-{
-  "tool": "spec-doc",
-  "spec_id": "feature-auth-001",
-  "output_format": "markdown",
-  "include_progress": true
-}
-```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `spec_id` | string | Yes | Specification ID |
-| `output_format` | string | No | `markdown` or `md` (default: `markdown`) |
-| `output_path` | string | No | Custom output path |
-| `include_progress` | boolean | No | Include progress bars (default: `true`) |
-| `include_journal` | boolean | No | Include journal entries (default: `false`) |
-| `mode` | string | No | `basic` or `enhanced` (default: `basic`) |
-
-### spec-doc-llm
-
-Generate comprehensive LLM-powered project documentation.
-
-```json
-{
-  "tool": "spec-doc-llm",
-  "directory": "src/",
-  "name": "My Project",
-  "batch_size": 3
-}
-```
-
-**Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `directory` | string | Yes | Project directory to document |
-| `output_dir` | string | No | Output directory (default: `./docs`) |
-| `name` | string | No | Project name |
-| `description` | string | No | Project description |
-| `batch_size` | integer | No | Shards per batch (default: 3, max: 10) |
-| `use_cache` | boolean | No | Enable caching (default: `true`) |
-| `resume` | boolean | No | Resume interrupted generation |
-
-**Rate limit:** 10/hour
-
 ### spec-review-fidelity
 
 Compare implementation against specification requirements.
@@ -579,10 +530,9 @@ LLM features are controlled by feature flags for gradual rollout and capability 
 
 | Flag | Description | State | Default |
 |------|-------------|-------|---------|
-| `llm_tools` | LLM-powered review and documentation | stable | enabled |
+| `llm_tools` | LLM-powered review | stable | enabled |
 | `llm_multi_provider` | Multi-provider AI tool support | stable | enabled |
 | `llm_fidelity_review` | AI-powered fidelity review | stable | enabled |
-| `llm_doc_generation` | LLM-powered documentation generation | beta | enabled |
 | `llm_data_only_fallback` | Graceful degradation when LLM unavailable | stable | enabled |
 
 ### Checking Capabilities
@@ -688,8 +638,8 @@ timeout = 60  # Increase for complex operations
 Check rate limits before batch operations:
 
 ```python
-metadata = get_llm_tool_metadata("spec-doc-llm")
-print(f"Rate limit: {metadata.rate_limit}")  # "10/hour"
+metadata = get_llm_tool_metadata("spec-review-fidelity")
+print(f"Rate limit: {metadata.rate_limit}")
 ```
 
 ### 4. Use Local Models for Development

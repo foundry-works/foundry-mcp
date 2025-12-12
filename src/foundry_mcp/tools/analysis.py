@@ -15,8 +15,14 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.tools.unified.review import legacy_review_action
+from foundry_mcp.tools.unified.spec import legacy_spec_action
 from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.spec import find_specs_directory, find_spec_file, load_spec
 from foundry_mcp.core.task import check_dependencies
@@ -67,6 +73,13 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - documentation_available: Whether generated docs exist
             - Additional heuristics from sdd analyze
         """
+        return legacy_spec_action(
+            "analyze",
+            config=config,
+            directory=directory,
+            path=path,
+        )
+
         tool_name = "spec_analyze"
         start_time = time.perf_counter()
 
@@ -109,7 +122,9 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
                 # Check for documentation
                 docs_dir = specs_dir / ".human-readable"
-                analysis_data["documentation_available"] = docs_dir.exists() and any(docs_dir.glob("*.md"))
+                analysis_data["documentation_available"] = docs_dir.exists() and any(
+                    docs_dir.glob("*.md")
+                )
 
                 # Check for codebase.json
                 codebase_json = ws_path / "docs" / "codebase.json"
@@ -119,20 +134,24 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             _metrics.counter(f"analysis.{tool_name}", labels={"status": "success"})
             _metrics.timer(f"analysis.{tool_name}.duration_ms", duration_ms)
 
-            return asdict(success_response(
-                duration_ms=round(duration_ms, 2),
-                **analysis_data,
-            ))
+            return asdict(
+                success_response(
+                    duration_ms=round(duration_ms, 2),
+                    **analysis_data,
+                )
+            )
 
         except Exception as e:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"analysis.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                sanitize_error_message(e, context="analysis"),
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="analysis"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )
 
     @canonical_tool(
         mcp,
@@ -168,26 +187,13 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - output_file: Path to generated suggestions file
             - categories: Breakdown of suggestion types
         """
-        # Review feedback parsing requires complex text/markdown parsing with
-        # AI-powered understanding of review comments. This functionality is
-        # not available as a direct core API.
-        # Use the sdd-toolkit:sdd-modify skill for applying review feedback.
-        return asdict(
-            error_response(
-                "Review feedback parsing requires complex text/markdown parsing. "
-                "Use the sdd-toolkit:sdd-modify skill to apply review feedback.",
-                error_code="NOT_IMPLEMENTED",
-                error_type="unavailable",
-                data={
-                    "spec_id": spec_id,
-                    "review_path": review_path,
-                    "output_path": output_path,
-                    "alternative": "sdd-toolkit:sdd-modify skill",
-                    "feature_status": "requires_complex_parsing",
-                },
-                remediation="Use the sdd-toolkit:sdd-modify skill which provides "
-                "review feedback application with proper parsing support.",
-            )
+        return legacy_review_action(
+            "parse-feedback",
+            config=config,
+            spec_id=spec_id,
+            review_path=review_path,
+            output_path=output_path,
+            path=path,
         )
 
     @canonical_tool(
@@ -223,6 +229,14 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - circular_deps: Any circular dependency issues
             - critical_path: Tasks on the longest dependency chain
         """
+        return legacy_spec_action(
+            "analyze-deps",
+            config=config,
+            spec_id=spec_id,
+            bottleneck_threshold=bottleneck_threshold,
+            path=path,
+        )
+
         tool_name = "spec_analyze_deps"
         start_time = time.perf_counter()
         threshold = bottleneck_threshold if bottleneck_threshold is not None else 3
@@ -230,12 +244,14 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
         try:
             # Validate required parameters
             if not spec_id:
-                return asdict(error_response(
-                    "spec_id is required",
-                    error_code="MISSING_REQUIRED",
-                    error_type="validation",
-                    remediation="Provide a spec_id parameter (e.g., my-feature-spec)",
-                ))
+                return asdict(
+                    error_response(
+                        "spec_id is required",
+                        error_code="MISSING_REQUIRED",
+                        error_type="validation",
+                        remediation="Provide a spec_id parameter (e.g., my-feature-spec)",
+                    )
+                )
 
             # Resolve workspace path
             ws_path = Path(path) if path else Path.cwd()
@@ -251,27 +267,33 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             # Find and load spec
             specs_dir = find_specs_directory(ws_path)
             if not specs_dir:
-                return asdict(error_response(
-                    f"Specs directory not found in {ws_path}",
-                    data={"spec_id": spec_id, "workspace": str(ws_path)},
-                ))
+                return asdict(
+                    error_response(
+                        f"Specs directory not found in {ws_path}",
+                        data={"spec_id": spec_id, "workspace": str(ws_path)},
+                    )
+                )
 
             spec_file = find_spec_file(spec_id, specs_dir)
             if not spec_file:
-                return asdict(error_response(
-                    f"Spec '{spec_id}' not found",
-                    error_code="NOT_FOUND",
-                    error_type="analysis",
-                    data={"spec_id": spec_id, "specs_dir": str(specs_dir)},
-                    remediation="Ensure the spec exists in specs/active or specs/pending",
-                ))
+                return asdict(
+                    error_response(
+                        f"Spec '{spec_id}' not found",
+                        error_code="NOT_FOUND",
+                        error_type="analysis",
+                        data={"spec_id": spec_id, "specs_dir": str(specs_dir)},
+                        remediation="Ensure the spec exists in specs/active or specs/pending",
+                    )
+                )
 
             spec_data = load_spec(spec_file)
             if not spec_data:
-                return asdict(error_response(
-                    f"Failed to load spec '{spec_id}'",
-                    data={"spec_id": spec_id, "spec_file": str(spec_file)},
-                ))
+                return asdict(
+                    error_response(
+                        f"Failed to load spec '{spec_id}'",
+                        data={"spec_id": spec_id, "spec_file": str(spec_file)},
+                    )
+                )
 
             hierarchy = spec_data.get("hierarchy", {})
 
@@ -296,12 +318,14 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             for task_id, count in blocks_count.items():
                 if count >= threshold:
                     task = hierarchy.get(task_id, {})
-                    bottlenecks.append({
-                        "task_id": task_id,
-                        "title": task.get("title", ""),
-                        "status": task.get("status", ""),
-                        "blocks_count": count,
-                    })
+                    bottlenecks.append(
+                        {
+                            "task_id": task_id,
+                            "title": task.get("title", ""),
+                            "status": task.get("status", ""),
+                            "blocks_count": count,
+                        }
+                    )
 
             # Sort bottlenecks by blocks_count descending
             bottlenecks.sort(key=lambda x: x["blocks_count"], reverse=True)
@@ -334,22 +358,26 @@ def register_analysis_tools(mcp: FastMCP, config: ServerConfig) -> None:
             _metrics.counter(f"analysis.{tool_name}", labels={"status": "success"})
             _metrics.timer(f"analysis.{tool_name}.duration_ms", duration_ms)
 
-            return asdict(success_response(
-                spec_id=spec_id,
-                dependency_count=dependency_count,
-                bottlenecks=bottlenecks,
-                bottleneck_threshold=threshold,
-                circular_deps=circular_deps,
-                has_cycles=len(circular_deps) > 0,
-                duration_ms=round(duration_ms, 2),
-            ))
+            return asdict(
+                success_response(
+                    spec_id=spec_id,
+                    dependency_count=dependency_count,
+                    bottlenecks=bottlenecks,
+                    bottleneck_threshold=threshold,
+                    circular_deps=circular_deps,
+                    has_cycles=len(circular_deps) > 0,
+                    duration_ms=round(duration_ms, 2),
+                )
+            )
 
         except Exception as e:
             logger.exception(f"Unexpected error in {tool_name}")
             _metrics.counter(f"analysis.{tool_name}", labels={"status": "error"})
-            return asdict(error_response(
-                sanitize_error_message(e, context="analysis"),
-                error_code="INTERNAL_ERROR",
-                error_type="internal",
-                remediation="Check logs for details",
-            ))
+            return asdict(
+                error_response(
+                    sanitize_error_message(e, context="analysis"),
+                    error_code="INTERNAL_ERROR",
+                    error_type="internal",
+                    remediation="Check logs for details",
+                )
+            )

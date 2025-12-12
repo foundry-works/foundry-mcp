@@ -51,8 +51,6 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 | `next` | Task discovery + preparation | `task-` |
 | `update` | Status changes, journaling, lifecycle | `task-`, `journal-`, `spec-lifecycle-` |
 | `validate` | Validation, fix, reporting | `spec-validate-*`, `spec-report-*` |
-| `render` | AI-assisted rendering | `spec-render-*`, `review-*` |
-| `doc` | Code documentation + queries | `code-*`, `doc-*` |
 | `provider` | LLM provider management | `provider-*` |
 | `test` | Test discovery/execution | `test-*` |
 | `spec-mod` | Bulk spec modifications | `spec-apply-*`, `verification-*` |
@@ -89,9 +87,7 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 | `server.py` | `sdd-server-capabilities`, `spec-list-basic`, `spec-get`, `spec-get-hierarchy`, `task-get` | ✅ live | Registered via `canonical_tool` with canonical names only.
 | `tools/queries.py` | `spec-find`, `spec-list`, `task-query` | ✅ live | Canonical names registered across CLI + discovery listings.
 | `validation.py` | `spec-validate`, `spec-fix`, `spec-stats`, `spec-validate-fix` | ✅ live | Canonical names ship via `canonical_tool`; no legacy aliases remain.
-| `rendering.py` | `spec-render`, `spec-render-progress`, `task-list` | ✅ live | Rendering helpers expose canonical names for registry + docs.
 | `journal.py` | `journal-add`, `journal-list`, `task-block`, `task-unblock`, `task-list-blocked`, `journal-list-unjournaled` | ✅ live | Lifecycle + journaling helpers now use canonical prefixes only.
-| `docs.py` | `code-find-class`, `code-find-function`, `code-trace-calls`, `code-impact-analysis`, `code-get-callers`, `code-get-callees`, `doc-stats` | ✅ live | Code-analysis suite follows `code-`/`doc-` naming for easier discovery.
 | `discovery.py` | `tool-list`, `tool-get-schema`, `capability-get`, `capability-negotiate`, `tool-list-categories` | ✅ live | Discovery endpoints expose canonical tool/capability prefixes.
 | `lifecycle.py` | `spec-lifecycle-move`, `spec-lifecycle-activate`, `spec-lifecycle-complete`, `spec-lifecycle-archive`, `spec-lifecycle-state`, `spec-list-by-folder` | ✅ live | All lifecycle transitions aligned to `spec-lifecycle-*` verbs.
 | `tasks.py` | `task-prepare`, `task-next`, `task-info`, `task-check-deps`, `task-update-status`, `task-complete`, `task-start`, `task-progress` | ✅ live | Task operations standardized under canonical prefixes.

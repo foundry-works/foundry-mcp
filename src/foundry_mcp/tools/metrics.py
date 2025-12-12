@@ -6,23 +6,13 @@ for debugging and system monitoring across server restarts.
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Optional
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.responses import success_response, error_response, ErrorCode
-from foundry_mcp.core.pagination import (
-    encode_cursor,
-    decode_cursor,
-    paginated_response,
-    normalize_page_size,
-    CursorError,
-)
-
-logger = logging.getLogger(__name__)
+from foundry_mcp.tools.unified.metrics import legacy_metrics_action
 
 
 def register_metrics_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -67,70 +57,19 @@ def register_metrics_tools(mcp: FastMCP, config: ServerConfig) -> None:
         until: Optional[str] = None,
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
-    ) -> dict[str, Any]:
+    ) -> dict:
         """Query historical metrics with filtering."""
-        if not config.metrics_persistence.enabled:
-            return error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Metrics persistence is disabled",
-                details={"config_key": "metrics_persistence.enabled"},
-            )
 
-        try:
-            from foundry_mcp.core.metrics_store import get_metrics_store
-
-            store = get_metrics_store(config.metrics_persistence.get_storage_path())
-
-            # Handle pagination
-            page_size = normalize_page_size(limit)
-            offset = 0
-            if cursor:
-                try:
-                    cursor_data = decode_cursor(cursor)
-                    offset = cursor_data.get("offset", 0)
-                except CursorError as e:
-                    return error_response(
-                        error_code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Invalid cursor: {e}",
-                    )
-
-            # Query metrics from store
-            records = store.query(
-                metric_name=metric_name,
-                labels=labels,
-                since=since,
-                until=until,
-                limit=page_size + 1,  # +1 to detect if there are more
-                offset=offset,
-            )
-
-            # Check if there are more results
-            has_more = len(records) > page_size
-            if has_more:
-                records = records[:page_size]
-
-            # Generate next cursor if needed
-            next_cursor = None
-            if has_more:
-                next_cursor = encode_cursor({"offset": offset + page_size})
-
-            # Convert records to dicts
-            metrics_dicts = [record.to_dict() for record in records]
-
-            return paginated_response(
-                items=metrics_dicts,
-                total_count=store.count(),
-                cursor=next_cursor,
-                limit=page_size,
-                item_key="metrics",
-            )
-
-        except Exception as e:
-            logger.exception("Error querying metrics")
-            return error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to query metrics: {e}",
-            )
+        return legacy_metrics_action(
+            "query",
+            config=config,
+            metric_name=metric_name,
+            labels=labels,
+            since=since,
+            until=until,
+            limit=limit,
+            cursor=cursor,
+        )
 
     @canonical_tool(
         mcp,
@@ -158,59 +97,15 @@ def register_metrics_tools(mcp: FastMCP, config: ServerConfig) -> None:
     def metrics_list(
         limit: Optional[int] = None,
         cursor: Optional[str] = None,
-    ) -> dict[str, Any]:
+    ) -> dict:
         """List all persisted metrics with metadata."""
-        if not config.metrics_persistence.enabled:
-            return error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Metrics persistence is disabled",
-            )
 
-        try:
-            from foundry_mcp.core.metrics_store import get_metrics_store
-
-            store = get_metrics_store(config.metrics_persistence.get_storage_path())
-
-            # Get all metrics
-            all_metrics = store.list_metrics()
-
-            # Handle pagination
-            page_size = normalize_page_size(limit)
-            offset = 0
-            if cursor:
-                try:
-                    cursor_data = decode_cursor(cursor)
-                    offset = cursor_data.get("offset", 0)
-                except CursorError as e:
-                    return error_response(
-                        error_code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Invalid cursor: {e}",
-                    )
-
-            # Paginate results
-            total_count = len(all_metrics)
-            end_idx = offset + page_size
-            metrics_page = all_metrics[offset:end_idx]
-
-            # Generate next cursor if there are more
-            next_cursor = None
-            if end_idx < total_count:
-                next_cursor = encode_cursor({"offset": end_idx})
-
-            return paginated_response(
-                items=metrics_page,
-                total_count=total_count,
-                cursor=next_cursor,
-                limit=page_size,
-                item_key="metrics",
-            )
-
-        except Exception as e:
-            logger.exception("Error listing metrics")
-            return error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to list metrics: {e}",
-            )
+        return legacy_metrics_action(
+            "list",
+            config=config,
+            limit=limit,
+            cursor=cursor,
+        )
 
     @canonical_tool(
         mcp,
@@ -242,40 +137,17 @@ def register_metrics_tools(mcp: FastMCP, config: ServerConfig) -> None:
         labels: Optional[dict[str, str]] = None,
         since: Optional[str] = None,
         until: Optional[str] = None,
-    ) -> dict[str, Any]:
+    ) -> dict:
         """Get aggregated statistics for a metric."""
-        if not config.metrics_persistence.enabled:
-            return error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Metrics persistence is disabled",
-            )
 
-        if not metric_name:
-            return error_response(
-                error_code=ErrorCode.VALIDATION_ERROR,
-                message="metric_name is required",
-            )
-
-        try:
-            from foundry_mcp.core.metrics_store import get_metrics_store
-
-            store = get_metrics_store(config.metrics_persistence.get_storage_path())
-
-            summary = store.get_summary(
-                metric_name=metric_name,
-                labels=labels,
-                since=since,
-                until=until,
-            )
-
-            return success_response(data={"summary": summary})
-
-        except Exception as e:
-            logger.exception("Error getting metrics summary")
-            return error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to get metrics summary: {e}",
-            )
+        return legacy_metrics_action(
+            "summary",
+            config=config,
+            metric_name=metric_name,
+            labels=labels,
+            since=since,
+            until=until,
+        )
 
     @canonical_tool(
         mcp,
@@ -306,56 +178,16 @@ def register_metrics_tools(mcp: FastMCP, config: ServerConfig) -> None:
         retention_days: Optional[int] = None,
         max_records: Optional[int] = None,
         dry_run: bool = False,
-    ) -> dict[str, Any]:
+    ) -> dict:
         """Clean up old metric records."""
-        if not config.metrics_persistence.enabled:
-            return error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Metrics persistence is disabled",
-            )
 
-        # Use config defaults if not specified
-        effective_retention = retention_days or config.metrics_persistence.retention_days
-        effective_max = max_records or config.metrics_persistence.max_records
-
-        try:
-            from foundry_mcp.core.metrics_store import get_metrics_store
-
-            store = get_metrics_store(config.metrics_persistence.get_storage_path())
-
-            if dry_run:
-                # For dry run, just return current count vs what would remain
-                current_count = store.count()
-                return success_response(
-                    data={
-                        "current_count": current_count,
-                        "retention_days": effective_retention,
-                        "max_records": effective_max,
-                        "dry_run": True,
-                        "message": "Dry run - no records deleted",
-                    },
-                )
-
-            deleted_count = store.cleanup(
-                retention_days=effective_retention,
-                max_records=effective_max,
-            )
-
-            return success_response(
-                data={
-                    "deleted_count": deleted_count,
-                    "retention_days": effective_retention,
-                    "max_records": effective_max,
-                    "dry_run": False,
-                },
-            )
-
-        except Exception as e:
-            logger.exception("Error cleaning up metrics")
-            return error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to cleanup metrics: {e}",
-            )
+        return legacy_metrics_action(
+            "cleanup",
+            config=config,
+            retention_days=retention_days,
+            max_records=max_records,
+            dry_run=dry_run,
+        )
 
     @canonical_tool(
         mcp,
@@ -375,44 +207,7 @@ def register_metrics_tools(mcp: FastMCP, config: ServerConfig) -> None:
             JSON object with storage statistics
         """,
     )
-    def metrics_stats() -> dict[str, Any]:
+    def metrics_stats() -> dict:
         """Get overall metrics persistence statistics."""
-        if not config.metrics_persistence.enabled:
-            return error_response(
-                error_code=ErrorCode.UNAVAILABLE,
-                message="Metrics persistence is disabled",
-            )
 
-        try:
-            from foundry_mcp.core.metrics_store import get_metrics_store
-
-            store = get_metrics_store(config.metrics_persistence.get_storage_path())
-
-            metrics_list = store.list_metrics()
-            total_records = store.count()
-
-            # Calculate summary stats
-            unique_metrics = len(metrics_list)
-            total_samples = sum(m.get("count", 0) for m in metrics_list)
-
-            return success_response(
-                data={
-                    "total_records": total_records,
-                    "unique_metrics": unique_metrics,
-                    "total_samples": total_samples,
-                    "metrics_by_name": {
-                        m["metric_name"]: m["count"]
-                        for m in metrics_list
-                    },
-                    "storage_path": str(config.metrics_persistence.get_storage_path()),
-                    "retention_days": config.metrics_persistence.retention_days,
-                    "max_records": config.metrics_persistence.max_records,
-                },
-            )
-
-        except Exception as e:
-            logger.exception("Error getting metrics stats")
-            return error_response(
-                error_code=ErrorCode.INTERNAL_ERROR,
-                message=f"Failed to get metrics stats: {e}",
-            )
+        return legacy_metrics_action("stats", config=config)

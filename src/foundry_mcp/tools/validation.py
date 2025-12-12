@@ -24,8 +24,13 @@ from foundry_mcp.core.validation import (
     apply_fixes,
     calculate_stats,
 )
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
+from foundry_mcp.core.responses import (
+    success_response,
+    error_response,
+    sanitize_error_message,
+)
 from foundry_mcp.core.naming import canonical_tool
+from foundry_mcp.tools.unified.spec import legacy_spec_action
 
 logger = logging.getLogger(__name__)
 
@@ -64,50 +69,12 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - warning_count: Number of warnings
             - diagnostics: List of diagnostic objects with code, message, severity, etc.
         """
-        try:
-            if workspace:
-                specs_dir = find_specs_directory(workspace)
-            else:
-                specs_dir = config.specs_dir or find_specs_directory()
-
-            if not specs_dir:
-                return asdict(error_response("No specs directory found"))
-
-            spec_data = load_spec(spec_id, specs_dir)
-            if not spec_data:
-                return asdict(error_response(f"Spec not found: {spec_id}"))
-
-            result = validate_spec(spec_data)
-
-            # Convert diagnostics to dicts
-            diagnostics = []
-            for diag in result.diagnostics:
-                diagnostics.append(
-                    {
-                        "code": diag.code,
-                        "message": diag.message,
-                        "severity": diag.severity,
-                        "category": diag.category,
-                        "location": diag.location,
-                        "suggested_fix": diag.suggested_fix,
-                        "auto_fixable": diag.auto_fixable,
-                    }
-                )
-
-            return asdict(
-                success_response(
-                    spec_id=result.spec_id,
-                    is_valid=result.is_valid,
-                    error_count=result.error_count,
-                    warning_count=result.warning_count,
-                    info_count=result.info_count,
-                    diagnostics=diagnostics,
-                )
-            )
-
-        except Exception as e:
-            logger.error(f"Error validating spec: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
+        return legacy_spec_action(
+            "validate",
+            config=config,
+            spec_id=spec_id,
+            workspace=workspace,
+        )
 
     @canonical_tool(
         mcp,
@@ -138,6 +105,15 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
             - applied_actions: List of applied fix descriptions
             - backup_path: Path to backup file (if created)
         """
+        return legacy_spec_action(
+            "fix",
+            config=config,
+            spec_id=spec_id,
+            dry_run=dry_run,
+            create_backup=create_backup,
+            workspace=workspace,
+        )
+
         try:
             if workspace:
                 specs_dir = find_specs_directory(workspace)
@@ -211,7 +187,9 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error fixing spec: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
+            return asdict(
+                error_response(sanitize_error_message(e, context="spec validation"))
+            )
 
     @canonical_tool(
         mcp,
@@ -238,6 +216,13 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with spec statistics
         """
+        return legacy_spec_action(
+            "stats",
+            config=config,
+            spec_id=spec_id,
+            workspace=workspace,
+        )
+
         try:
             if workspace:
                 specs_dir = find_specs_directory(workspace)
@@ -275,7 +260,9 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error getting spec stats: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
+            return asdict(
+                error_response(sanitize_error_message(e, context="spec validation"))
+            )
 
     @canonical_tool(
         mcp,
@@ -299,6 +286,14 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             JSON object with validation result and fix summary
         """
+        return legacy_spec_action(
+            "validate-fix",
+            config=config,
+            spec_id=spec_id,
+            auto_fix=auto_fix,
+            workspace=workspace,
+        )
+
         try:
             if workspace:
                 specs_dir = find_specs_directory(workspace)
@@ -373,7 +368,9 @@ def register_validation_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         except Exception as e:
             logger.error(f"Error in validate_and_fix: {e}")
-            return asdict(error_response(sanitize_error_message(e, context="spec validation")))
+            return asdict(
+                error_response(sanitize_error_message(e, context="spec validation"))
+            )
 
     logger.debug(
         "Registered validation tools: spec-validate/spec-fix/spec-stats/spec-validate-fix"

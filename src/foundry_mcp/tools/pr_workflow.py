@@ -2,30 +2,19 @@
 PR workflow tools for foundry-mcp.
 
 Provides MCP tools for GitHub PR creation with SDD spec context.
-Uses direct Python API calls to core modules for progress and journal retrieval.
 PR creation requires external GitHub CLI integration and is not directly supported.
 """
 
-import logging
-import time
-from dataclasses import asdict
-from pathlib import Path
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.responses import success_response, error_response, sanitize_error_message
 from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.observability import get_metrics, mcp_tool
-from foundry_mcp.core.spec import find_specs_directory, load_spec, find_spec_file
-from foundry_mcp.core.progress import get_progress_summary
-from foundry_mcp.core.journal import get_journal_entries, JournalEntry
-
-logger = logging.getLogger(__name__)
-
-# Metrics singleton for PR workflow tools
-_metrics = get_metrics()
+from foundry_mcp.core.observability import mcp_tool
+from foundry_mcp.tools.unified.pr import legacy_pr_action
 
 
 def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
@@ -69,38 +58,19 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
             dry_run: Preview PR content without creating
 
         Returns:
-            JSON object with:
-            - spec_id: The specification used
-            - pr_url: URL of created PR (if not dry_run)
-            - title: PR title
-            - description_preview: Preview of generated description
-            - llm_status: LLM configuration status
-
-        LIMITATIONS:
-        - Requires GitHub CLI (gh) to be installed and authenticated
-        - Requires LLM for enhanced descriptions (falls back to basic if unavailable)
-        - Git working tree must be clean or changes staged
+            JSON object describing either the error or delegated action outcome.
         """
-        # PR creation requires GitHub CLI integration and LLM-powered description generation.
-        # This functionality is not available as a direct core API.
-        # Use the sdd-toolkit:sdd-pr skill for AI-powered PR creation.
-        return asdict(
-            error_response(
-                "PR creation requires GitHub CLI integration and LLM-powered description generation. "
-                "Use the sdd-toolkit:sdd-pr skill for AI-powered PR creation.",
-                error_code="NOT_IMPLEMENTED",
-                error_type="unavailable",
-                data={
-                    "spec_id": spec_id,
-                    "title": title,
-                    "base_branch": base_branch,
-                    "dry_run": dry_run,
-                    "alternative": "sdd-toolkit:sdd-pr skill",
-                    "feature_status": "requires_external_integration",
-                },
-                remediation="Use the sdd-toolkit:sdd-pr skill which provides "
-                "GitHub CLI integration and LLM-powered PR description generation.",
-            )
+
+        return legacy_pr_action(
+            action="create",
+            spec_id=spec_id,
+            title=title,
+            base_branch=base_branch,
+            include_journals=include_journals,
+            include_diffs=include_diffs,
+            model=model,
+            path=path,
+            dry_run=dry_run,
         )
 
     @canonical_tool(
@@ -135,104 +105,14 @@ def register_pr_workflow_tools(mcp: FastMCP, config: ServerConfig) -> None:
             path: Project root path
 
         Returns:
-            JSON object with:
-            - spec_id: The specification ID
-            - title: Spec title
-            - tasks: Completed tasks (if requested)
-            - journals: Recent journal entries (if requested)
-            - progress: Progress statistics (if requested)
+            JSON object with spec context for PR authoring.
         """
-        start_time = time.perf_counter()
 
-        try:
-            # Resolve workspace path
-            ws_path = Path(path) if path else Path.cwd()
-
-            # Find and load spec
-            specs_dir = find_specs_directory(ws_path)
-            if not specs_dir:
-                return asdict(
-                    error_response(
-                        f"Specs directory not found in {ws_path}",
-                        data={"spec_id": spec_id, "workspace": str(ws_path)},
-                    )
-                )
-
-            spec_file = find_spec_file(spec_id, specs_dir)
-            if not spec_file:
-                return asdict(
-                    error_response(
-                        f"Spec '{spec_id}' not found",
-                        data={"spec_id": spec_id, "specs_dir": str(specs_dir)},
-                    )
-                )
-
-            spec_data = load_spec(spec_file)
-            if not spec_data:
-                return asdict(
-                    error_response(
-                        f"Failed to load spec '{spec_id}'",
-                        data={"spec_id": spec_id, "spec_file": str(spec_file)},
-                    )
-                )
-
-            # Build context response
-            context: Dict[str, Any] = {
-                "spec_id": spec_id,
-                "title": spec_data.get("metadata", {}).get("title", ""),
-            }
-
-            # Get progress information
-            if include_progress:
-                progress_data = get_progress_summary(spec_data)
-                context["progress"] = {
-                    "total_tasks": progress_data.get("total_tasks", 0),
-                    "completed_tasks": progress_data.get("completed_tasks", 0),
-                    "percentage": progress_data.get("percentage", 0),
-                    "current_phase": progress_data.get("current_phase"),
-                }
-
-            # Get completed tasks if requested
-            if include_tasks:
-                hierarchy = spec_data.get("hierarchy", {})
-                completed_tasks = []
-                for node_id, node in hierarchy.items():
-                    if node.get("type") in ("task", "subtask") and node.get("status") == "completed":
-                        completed_tasks.append({
-                            "task_id": node_id,
-                            "title": node.get("title", ""),
-                            "completed_at": node.get("metadata", {}).get("completed_at", ""),
-                        })
-                context["tasks"] = completed_tasks
-
-            # Get journal entries if requested
-            if include_journals:
-                journal_entries = get_journal_entries(spec_data, limit=5)
-                context["journals"] = [
-                    {
-                        "timestamp": entry.timestamp,
-                        "entry_type": entry.entry_type,
-                        "title": entry.title,
-                        "task_id": entry.task_id,
-                    }
-                    for entry in journal_entries
-                ]
-
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            _metrics.timer("pr_workflow.pr_get_spec_context.duration_ms", duration_ms)
-
-            return asdict(
-                success_response(
-                    duration_ms=round(duration_ms, 2),
-                    **context,
-                )
-            )
-
-        except Exception as e:
-            logger.exception(f"Error getting spec context for {spec_id}")
-            return asdict(
-                error_response(
-                    sanitize_error_message(e, context="PR workflow"),
-                    data={"spec_id": spec_id},
-                )
-            )
+        return legacy_pr_action(
+            action="get-context",
+            spec_id=spec_id,
+            include_tasks=include_tasks,
+            include_journals=include_journals,
+            include_progress=include_progress,
+            path=path,
+        )

@@ -5,6 +5,7 @@ Provides MCP tools and resources for SDD spec management.
 """
 
 import logging
+import os
 import sys
 from dataclasses import asdict
 from typing import Optional
@@ -12,7 +13,11 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import get_config, ServerConfig
-from foundry_mcp.core.observability import audit_log, get_metrics, get_observability_manager
+from foundry_mcp.core.observability import (
+    audit_log,
+    get_metrics,
+    get_observability_manager,
+)
 from foundry_mcp.core.responses import success_response, error_response
 from foundry_mcp.core.pagination import (
     encode_cursor,
@@ -46,9 +51,7 @@ from foundry_mcp.tools.queries import register_query_tools
 from foundry_mcp.tools.tasks import register_task_tools
 from foundry_mcp.tools.validation import register_validation_tools
 from foundry_mcp.tools.journal import register_journal_tools
-from foundry_mcp.tools.rendering import register_rendering_tools
 from foundry_mcp.tools.lifecycle import register_lifecycle_tools
-from foundry_mcp.tools.docs import register_docs_tools
 from foundry_mcp.tools.testing import register_testing_tools
 from foundry_mcp.tools.discovery import register_discovery_tools
 from foundry_mcp.tools.environment import register_environment_tools
@@ -181,6 +184,22 @@ def _init_metrics_persistence(config: ServerConfig) -> None:
 # This avoids any interference with MCP stdio transport.
 
 
+def _apply_feature_flag_overrides_from_env() -> None:
+    """Apply comma-separated feature flag overrides.
+
+    The consolidation specs run pytest with FEATURE_FLAGS set so unified routers
+    can be exercised without changing defaults.
+    """
+
+    raw = os.environ.get("FEATURE_FLAGS")
+    if not raw:
+        return
+
+    flag_service = get_flag_service()
+    for name in [part.strip() for part in raw.split(",") if part.strip()]:
+        flag_service.set_override("anonymous", name, True)
+
+
 def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     """
     Create and configure the FastMCP server instance.
@@ -196,6 +215,8 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
 
     # Setup logging
     config.setup_logging()
+
+    _apply_feature_flag_overrides_from_env()
 
     # Initialize observability (OTel + Prometheus)
     _init_observability(config)
@@ -215,32 +236,38 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     )
 
     # Register tools
-    _register_tools(mcp, config)
-    register_query_tools(mcp, config)
-    register_task_tools(mcp, config)
-    register_validation_tools(mcp, config)
-    register_journal_tools(mcp, config)
-    register_rendering_tools(mcp, config)
-    register_lifecycle_tools(mcp, config)
-    register_docs_tools(mcp, config)
-    register_testing_tools(mcp, config)
-    register_discovery_tools(mcp, config)
-    register_environment_tools(mcp, config)
-    register_health_tools(mcp, config)
-    register_spec_helper_tools(mcp, config)
-    register_authoring_tools(mcp, config)
-    register_analysis_tools(mcp, config)
-    register_mutation_tools(mcp, config)
-    register_reporting_tools(mcp, config)
-    register_utility_tools(mcp, config)
-    register_context_tools(mcp, config)
-    register_review_tools(mcp, config)
-    register_pr_workflow_tools(mcp, config)
-    register_documentation_tools(mcp, config)
-    register_provider_tools(mcp, config)
-    register_error_tools(mcp, config)
-    register_metrics_tools(mcp, config)
-    register_plan_review_tools(mcp, config)
+    # When unified_manifest is enabled we only register the 17 unified routers.
+    # Legacy tools remain available by disabling the flag for rollback.
+    flag_service = get_flag_service()
+    if flag_service.is_enabled("unified_manifest"):
+        from foundry_mcp.tools.unified import register_unified_tools
+
+        register_unified_tools(mcp, config)
+    else:
+        _register_tools(mcp, config)
+        register_query_tools(mcp, config)
+        register_task_tools(mcp, config)
+        register_validation_tools(mcp, config)
+        register_journal_tools(mcp, config)
+        register_lifecycle_tools(mcp, config)
+        register_testing_tools(mcp, config)
+        register_discovery_tools(mcp, config)
+        register_environment_tools(mcp, config)
+        register_health_tools(mcp, config)
+        register_spec_helper_tools(mcp, config)
+        register_authoring_tools(mcp, config)
+        register_analysis_tools(mcp, config)
+        register_mutation_tools(mcp, config)
+        register_reporting_tools(mcp, config)
+        register_utility_tools(mcp, config)
+        register_context_tools(mcp, config)
+        register_review_tools(mcp, config)
+        register_pr_workflow_tools(mcp, config)
+        register_documentation_tools(mcp, config)
+        register_provider_tools(mcp, config)
+        register_error_tools(mcp, config)
+        register_metrics_tools(mcp, config)
+        register_plan_review_tools(mcp, config)
 
     # Register resources
     _register_resources(mcp, config)
@@ -457,8 +484,14 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
             return asdict(
                 error_response(
                     "max_depth must be between 0 and 10",
-                    code="VALIDATION_ERROR",
-                    details={"field": "max_depth", "received": max_depth, "valid_range": "0-10"},
+                    error_code="VALIDATION_ERROR",
+                    error_type="validation",
+                    remediation="Provide max_depth between 0 and 10",
+                    details={
+                        "field": "max_depth",
+                        "received": max_depth,
+                        "valid_range": "0-10",
+                    },
                 )
             )
 
@@ -475,7 +508,9 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
                 return asdict(
                     error_response(
                         f"Invalid cursor: {e.reason}",
-                        code="INVALID_CURSOR",
+                        error_code="INVALID_FORMAT",
+                        error_type="validation",
+                        remediation="Use the cursor returned in meta.pagination",
                         details={"cursor": cursor},
                     )
                 )
@@ -491,7 +526,9 @@ def _register_tools(mcp: FastMCP, config: ServerConfig) -> None:
 
         # Apply depth and metadata filtering for compact output
         if max_depth > 0 or not include_metadata:
-            filtered_hierarchy = _filter_hierarchy(full_hierarchy, max_depth, include_metadata)
+            filtered_hierarchy = _filter_hierarchy(
+                full_hierarchy, max_depth, include_metadata
+            )
         else:
             filtered_hierarchy = full_hierarchy
 
@@ -628,17 +665,26 @@ def main() -> None:
         # Shutdown observability to flush pending traces/metrics
         get_observability_manager().shutdown()
         sys.exit(0)
-    except BaseException as e:
+    except BaseException as exc:
         # Log detailed error info, especially for ExceptionGroups
-        logger.error(f"Server error: {type(e).__name__}: {e}")
-        if hasattr(e, 'exceptions'):
-            # Handle ExceptionGroup/TaskGroup
-            for i, sub_exc in enumerate(e.exceptions):
-                logger.error(f"  Sub-exception {i}: {type(sub_exc).__name__}: {sub_exc}")
+        logger.error(f"Server error: {type(exc).__name__}: {exc}")
+
+        exceptions = getattr(exc, "exceptions", None)
+        if isinstance(exceptions, (list, tuple)):
+            for i, sub_exc in enumerate(exceptions):
+                logger.error(
+                    f"  Sub-exception {i}: {type(sub_exc).__name__}: {sub_exc}"
+                )
                 import traceback
-                tb_str = ''.join(traceback.format_exception(type(sub_exc), sub_exc, sub_exc.__traceback__))
+
+                tb_str = "".join(
+                    traceback.format_exception(
+                        type(sub_exc), sub_exc, sub_exc.__traceback__
+                    )
+                )
                 logger.error(f"  Traceback:\n{tb_str}")
-        audit_log("tool_invocation", tool="server_error", error=str(e), success=False)
+
+        audit_log("tool_invocation", tool="server_error", error=str(exc), success=False)
         # Shutdown observability to flush pending traces/metrics
         get_observability_manager().shutdown()
         sys.exit(1)
