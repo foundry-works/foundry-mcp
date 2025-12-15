@@ -18,7 +18,12 @@ from foundry_mcp.core.health import (
 )
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.prometheus import get_prometheus_exporter
-from foundry_mcp.core.responses import error_response, success_response
+from foundry_mcp.core.responses import (
+    ErrorCode,
+    ErrorType,
+    error_response,
+    success_response,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -80,8 +85,10 @@ def perform_health_liveness() -> dict:
         return asdict(
             error_response(
                 f"Liveness check failed: {exc}",
-                error_code="HEALTH_CHECK_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check server logs and retry.",
+                details={"check_type": "liveness"},
             )
         )
 
@@ -102,8 +109,10 @@ def perform_health_readiness() -> dict:
         return asdict(
             error_response(
                 f"Readiness check failed: {exc}",
-                error_code="HEALTH_CHECK_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check server logs and retry.",
+                details={"check_type": "readiness"},
             )
         )
 
@@ -128,8 +137,10 @@ def perform_health_check(include_details: bool = True) -> dict:
         return asdict(
             error_response(
                 f"Health check failed: {exc}",
-                error_code="HEALTH_CHECK_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check server logs and retry.",
+                details={"check_type": "check"},
             )
         )
 
@@ -181,9 +192,10 @@ def _dispatch_health_action(action: str, *, include_details: bool = True) -> dic
         return asdict(
             error_response(
                 f"Unsupported health action '{action}'. Allowed actions: {allowed}",
-                error_code="INVALID_ACTION",
-                error_type="validation",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation=f"Use one of: {allowed}",
+                details={"action": action, "allowed_actions": exc.allowed_actions},
             )
         )
 

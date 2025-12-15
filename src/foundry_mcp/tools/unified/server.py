@@ -224,7 +224,20 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             remediation="Provide a tag name like 'read'",
         )
 
-    include_deprecated = bool(payload.get("include_deprecated", False))
+    include_deprecated_value = payload.get("include_deprecated", False)
+    if include_deprecated_value is not None and not isinstance(
+        include_deprecated_value, bool
+    ):
+        return _validation_error(
+            message="include_deprecated must be a boolean",
+            request_id=request_id,
+            remediation="Provide include_deprecated=true|false",
+        )
+    include_deprecated = (
+        include_deprecated_value
+        if isinstance(include_deprecated_value, bool)
+        else False
+    )
 
     cursor = payload.get("cursor")
     if cursor is not None and not isinstance(cursor, str):
@@ -404,10 +417,57 @@ def _handle_capabilities(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
 
 def _handle_context(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
-    include_llm = bool(payload.get("include_llm", True))
-    include_workflow = bool(payload.get("include_workflow", True))
-    include_workspace = bool(payload.get("include_workspace", True))
-    include_capabilities = bool(payload.get("include_capabilities", True))
+    request_id = _request_id()
+
+    include_llm_value = payload.get("include_llm", True)
+    if include_llm_value is not None and not isinstance(include_llm_value, bool):
+        return _validation_error(
+            message="include_llm must be a boolean",
+            request_id=request_id,
+            remediation="Provide include_llm=true|false",
+        )
+    include_llm = include_llm_value if isinstance(include_llm_value, bool) else True
+
+    include_workflow_value = payload.get("include_workflow", True)
+    if include_workflow_value is not None and not isinstance(
+        include_workflow_value, bool
+    ):
+        return _validation_error(
+            message="include_workflow must be a boolean",
+            request_id=request_id,
+            remediation="Provide include_workflow=true|false",
+        )
+    include_workflow = (
+        include_workflow_value if isinstance(include_workflow_value, bool) else True
+    )
+
+    include_workspace_value = payload.get("include_workspace", True)
+    if include_workspace_value is not None and not isinstance(
+        include_workspace_value, bool
+    ):
+        return _validation_error(
+            message="include_workspace must be a boolean",
+            request_id=request_id,
+            remediation="Provide include_workspace=true|false",
+        )
+    include_workspace = (
+        include_workspace_value if isinstance(include_workspace_value, bool) else True
+    )
+
+    include_capabilities_value = payload.get("include_capabilities", True)
+    if include_capabilities_value is not None and not isinstance(
+        include_capabilities_value, bool
+    ):
+        return _validation_error(
+            message="include_capabilities must be a boolean",
+            request_id=request_id,
+            remediation="Provide include_capabilities=true|false",
+        )
+    include_capabilities = (
+        include_capabilities_value
+        if isinstance(include_capabilities_value, bool)
+        else True
+    )
 
     return build_server_context_response(
         config,

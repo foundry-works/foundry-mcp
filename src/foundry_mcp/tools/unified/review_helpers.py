@@ -76,7 +76,7 @@ def _run_quick_review(
                 dry_run=True,
                 llm_status=llm_status,
                 message="Dry run - quick review skipped",
-                duration_ms=round(duration_ms, 2),
+                telemetry={"duration_ms": round(duration_ms, 2)},
             )
         )
 
@@ -99,9 +99,13 @@ def _run_quick_review(
 
     payload = asdict(result)
     payload["llm_status"] = llm_status
-    payload["duration_ms"] = round(duration_ms, 2)
 
-    return asdict(success_response(**payload))
+    return asdict(
+        success_response(
+            **payload,
+            telemetry={"duration_ms": round(duration_ms, 2)},
+        )
+    )
 
 
 def _run_ai_review(
@@ -179,7 +183,7 @@ def _run_ai_review(
                     if context.stats
                     else 0,
                 },
-                duration_ms=round(duration_ms, 2),
+                telemetry={"duration_ms": round(duration_ms, 2)},
             )
         )
 
@@ -290,6 +294,6 @@ def _run_ai_review(
                 if context.progress
                 else 0,
             },
-            duration_ms=round(duration_ms, 2),
+            telemetry={"duration_ms": round(duration_ms, 2)},
         )
     )

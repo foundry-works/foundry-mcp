@@ -111,8 +111,23 @@ def _handle_run(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         timeout = timeout_int
 
-    verbose = bool(payload.get("verbose", True))
-    fail_fast = bool(payload.get("fail_fast", False))
+    verbose_value = payload.get("verbose", True)
+    if verbose_value is not None and not isinstance(verbose_value, bool):
+        return _validation_error(
+            message="verbose must be a boolean",
+            request_id=request_id,
+            remediation="Provide verbose=true|false",
+        )
+    verbose = verbose_value if isinstance(verbose_value, bool) else True
+
+    fail_fast_value = payload.get("fail_fast", False)
+    if fail_fast_value is not None and not isinstance(fail_fast_value, bool):
+        return _validation_error(
+            message="fail_fast must be a boolean",
+            request_id=request_id,
+            remediation="Provide fail_fast=true|false",
+        )
+    fail_fast = fail_fast_value if isinstance(fail_fast_value, bool) else False
     markers = payload.get("markers")
     if markers is not None and not isinstance(markers, str):
         return _validation_error(
@@ -129,7 +144,16 @@ def _handle_run(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             remediation="Provide an absolute path to the workspace",
         )
 
-    include_passed = bool(payload.get("include_passed", False))
+    include_passed_value = payload.get("include_passed", False)
+    if include_passed_value is not None and not isinstance(include_passed_value, bool):
+        return _validation_error(
+            message="include_passed must be a boolean",
+            request_id=request_id,
+            remediation="Provide include_passed=true|false",
+        )
+    include_passed = (
+        include_passed_value if isinstance(include_passed_value, bool) else False
+    )
 
     runner = _get_runner(config, workspace)
 
@@ -189,7 +213,8 @@ def _handle_run(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             filtered=not include_passed,
             command=result.command,
             duration=result.duration,
-            metadata=dict(result.metadata or {}, duration_ms=round(elapsed_ms, 2)),
+            metadata=dict(result.metadata or {}),
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
             request_id=request_id,
         )
     )
@@ -258,7 +283,8 @@ def _handle_discover(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                 }
                 for t in result.tests
             ],
-            metadata=dict(result.metadata or {}, duration_ms=round(elapsed_ms, 2)),
+            metadata=dict(result.metadata or {}),
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
             request_id=request_id,
         )
     )

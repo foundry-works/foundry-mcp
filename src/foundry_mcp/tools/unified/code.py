@@ -402,7 +402,7 @@ def _handle_find_class(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
             language=language,
             scanned_files=len(files),
             request_id=request_id,
-            duration_ms=round(elapsed_ms, 2),
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
             warnings=warnings or None,
         )
     )
@@ -477,7 +477,7 @@ def _handle_find_function(*, config: ServerConfig, payload: Dict[str, Any]) -> d
             language=language,
             scanned_files=len(files),
             request_id=request_id,
-            duration_ms=round(elapsed_ms, 2),
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
             warnings=warnings or None,
         )
     )
@@ -682,7 +682,7 @@ def _handle_call_graph(
             traces=traces,
             scanned_files=len(files),
             request_id=request_id,
-            telemetry={"duration_ms": round(elapsed_ms, 2), "depth": depth},
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
             warnings=warnings or None,
         )
     )
@@ -752,7 +752,7 @@ def _handle_occurrences(
             edges=[],
             scanned_files=len(files),
             request_id=request_id,
-            duration_ms=round(elapsed_ms, 2),
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
             warnings=warnings or None,
         )
     )
@@ -844,7 +844,7 @@ def _handle_impact(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             details={"files_by_symbol": touched_files},
             scanned_files=len(files),
             request_id=request_id,
-            duration_ms=round(elapsed_ms, 2),
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
     )
 

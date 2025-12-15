@@ -33,13 +33,13 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spec
-from foundry_mcp.tools.unified.documentation_helpers import (
+from .documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
     _build_spec_requirements,
     _build_test_results,
 )
-from foundry_mcp.tools.unified.review_helpers import (
+from .review_helpers import (
     DEFAULT_AI_TIMEOUT,
     REVIEW_TYPES,
     _get_llm_status,
@@ -150,7 +150,18 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     else:
         specs_dir = config.specs_dir
 
-    dry_run = bool(payload.get("dry_run", False))
+    dry_run_value = payload.get("dry_run", False)
+    if dry_run_value is not None and not isinstance(dry_run_value, bool):
+        return asdict(
+            error_response(
+                "dry_run must be a boolean",
+                error_code=ErrorCode.INVALID_FORMAT,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide dry_run=true|false",
+                details={"field": "dry_run"},
+            )
+        )
+    dry_run = dry_run_value if isinstance(dry_run_value, bool) else False
 
     if review_type == "quick":
         return _run_quick_review(
@@ -183,6 +194,23 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
             )
         )
 
+    consultation_cache_value = payload.get("consultation_cache", True)
+    if consultation_cache_value is not None and not isinstance(
+        consultation_cache_value, bool
+    ):
+        return asdict(
+            error_response(
+                "consultation_cache must be a boolean",
+                error_code=ErrorCode.INVALID_FORMAT,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide consultation_cache=true|false",
+                details={"field": "consultation_cache"},
+            )
+        )
+    consultation_cache = (
+        consultation_cache_value if isinstance(consultation_cache_value, bool) else True
+    )
+
     return _run_ai_review(
         spec_id=spec_id,
         specs_dir=specs_dir,
@@ -190,7 +218,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         ai_provider=ai_provider,
         model=model,
         ai_timeout=ai_timeout,
-        consultation_cache=bool(payload.get("consultation_cache", True)),
+        consultation_cache=consultation_cache,
         dry_run=dry_run,
         llm_status=llm_status,
         start_time=start_time,
@@ -225,7 +253,7 @@ def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
                 review_types=REVIEW_TYPES,
                 available_count=sum(1 for tool in tools_info if tool.get("available")),
                 total_count=len(tools_info),
-                duration_ms=round(duration_ms, 2),
+                telemetry={"duration_ms": round(duration_ms, 2)},
             )
         )
 
@@ -293,7 +321,7 @@ def _handle_list_plan_tools(*, config: ServerConfig, payload: Dict[str, Any]) ->
                 plan_tools=plan_tools,
                 llm_status=llm_status,
                 recommendations=recommendations,
-                duration_ms=round(duration_ms, 2),
+                telemetry={"duration_ms": round(duration_ms, 2)},
             )
         )
 
@@ -318,8 +346,8 @@ def _handle_parse_feedback(*, config: ServerConfig, payload: Dict[str, Any]) -> 
         error_response(
             "Review feedback parsing requires complex text/markdown parsing. "
             "Use the sdd-toolkit:sdd-modify skill to apply review feedback.",
-            error_code="NOT_IMPLEMENTED",
-            error_type="unavailable",
+            error_code=ErrorCode.UNAVAILABLE,
+            error_type=ErrorType.UNAVAILABLE,
             data={
                 "spec_id": spec_id,
                 "review_path": review_path,
@@ -348,8 +376,33 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     ai_tools = payload.get("ai_tools")
     model = payload.get("model")
     consensus_threshold = payload.get("consensus_threshold", 2)
-    incremental = bool(payload.get("incremental", False))
-    include_tests = bool(payload.get("include_tests", True))
+    incremental_value = payload.get("incremental", False)
+    if incremental_value is not None and not isinstance(incremental_value, bool):
+        return asdict(
+            error_response(
+                "incremental must be a boolean",
+                error_code=ErrorCode.INVALID_FORMAT,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide incremental=true|false",
+                details={"field": "incremental"},
+            )
+        )
+    incremental = incremental_value if isinstance(incremental_value, bool) else False
+
+    include_tests_value = payload.get("include_tests", True)
+    if include_tests_value is not None and not isinstance(include_tests_value, bool):
+        return asdict(
+            error_response(
+                "include_tests must be a boolean",
+                error_code=ErrorCode.INVALID_FORMAT,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide include_tests=true|false",
+                details={"field": "include_tests"},
+            )
+        )
+    include_tests = (
+        include_tests_value if isinstance(include_tests_value, bool) else True
+    )
     base_branch = payload.get("base_branch", "main")
     workspace = payload.get("workspace")
 
@@ -477,7 +530,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             error_response(
                 "Fidelity review requested but no providers available",
                 error_code=ErrorCode.AI_NO_PROVIDER,
-                error_type="unavailable",
+                error_type=ErrorType.UNAVAILABLE,
                 data={"spec_id": spec_id, "requested_provider": first_provider},
                 remediation="Install/configure an AI provider (claude/gemini/codex)",
             )
@@ -523,7 +576,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                 "provider_id": getattr(result, "provider_id", None),
                 "model_used": getattr(result, "model_used", None),
             },
-            duration_ms=round(duration_ms, 2),
+            telemetry={"duration_ms": round(duration_ms, 2)},
         )
     )
 

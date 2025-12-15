@@ -31,6 +31,19 @@
             "default": true,
             "description": "When action=check, include dependency details"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: health action=liveness",
+            "input": {
+              "action": "liveness"
+            }
+          }
         ]
       },
       {
@@ -49,6 +62,19 @@
               "review"
             ],
             "description": "Planning action"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: plan action=create",
+            "input": {
+              "action": "create"
+            }
           }
         ]
       },
@@ -73,6 +99,19 @@
             "type": "string",
             "required": false,
             "description": "Spec ID for context/PR creation"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: pr action=create",
+            "input": {
+              "action": "create"
+            }
           }
         ]
       },
@@ -101,6 +140,19 @@
             "required": false,
             "description": "Error ID (required for action=get)"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: error action=list",
+            "input": {
+              "action": "list"
+            }
+          }
         ]
       },
       {
@@ -127,6 +179,19 @@
             "type": "string",
             "required": false,
             "description": "Metric name (required for some actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: metrics action=query",
+            "input": {
+              "action": "query"
+            }
           }
         ]
       },
@@ -158,6 +223,19 @@
             "type": "string",
             "required": false,
             "description": "Task ID filter"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: journal action=add",
+            "input": {
+              "action": "add"
+            }
           }
         ]
       },
@@ -245,6 +323,19 @@
             "required": false,
             "description": "Workspace path override"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: authoring action=spec-create",
+            "input": {
+              "action": "spec-create"
+            }
+          }
         ]
       },
       {
@@ -269,6 +360,19 @@
             "type": "string",
             "required": false,
             "description": "Provider identifier (required for some actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: provider action=list",
+            "input": {
+              "action": "list"
+            }
           }
         ]
       },
@@ -298,6 +402,19 @@
             "required": false,
             "description": "Workspace path (default: current)"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: environment action=init",
+            "input": {
+              "action": "init"
+            }
+          }
         ]
       },
       {
@@ -325,6 +442,19 @@
             "required": false,
             "description": "Target spec ID"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: lifecycle action=move",
+            "input": {
+              "action": "move"
+            }
+          }
         ]
       },
       {
@@ -348,6 +478,19 @@
             "type": "string",
             "required": false,
             "description": "Target spec ID"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: verification action=add",
+            "input": {
+              "action": "add"
+            }
           }
         ]
       },
@@ -402,6 +545,19 @@
             "default": false,
             "description": "Preview changes without saving (supported for update-estimate/update-metadata/add/remove)"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: task action=prepare",
+            "input": {
+              "action": "prepare"
+            }
+          }
         ]
       },
       {
@@ -433,6 +589,19 @@
             "required": false,
             "description": "Target spec ID (required for most actions)"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: spec action=find",
+            "input": {
+              "action": "find"
+            }
+          }
         ]
       },
       {
@@ -461,6 +630,19 @@
             "required": false,
             "description": "Target spec ID (required for spec/fidelity actions)"
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: review action=spec",
+            "input": {
+              "action": "spec"
+            }
+          }
         ]
       },
       {
@@ -488,6 +670,19 @@
             "type": "string",
             "required": false,
             "description": "Symbol name (required for most actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: code action=find-class",
+            "input": {
+              "action": "find-class"
+            }
           }
         ]
       },
@@ -569,6 +764,19 @@
             "required": false,
             "default": true
           }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: server action=tools",
+            "input": {
+              "action": "tools"
+            }
+          }
         ]
       },
       {
@@ -597,6 +805,19 @@
               "full"
             ],
             "description": "Preset for action=run"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: test action=run",
+            "input": {
+              "action": "run"
+            }
           }
         ]
       }

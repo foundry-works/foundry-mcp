@@ -4,9 +4,9 @@
 
 ## 1.1 Parsers & Entry Points
 
-- Use `foundry_mcp.sdd_cli.runtime.create_parser()` (or the shared helper) for every binary (`sdd`, `sdd-native`).
-- Support the global options set in [docs/mcp_best_practices/13-tool-discovery.md](../mcp_best_practices/13-tool-discovery.md) (verbosity flags, `--json/--compact`, workspace overrides) so tooling can share scripts.
-- Never hand-roll argparse objects inside subcommands; instead, register handlers through the runtime registry to guarantee consistent help output.
+- Use the shared Click entry point in `foundry_mcp.cli.main` for every binary (`sdd`, `sdd-native`).
+- Support the global options set in [docs/mcp_best_practices/13-tool-discovery.md](../mcp_best_practices/13-tool-discovery.md) (including `--json` and workspace overrides) so tooling can share scripts.
+- Register command groups through the CLI registry (`foundry_mcp.cli.registry`) to keep help output consistent.
 
 ## 1.2 Verbosity & Output Filtering
 

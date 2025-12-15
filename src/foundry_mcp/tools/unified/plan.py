@@ -23,6 +23,8 @@ from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import available_providers
 from foundry_mcp.core.responses import (
+    ErrorCode,
+    ErrorType,
     ai_no_provider_error,
     error_response,
     success_response,
@@ -213,9 +215,10 @@ def perform_plan_review(
         return asdict(
             error_response(
                 f"Invalid review_type: {review_type}. Must be one of: {', '.join(REVIEW_TYPES)}",
-                error_code="INVALID_REVIEW_TYPE",
-                error_type="validation",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation=f"Use one of: {', '.join(REVIEW_TYPES)}",
+                details={"review_type": review_type, "allowed": REVIEW_TYPES},
             )
         )
 
@@ -231,8 +234,8 @@ def perform_plan_review(
             return asdict(
                 error_response(
                     f"Input validation failed for {field_name}",
-                    error_code="VALIDATION_ERROR",
-                    error_type="security",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
                     remediation="Remove special characters or instruction-like patterns from input.",
                 )
             )
@@ -251,9 +254,10 @@ def perform_plan_review(
         return asdict(
             error_response(
                 f"Plan file not found: {plan_path}",
-                error_code="PLAN_NOT_FOUND",
-                error_type="not_found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
                 remediation="Ensure the markdown plan exists at the specified path",
+                details={"plan_path": plan_path},
             )
         )
 
@@ -267,9 +271,10 @@ def perform_plan_review(
         return asdict(
             error_response(
                 f"Failed to read plan file: {exc}",
-                error_code="READ_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
                 remediation="Check file permissions and encoding",
+                details={"plan_path": str(plan_file)},
             )
         )
 
@@ -281,9 +286,10 @@ def perform_plan_review(
         return asdict(
             error_response(
                 "Plan file is empty",
-                error_code="EMPTY_PLAN",
-                error_type="validation",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation="Add content to the markdown plan before reviewing",
+                details={"plan_path": str(plan_file)},
             )
         )
 
@@ -339,8 +345,8 @@ def perform_plan_review(
                 return asdict(
                     error_response(
                         f"AI consultation failed: {result.error}",
-                        error_code="AI_PROVIDER_ERROR",
-                        error_type="ai_provider",
+                        error_code=ErrorCode.AI_PROVIDER_ERROR,
+                        error_type=ErrorType.AI_PROVIDER,
                         remediation="Check AI provider configuration or try again later",
                     )
                 )
@@ -351,8 +357,8 @@ def perform_plan_review(
                 return asdict(
                     error_response(
                         "AI consultation failed - no successful responses",
-                        error_code="AI_PROVIDER_ERROR",
-                        error_type="ai_provider",
+                        error_code=ErrorCode.AI_PROVIDER_ERROR,
+                        error_type=ErrorType.AI_PROVIDER,
                         remediation="Check AI provider configuration or try again later",
                     )
                 )
@@ -371,8 +377,8 @@ def perform_plan_review(
             return asdict(
                 error_response(
                     "Unsupported consultation result",
-                    error_code="AI_PROVIDER_ERROR",
-                    error_type="ai_provider",
+                    error_code=ErrorCode.AI_PROVIDER_ERROR,
+                    error_type=ErrorType.AI_PROVIDER,
                 )
             )
     except Exception as exc:  # pragma: no cover - orchestration errors
@@ -383,8 +389,8 @@ def perform_plan_review(
         return asdict(
             error_response(
                 f"AI consultation failed: {exc}",
-                error_code="AI_PROVIDER_ERROR",
-                error_type="ai_provider",
+                error_code=ErrorCode.AI_PROVIDER_ERROR,
+                error_type=ErrorType.AI_PROVIDER,
                 remediation="Check AI provider configuration or try again later",
             )
         )
@@ -397,8 +403,8 @@ def perform_plan_review(
         return asdict(
             error_response(
                 "No specs directory found for storing plan review",
-                error_code="SPECS_NOT_FOUND",
-                error_type="validation",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
                 remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
             )
         )
@@ -416,8 +422,8 @@ def perform_plan_review(
         return asdict(
             error_response(
                 f"Failed to write review file: {exc}",
-                error_code="WRITE_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
                 remediation="Check write permissions for specs/.plan-reviews/ directory",
             )
         )
@@ -458,9 +464,13 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         return asdict(
             error_response(
                 f"Invalid template: {template}. Must be one of: simple, detailed",
-                error_code="INVALID_TEMPLATE",
-                error_type="validation",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation="Use 'simple' or 'detailed' template",
+                details={
+                    "template": template,
+                    "allowed": sorted(PLAN_TEMPLATES.keys()),
+                },
             )
         )
 
@@ -472,8 +482,8 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         return asdict(
             error_response(
                 "Input validation failed for name",
-                error_code="VALIDATION_ERROR",
-                error_type="security",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation="Remove special characters or instruction-like patterns from input.",
             )
         )
@@ -483,8 +493,8 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         return asdict(
             error_response(
                 "No specs directory found",
-                error_code="SPECS_NOT_FOUND",
-                error_type="validation",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
                 remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
             )
         )
@@ -496,8 +506,8 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         return asdict(
             error_response(
                 f"Failed to create plans directory: {exc}",
-                error_code="WRITE_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
                 remediation="Check write permissions for specs/.plans/ directory",
             )
         )
@@ -509,8 +519,8 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         return asdict(
             error_response(
                 f"Plan already exists: {plan_file}",
-                error_code="DUPLICATE_ENTRY",
-                error_type="conflict",
+                error_code=ErrorCode.DUPLICATE_ENTRY,
+                error_type=ErrorType.CONFLICT,
                 remediation="Use a different name or delete the existing plan",
                 details={"plan_path": str(plan_file)},
             )
@@ -523,8 +533,8 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         return asdict(
             error_response(
                 f"Failed to write plan file: {exc}",
-                error_code="WRITE_ERROR",
-                error_type="internal",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
                 remediation="Check write permissions for specs/.plans/ directory",
             )
         )
@@ -558,8 +568,8 @@ def perform_plan_list() -> dict:
         return asdict(
             error_response(
                 "No specs directory found",
-                error_code="SPECS_NOT_FOUND",
-                error_type="validation",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
                 remediation="Create a specs/ directory with pending/active/completed/archived subdirectories",
             )
         )
@@ -622,8 +632,8 @@ def _handle_plan_create(**payload: Any) -> dict:
         return asdict(
             error_response(
                 "Missing required parameter 'name' for plan.create",
-                error_code="MISSING_REQUIRED",
-                error_type="validation",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
                 remediation="Provide a plan name when action=create",
             )
         )
@@ -640,8 +650,8 @@ def _handle_plan_review(**payload: Any) -> dict:
         return asdict(
             error_response(
                 "Missing required parameter 'plan_path' for plan.review",
-                error_code="MISSING_REQUIRED",
-                error_type="validation",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
                 remediation="Provide a markdown plan path when action=review",
             )
         )
@@ -684,8 +694,8 @@ def _dispatch_plan_action(action: str, payload: Dict[str, Any]) -> dict:
         return asdict(
             error_response(
                 f"Unsupported plan action '{action}'. Allowed actions: {allowed}",
-                error_code="INVALID_ACTION",
-                error_type="validation",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation=f"Use one of: {allowed}",
             )
         )

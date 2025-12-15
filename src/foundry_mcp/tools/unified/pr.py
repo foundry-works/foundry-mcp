@@ -16,6 +16,8 @@ from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.progress import get_progress_summary
 from foundry_mcp.core.responses import (
+    ErrorCode,
+    ErrorType,
     error_response,
     success_response,
     sanitize_error_message,
@@ -53,8 +55,8 @@ def perform_pr_create_with_spec(
         error_response(
             "PR creation requires GitHub CLI integration and LLM-powered description generation. "
             "Use the sdd-toolkit:sdd-pr skill for AI-powered PR creation.",
-            error_code="NOT_IMPLEMENTED",
-            error_type="unavailable",
+            error_code=ErrorCode.UNAVAILABLE,
+            error_type=ErrorType.UNAVAILABLE,
             data={
                 "spec_id": spec_id,
                 "title": title,
@@ -67,8 +69,7 @@ def perform_pr_create_with_spec(
                 "alternative": "sdd-toolkit:sdd-pr skill",
                 "feature_status": "requires_external_integration",
             },
-            remediation="Use the sdd-toolkit:sdd-pr skill which provides GitHub CLI "
-            "integration and LLM-powered PR description generation.",
+            remediation="Use the sdd-toolkit:sdd-pr skill which provides GitHub CLI integration and LLM-powered PR description generation.",
         )
     )
 
@@ -88,12 +89,15 @@ def perform_pr_get_context(
     try:
         ws_path = Path(path) if path else Path.cwd()
 
-        specs_dir = find_specs_directory(ws_path)
+        specs_dir = find_specs_directory(str(ws_path))
         if not specs_dir:
             return asdict(
                 error_response(
                     f"Specs directory not found in {ws_path}",
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
                     data={"spec_id": spec_id, "workspace": str(ws_path)},
+                    remediation="Ensure you're in a project with a specs/ directory or pass a valid path.",
                 )
             )
 
@@ -102,16 +106,22 @@ def perform_pr_get_context(
             return asdict(
                 error_response(
                     f"Spec '{spec_id}' not found",
+                    error_code=ErrorCode.SPEC_NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
                     data={"spec_id": spec_id, "specs_dir": str(specs_dir)},
+                    remediation='Verify the spec ID exists using spec(action="list").',
                 )
             )
 
-        spec_data = load_spec(spec_file)
+        spec_data = load_spec(str(spec_file), specs_dir)
         if not spec_data:
             return asdict(
                 error_response(
                     f"Failed to load spec '{spec_id}'",
+                    error_code=ErrorCode.INTERNAL_ERROR,
+                    error_type=ErrorType.INTERNAL,
                     data={"spec_id": spec_id, "spec_file": str(spec_file)},
+                    remediation="Check spec JSON validity and retry.",
                 )
             )
 
@@ -165,8 +175,8 @@ def perform_pr_get_context(
 
         return asdict(
             success_response(
-                duration_ms=round(duration_ms, 2),
                 **context,
+                telemetry={"duration_ms": round(duration_ms, 2)},
             )
         )
 
@@ -175,7 +185,10 @@ def perform_pr_get_context(
         return asdict(
             error_response(
                 sanitize_error_message(exc, context="PR workflow"),
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
                 data={"spec_id": spec_id},
+                remediation="Check logs for details and retry.",
             )
         )
 
@@ -229,8 +242,8 @@ def _dispatch_pr_action(action: str, payload: Dict[str, Any]) -> dict:
         return asdict(
             error_response(
                 f"Unsupported pr action '{action}'. Allowed actions: {allowed}",
-                error_code="INVALID_ACTION",
-                error_type="validation",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
                 remediation=f"Use one of: {allowed}",
             )
         )

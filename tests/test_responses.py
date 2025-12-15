@@ -118,10 +118,11 @@ class TestErrorResponse:
         response = error_response("Spec not found")
         assert response.error == "Spec not found"
 
-    def test_data_is_empty_dict(self):
-        """Test that error_response data is empty dict."""
+    def test_data_has_default_error_fields(self):
+        """Test that error_response includes default structured fields."""
         response = error_response("Test error")
-        assert response.data == {}
+        assert response.data["error_code"] == ErrorCode.INTERNAL_ERROR.value
+        assert response.data["error_type"] == ErrorType.INTERNAL.value
 
     def test_preserves_error_message_details(self):
         """Test that detailed error messages are preserved."""
@@ -152,6 +153,15 @@ class TestErrorResponse:
         assert response.meta["rate_limit"]["remaining"] == 0
         assert response.meta["telemetry"]["duration_ms"] == 12
         assert response.meta["trace_id"] == "trace_error"
+
+    def test_enum_error_fields_serialize_to_strings(self):
+        response = error_response(
+            "Not found",
+            error_code=ErrorCode.NOT_FOUND,
+            error_type=ErrorType.NOT_FOUND,
+        )
+        assert response.data["error_code"] == ErrorCode.NOT_FOUND.value
+        assert response.data["error_type"] == ErrorType.NOT_FOUND.value
 
 
 class TestResponseContractCompliance:
