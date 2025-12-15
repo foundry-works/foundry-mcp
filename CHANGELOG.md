@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Added `phase-add` MCP tool, core helper, and CLI command for creating new phases with verification scaffolding, plus refreshed docs, manifest metadata, and tests to cover the new workflow.
+## [0.3.0] - 2025-12-15
+
+### Changed
+- Consolidated the MCP tool surface into 17 unified routers (tool + `action`) and aligned CLI/MCP naming.
+- Updated documentation and manifests to reflect the unified router contract.
+
+### Added
+- New completed specs documenting MCP tool consolidation and removal of docquery/rendering/docgen.
+- Unified-manifest budget telemetry (Prometheus metrics, recording rules, alerting rules, and dashboard panels).
+
+### Removed
+- Legacy per-tool MCP modules and legacy CLI command surfaces in favor of unified routers.
+- Docquery/rendering/docgen modules and generated docs previously under `docs/generated/`.
 
 ## [0.2.1] - 2025-12-08
 
