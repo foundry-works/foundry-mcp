@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 
 from foundry_mcp.core.spec import load_spec, find_specs_directory
 from foundry_mcp.core.validation import (
-    Diagnostic,
     ValidationResult,
     validate_spec,
     calculate_stats,

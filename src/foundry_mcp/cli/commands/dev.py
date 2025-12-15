@@ -7,8 +7,6 @@ Provides commands for skills development including:
 - Development tooling
 """
 
-import json
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -369,7 +367,7 @@ def dev_check_cmd(ctx: click.Context) -> None:
     Verifies that all development tools are available.
     """
     start_time = time.perf_counter()
-    cli_ctx = get_context(ctx)
+    get_context(ctx)
 
     tools = {}
 

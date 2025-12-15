@@ -22,7 +22,6 @@ from foundry_mcp.core.journal import (
     find_unjournaled_tasks,
     get_journal_entries,
     save_journal,
-    VALID_ENTRY_TYPES,
 )
 
 logger = get_cli_logger()

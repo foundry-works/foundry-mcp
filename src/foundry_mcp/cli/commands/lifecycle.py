@@ -3,8 +3,6 @@
 Provides commands for spec lifecycle transitions: activate, complete, archive.
 """
 
-from dataclasses import asdict
-from typing import Optional
 
 import click
 

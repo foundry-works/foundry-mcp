@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -555,7 +554,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     if has_more and page_tasks:
         next_cursor = encode_cursor({"last_id": page_tasks[-1].get("id")})
 
-    elapsed_ms = (time.perf_counter() - start) * 1000
+    (time.perf_counter() - start) * 1000
     warnings = _pagination_warnings(total_count, has_more)
     response = paginated_response(
         data={

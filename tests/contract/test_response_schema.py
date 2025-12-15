@@ -60,7 +60,7 @@ def validate_response(response: ToolResponse, validator: Draft7Validator) -> Non
     if errors:
         error_messages = [f"- {e.message} at {list(e.absolute_path)}" for e in errors]
         pytest.fail(
-            f"Schema validation failed:\n" + "\n".join(error_messages) +
+            "Schema validation failed:\n" + "\n".join(error_messages) +
             f"\n\nResponse: {json.dumps(response_dict, indent=2)}"
         )
 

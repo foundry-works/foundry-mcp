@@ -8,13 +8,10 @@ Tests cover:
 - Feature flag bootstrap
 """
 
-import io
 import json
 import sys
 import time
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,7 +43,7 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.core.feature_flags import FlagState, get_registry
+from foundry_mcp.core.feature_flags import FlagState
 
 
 class TestCLIOutput:

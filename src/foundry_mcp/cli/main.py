@@ -5,7 +5,7 @@ JSON-only output for AI coding assistants.
 
 import click
 
-from foundry_mcp.cli.config import CLIContext, create_context
+from foundry_mcp.cli.config import create_context
 from foundry_mcp.cli.registry import register_all_commands
 
 

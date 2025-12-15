@@ -15,7 +15,7 @@ from foundry_mcp.server import create_server
 
 
 def test_get_llm_status_handles_import_error(monkeypatch):
-    from foundry_mcp.tools.review import _get_llm_status
+    from foundry_mcp.tools.unified.review_helpers import _get_llm_status
 
     def _raise():
         raise ImportError("missing")

@@ -39,7 +39,7 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
-from foundry_mcp.tools.context import (
+from foundry_mcp.tools.unified.context_helpers import (
     build_llm_status_response,
     build_server_context_response,
 )

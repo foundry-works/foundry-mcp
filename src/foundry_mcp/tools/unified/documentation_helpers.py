@@ -1,31 +1,13 @@
-"""Fidelity review context helpers.
+"""Helpers for building review context sections (implementation artifacts, requirements, etc)."""
 
-The unified `review(action="fidelity")` router uses these helpers to build a
-deterministic, repo-local context payload (spec requirements, implementation
-artifacts, test signals, and journal excerpts).
-
-This module intentionally does not register any standalone MCP tools.
-"""
-
-from __future__ import annotations
-
-import logging
-import subprocess
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-logger = logging.getLogger(__name__)
+from pathlib import Path
 
 
 def _build_spec_requirements(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
+    spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]
 ) -> str:
-    """Build spec requirements section for fidelity review context."""
-
     lines: list[str] = []
-
     if task_id:
         task = _find_task(spec_data, task_id)
         if task:
@@ -60,7 +42,6 @@ def _build_spec_requirements(
                     lines.append(f"  - {assumption.get('text', str(assumption))}")
                 else:
                     lines.append(f"  - {assumption}")
-
     return "\n".join(lines) if lines else "*No requirements available*"
 
 
@@ -72,10 +53,7 @@ def _build_implementation_artifacts(
     incremental: bool,
     base_branch: str,
 ) -> str:
-    """Build implementation artifacts section for fidelity review context."""
-
     lines: list[str] = []
-
     file_paths: list[str] = []
     if files:
         file_paths = list(files)
@@ -89,9 +67,10 @@ def _build_implementation_artifacts(
             for child in _get_child_nodes(spec_data, phase):
                 if child.get("metadata", {}).get("file_path"):
                     file_paths.append(child["metadata"]["file_path"])
-
     if incremental:
         try:
+            import subprocess
+
             result = subprocess.run(
                 ["git", "diff", "--name-only", base_branch],
                 capture_output=True,
@@ -111,7 +90,6 @@ def _build_implementation_artifacts(
                 )
         except Exception:
             lines.append(f"*Warning: Could not get git diff from {base_branch}*\n")
-
     for file_path in file_paths[:5]:
         path = Path(file_path)
         if path.exists():
@@ -130,20 +108,14 @@ def _build_implementation_artifacts(
         else:
             lines.append(f"### File: `{file_path}`")
             lines.append("*File not found*\n")
-
     if not lines:
         lines.append("*No implementation artifacts available*")
-
     return "\n".join(lines)
 
 
 def _build_test_results(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
+    spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]
 ) -> str:
-    """Build test results section for fidelity review context."""
-
     journal = spec_data.get("journal", [])
     test_entries = [
         entry
@@ -151,7 +123,6 @@ def _build_test_results(
         if "test" in entry.get("title", "").lower()
         or "verify" in entry.get("title", "").lower()
     ]
-
     if test_entries:
         lines = ["*Recent test-related journal entries:*"]
         for entry in test_entries[-3:]:
@@ -164,22 +135,15 @@ def _build_test_results(
                     content += "..."
                 lines.append(f"  {content}")
         return "\n".join(lines)
-
     return "*No test results available*"
 
 
 def _build_journal_entries(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
+    spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]
 ) -> str:
-    """Build journal entries section for fidelity review context."""
-
     journal = spec_data.get("journal", [])
-
     if task_id:
         journal = [entry for entry in journal if entry.get("task_id") == task_id]
-
     if journal:
         lines = [f"*{len(journal)} journal entries found:*"]
         for entry in journal[-5:]:
@@ -193,52 +157,38 @@ def _build_journal_entries(
                 f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({timestamp})"
             )
         return "\n".join(lines)
-
     return "*No journal entries found*"
 
 
 def _find_task(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict[str, Any]]:
-    """Find a task by ID in the spec hierarchy."""
-
     hierarchy_nodes = _get_hierarchy_nodes(spec_data)
     if task_id in hierarchy_nodes:
         return hierarchy_nodes[task_id]
-
     return None
 
 
 def _find_phase(spec_data: Dict[str, Any], phase_id: str) -> Optional[Dict[str, Any]]:
-    """Find a phase by ID in the spec hierarchy."""
-
     hierarchy_nodes = _get_hierarchy_nodes(spec_data)
     if phase_id in hierarchy_nodes:
         return hierarchy_nodes[phase_id]
-
     return None
 
 
 def _get_hierarchy_nodes(spec_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """Return mapping of hierarchy node IDs to node data."""
-
     hierarchy = spec_data.get("hierarchy", {})
     nodes: Dict[str, Dict[str, Any]] = {}
-
     if isinstance(hierarchy, dict):
-        # New format: dict keyed by node_id -> node metadata
         if all(isinstance(value, dict) for value in hierarchy.values()):
             for node_id, node in hierarchy.items():
                 node_copy = dict(node)
                 node_copy.setdefault("id", node_id)
                 nodes[node_id] = node_copy
-
     return nodes
 
 
 def _get_child_nodes(
     spec_data: Dict[str, Any], node: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
-    """Return direct children for the supplied hierarchy node."""
-
     hierarchy_nodes = _get_hierarchy_nodes(spec_data)
     children = node.get("children", [])
     return [
@@ -246,11 +196,3 @@ def _get_child_nodes(
         for child_id in children
         if child_id in hierarchy_nodes
     ]
-
-
-__all__ = [
-    "_build_implementation_artifacts",
-    "_build_journal_entries",
-    "_build_spec_requirements",
-    "_build_test_results",
-]

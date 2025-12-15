@@ -10,43 +10,30 @@ Tests the core consultation infrastructure including:
 """
 
 import pytest
-from typing import Dict, Any
 
 # Core consultation module
 from foundry_mcp.core.ai_consultation import (
     ConsultationWorkflow,
     ConsultationRequest,
     ConsultationResult,
-    ConsultationOrchestrator,
-    ResultCache,
 )
 
 # Prompts infrastructure
 from foundry_mcp.core.prompts import (
     PromptTemplate,
     PromptRegistry,
-    PromptBuilder,
     get_prompt_builder,
-    get_global_registry,
-    reset_global_registry,
 )
 
 # Workflow-specific prompt builders
 from foundry_mcp.core.prompts.plan_review import (
     PLAN_REVIEW_FULL_V1,
-    PLAN_REVIEW_QUICK_V1,
     PLAN_REVIEW_SECURITY_V1,
-    PLAN_REVIEW_FEASIBILITY_V1,
-    SYNTHESIS_PROMPT_V1,
-    PLAN_REVIEW_TEMPLATES,
     PlanReviewPromptBuilder,
 )
 
 from foundry_mcp.core.prompts.fidelity_review import (
     FIDELITY_REVIEW_V1,
-    FIDELITY_DEVIATION_ANALYSIS_V1,
-    FIDELITY_COMPLIANCE_SUMMARY_V1,
-    FIDELITY_REVIEW_TEMPLATES,
     FIDELITY_RESPONSE_SCHEMA,
     SEVERITY_KEYWORDS,
     FidelityReviewPromptBuilder,
@@ -261,8 +248,12 @@ class TestPromptRegistry:
     def test_registry_list_templates(self):
         """Registry lists all registered template IDs."""
         registry = PromptRegistry()
-        registry.register(PromptTemplate(id="a", version="1.0", system_prompt="S", user_template="U"))
-        registry.register(PromptTemplate(id="b", version="1.0", system_prompt="S", user_template="U"))
+        registry.register(
+            PromptTemplate(id="a", version="1.0", system_prompt="S", user_template="U")
+        )
+        registry.register(
+            PromptTemplate(id="b", version="1.0", system_prompt="S", user_template="U")
+        )
 
         templates = registry.list_templates()
         assert "a" in templates
@@ -350,9 +341,6 @@ class TestFidelityReviewPromptBuilder:
         assert "FIDELITY_REVIEW_V1" in prompts
         assert "FIDELITY_DEVIATION_ANALYSIS_V1" in prompts
         assert "FIDELITY_COMPLIANCE_SUMMARY_V1" in prompts
-        # Legacy prompts
-        assert "review_task" in prompts
-        assert "review_phase" in prompts
 
     def test_builder_build_fidelity_review(self):
         """Builder renders FIDELITY_REVIEW_V1."""
@@ -808,6 +796,7 @@ class TestBackwardCompatibility:
 
         Legacy pattern: if result.error or not result.content
         """
+
         # Simulating the common pattern in tools
         def process_consultation_result(result: ConsultationResult) -> str:
             """Example of existing code pattern."""

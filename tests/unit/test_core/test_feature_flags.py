@@ -12,7 +12,6 @@ from foundry_mcp.core.feature_flags import (
     FeatureFlag,
     FeatureFlagRegistry,
     FlagState,
-    current_client_id,
     feature_flag,
     flag_override,
     get_registry,

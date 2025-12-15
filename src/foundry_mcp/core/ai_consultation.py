@@ -43,7 +43,6 @@ import concurrent.futures
 import hashlib
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -641,7 +640,6 @@ class ConsultationOrchestrator:
     def __init__(
         self,
         cache: Optional[ResultCache] = None,
-        preferred_providers: Optional[Sequence[str]] = None,
         default_timeout: Optional[float] = None,
         config: Optional["ConsultationConfig"] = None,
     ):
@@ -650,7 +648,6 @@ class ConsultationOrchestrator:
 
         Args:
             cache: ResultCache instance (creates default if None)
-            preferred_providers: Ordered list of preferred provider IDs (legacy, use config.priority)
             default_timeout: Default timeout in seconds (uses config if None)
             config: ConsultationConfig instance (uses global config if None)
         """
@@ -669,7 +666,7 @@ class ConsultationOrchestrator:
         )
 
         # Parse priority list from config into ProviderSpec objects
-        # Priority: 1) config.priority specs, 2) preferred_providers param (legacy)
+        # Priority: 1) config.priority specs
         self._priority_specs: List[ProviderSpec] = []
         if self._config.priority:
             for spec_str in self._config.priority:
@@ -679,11 +676,6 @@ class ConsultationOrchestrator:
                     logger.warning(
                         f"Invalid provider spec in priority list: {spec_str}: {e}"
                     )
-
-        # Legacy preferred_providers for backwards compatibility
-        self.preferred_providers = (
-            list(preferred_providers) if preferred_providers else []
-        )
 
     def is_available(self, provider_id: Optional[str] = None) -> bool:
         """
@@ -698,9 +690,9 @@ class ConsultationOrchestrator:
         if provider_id:
             return check_provider_available(provider_id)
 
-        # Check preferred providers first
-        for prov_id in self.preferred_providers:
-            if check_provider_available(prov_id):
+        # Check priority providers first
+        for spec in self._priority_specs:
+            if check_provider_available(spec.provider):
                 return True
 
         # Fall back to any available provider
@@ -710,24 +702,10 @@ class ConsultationOrchestrator:
         """
         Return list of available provider IDs.
 
-        Preferred providers are listed first (if available), followed by
-        other available providers.
-
         Returns:
             List of available provider IDs
         """
-        available = set(available_providers())
-        result = []
-
-        # Add preferred providers that are available
-        for prov_id in self.preferred_providers:
-            if prov_id in available:
-                result.append(prov_id)
-                available.discard(prov_id)
-
-        # Add remaining available providers
-        result.extend(sorted(available))
-        return result
+        return sorted(available_providers())
 
     def _select_provider(self, request: ConsultationRequest) -> str:
         """
@@ -751,10 +729,10 @@ class ConsultationOrchestrator:
                 provider=request.provider_id,
             )
 
-        # Try preferred providers
-        for prov_id in self.preferred_providers:
-            if check_provider_available(prov_id):
-                return prov_id
+        # Try priority providers
+        for spec in self._priority_specs:
+            if check_provider_available(spec.provider):
+                return spec.provider
 
         # Fall back to first available
         providers = available_providers()
@@ -890,18 +868,7 @@ class ConsultationOrchestrator:
                 result.append(resolved)
                 seen_providers.add(resolved.provider_id)
 
-        # 3. Legacy preferred_providers (for backwards compatibility)
-        for prov_id in self.preferred_providers:
-            if prov_id not in seen_providers and check_provider_available(prov_id):
-                result.append(
-                    ResolvedProvider(
-                        provider_id=prov_id,
-                        spec_str=f"legacy:{prov_id}",
-                    )
-                )
-                seen_providers.add(prov_id)
-
-        # 4. Fallback to available providers from registry
+        # 3. Fallback to available providers from registry
         for prov_id in available_providers():
             if prov_id not in seen_providers:
                 result.append(
@@ -1390,7 +1357,7 @@ class ConsultationOrchestrator:
                 # Create a pseudo-error from the warning to check fallback eligibility
                 pseudo_error = Exception(last_warning)
                 if self._should_try_next_provider(pseudo_error):
-                    warnings.append(f"Falling back to next provider...")
+                    warnings.append("Falling back to next provider...")
                 else:
                     last_error = (
                         f"Provider {provider_id} failed and fallback is not appropriate"

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-from .spec import load_spec, save_spec, get_node, update_node, backup_spec, find_specs_directory
+from .spec import load_spec, save_spec, update_node, find_specs_directory
 
 
 def apply_modifications(

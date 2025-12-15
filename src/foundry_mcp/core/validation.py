@@ -948,7 +948,6 @@ def _build_fix_action(
 ) -> Optional[FixAction]:
     """Build a fix action for a diagnostic."""
     code = diag.code
-    location = diag.location
 
     if code == "INVALID_DATE_FORMAT":
         return _build_date_fix(diag, spec_data)

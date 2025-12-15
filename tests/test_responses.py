@@ -4,7 +4,6 @@ Tests for response helper functions and standard format validation.
 Verifies that the response contract is properly implemented across all tools.
 """
 
-import pytest
 from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
@@ -331,7 +330,6 @@ class TestErrorCodeEnum:
 
     def test_error_code_serializes_as_string(self):
         """Test that ErrorCode serializes as string in JSON."""
-        import json
 
         data = {"error_code": ErrorCode.VALIDATION_ERROR}
         # str-based enum serializes directly

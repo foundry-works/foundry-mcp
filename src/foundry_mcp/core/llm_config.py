@@ -1055,7 +1055,7 @@ class ConsultationConfig:
                 all_errors.append(f"{spec_str}: {e}")
 
         if all_errors:
-            raise ValueError(f"Invalid provider specs in priority list:\n" + "\n".join(all_errors))
+            raise ValueError("Invalid provider specs in priority list:\n" + "\n".join(all_errors))
 
         # Validate workflow configurations
         workflow_errors = []
@@ -1066,7 +1066,7 @@ class ConsultationConfig:
                 workflow_errors.append(f"workflows.{workflow_name}: {e}")
 
         if workflow_errors:
-            raise ValueError(f"Invalid workflow configurations:\n" + "\n".join(workflow_errors))
+            raise ValueError("Invalid workflow configurations:\n" + "\n".join(workflow_errors))
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ConsultationConfig":
@@ -1228,11 +1228,9 @@ def load_consultation_config(
     config = ConsultationConfig()
 
     # Try to load from TOML
-    toml_loaded = False
     if config_file and config_file.exists():
         try:
             config = ConsultationConfig.from_toml(config_file)
-            toml_loaded = True
             logger.debug(f"Loaded consultation config from {config_file}")
         except Exception as e:
             logger.warning(f"Failed to load consultation config from {config_file}: {e}")
@@ -1247,7 +1245,6 @@ def load_consultation_config(
             if path.exists():
                 try:
                     config = ConsultationConfig.from_toml(path)
-                    toml_loaded = True
                     logger.debug(f"Loaded consultation config from {path}")
                     break
                 except Exception as e:

@@ -47,10 +47,9 @@ from typing import (
     ParamSpec,
     Set,
     TypeVar,
-    Union,
 )
 
-from foundry_mcp.core.responses import ToolResponse, error_response
+from foundry_mcp.core.responses import error_response
 
 logger = logging.getLogger(__name__)
 

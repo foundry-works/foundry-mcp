@@ -592,7 +592,7 @@ def _handle_verify_environment(
 
     metric_key = _metric_name("verify-env")
     try:
-        base_path = Path(path) if path else Path.cwd()
+        Path(path) if path else Path.cwd()
 
         runtimes: Dict[str, Any] = {}
         issues: List[str] = []

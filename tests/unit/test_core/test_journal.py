@@ -127,7 +127,7 @@ class TestAddJournalEntry:
 
     def test_adds_entry_to_journal(self, spec_with_task):
         """Test that entry is added to journal array."""
-        entry = add_journal_entry(
+        add_journal_entry(
             spec_with_task,
             title="Test Entry",
             content="Test content",

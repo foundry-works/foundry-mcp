@@ -1,13 +1,10 @@
 """Tests for core/review.py - non-LLM review logic."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from foundry_mcp.core.review import (
     ReviewFinding,
     QuickReviewResult,
-    ReviewContext,
     get_llm_status,
     prepare_review_context,
     quick_review,

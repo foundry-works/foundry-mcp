@@ -8,12 +8,10 @@ Tests:
 - End-to-end tool execution
 """
 
-import json
 import tempfile
 from pathlib import Path
 from dataclasses import asdict
 
-import pytest
 
 from foundry_mcp.core.responses import success_response, error_response
 

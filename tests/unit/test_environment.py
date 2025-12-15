@@ -5,13 +5,11 @@ Tests the environment verification, workspace initialization, and topology
 detection helpers used by the unified environment router.
 """
 
-import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 
 class TestVerifyToolchain:
@@ -238,7 +236,7 @@ class TestDetectTopology:
     def test_unknown_project_type(self):
         """Test handling of unknown project type."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            base_path = Path(tmpdir)
+            Path(tmpdir)
 
             # Empty directory - no markers
             project_type = "unknown"
@@ -273,7 +271,6 @@ class TestVerifyEnvironment:
         """Test Git availability check."""
         mock_which.return_value = "/usr/bin/git"
 
-        import shutil
 
         git_path = mock_which("git")
         assert git_path is not None
@@ -283,7 +280,6 @@ class TestVerifyEnvironment:
         """Test handling when Git is not available."""
         mock_which.return_value = None
 
-        import shutil
 
         git_path = mock_which("git")
         issues = []
@@ -449,7 +445,7 @@ class TestSddSetup:
 
             # Dry run permissions
             settings_file = base_path / ".claude" / "settings.local.json"
-            perm_result = _update_permissions(settings_file, "minimal", dry_run=True)
+            _update_permissions(settings_file, "minimal", dry_run=True)
             assert not (base_path / ".claude").exists()
 
     def test_invalid_preset_validation(self):

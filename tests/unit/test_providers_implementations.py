@@ -15,19 +15,17 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Sequence
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from foundry_mcp.core.providers.base import (
-    ProviderCapability,
     ProviderExecutionError,
     ProviderHooks,
     ProviderRequest,
     ProviderStatus,
     ProviderTimeoutError,
     ProviderUnavailableError,
-    StreamChunk,
 )
 
 
@@ -386,7 +384,7 @@ class TestCodexProvider:
         runner = make_mock_runner(stdout=mock_output)
         provider = CodexProvider(metadata=CODEX_METADATA, hooks=hooks, runner=runner)
 
-        result = provider.generate(ProviderRequest(prompt="test", stream=True))
+        provider.generate(ProviderRequest(prompt="test", stream=True))
 
         assert len(chunks) == 2
         assert chunks[0].content == "chunk1"
@@ -613,7 +611,7 @@ class TestClaudeProvider:
             metadata=CLAUDE_METADATA, hooks=hooks, runner=runner
         )
 
-        result = provider.generate(ProviderRequest(prompt="test", stream=True))
+        provider.generate(ProviderRequest(prompt="test", stream=True))
 
         assert len(chunks) == 1
         assert chunks[0].content == "Streamed"
@@ -775,7 +773,7 @@ class TestOpenCodeProvider:
             wrapper_path=tmp_path / "wrapper.js",
         )
 
-        result = provider.generate(ProviderRequest(prompt="test", stream=True))
+        provider.generate(ProviderRequest(prompt="test", stream=True))
 
         assert len(chunks) >= 2
 

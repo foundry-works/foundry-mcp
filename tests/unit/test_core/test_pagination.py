@@ -360,7 +360,6 @@ class TestPaginatedListToolIntegration:
 
     def test_pagination_pattern_last_page(self):
         """Test pagination pattern on last page."""
-        items = ["item-1", "item-2", "item-3"]
         page_size = 2
 
         # Start after item-2

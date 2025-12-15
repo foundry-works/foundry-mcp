@@ -177,7 +177,6 @@ src/foundry_mcp/
 │   ├── validation.py      # Validation tools
 │   ├── lifecycle.py       # Lifecycle tools
 │   ├── journal.py         # Journal tools
-│   ├── docs.py            # Code documentation tools
 │   ├── testing.py         # Test runner tools
 │   ├── review.py          # LLM review tools
 │   └── ...
@@ -589,19 +588,6 @@ def example_command(param: str, dry_run: bool):
 2. **Same response contract** — Use the same envelope as MCP tools
 3. **Stderr for errors** — Non-JSON diagnostics go to stderr
 4. **Exit codes** — 0 for success, non-zero for failures
-
-### Documentation Query Commands
-
-The `sdd doc` namespace wraps the transport-agnostic `foundry_mcp.core.docs.DocQuery`
-helpers. All commands support JSON pagination and input validation:
-
-- `sdd doc find-class|find-function` — Exact or fuzzy lookups constrained by `--limit`
-- `sdd doc trace-calls` — Traverses callers/callees up to 6 hops; rejects deeper traversals
-- `sdd doc context` — Depth 1–3 (plan/standard/comprehensive) with optional graph overlays
-- `sdd doc refactor-candidates` — Flags high-risk functions/classes with bounded thresholds
-
-Keep inputs within the published ranges to avoid runaway traversals, and reuse
-`core.pagination.normalize_page_size` for list commands.
 
 ### Session Context & Transcript Access
 

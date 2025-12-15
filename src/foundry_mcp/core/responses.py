@@ -664,8 +664,8 @@ def ai_provider_timeout_error(
             "timeout_seconds": timeout_seconds,
         },
         remediation=remediation or (
-            f"Try again with a smaller context, increase the timeout, "
-            f"or use a different provider."
+            "Try again with a smaller context, increase the timeout, "
+            "or use a different provider."
         ),
         request_id=request_id,
     )

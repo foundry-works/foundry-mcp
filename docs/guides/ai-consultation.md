@@ -34,7 +34,6 @@ The main entry point for all AI consultations:
 from foundry_mcp.core.ai_consultation import ConsultationOrchestrator
 
 orchestrator = ConsultationOrchestrator(
-    preferred_providers=["gemini", "claude"],
     default_timeout=300
 )
 

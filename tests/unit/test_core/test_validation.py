@@ -4,7 +4,6 @@ Unit tests for foundry_mcp.core.validation module.
 Tests validation functions, auto-fix capabilities, and statistics calculation.
 """
 
-import copy
 import pytest
 from foundry_mcp.core.validation import (
     validate_spec,
@@ -15,9 +14,6 @@ from foundry_mcp.core.validation import (
     execute_verification,
     format_verification_summary,
     Diagnostic,
-    ValidationResult,
-    FixAction,
-    SpecStats,
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_VERIFICATION_TYPES,

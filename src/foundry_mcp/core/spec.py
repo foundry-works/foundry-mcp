@@ -1529,17 +1529,6 @@ def list_assumptions(
                     "index": i,
                 }
             )
-        elif isinstance(assumption, dict):
-            # Handle legacy object format
-            assumption_list.append(
-                {
-                    "id": assumption.get("id", f"a-{i}"),
-                    "text": assumption.get("text", str(assumption)),
-                    "type": assumption.get("type"),
-                    "author": assumption.get("author"),
-                    "index": i,
-                }
-            )
 
     return {
         "spec_id": spec_id,

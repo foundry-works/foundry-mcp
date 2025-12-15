@@ -13,7 +13,6 @@ from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
 
 from foundry_mcp.core.observability import (
-    MetricsCollector,
     get_metrics,
     redact_sensitive_data,
 )
@@ -167,7 +166,7 @@ def cli_command(
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
-            with CLILogContext() as ctx:
+            with CLILogContext():
                 metrics = get_metrics()
                 start = time.perf_counter()
                 success = True

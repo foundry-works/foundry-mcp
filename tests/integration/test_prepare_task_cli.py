@@ -7,7 +7,6 @@ If the fixture is missing, all tests in this module are skipped.
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest

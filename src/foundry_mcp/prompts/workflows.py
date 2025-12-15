@@ -5,7 +5,6 @@ Provides MCP prompts for common SDD workflows like starting features,
 debugging tests, and completing phases.
 """
 
-import json
 import logging
 from typing import Optional
 
@@ -18,7 +17,6 @@ from foundry_mcp.core.spec import (
     find_specs_directory,
 )
 from foundry_mcp.core.progress import get_progress_summary, list_phases
-from foundry_mcp.core.task import get_next_task, prepare_task
 
 logger = logging.getLogger(__name__)
 
@@ -253,7 +251,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         if spec_id:
             prompt_parts.extend(
                 [
-                    f"## Spec Context",
+                    "## Spec Context",
                     f"This test is related to spec `{spec_id}`.",
                     "After fixing, remember to update the task status.",
                     "",
@@ -353,7 +351,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "### Step 1: Review Remaining Tasks",
                 "List all pending/in-progress tasks in this phase:",
                 "```bash",
-                f'# Use task(action="progress") to check status',
+                '# Use task(action="progress") to check status',
                 "```",
                 "",
                 "### Step 2: Complete Each Task",

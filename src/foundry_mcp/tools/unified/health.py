@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict
 
 from mcp.server.fastmcp import FastMCP
 

@@ -7,7 +7,6 @@ circuit breaker state transitions, and health check utilities.
 
 import asyncio
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 

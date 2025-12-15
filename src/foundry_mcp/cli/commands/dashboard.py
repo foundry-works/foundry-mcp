@@ -6,7 +6,6 @@ Provides commands for starting, stopping, and managing the Streamlit dashboard.
 import click
 
 from foundry_mcp.cli.output import emit, emit_error
-from foundry_mcp.cli.registry import get_context
 
 
 @click.group("dashboard")

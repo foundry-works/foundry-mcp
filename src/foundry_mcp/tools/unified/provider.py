@@ -488,7 +488,7 @@ def _handle_execute(
                 },
             )
         )
-    except ProviderTimeoutError as exc:
+    except ProviderTimeoutError:
         _metrics.counter(metric_key, labels={"status": "timeout"})
         return asdict(
             error_response(
@@ -500,7 +500,7 @@ def _handle_execute(
                 request_id=request_id,
             )
         )
-    except ProviderExecutionError as exc:
+    except ProviderExecutionError:
         _metrics.counter(metric_key, labels={"status": "provider_error"})
         return asdict(
             error_response(

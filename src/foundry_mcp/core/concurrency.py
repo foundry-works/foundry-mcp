@@ -133,14 +133,14 @@ async def request_context(
 
     try:
         logger.debug(
-            f"Request context started",
+            "Request context started",
             extra={"request_id": actual_req_id, "client_id": actual_cli_id},
         )
         yield ctx
     finally:
         elapsed = ctx.elapsed_ms
         logger.debug(
-            f"Request context ended",
+            "Request context ended",
             extra={
                 "request_id": actual_req_id,
                 "client_id": actual_cli_id,

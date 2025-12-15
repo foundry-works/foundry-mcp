@@ -7,7 +7,6 @@ Verifies that observability features work correctly when:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestNoOpStubs:

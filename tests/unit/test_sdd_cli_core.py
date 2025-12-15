@@ -9,18 +9,12 @@ Tests cover:
 
 import importlib
 import json
-import os
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
 from foundry_mcp.cli.main import cli
-from foundry_mcp.cli.registry import set_context
-from foundry_mcp.cli.config import CLIContext
 from foundry_mcp.cli.commands import testing as testing_commands
 
 tasks_module = importlib.import_module("foundry_mcp.cli.commands.tasks")

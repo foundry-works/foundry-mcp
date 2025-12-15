@@ -4,7 +4,6 @@ Provides commands for reviewing markdown implementation plans
 before converting them to formal JSON specifications.
 """
 
-from dataclasses import asdict
 import re
 import time
 from pathlib import Path
@@ -14,7 +13,6 @@ import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
-from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     SLOW_TIMEOUT,
     MEDIUM_TIMEOUT,

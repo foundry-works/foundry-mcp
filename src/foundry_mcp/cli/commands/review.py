@@ -14,7 +14,6 @@ AI-enhanced reviews use:
 - FIDELITY_REVIEW_V1: Implementation vs specification comparison
 """
 
-from dataclasses import asdict
 import json
 import time
 from typing import Any, Dict, List, Optional
@@ -27,30 +26,54 @@ from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
     SLOW_TIMEOUT,
-    MEDIUM_TIMEOUT,
-    with_sync_timeout,
     handle_keyboard_interrupt,
+    with_sync_timeout,
 )
-from foundry_mcp.core.review import (
-    quick_review,
-    review_type_requires_llm,
-    prepare_review_context,
+from foundry_mcp.tools.unified.documentation_helpers import (
+    _build_implementation_artifacts,
+    _build_journal_entries,
+    _build_spec_requirements,
+    _build_test_results,
+)
+from foundry_mcp.tools.unified.review_helpers import (
+    DEFAULT_AI_TIMEOUT,
+    REVIEW_TYPES,
+    _get_llm_status,
+    _run_ai_review,
+    _run_quick_review,
 )
 
 logger = get_cli_logger()
 
-# Default AI consultation timeout
-DEFAULT_AI_TIMEOUT = 120.0
 
-# Review types supported
-REVIEW_TYPES = ["quick", "full", "security", "feasibility"]
+def _emit_review_envelope(envelope: Dict[str, Any], *, duration_ms: float) -> None:
+    """Emit a response-v2 envelope returned by shared review helpers."""
 
-# Map review types to PLAN_REVIEW templates
-REVIEW_TYPE_TO_TEMPLATE = {
-    "full": "PLAN_REVIEW_FULL_V1",
-    "security": "PLAN_REVIEW_SECURITY_V1",
-    "feasibility": "PLAN_REVIEW_FEASIBILITY_V1",
-}
+    if envelope.get("success") is True:
+        emit_success(
+            envelope.get("data", {}),
+            telemetry={"duration_ms": round(duration_ms, 2)},
+        )
+        return
+
+    payload = envelope.get("data") or {}
+
+    error_code = payload.get("error_code", "INTERNAL_ERROR")
+    if hasattr(error_code, "value"):
+        error_code = error_code.value
+
+    error_type = payload.get("error_type", "internal")
+    if hasattr(error_type, "value"):
+        error_type = error_type.value
+
+    emit_error(
+        envelope.get("error") or "Review failed",
+        code=str(error_code),
+        error_type=str(error_type),
+        remediation=payload.get("remediation"),
+        details=payload.get("details"),
+    )
+
 
 REVIEW_TOOL_DEFINITIONS = [
     {
@@ -160,50 +183,30 @@ def review_spec_cmd(
 
     llm_status = _get_llm_status()
 
-    # Quick review doesn't require LLM
-    if not review_type_requires_llm(review_type):
-        if dry_run:
-            emit_success(
-                {
-                    "spec_id": spec_id,
-                    "review_type": review_type,
-                    "dry_run": True,
-                    "llm_status": llm_status,
-                    "message": "Dry run - quick review skipped",
-                }
-            )
-            return
-
-        quick_result = quick_review(spec_id=spec_id, specs_dir=specs_dir)
-        duration_ms = (time.perf_counter() - start_time) * 1000
-
-        payload = asdict(quick_result)
-        payload["llm_status"] = llm_status
-
-        emit_success(
-            payload,
-            telemetry={"duration_ms": round(duration_ms, 2)},
+    if review_type == "quick":
+        envelope = _run_quick_review(
+            spec_id=spec_id,
+            specs_dir=specs_dir,
+            dry_run=dry_run,
+            llm_status=llm_status,
+            start_time=start_time,
         )
-        return
-
-    # LLM-powered review types (full, security, feasibility)
-    result = _run_ai_review(
-        spec_id=spec_id,
-        specs_dir=specs_dir,
-        review_type=review_type,
-        ai_provider=ai_provider,
-        ai_timeout=ai_timeout,
-        consultation_cache=not no_consultation_cache,
-        dry_run=dry_run,
-        llm_status=llm_status,
-    )
+    else:
+        envelope = _run_ai_review(
+            spec_id=spec_id,
+            specs_dir=specs_dir,
+            review_type=review_type,
+            ai_provider=ai_provider,
+            model=model,
+            ai_timeout=ai_timeout,
+            consultation_cache=not no_consultation_cache,
+            dry_run=dry_run,
+            llm_status=llm_status,
+            start_time=start_time,
+        )
 
     duration_ms = (time.perf_counter() - start_time) * 1000
-
-    emit_success(
-        result,
-        telemetry={"duration_ms": round(duration_ms, 2)},
-    )
+    _emit_review_envelope(envelope, duration_ms=duration_ms)
 
 
 @review_group.command("tools")
@@ -413,13 +416,12 @@ def review_fidelity_cmd(
     llm_status = _get_llm_status()
 
     # Determine scope
-    scope = "spec"
     if task_id:
-        scope = f"task:{task_id}"
+        pass
     elif phase_id:
-        scope = f"phase:{phase_id}"
+        pass
     elif files:
-        scope = f"files:{len(files)}"
+        f"files:{len(files)}"
 
     # Run the fidelity review
     result = _run_fidelity_review(
@@ -442,189 +444,6 @@ def review_fidelity_cmd(
         result,
         telemetry={"duration_ms": round(duration_ms, 2)},
     )
-
-
-def _run_ai_review(
-    spec_id: str,
-    specs_dir: Any,
-    review_type: str,
-    ai_provider: Optional[str],
-    ai_timeout: float,
-    consultation_cache: bool,
-    dry_run: bool,
-    llm_status: dict,
-) -> dict:
-    """
-    Run an AI-powered review using ConsultationOrchestrator.
-
-    Args:
-        spec_id: Specification ID to review
-        specs_dir: Specs directory path
-        review_type: Type of review (full, security, feasibility)
-        ai_provider: Explicit provider selection
-        ai_timeout: Consultation timeout in seconds
-        consultation_cache: Whether to use consultation cache
-        dry_run: Preview without executing
-        llm_status: LLM configuration status
-
-    Returns:
-        Dict with review results or dry-run preview
-    """
-    from pathlib import Path
-
-    # Get template for review type
-    template_id = REVIEW_TYPE_TO_TEMPLATE.get(review_type)
-    if template_id is None:
-        emit_error(
-            f"Unknown review type: {review_type}",
-            code="INVALID_REVIEW_TYPE",
-            error_type="validation",
-            remediation=f"Use one of: {', '.join(REVIEW_TYPE_TO_TEMPLATE.keys())}",
-            details={"review_type": review_type},
-        )
-
-    # Prepare review context
-    context = prepare_review_context(
-        spec_id=spec_id,
-        specs_dir=Path(specs_dir) if specs_dir else None,
-        include_tasks=True,
-        include_journals=True,
-    )
-
-    if context is None:
-        emit_error(
-            f"Specification '{spec_id}' not found",
-            code="SPEC_NOT_FOUND",
-            error_type="not_found",
-            remediation="Verify the spec ID and that the spec exists in the specs directory",
-            details={"spec_id": spec_id},
-        )
-
-    # Dry run - preview what would be reviewed
-    if dry_run:
-        return {
-            "spec_id": spec_id,
-            "review_type": review_type,
-            "template_id": template_id,
-            "dry_run": True,
-            "llm_status": llm_status,
-            "ai_provider": ai_provider,
-            "consultation_cache": consultation_cache,
-            "message": f"Dry run - {review_type} review would use template {template_id}",
-            "spec_title": context.title,
-            "task_count": context.stats.total_tasks if context.stats else 0,
-        }
-
-    # Import consultation layer components
-    try:
-        from foundry_mcp.core.ai_consultation import (
-            ConsultationOrchestrator,
-            ConsultationRequest,
-            ConsultationWorkflow,
-        )
-    except ImportError as exc:
-        emit_error(
-            "AI consultation layer not available",
-            code="AI_NOT_AVAILABLE",
-            error_type="unavailable",
-            remediation="Ensure foundry_mcp.core.ai_consultation is properly installed",
-        )
-
-    # Initialize orchestrator with preferred provider if specified
-    preferred_providers = [ai_provider] if ai_provider else []
-    orchestrator = ConsultationOrchestrator(
-        preferred_providers=preferred_providers,
-        default_timeout=ai_timeout,
-    )
-
-    # Check if any providers are available
-    if not orchestrator.is_available(provider_id=ai_provider):
-        provider_msg = f" (requested: {ai_provider})" if ai_provider else ""
-        emit_error(
-            f"AI-enhanced review requested but no providers available{provider_msg}",
-            code="AI_NO_PROVIDER",
-            error_type="unavailable",
-            remediation="Install and configure an AI provider (gemini, cursor-agent, codex) "
-            "or use --type quick for non-AI review.",
-            details={
-                "spec_id": spec_id,
-                "review_type": review_type,
-                "requested_provider": ai_provider,
-                "llm_status": llm_status,
-            },
-        )
-
-    # Build context for prompt template
-    spec_content = json.dumps(context.spec_data, indent=2)
-
-    # Create consultation request - orchestrator handles prompt building
-    request = ConsultationRequest(
-        workflow=ConsultationWorkflow.PLAN_REVIEW,
-        prompt_id=template_id,
-        context={
-            "spec_content": spec_content,
-            "spec_id": spec_id,
-            "title": context.title,
-            "review_type": review_type,
-        },
-        provider_id=ai_provider,
-        timeout=ai_timeout,
-    )
-
-    # Execute consultation
-    try:
-        result = orchestrator.consult(request, use_cache=consultation_cache)
-    except Exception as exc:
-        logger.exception(f"AI consultation failed for {spec_id}")
-        emit_error(
-            "AI consultation failed",
-            code="AI_CONSULTATION_ERROR",
-            error_type="error",
-            remediation="Check provider configuration and try again",
-            details={
-                "spec_id": spec_id,
-                "review_type": review_type,
-            },
-        )
-
-    # Build response
-    return {
-        "spec_id": spec_id,
-        "title": context.title,
-        "review_type": review_type,
-        "template_id": template_id,
-        "llm_status": llm_status,
-        "ai_provider": result.provider_id if result else ai_provider,
-        "consultation_cache": consultation_cache,
-        "response": result.content if result else None,
-        "model": result.model_used if result else None,
-        "cached": result.cache_hit if result else False,
-        "stats": {
-            "total_tasks": context.stats.total_tasks if context.stats else 0,
-            "completed_tasks": context.stats.completed_tasks if context.stats else 0,
-            "progress_percentage": context.progress.get("percentage", 0)
-            if context.progress
-            else 0,
-        },
-    }
-
-
-def _get_llm_status() -> dict:
-    """Get LLM configuration status."""
-    try:
-        from foundry_mcp.core.llm_config import get_llm_config
-
-        config = get_llm_config()
-        return {
-            "configured": config.get_api_key() is not None,
-            "provider": config.provider.value,
-            "model": config.get_model(),
-        }
-    except ImportError:
-        return {"configured": False, "error": "LLM config not available"}
-    except Exception as e:
-        logger.debug(f"Failed to get LLM config: {e}")
-        return {"configured": False, "error": "Failed to load LLM configuration"}
 
 
 def _run_fidelity_review(
@@ -661,7 +480,6 @@ def _run_fidelity_review(
     Returns:
         Dict with fidelity review results
     """
-    from pathlib import Path
 
     # Import consultation layer components
     try:
@@ -670,7 +488,7 @@ def _run_fidelity_review(
             ConsultationRequest,
             ConsultationWorkflow,
         )
-    except ImportError as exc:
+    except ImportError:
         emit_error(
             "AI consultation layer not available",
             code="AI_NOT_AVAILABLE",
@@ -692,7 +510,7 @@ def _run_fidelity_review(
                 details={"spec_id": spec_id},
             )
         spec_data = load_spec(spec_file)
-    except Exception as exc:
+    except Exception:
         logger.exception(f"Failed to load spec {spec_id}")
         emit_error(
             "Failed to load spec",
@@ -731,9 +549,7 @@ def _run_fidelity_review(
     journal_entries = _build_journal_entries(spec_data, task_id, phase_id)
 
     # Initialize orchestrator
-    preferred_providers = [ai_provider] if ai_provider else []
     orchestrator = ConsultationOrchestrator(
-        preferred_providers=preferred_providers,
         default_timeout=ai_timeout,
     )
 
@@ -775,7 +591,7 @@ def _run_fidelity_review(
     # Execute consultation
     try:
         result = orchestrator.consult(request, use_cache=consultation_cache)
-    except Exception as exc:
+    except Exception:
         logger.exception(f"AI fidelity consultation failed for {spec_id}")
         emit_error(
             "AI consultation failed",
@@ -834,285 +650,3 @@ def _run_fidelity_review(
         "incremental": incremental,
         "base_branch": base_branch,
     }
-
-
-def _build_spec_requirements(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
-) -> str:
-    """Build spec requirements section for fidelity review context."""
-    lines = []
-
-    if task_id:
-        # Find specific task
-        task = _find_task(spec_data, task_id)
-        if task:
-            lines.append(f"### Task: {task.get('title', task_id)}")
-            lines.append(f"- **Status:** {task.get('status', 'unknown')}")
-            if task.get("metadata", {}).get("details"):
-                lines.append("- **Details:**")
-                for detail in task["metadata"]["details"]:
-                    lines.append(f"  - {detail}")
-            if task.get("metadata", {}).get("file_path"):
-                lines.append(f"- **Expected file:** {task['metadata']['file_path']}")
-    elif phase_id:
-        # Find specific phase
-        phase = _find_phase(spec_data, phase_id)
-        if phase:
-            lines.append(f"### Phase: {phase.get('title', phase_id)}")
-            lines.append(f"- **Status:** {phase.get('status', 'unknown')}")
-            child_nodes = _get_child_nodes(spec_data, phase)
-            if child_nodes:
-                lines.append("- **Tasks:**")
-                for child in child_nodes:
-                    lines.append(
-                        f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}"
-                    )
-    else:
-        # Full spec
-        lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
-        if spec_data.get("description"):
-            lines.append(f"- **Description:** {spec_data['description']}")
-        if spec_data.get("assumptions"):
-            lines.append("- **Assumptions:**")
-            for assumption in spec_data["assumptions"][:5]:
-                if isinstance(assumption, dict):
-                    lines.append(f"  - {assumption.get('text', str(assumption))}")
-                else:
-                    lines.append(f"  - {assumption}")
-
-    return "\n".join(lines) if lines else "*No requirements available*"
-
-
-def _build_implementation_artifacts(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
-    files: Optional[List[str]],
-    incremental: bool,
-    base_branch: str,
-) -> str:
-    """Build implementation artifacts section for fidelity review context."""
-    from pathlib import Path
-    import subprocess
-
-    lines = []
-
-    # Collect file paths to review
-    file_paths = []
-    if files:
-        file_paths = list(files)
-    elif task_id:
-        task = _find_task(spec_data, task_id)
-        if task and task.get("metadata", {}).get("file_path"):
-            file_paths = [task["metadata"]["file_path"]]
-    elif phase_id:
-        phase = _find_phase(spec_data, phase_id)
-        if phase:
-            for child in _get_child_nodes(spec_data, phase):
-                if child.get("metadata", {}).get("file_path"):
-                    file_paths.append(child["metadata"]["file_path"])
-
-    # If incremental, get changed files from git diff
-    if incremental:
-        try:
-            result = subprocess.run(
-                ["git", "diff", "--name-only", base_branch],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                changed_files = result.stdout.strip().split("\n")
-                if file_paths:
-                    # Intersect with specified files
-                    file_paths = [f for f in file_paths if f in changed_files]
-                else:
-                    file_paths = changed_files
-                lines.append(
-                    f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n"
-                )
-        except Exception:
-            lines.append(f"*Warning: Could not get git diff from {base_branch}*\n")
-
-    # Read file contents (limited)
-    for file_path in file_paths[:5]:  # Limit to 5 files
-        path = Path(file_path)
-        if path.exists():
-            try:
-                content = path.read_text(encoding="utf-8")
-                # Truncate large files
-                if len(content) > 10000:
-                    content = content[:10000] + "\n... [truncated] ..."
-                file_type = path.suffix.lstrip(".") or "text"
-                lines.append(f"### File: `{file_path}`")
-                lines.append(f"```{file_type}")
-                lines.append(content)
-                lines.append("```\n")
-            except Exception as e:
-                lines.append(f"### File: `{file_path}`")
-                lines.append(f"*Error reading file: {e}*\n")
-        else:
-            lines.append(f"### File: `{file_path}`")
-            lines.append("*File not found*\n")
-
-    if not lines:
-        lines.append("*No implementation artifacts available*")
-
-    return "\n".join(lines)
-
-
-def _build_test_results(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
-) -> str:
-    """Build test results section for fidelity review context."""
-    # Check journal for test-related entries
-    journal = spec_data.get("journal", [])
-    test_entries = [
-        entry
-        for entry in journal
-        if "test" in entry.get("title", "").lower()
-        or "verify" in entry.get("title", "").lower()
-    ]
-
-    if test_entries:
-        lines = ["*Recent test-related journal entries:*"]
-        for entry in test_entries[-3:]:  # Last 3 entries
-            lines.append(
-                f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})"
-            )
-            if entry.get("content"):
-                # Truncate long content
-                content = entry["content"][:500]
-                if len(entry["content"]) > 500:
-                    content += "..."
-                lines.append(f"  {content}")
-        return "\n".join(lines)
-
-    return "*No test results available*"
-
-
-def _build_journal_entries(
-    spec_data: Dict[str, Any],
-    task_id: Optional[str],
-    phase_id: Optional[str],
-) -> str:
-    """Build journal entries section for fidelity review context."""
-    journal = spec_data.get("journal", [])
-
-    if task_id:
-        # Filter to task-related entries
-        journal = [entry for entry in journal if entry.get("task_id") == task_id]
-
-    if journal:
-        lines = [f"*{len(journal)} journal entries found:*"]
-        for entry in journal[-5:]:  # Last 5 entries
-            entry_type = entry.get("entry_type", "note")
-            lines.append(
-                f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({entry.get('timestamp', 'unknown')[:10]})"
-            )
-        return "\n".join(lines)
-
-    return "*No journal entries found*"
-
-
-def _find_task(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict[str, Any]]:
-    """Find a task by ID in the spec hierarchy (new or legacy format)."""
-    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
-    if task_id in hierarchy_nodes:
-        return hierarchy_nodes[task_id]
-
-    # Legacy tree structure fallback
-    hierarchy = spec_data.get("hierarchy", {})
-    children = hierarchy.get("children") if isinstance(hierarchy, dict) else None
-    if children:
-        return _search_hierarchy_children(children, task_id)
-    return None
-
-
-def _find_phase(spec_data: Dict[str, Any], phase_id: str) -> Optional[Dict[str, Any]]:
-    """Find a phase by ID in the spec hierarchy (new or legacy format)."""
-    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
-    if phase_id in hierarchy_nodes:
-        return hierarchy_nodes[phase_id]
-
-    # Legacy tree structure fallback
-    hierarchy = spec_data.get("hierarchy", {})
-    children = hierarchy.get("children") if isinstance(hierarchy, dict) else None
-    if children:
-        return _search_hierarchy_children(children, phase_id)
-    return None
-
-
-def _get_hierarchy_nodes(spec_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """Return mapping of hierarchy node IDs to node data."""
-    hierarchy = spec_data.get("hierarchy", {})
-    nodes: Dict[str, Dict[str, Any]] = {}
-
-    if isinstance(hierarchy, dict):
-        # New format: dict keyed by node_id -> node
-        if (
-            all(isinstance(value, dict) for value in hierarchy.values())
-            and "children" not in hierarchy
-        ):
-            for node_id, node in hierarchy.items():
-                node_copy = dict(node)
-                node_copy.setdefault("id", node_id)
-                nodes[node_id] = node_copy
-            return nodes
-
-        # Legacy format: nested children arrays
-        if hierarchy.get("children"):
-            _collect_hierarchy_nodes(hierarchy, nodes)
-
-    return nodes
-
-
-def _collect_hierarchy_nodes(
-    node: Dict[str, Any], nodes: Dict[str, Dict[str, Any]]
-) -> None:
-    """Recursively collect nodes for legacy hierarchy structure."""
-    node_id = node.get("id")
-    if node_id:
-        nodes[node_id] = node
-    for child in node.get("children", []) or []:
-        if isinstance(child, dict):
-            _collect_hierarchy_nodes(child, nodes)
-
-
-def _search_hierarchy_children(
-    children: List[Dict[str, Any]], target_id: str
-) -> Optional[Dict[str, Any]]:
-    """Search nested children lists for a target ID."""
-    for child in children:
-        if child.get("id") == target_id:
-            return child
-        nested = child.get("children")
-        if nested:
-            result = _search_hierarchy_children(nested, target_id)
-            if result:
-                return result
-    return None
-
-
-def _get_child_nodes(
-    spec_data: Dict[str, Any], node: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """Resolve child references (IDs or embedded dicts) to node data."""
-    children = node.get("children", []) or []
-    if not children:
-        return []
-
-    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
-    resolved: List[Dict[str, Any]] = []
-    for child in children:
-        if isinstance(child, dict):
-            resolved.append(child)
-        elif isinstance(child, str):
-            child_node = hierarchy_nodes.get(child)
-            if child_node:
-                resolved.append(child_node)
-    return resolved

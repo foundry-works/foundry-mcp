@@ -2,8 +2,8 @@
 
 import streamlit as st
 
-from foundry_mcp.dashboard.components.cards import kpi_row, status_badge
-from foundry_mcp.dashboard.components.charts import line_chart, bar_chart, empty_chart
+from foundry_mcp.dashboard.components.cards import kpi_row
+from foundry_mcp.dashboard.components.charts import line_chart, empty_chart
 from foundry_mcp.dashboard.data.stores import (
     get_overview_summary,
     get_metrics_timeseries,

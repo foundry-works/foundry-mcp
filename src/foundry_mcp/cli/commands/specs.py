@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
-from foundry_mcp.cli.output import emit, emit_error, emit_success
+from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,

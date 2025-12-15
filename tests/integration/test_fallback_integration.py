@@ -40,7 +40,7 @@ def test_sdd_plan_review_with_limits():
     # Run plan review that might consult multiple models
     env = os.environ.copy()
     env["HOME"] = "/tmp/test_home"
-    result = subprocess.run(
+    subprocess.run(
         ["foundry-cli", "plan", "review", "test-spec-id"],
         capture_output=True,
         text=True,
@@ -55,7 +55,7 @@ def test_sdd_plan_review_with_limits():
 def test_fidelity_review_retry_on_timeout():
     """Test fidelity review retries on timeout."""
     # Set very short timeout to force timeout
-    result = subprocess.run(
+    subprocess.run(
         [
             "foundry-cli",
             "review",

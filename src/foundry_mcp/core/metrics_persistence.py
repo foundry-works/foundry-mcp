@@ -7,7 +7,6 @@ to disk with time-bucket aggregation.
 
 from __future__ import annotations
 
-import atexit
 import logging
 import threading
 import time
@@ -20,7 +19,6 @@ from foundry_mcp.core.metrics_store import (
     MetricDataPoint,
     FileMetricsStore,
     MetricsStore,
-    get_metrics_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -322,7 +320,7 @@ def create_persistence_aware_exporter(
     Returns:
         PersistenceAwareExporter instance
     """
-    from foundry_mcp.core.prometheus import PrometheusExporter, get_prometheus_exporter
+    from foundry_mcp.core.prometheus import get_prometheus_exporter
 
     if collector is None:
         collector = MetricsPersistenceCollector(config)

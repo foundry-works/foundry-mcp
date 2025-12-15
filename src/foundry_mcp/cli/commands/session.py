@@ -15,11 +15,9 @@ from foundry_mcp.cli.transcript import find_transcript_by_marker, parse_transcri
 
 TRANSCRIPT_OPT_IN_ENV = "FOUNDRY_MCP_ALLOW_TRANSCRIPTS"
 from foundry_mcp.cli.context import (
-    ContextTracker,
     get_context_tracker,
     get_session_status,
     record_consultation,
-    start_cli_session,
 )
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
@@ -207,7 +205,7 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
             command_groups[name] = {"type": "command"}
 
     # Get feature flags
-    flag_registry = get_cli_flags()
+    get_cli_flags()
     flags = flags_for_discovery()
 
     # Known CLI capabilities

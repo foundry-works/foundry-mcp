@@ -33,13 +33,13 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spec
-from foundry_mcp.tools.documentation import (
+from foundry_mcp.tools.unified.documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
     _build_spec_requirements,
     _build_test_results,
 )
-from foundry_mcp.tools.review import (
+from foundry_mcp.tools.unified.review_helpers import (
     DEFAULT_AI_TIMEOUT,
     REVIEW_TYPES,
     _get_llm_status,
@@ -107,23 +107,91 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     start_time = time.perf_counter()
     llm_status = _get_llm_status()
 
+    path = payload.get("path")
+    ai_provider = payload.get("ai_provider")
+    model = payload.get("model")
+
+    for field_name, field_value in [
+        ("spec_id", spec_id),
+        ("path", path),
+        ("ai_provider", ai_provider),
+        ("model", model),
+    ]:
+        if (
+            field_value
+            and isinstance(field_value, str)
+            and is_prompt_injection(field_value)
+        ):
+            return asdict(
+                error_response(
+                    f"Input validation failed for {field_name}",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Remove instruction-like patterns from input.",
+                )
+            )
+
+    specs_dir = None
+    if isinstance(path, str) and path.strip():
+        candidate = Path(path)
+        if candidate.is_dir():
+            specs_dir = candidate
+        elif candidate.is_file():
+            specs_dir = candidate.parent
+        else:
+            return asdict(
+                error_response(
+                    f"Invalid path: {path}",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Provide an existing directory or spec file path.",
+                )
+            )
+    else:
+        specs_dir = config.specs_dir
+
+    dry_run = bool(payload.get("dry_run", False))
+
     if review_type == "quick":
         return _run_quick_review(
             spec_id=spec_id,
-            path=payload.get("path"),
-            dry_run=bool(payload.get("dry_run", False)),
+            specs_dir=specs_dir,
+            dry_run=dry_run,
             llm_status=llm_status,
             start_time=start_time,
         )
 
+    try:
+        ai_timeout = float(payload.get("ai_timeout", DEFAULT_AI_TIMEOUT))
+    except (TypeError, ValueError):
+        return asdict(
+            error_response(
+                "ai_timeout must be a number",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide ai_timeout as a float (seconds).",
+            )
+        )
+
+    if ai_timeout <= 0:
+        return asdict(
+            error_response(
+                "ai_timeout must be greater than 0",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide ai_timeout as a positive number of seconds.",
+            )
+        )
+
     return _run_ai_review(
         spec_id=spec_id,
+        specs_dir=specs_dir,
         review_type=review_type,
-        ai_provider=payload.get("ai_provider"),
-        ai_timeout=float(payload.get("ai_timeout", DEFAULT_AI_TIMEOUT)),
+        ai_provider=ai_provider,
+        model=model,
+        ai_timeout=ai_timeout,
         consultation_cache=bool(payload.get("consultation_cache", True)),
-        path=payload.get("path"),
-        dry_run=bool(payload.get("dry_run", False)),
+        dry_run=dry_run,
         llm_status=llm_status,
         start_time=start_time,
     )
@@ -403,7 +471,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     preferred_providers = ai_tools if isinstance(ai_tools, list) else []
     first_provider = preferred_providers[0] if preferred_providers else None
 
-    orchestrator = ConsultationOrchestrator(preferred_providers=preferred_providers)
+    orchestrator = ConsultationOrchestrator()
     if not orchestrator.is_available(provider_id=first_provider):
         return asdict(
             error_response(

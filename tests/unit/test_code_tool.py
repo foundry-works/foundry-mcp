@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.tools.unified.code import legacy_code_action
+from foundry_mcp.tools.unified.code import _dispatch_code_action
 
 
 def test_python_call_graph_respects_depth(tmp_path: Path, response_validator) -> None:
@@ -28,15 +28,17 @@ def baz():
 
     config = ServerConfig()
 
-    response_depth_1 = legacy_code_action(
-        "callees",
+    response_depth_1 = _dispatch_code_action(
+        action="callees",
         config=config,
-        symbol="baz",
-        language="python",
-        workspace=str(tmp_path),
-        path_allowlist=["."],
-        depth=1,
-        max_nodes=50,
+        payload={
+            "symbol": "baz",
+            "language": "python",
+            "workspace": str(tmp_path),
+            "path_allowlist": ["."],
+            "depth": 1,
+            "max_nodes": 50,
+        },
     )
     response_validator(response_depth_1)
     assert response_depth_1["success"] is True
@@ -46,15 +48,17 @@ def baz():
     assert "bar" in symbols_depth_1
     assert "foo" not in symbols_depth_1
 
-    response_depth_2 = legacy_code_action(
-        "callees",
+    response_depth_2 = _dispatch_code_action(
+        action="callees",
         config=config,
-        symbol="baz",
-        language="python",
-        workspace=str(tmp_path),
-        path_allowlist=["."],
-        depth=2,
-        max_nodes=50,
+        payload={
+            "symbol": "baz",
+            "language": "python",
+            "workspace": str(tmp_path),
+            "path_allowlist": ["."],
+            "depth": 2,
+            "max_nodes": 50,
+        },
     )
     response_validator(response_depth_2)
     assert response_depth_2["success"] is True
@@ -67,14 +71,16 @@ def test_invalid_depth_is_validation_error(tmp_path: Path, response_validator) -
     sample = tmp_path / "sample.py"
     sample.write_text("def foo():\n    return 1\n")
 
-    response = legacy_code_action(
-        "callees",
+    response = _dispatch_code_action(
+        action="callees",
         config=ServerConfig(),
-        symbol="foo",
-        language="python",
-        workspace=str(tmp_path),
-        path_allowlist=["."],
-        depth="nope",
+        payload={
+            "symbol": "foo",
+            "language": "python",
+            "workspace": str(tmp_path),
+            "path_allowlist": ["."],
+            "depth": "nope",
+        },
     )
 
     response_validator(response)

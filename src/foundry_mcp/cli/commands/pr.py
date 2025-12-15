@@ -17,7 +17,6 @@ from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
     MEDIUM_TIMEOUT,
-    SLOW_TIMEOUT,
     with_sync_timeout,
     handle_keyboard_interrupt,
 )

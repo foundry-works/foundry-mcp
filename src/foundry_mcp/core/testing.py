@@ -3,7 +3,6 @@ Testing operations for foundry-mcp.
 Provides functions for running tests and test discovery.
 """
 
-import json
 import subprocess
 import uuid
 from dataclasses import dataclass, field

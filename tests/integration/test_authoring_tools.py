@@ -10,7 +10,6 @@ Tests:
 
 import json
 import pytest
-from pathlib import Path
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
 

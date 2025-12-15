@@ -10,7 +10,6 @@ from foundry_mcp.dashboard.components.filters import (
     filter_row,
 )
 from foundry_mcp.dashboard.components.tables import (
-    data_table,
     error_table_config,
     paginated_table,
 )

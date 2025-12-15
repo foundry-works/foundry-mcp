@@ -12,7 +12,6 @@ Tests cover:
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -227,7 +226,7 @@ class TestGoldenFixtureParity:
         assert result.exit_code == 0
 
         actual = json.loads(result.output)
-        expected = load_golden_fixture("success_test_presets")
+        load_golden_fixture("success_test_presets")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
@@ -248,7 +247,7 @@ class TestGoldenFixtureParity:
         )
 
         actual = json.loads(result.output)
-        expected = load_golden_fixture("success_validation")
+        load_golden_fixture("success_validation")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
@@ -275,7 +274,7 @@ class TestGoldenFixtureParity:
         )
 
         actual = json.loads(result.output)
-        expected = load_golden_fixture("error_not_found")
+        load_golden_fixture("error_not_found")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
