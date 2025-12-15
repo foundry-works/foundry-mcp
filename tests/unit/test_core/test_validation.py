@@ -4,7 +4,6 @@ Unit tests for foundry_mcp.core.validation module.
 Tests validation functions, auto-fix capabilities, and statistics calculation.
 """
 
-import copy
 import pytest
 from foundry_mcp.core.validation import (
     validate_spec,
@@ -15,9 +14,6 @@ from foundry_mcp.core.validation import (
     execute_verification,
     format_verification_summary,
     Diagnostic,
-    ValidationResult,
-    FixAction,
-    SpecStats,
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_VERIFICATION_TYPES,
@@ -26,6 +22,7 @@ from foundry_mcp.core.validation import (
 
 
 # Test fixtures
+
 
 @pytest.fixture
 def valid_spec():
@@ -97,8 +94,15 @@ def spec_with_issues():
                 "children": [],
                 "total_tasks": 1,
                 "completed_tasks": 0,
-                "metadata": {"task_category": "implementation", "file_path": "test2.py"},
-                "dependencies": {"blocks": [], "blocked_by": [], "depends": []},  # Missing blocked_by
+                "metadata": {
+                    "task_category": "implementation",
+                    "file_path": "test2.py",
+                },
+                "dependencies": {
+                    "blocks": [],
+                    "blocked_by": [],
+                    "depends": [],
+                },  # Missing blocked_by
             },
         },
     }
@@ -251,6 +255,7 @@ class TestApplyFixes:
         """Test that dry_run mode returns skipped actions."""
         spec_file = tmp_path / "spec.json"
         import json
+
         spec_file.write_text(json.dumps(spec_with_issues))
 
         result = validate_spec(spec_with_issues)
@@ -264,6 +269,7 @@ class TestApplyFixes:
         """Test that backup is created when enabled."""
         spec_file = tmp_path / "spec.json"
         import json
+
         spec_file.write_text(json.dumps(spec_with_issues))
 
         result = validate_spec(spec_with_issues)
@@ -277,6 +283,7 @@ class TestApplyFixes:
         """Test that fixes are applied correctly."""
         spec_file = tmp_path / "spec.json"
         import json
+
         spec_file.write_text(json.dumps(spec_with_issues))
 
         result = validate_spec(spec_with_issues)
@@ -326,6 +333,7 @@ class TestCalculateStats:
         """Test that file size is calculated when path provided."""
         spec_file = tmp_path / "spec.json"
         import json
+
         spec_file.write_text(json.dumps(valid_spec))
         stats = calculate_stats(valid_spec, str(spec_file))
         assert stats.file_size_kb > 0
@@ -380,8 +388,8 @@ class TestValidationConstants:
 
     def test_valid_verification_types(self):
         """Test that valid verification types are defined."""
-        # Current valid types are run-tests and fidelity
-        assert "run-tests" in VALID_VERIFICATION_TYPES
+        # Current valid types are test and fidelity
+        assert "test" in VALID_VERIFICATION_TYPES
         assert "fidelity" in VALID_VERIFICATION_TYPES
 
 
@@ -493,7 +501,9 @@ class TestAddVerification:
         )
         assert success is True
 
-        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"]["verification_history"]
+        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"][
+            "verification_history"
+        ]
         entry = history[0]
         assert entry["result"] == "PARTIAL"
         assert entry["command"] == "pytest tests/"
@@ -531,7 +541,10 @@ class TestExecuteVerification:
                     "children": [],
                     "total_tasks": 1,
                     "completed_tasks": 0,
-                    "metadata": {"verification_type": "auto", "command": "echo hello world"},
+                    "metadata": {
+                        "verification_type": "auto",
+                        "command": "echo hello world",
+                    },
                 },
             },
         }
@@ -579,7 +592,9 @@ class TestExecuteVerification:
     def test_execute_verification_failing_command(self, spec_with_failing_command):
         """Test execution of a failing command."""
         result = execute_verification(spec_with_failing_command, "verify-1")
-        assert result["success"] is True  # Execution completed, even if result is FAILED
+        assert (
+            result["success"] is True
+        )  # Execution completed, even if result is FAILED
         assert result["result"] == "FAILED"
         assert result["exit_code"] == 1
 
@@ -628,7 +643,9 @@ class TestExecuteVerification:
     def test_execute_verification_timeout(self, spec_with_echo_command):
         """Test command timeout handling."""
         # Change command to sleep longer than timeout
-        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "sleep 5"
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = (
+            "sleep 5"
+        )
         result = execute_verification(spec_with_echo_command, "verify-1", timeout=1)
         assert "timed out" in result["error"]
         assert result["result"] == "FAILED"
@@ -647,7 +664,9 @@ class TestExecuteVerification:
 
     def test_execute_verification_captures_stderr(self, spec_with_echo_command):
         """Test that stderr is captured."""
-        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "echo error >&2"
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = (
+            "echo error >&2"
+        )
         result = execute_verification(spec_with_echo_command, "verify-1")
         assert result["success"] is True
         assert "[stderr]" in result["output"]

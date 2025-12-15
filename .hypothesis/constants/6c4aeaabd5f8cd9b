@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/testing.py
-# hypothesis_version: 6.148.3
-
-[300, 'duration', 'errors', 'failed', 'file_path', 'foundry_run_tests', 'foundry_test_presets', 'line_number', 'markers', 'message', 'name', 'outcome', 'passed', 'quick', 'skipped', 'test_*.py', 'total', 'unit']

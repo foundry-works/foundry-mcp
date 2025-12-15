@@ -3,19 +3,14 @@
 import asyncio
 import pytest
 import time
-from unittest.mock import AsyncMock, patch
 
 from foundry_mcp.core.concurrency import (
     # Concurrency limiting
     ConcurrencyLimiter,
-    ConcurrencyConfig,
-    ConcurrencyStats,
-    GatherResult,
     get_tool_limiter,
     configure_tool_limiter,
     get_all_limiter_stats,
     # Cancellation handling
-    CancellationResult,
     CancellationToken,
     cancellable_scope,
     with_cancellation,

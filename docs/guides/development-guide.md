@@ -177,7 +177,6 @@ src/foundry_mcp/
 │   ├── validation.py      # Validation tools
 │   ├── lifecycle.py       # Lifecycle tools
 │   ├── journal.py         # Journal tools
-│   ├── docs.py            # Code documentation tools
 │   ├── testing.py         # Test runner tools
 │   ├── review.py          # LLM review tools
 │   └── ...
@@ -367,16 +366,16 @@ def test_do_thing_empty_input():
 
 Follow the [naming conventions](../codebase_standards/naming-conventions.md):
 
-| Domain | Prefix | Examples |
-|--------|--------|----------|
-| Environment | `sdd-` | `sdd-verify-toolchain`, `sdd-init-workspace` |
-| Spec-wide | `spec-` | `spec-create`, `spec-validate`, `spec-render` |
-| Task | `task-` | `task-add`, `task-complete`, `task-block` |
-| Planning | `plan-`/`phase-` | `plan-format`, `phase-check-complete` |
-| Review | `review-`/`pr-` | `review-parse-feedback`, `pr-create-with-spec` |
-| Testing | `test-` | `test-run`, `test-discover` |
-| Code docs | `code-`/`doc-` | `code-find-class`, `doc-stats` |
-| Journal | `journal-` | `journal-add`, `journal-list` |
+| Surface | Name | Examples |
+|--------|------|----------|
+| Unified tool router | `spec` | `spec(action="list")`, `spec(action="validate")` |
+| Unified tool router | `task` | `task(action="next")`, `task(action="prepare")` |
+| Unified tool router | `lifecycle` | `lifecycle(action="activate")`, `lifecycle(action="archive")` |
+| Unified tool router | `journal` | `journal(action="add")`, `journal(action="list")` |
+| Unified tool router | `test` | `test(action="run", preset="full")`, `test(action="discover")` |
+| Unified tool router | `review` | `review(action="spec")`, `review(action="fidelity")` |
+| Unified tool router | `code` | `code(action="find-function")`, `code(action="trace")` |
+| Unified tool router | `server` | `server(action="tools")`, `server(action="schema", tool_name="spec")` |
 
 ---
 
@@ -590,19 +589,6 @@ def example_command(param: str, dry_run: bool):
 3. **Stderr for errors** — Non-JSON diagnostics go to stderr
 4. **Exit codes** — 0 for success, non-zero for failures
 
-### Documentation Query Commands
-
-The `sdd doc` namespace wraps the transport-agnostic `foundry_mcp.core.docs.DocQuery`
-helpers. All commands support JSON pagination and input validation:
-
-- `sdd doc find-class|find-function` — Exact or fuzzy lookups constrained by `--limit`
-- `sdd doc trace-calls` — Traverses callers/callees up to 6 hops; rejects deeper traversals
-- `sdd doc context` — Depth 1–3 (plan/standard/comprehensive) with optional graph overlays
-- `sdd doc refactor-candidates` — Flags high-risk functions/classes with bounded thresholds
-
-Keep inputs within the published ranges to avoid runaway traversals, and reuse
-`core.pagination.normalize_page_size` for list commands.
-
 ### Session Context & Transcript Access
 
 `session context` parses Claude transcript JSONL files to estimate token budgets.
@@ -720,7 +706,7 @@ python -c "from foundry_mcp.server import create_server; print('OK')"
 | `ModuleNotFoundError: foundry_mcp` | Package not installed | `pip install -e .` |
 | `No specs directory found` | Missing specs path | Set `FOUNDRY_MCP_SPECS_DIR` |
 | `Spec not found: {id}` | Wrong spec ID or folder | Check spec exists in status folders |
-| `Invalid spec structure` | Malformed JSON | Run `spec-validate` |
+| `Invalid spec structure` | Malformed JSON | Run `spec(action="validate")` |
 | `pytest not found` | Missing test dependency | `pip install -e ".[test]"` |
 
 ### Getting Help
@@ -740,7 +726,7 @@ python -c "from foundry_mcp.server import create_server; print('OK')"
 | [Response Schema](../codebase_standards/mcp_response_schema.md) | Response contract details |
 | [Naming Conventions](../codebase_standards/naming-conventions.md) | Tool naming standards |
 | [MCP Best Practices](../mcp_best_practices/README.md) | Industry patterns |
-| [Architecture](../generated/architecture.md) | Architecture overview |
+| [Architecture](../architecture/adr-001-cli-architecture.md) | CLI/MCP architecture decision record |
 | [LLM Configuration](llm-configuration.md) | LLM provider setup |
 
 ---

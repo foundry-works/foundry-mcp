@@ -12,7 +12,6 @@ Tests cover:
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -56,13 +55,23 @@ def validate_envelope_structure(response: dict, is_error: bool = False) -> list[
 
     # Type checks
     if "success" in response and not isinstance(response["success"], bool):
-        violations.append(f"'success' must be boolean, got {type(response['success']).__name__}")
+        violations.append(
+            f"'success' must be boolean, got {type(response['success']).__name__}"
+        )
 
     if "data" in response and not isinstance(response["data"], dict):
-        violations.append(f"'data' must be object, got {type(response['data']).__name__}")
+        violations.append(
+            f"'data' must be object, got {type(response['data']).__name__}"
+        )
 
-    if "error" in response and response["error"] is not None and not isinstance(response["error"], str):
-        violations.append(f"'error' must be string or null, got {type(response['error']).__name__}")
+    if (
+        "error" in response
+        and response["error"] is not None
+        and not isinstance(response["error"], str)
+    ):
+        violations.append(
+            f"'error' must be string or null, got {type(response['error']).__name__}"
+        )
 
     # Consistency checks
     if response.get("success") is True and response.get("error") is not None:
@@ -96,7 +105,9 @@ def compare_schema_keys(expected: dict, actual: dict, path: str = "") -> list[st
     for key in common_keys:
         if isinstance(expected[key], dict) and isinstance(actual[key], dict):
             nested_path = f"{path}.{key}" if path else key
-            differences.extend(compare_schema_keys(expected[key], actual[key], nested_path))
+            differences.extend(
+                compare_schema_keys(expected[key], actual[key], nested_path)
+            )
 
     return differences
 
@@ -125,14 +136,14 @@ def temp_specs_dir(tmp_path):
                 "type": "root",
                 "title": "Example Specification",
                 "children": ["phase-1"],
-                "status": "in_progress"
+                "status": "in_progress",
             },
             "phase-1": {
                 "type": "phase",
                 "title": "Phase 1",
                 "parent": "spec-root",
                 "children": ["task-1-1", "task-1-2"],
-                "status": "in_progress"
+                "status": "in_progress",
             },
             "task-1-1": {
                 "type": "task",
@@ -140,7 +151,7 @@ def temp_specs_dir(tmp_path):
                 "parent": "phase-1",
                 "status": "completed",
                 "metadata": {"description": "First task implementation"},
-                "dependencies": {}
+                "dependencies": {},
             },
             "task-1-2": {
                 "type": "task",
@@ -148,10 +159,10 @@ def temp_specs_dir(tmp_path):
                 "parent": "phase-1",
                 "status": "pending",
                 "metadata": {"description": "Second task"},
-                "dependencies": {}
-            }
+                "dependencies": {},
+            },
         },
-        "journal": []
+        "journal": [],
     }
 
     spec_file = active_dir / "example-spec.json"
@@ -166,8 +177,7 @@ class TestResponseEnvelopeParity:
     def test_success_response_envelope(self, cli_runner, temp_specs_dir):
         """Success responses follow envelope structure."""
         result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
         )
         assert result.exit_code == 0
 
@@ -184,7 +194,13 @@ class TestResponseEnvelopeParity:
         """Error responses follow envelope structure."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "validate", "check", "nonexistent-spec"]
+            [
+                "--specs-dir",
+                str(temp_specs_dir),
+                "validate",
+                "check",
+                "nonexistent-spec",
+            ],
         )
         # May succeed or fail depending on implementation
         response = json.loads(result.output)
@@ -205,13 +221,12 @@ class TestGoldenFixtureParity:
     def test_test_presets_matches_golden(self, cli_runner, temp_specs_dir):
         """test presets output matches expected schema."""
         result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
         )
         assert result.exit_code == 0
 
         actual = json.loads(result.output)
-        expected = load_golden_fixture("success_test_presets")
+        load_golden_fixture("success_test_presets")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
@@ -228,11 +243,11 @@ class TestGoldenFixtureParity:
         """validate check output matches expected schema."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "validate", "check", "example-spec"]
+            ["--specs-dir", str(temp_specs_dir), "validate", "check", "example-spec"],
         )
 
         actual = json.loads(result.output)
-        expected = load_golden_fixture("success_validation")
+        load_golden_fixture("success_validation")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
@@ -249,11 +264,17 @@ class TestGoldenFixtureParity:
         """Not found error matches expected schema."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "validate", "check", "nonexistent-spec-id"]
+            [
+                "--specs-dir",
+                str(temp_specs_dir),
+                "validate",
+                "check",
+                "nonexistent-spec-id",
+            ],
         )
 
         actual = json.loads(result.output)
-        expected = load_golden_fixture("error_not_found")
+        load_golden_fixture("error_not_found")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
@@ -274,8 +295,7 @@ class TestCommandGroupParity:
     def test_specs_analyze_produces_json(self, cli_runner, temp_specs_dir):
         """specs analyze produces valid JSON output."""
         result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "analyze"]
+            cli, ["--specs-dir", str(temp_specs_dir), "specs", "analyze"]
         )
         assert result.exit_code == 0
 
@@ -286,8 +306,7 @@ class TestCommandGroupParity:
     def test_session_status_produces_json(self, cli_runner, temp_specs_dir):
         """session status produces valid JSON output."""
         result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "session", "status"]
+            cli, ["--specs-dir", str(temp_specs_dir), "session", "status"]
         )
         assert result.exit_code == 0
 
@@ -298,8 +317,7 @@ class TestCommandGroupParity:
     def test_session_capabilities_produces_json(self, cli_runner, temp_specs_dir):
         """session capabilities produces valid JSON output."""
         result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "session", "capabilities"]
+            cli, ["--specs-dir", str(temp_specs_dir), "session", "capabilities"]
         )
         assert result.exit_code == 0
 
@@ -315,28 +333,12 @@ class TestCommandGroupParity:
         """lifecycle state produces valid JSON output."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "lifecycle", "state", "example-spec"]
+            ["--specs-dir", str(temp_specs_dir), "lifecycle", "state", "example-spec"],
         )
 
         response = json.loads(result.output)
         violations = validate_envelope_structure(response)
         assert not violations, f"Envelope violations: {violations}"
-
-    def test_render_basic_produces_json(self, cli_runner, temp_specs_dir):
-        """render basic mode produces valid JSON output."""
-        result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "render", "example-spec", "--mode", "basic"]
-        )
-        assert result.exit_code == 0
-
-        response = json.loads(result.output)
-        violations = validate_envelope_structure(response)
-        assert not violations, f"Envelope violations: {violations}"
-
-        # Should have markdown output
-        assert response["success"] is True
-        assert "markdown" in response["data"]
 
 
 class TestOutputStability:
@@ -347,8 +349,7 @@ class TestOutputStability:
         results = []
         for _ in range(3):
             result = cli_runner.invoke(
-                cli,
-                ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+                cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
             )
             assert result.exit_code == 0
             results.append(json.loads(result.output))
@@ -356,7 +357,9 @@ class TestOutputStability:
         # All responses should have same keys
         first_keys = set(results[0].keys())
         for i, response in enumerate(results[1:], 2):
-            assert set(response.keys()) == first_keys, f"Invocation {i} has different keys"
+            assert set(response.keys()) == first_keys, (
+                f"Invocation {i} has different keys"
+            )
 
         # All should have same data keys
         first_data_keys = set(results[0]["data"].keys())
@@ -366,54 +369,37 @@ class TestOutputStability:
     def test_no_ansi_in_output(self, cli_runner, temp_specs_dir):
         """CLI output contains no ANSI escape codes."""
         result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
         )
         assert result.exit_code == 0
 
         # Check for common ANSI escape sequences
         ansi_patterns = ["\x1b[", "\033[", "\x1b]"]
         for pattern in ansi_patterns:
-            assert pattern not in result.output, f"Found ANSI escape in output: {pattern!r}"
+            assert pattern not in result.output, (
+                f"Found ANSI escape in output: {pattern!r}"
+            )
 
     def test_output_is_valid_json(self, cli_runner, temp_specs_dir):
         """All output is valid JSON (no extra text)."""
         commands = [
             ["test", "presets"],
-            ["analyze"],
+            ["specs", "analyze"],
             ["session", "status"],
         ]
 
         for cmd in commands:
-            result = cli_runner.invoke(
-                cli,
-                ["--specs-dir", str(temp_specs_dir)] + cmd
-            )
+            result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir)] + cmd)
 
             # Output should be parseable as JSON
             try:
                 data = json.loads(result.output)
             except json.JSONDecodeError as e:
-                pytest.fail(f"Command {cmd} produced invalid JSON: {e}\nOutput: {result.output[:200]}")
+                pytest.fail(
+                    f"Command {cmd} produced invalid JSON: {e}\nOutput: {result.output[:200]}"
+                )
 
             # Should be a dict (not list or primitive)
-            assert isinstance(data, dict), f"Command {cmd} should return object, got {type(data)}"
-
-
-class TestFeatureFlagGating:
-    """Tests that feature-gated functionality behaves correctly."""
-
-    def test_enhanced_render_gated(self, cli_runner, temp_specs_dir):
-        """Enhanced render mode is properly gated by feature flag."""
-        result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "render", "example-spec", "--mode", "enhanced"]
-        )
-
-        # Should fail with feature disabled error
-        assert result.exit_code == 1
-        response = json.loads(result.output)
-        assert response["success"] is False
-        # Per response-v2: error is string message, error_code is in data
-        assert isinstance(response["error"], str)
-        assert response["data"].get("error_code") == "FEATURE_DISABLED"
+            assert isinstance(data, dict), (
+                f"Command {cmd} should return object, got {type(data)}"
+            )

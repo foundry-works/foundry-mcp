@@ -1,12 +1,10 @@
 """Tests for foundry_mcp.core.llm_patterns module."""
 
-import pytest
 
 from foundry_mcp.core.llm_patterns import (
     # Progressive disclosure
     DetailLevel,
     DisclosureConfig,
-    DEFAULT_DISCLOSURE_CONFIG,
     progressive_disclosure,
     get_detail_level,
     # Batch operations

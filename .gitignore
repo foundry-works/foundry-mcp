@@ -48,11 +48,9 @@ settings.json
 
 # SDD Toolkit
 .specs/
-specs/.reports/
-specs/.reviews/
-specs/.backups/
-specs/.human-readable/
-specs/.fidelity-reviews/
+
+# Ignore all dotfolders under specs/ (reports, reviews, etc.)
+specs/.*/
 
 # ModelChorus configuration
 .model-chorusrc

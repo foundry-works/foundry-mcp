@@ -10,7 +10,6 @@ from foundry_mcp.core.spec import (
     find_specs_directory,
     find_spec_file,
     load_spec,
-    save_spec,
     list_specs,
     get_node,
     update_node,

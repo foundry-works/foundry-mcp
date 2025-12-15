@@ -1,7 +1,7 @@
 """JSON output helpers for SDD CLI.
 
 This module provides the sole output mechanism for the CLI.
-All output is JSON - no human-readable formatting, no verbosity flags.
+The CLI is JSON-first and currently emits JSON envelopes only.
 
 Design rationale:
 - Primary consumers are AI coding assistants (Claude, Cursor, etc.)
@@ -18,7 +18,17 @@ import sys
 from dataclasses import asdict
 from typing import Any, Mapping, Sequence, NoReturn
 
+from foundry_mcp.cli.logging import generate_request_id, get_request_id, set_request_id
 from foundry_mcp.core.responses import error_response, success_response
+
+
+def _ensure_request_id() -> str:
+    request_id = get_request_id()
+    if request_id:
+        return request_id
+    request_id = generate_request_id()
+    set_request_id(request_id)
+    return request_id
 
 
 def emit(data: Any) -> None:
@@ -63,6 +73,7 @@ def emit_error(
         error_type=error_type,
         remediation=remediation,
         details=details,
+        request_id=_ensure_request_id(),
     )
     print(json.dumps(asdict(response), indent=2, default=str), file=sys.stderr)
     sys.exit(1)
@@ -96,6 +107,7 @@ def emit_success(
             pagination=pagination,
             telemetry=telemetry,
             meta=meta,
+            request_id=_ensure_request_id(),
         )
     else:
         # Wrap non-dict data in a result key
@@ -105,5 +117,6 @@ def emit_success(
             pagination=pagination,
             telemetry=telemetry,
             meta=meta,
+            request_id=_ensure_request_id(),
         )
     emit(asdict(response))

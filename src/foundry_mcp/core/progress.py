@@ -7,6 +7,29 @@ from datetime import datetime, timezone
 from typing import Dict, List, Any
 
 
+# Status icons for task visualization
+STATUS_ICONS = {
+    "pending": "⏳",
+    "in_progress": "🔄",
+    "completed": "✅",
+    "blocked": "🚫",
+    "failed": "❌",
+}
+
+
+def get_status_icon(status: str) -> str:
+    """
+    Get icon for a task status.
+
+    Args:
+        status: Task status string
+
+    Returns:
+        Status icon character
+    """
+    return STATUS_ICONS.get(status, "❓")
+
+
 def recalculate_progress(spec_data: Dict[str, Any], node_id: str = "spec-root") -> Dict[str, Any]:
     """
     Recursively recalculate progress for a node and all its parents.

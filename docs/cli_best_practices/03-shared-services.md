@@ -20,7 +20,7 @@
 ## 3.4 Resilience & Concurrency
 
 - Use `foundry_mcp.core.resilience` timeouts and retry helpers; never implement ad-hoc sleeps or busy loops.
-- Long-running operations (doc-query scans, render flows) must opt into the same concurrency controls described in [docs/mcp_best_practices/15-concurrency-patterns.md](../mcp_best_practices/15-concurrency-patterns.md) so the CLI does not saturate resources when run alongside MCP workloads.
+- Long-running operations (repo-local code scans, large spec/test runs) must opt into the same concurrency controls described in [docs/mcp_best_practices/15-concurrency-patterns.md](../mcp_best_practices/15-concurrency-patterns.md) so the CLI does not saturate resources when run alongside MCP workloads.
 
 ## 3.5 Discovery & Feature Flags
 

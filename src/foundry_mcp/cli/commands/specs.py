@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
-from foundry_mcp.cli.output import emit, emit_error, emit_success
+from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
@@ -295,7 +295,7 @@ TEMPLATE_INFO = {
 @click.argument("action", type=click.Choice(["list", "show"]))
 @click.argument("template_name", required=False)
 @click.pass_context
-@cli_command("specs-template")
+@cli_command("template")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Template lookup timed out")
 def template(
@@ -318,10 +318,12 @@ def template(
             }
             for info in TEMPLATE_INFO.values()
         ]
-        emit_success({
-            "templates": templates,
-            "count": len(templates),
-        })
+        emit_success(
+            {
+                "templates": templates,
+                "count": len(templates),
+            }
+        )
 
     elif action == "show":
         if not template_name:
@@ -349,27 +351,29 @@ def template(
         # Get the actual structure
         structure = get_template_structure(template_name, "implementation")
 
-        emit_success({
-            "template": info,
-            "structure": {
-                "nodes": list(structure.keys()),
-                "hierarchy": {
-                    node_id: {
-                        "type": node["type"],
-                        "title": node["title"],
-                        "children": node.get("children", []),
-                    }
-                    for node_id, node in structure.items()
-                    if isinstance(node, dict)
+        emit_success(
+            {
+                "template": info,
+                "structure": {
+                    "nodes": list(structure.keys()),
+                    "hierarchy": {
+                        node_id: {
+                            "type": node["type"],
+                            "title": node["title"],
+                            "children": node.get("children", []),
+                        }
+                        for node_id, node in structure.items()
+                        if isinstance(node, dict)
+                    },
                 },
-            },
-        })
+            }
+        )
 
 
 @specs.command("analyze")
 @click.argument("directory", required=False)
 @click.pass_context
-@cli_command("specs-analyze")
+@cli_command("analyze")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec analysis timed out")
 def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
@@ -419,7 +423,9 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
 
         # Check for documentation
         docs_dir = specs_dir / ".human-readable"
-        analysis["documentation_available"] = docs_dir.is_dir() and any(docs_dir.glob("*.md"))
+        analysis["documentation_available"] = docs_dir.is_dir() and any(
+            docs_dir.glob("*.md")
+        )
 
         # Check for codebase docs
         codebase_json = target_dir / "docs" / "codebase.json"
@@ -431,7 +437,8 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
             "has_pending_specs": folder_counts.get("pending", 0) > 0,
             "completion_rate": (
                 round(folder_counts.get("completed", 0) / total_specs * 100, 1)
-                if total_specs > 0 else 0
+                if total_specs > 0
+                else 0
             ),
         }
     else:
@@ -459,7 +466,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
     help="Default task category.",
 )
 @click.pass_context
-@cli_command("specs-create")
+@cli_command("create")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec creation timed out")
 def create(
@@ -549,25 +556,30 @@ def create(
         if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
     )
 
-    emit_success({
-        "spec_id": spec_id,
-        "spec_path": str(spec_path),
-        "template": template,
-        "category": category,
-        "name": name,
-        "structure": {
-            "phases": len([
-                n for n in hierarchy.values()
-                if isinstance(n, dict) and n.get("type") == "phase"
-            ]),
-            "tasks": task_count,
-        },
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "spec_path": str(spec_path),
+            "template": template,
+            "category": category,
+            "name": name,
+            "structure": {
+                "phases": len(
+                    [
+                        n
+                        for n in hierarchy.values()
+                        if isinstance(n, dict) and n.get("type") == "phase"
+                    ]
+                ),
+                "tasks": task_count,
+            },
+        }
+    )
 
 
 @specs.command("schema")
 @click.pass_context
-@cli_command("specs-schema")
+@cli_command("schema")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Schema export timed out")
 def schema_cmd(ctx: click.Context) -> None:
@@ -589,22 +601,25 @@ def schema_cmd(ctx: click.Context) -> None:
             details={"error": error},
         )
 
-    emit_success({
-        "schema": schema,
-        "version": "1.0.0",
-        "source": "bundled",
-    })
+    emit_success(
+        {
+            "schema": schema,
+            "version": "1.0.0",
+            "source": "bundled",
+        }
+    )
 
 
 @specs.command("find")
 @click.option(
-    "--status", "-s",
+    "--status",
+    "-s",
     type=click.Choice(["active", "pending", "completed", "archived", "all"]),
     default="all",
     help="Filter by status folder.",
 )
 @click.pass_context
-@cli_command("specs-find")
+@cli_command("find")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec discovery timed out")
 def find_specs_cmd(ctx: click.Context, status: str) -> None:
@@ -615,7 +630,7 @@ def find_specs_cmd(ctx: click.Context, status: str) -> None:
     Examples:
         sdd specs find
         sdd specs find --status active
-        sdd find-specs
+        sdd specs find
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -634,17 +649,19 @@ def find_specs_cmd(ctx: click.Context, status: str) -> None:
     status_filter = None if status == "all" else status
     specs_list = core_list_specs(specs_dir, status=status_filter)
 
-    emit_success({
-        "count": len(specs_list),
-        "status_filter": status if status != "all" else None,
-        "specs": specs_list,
-    })
+    emit_success(
+        {
+            "count": len(specs_list),
+            "status_filter": status if status != "all" else None,
+            "specs": specs_list,
+        }
+    )
 
 
 @specs.command("list-phases")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("specs-list-phases")
+@cli_command("list-phases")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "List phases timed out")
 def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -683,19 +700,25 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
 
     phases = core_list_phases(spec_data)
 
-    emit_success({
-        "spec_id": spec_id,
-        "phase_count": len(phases),
-        "phases": phases,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "phase_count": len(phases),
+            "phases": phases,
+        }
+    )
 
 
 @specs.command("query-tasks")
 @click.argument("spec_id")
-@click.option("--status", "-s", help="Filter by status (pending, in_progress, completed, blocked).")
+@click.option(
+    "--status",
+    "-s",
+    help="Filter by status (pending, in_progress, completed, blocked).",
+)
 @click.option("--parent", "-p", help="Filter by parent node ID (e.g., phase-1).")
 @click.pass_context
-@cli_command("specs-query-tasks")
+@cli_command("query-tasks")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Query tasks timed out")
 def query_tasks_cmd(
@@ -753,33 +776,37 @@ def query_tasks_cmd(
         if parent and node.get("parent") != parent:
             continue
 
-        tasks.append({
-            "task_id": node_id,
-            "title": node.get("title", ""),
-            "type": node_type,
-            "status": node.get("status", "pending"),
-            "parent": node.get("parent"),
-            "children": node.get("children", []),
-        })
+        tasks.append(
+            {
+                "task_id": node_id,
+                "title": node.get("title", ""),
+                "type": node_type,
+                "status": node.get("status", "pending"),
+                "parent": node.get("parent"),
+                "children": node.get("children", []),
+            }
+        )
 
     # Sort by task_id
     tasks.sort(key=lambda t: t["task_id"])
 
-    emit_success({
-        "spec_id": spec_id,
-        "filters": {
-            "status": status,
-            "parent": parent,
-        },
-        "task_count": len(tasks),
-        "tasks": tasks,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "filters": {
+                "status": status,
+                "parent": parent,
+            },
+            "task_count": len(tasks),
+            "tasks": tasks,
+        }
+    )
 
 
 @specs.command("list-blockers")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("specs-list-blockers")
+@cli_command("list-blockers")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "List blockers timed out")
 def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -820,15 +847,10 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
 
     blocked = list_blocked_tasks(spec_data)
 
-    emit_success({
-        "spec_id": spec_id,
-        "blocker_count": len(blocked),
-        "blocked_tasks": blocked,
-    })
-
-
-# Top-level aliases
-find_specs_alias_cmd = find_specs_cmd
-list_phases_alias_cmd = list_phases_cmd
-query_tasks_alias_cmd = query_tasks_cmd
-list_blockers_alias_cmd = list_blockers_cmd
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "blocker_count": len(blocked),
+            "blocked_tasks": blocked,
+        }
+    )

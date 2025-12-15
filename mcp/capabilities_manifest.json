@@ -1,820 +1,825 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "server": {
     "name": "foundry-mcp",
     "version": "0.2.0",
     "description": "MCP server for SDD spec management with tools, resources, and prompts"
   },
   "tools": {
-    "spec_management": [
+    "unified": [
       {
-        "name": "list_specs",
-        "description": "List all specification files with optional filtering",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "get_spec",
-        "description": "Get a specification by ID",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "get_spec_hierarchy",
-        "description": "Get the full hierarchy of a specification",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "get_task",
-        "description": "Get a specific task from a specification",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "query_tools": [
-      {
-        "name": "task_query",
-        "description": "Query tasks with filtering by status, type, parent",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "task_tools": [
-      {
-        "name": "task_prepare",
-        "description": "Prepare task with full context for implementation",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_next",
-        "description": "Find next actionable task",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_info",
-        "description": "Get detailed task information",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_check_deps",
-        "description": "Check dependency status for a task",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_update_status",
-        "description": "Update task status",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_complete",
-        "description": "Mark task complete with journal entry",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_start",
-        "description": "Start working on a task",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_progress",
-        "description": "Get spec/phase progress summary",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "validation_tools": [
-      {
-        "name": "spec_validate",
-        "description": "Validate spec and return structured diagnostics",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_fix",
-        "description": "Apply auto-fixes with dry-run support",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_stats",
-        "description": "Get comprehensive spec statistics",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_validate_fix",
-        "description": "Combined validation and fix in one operation",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "journal_tools": [
-      {
-        "name": "journal_add",
-        "description": "Add journal entries with optional task association",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "journal_list",
-        "description": "Retrieve journal entries with filtering",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_block",
-        "description": "Mark tasks as blocked with metadata",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_unblock",
-        "description": "Unblock tasks and track resolution",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_list_blocked",
-        "description": "List all blocked tasks",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "journal_list_unjournaled",
-        "description": "Find tasks needing journal entries",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "rendering_tools": [
-      {
-        "name": "spec_render",
-        "description": "Render spec to markdown with mode options",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_render_progress",
-        "description": "ASCII progress bars for spec and phases",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "task_list",
-        "description": "Flat task list with filtering",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "lifecycle_tools": [
-      {
-        "name": "spec_lifecycle_move",
-        "description": "Move spec between folders",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_lifecycle_activate",
-        "description": "Activate pending spec",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_lifecycle_complete",
-        "description": "Mark spec completed",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_lifecycle_archive",
-        "description": "Archive spec",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_lifecycle_state",
-        "description": "Get lifecycle state and transition eligibility",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "spec_list_by_folder",
-        "description": "List specs by folder",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "docs_tools": [
-      {
-        "name": "code_find_class",
-        "description": "Find class in documentation",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "code_find_function",
-        "description": "Find function in documentation",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "code_trace_calls",
-        "description": "Trace call graph with direction and depth",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "code_impact_analysis",
-        "description": "Analyze change impact",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "code_get_callers",
-        "description": "Get caller functions",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "code_get_callees",
-        "description": "Get callee functions",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "doc_stats",
-        "description": "Get documentation statistics",
-        "auth_required": false,
-        "rate_limit": null
-      }
-    ],
-    "testing_tools": [
-      {
-        "name": "test_run",
-        "description": "Full-featured test execution with presets",
-        "auth_required": false,
-        "rate_limit": {
-          "requests_per_minute": 10,
-          "reason": "Resource-intensive operation"
-        }
-      },
-      {
-        "name": "test_discover",
-        "description": "Test discovery without execution",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "test_presets",
-        "description": "List available test presets",
-        "auth_required": false,
-        "rate_limit": null
-      },
-      {
-        "name": "test_run_quick",
-        "description": "Quick test preset shortcut",
-        "auth_required": false,
-        "rate_limit": {
-          "requests_per_minute": 10,
-          "reason": "Resource-intensive operation"
-        }
-      },
-      {
-        "name": "test_run_unit",
-        "description": "Unit test preset shortcut",
-        "auth_required": false,
-        "rate_limit": {
-          "requests_per_minute": 10,
-          "reason": "Resource-intensive operation"
-        }
-      }
-    ],
-    "environment_tools": [
-      {
-        "name": "sdd-verify-toolchain",
-        "description": "Verify local CLI/toolchain availability including git, python, node, and SDD CLI",
+        "name": "health",
+        "description": "Health checks and diagnostics.",
         "auth_required": false,
         "rate_limit": null,
         "parameters": [
-          {"name": "tools", "type": "array", "required": false, "description": "Specific tools to check (default: all)"},
-          {"name": "verbose", "type": "boolean", "required": false, "default": false}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "liveness",
+              "readiness",
+              "check"
+            ],
+            "description": "Health action to run"
+          },
+          {
+            "name": "include_details",
+            "type": "boolean",
+            "required": false,
+            "default": true,
+            "description": "When action=check, include dependency details"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: health action=liveness",
+            "input": {
+              "action": "liveness"
+            }
+          }
         ]
       },
       {
-        "name": "sdd-init-workspace",
-        "description": "Bootstrap working directory with specs folders, config files, and git integration",
+        "name": "plan",
+        "description": "Planning helpers (create/list/review plans).",
         "auth_required": false,
         "rate_limit": null,
         "parameters": [
-          {"name": "path", "type": "string", "required": false, "description": "Target directory (default: current)"},
-          {"name": "force", "type": "boolean", "required": false, "default": false, "description": "Overwrite existing config"},
-          {"name": "git_integration", "type": "boolean", "required": false, "default": true}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "create",
+              "list",
+              "review"
+            ],
+            "description": "Planning action"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: plan action=create",
+            "input": {
+              "action": "create"
+            }
+          }
         ]
       },
       {
-        "name": "sdd-detect-topology",
-        "description": "Auto-detect repository layout for specs and documentation directories",
+        "name": "pr",
+        "description": "PR workflows with spec context.",
         "auth_required": false,
         "rate_limit": null,
         "parameters": [
-          {"name": "path", "type": "string", "required": false, "description": "Root directory to scan (default: current)"},
-          {"name": "depth", "type": "integer", "required": false, "default": 3, "description": "Max directory depth to scan"}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "create",
+              "get-context"
+            ],
+            "description": "PR workflow action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Spec ID for context/PR creation"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: pr action=create",
+            "input": {
+              "action": "create"
+            }
+          }
         ]
       },
       {
-        "name": "sdd-verify-environment",
-        "description": "Validate OS packages, runtime versions, and credential availability",
+        "name": "error",
+        "description": "Error collection query and cleanup.",
         "auth_required": false,
         "rate_limit": null,
         "parameters": [
-          {"name": "checks", "type": "array", "required": false, "description": "Specific checks to run (os, runtime, credentials)"},
-          {"name": "fix", "type": "boolean", "required": false, "default": false, "description": "Attempt to fix issues"}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "list",
+              "get",
+              "stats",
+              "patterns",
+              "cleanup"
+            ],
+            "description": "Error action"
+          },
+          {
+            "name": "error_id",
+            "type": "string",
+            "required": false,
+            "description": "Error ID (required for action=get)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: error action=list",
+            "input": {
+              "action": "list"
+            }
+          }
         ]
-      }
-    ],
-    "spec_helper_tools": [
+      },
       {
-        "name": "spec_find_related_files",
-        "description": "Locate files referenced by a spec node including source files, test files, and documentation",
+        "name": "metrics",
+        "description": "Metrics query, stats, and cleanup.",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "query",
+              "list",
+              "summary",
+              "stats",
+              "cleanup"
+            ],
+            "description": "Metrics action"
+          },
+          {
+            "name": "metric_name",
+            "type": "string",
+            "required": false,
+            "description": "Metric name (required for some actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: metrics action=query",
+            "input": {
+              "action": "query"
+            }
+          }
+        ]
+      },
+      {
+        "name": "journal",
+        "description": "Journaling add/list helpers.",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "add",
+              "list",
+              "list-unjournaled"
+            ],
+            "description": "Journal action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Spec ID filter"
+          },
+          {
+            "name": "task_id",
+            "type": "string",
+            "required": false,
+            "description": "Task ID filter"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: journal action=add",
+            "input": {
+              "action": "add"
+            }
+          }
+        ]
+      },
+      {
+        "name": "authoring",
+        "description": "Spec authoring mutations (create/templates/frontmatter, phases, assumptions, revisions).",
+        "auth_required": false,
+        "rate_limit": null,
+        "feature_flag": "authoring_tools",
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "spec-create",
+              "spec-template",
+              "spec-update-frontmatter",
+              "phase-add",
+              "phase-remove",
+              "assumption-add",
+              "assumption-list",
+              "revision-add"
+            ],
+            "description": "Authoring action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Target spec ID (required for most actions)"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "required": false,
+            "description": "Spec name (required for action=spec-create)"
+          },
+          {
+            "name": "template",
+            "type": "string",
+            "required": false,
+            "description": "Template name (used by spec-create/spec-template)"
+          },
+          {
+            "name": "category",
+            "type": "string",
+            "required": false,
+            "description": "Default task category for spec-create"
+          },
+          {
+            "name": "template_action",
+            "type": "string",
+            "required": false,
+            "description": "Template operation (list|show|apply) for action=spec-template"
+          },
+          {
+            "name": "template_name",
+            "type": "string",
+            "required": false,
+            "description": "Template name for template_action=show|apply"
+          },
+          {
+            "name": "key",
+            "type": "string",
+            "required": false,
+            "description": "Frontmatter key (required for action=spec-update-frontmatter)"
+          },
+          {
+            "name": "value",
+            "type": "string",
+            "required": false,
+            "description": "Frontmatter value (required for action=spec-update-frontmatter)"
+          },
+          {
+            "name": "dry_run",
+            "type": "boolean",
+            "required": false,
+            "default": false,
+            "description": "Preview changes without saving"
+          },
+          {
+            "name": "path",
+            "type": "string",
+            "required": false,
+            "description": "Workspace path override"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: authoring action=spec-create",
+            "input": {
+              "action": "spec-create"
+            }
+          }
+        ]
+      },
+      {
+        "name": "provider",
+        "description": "LLM provider discovery and execution.",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "list",
+              "status",
+              "execute"
+            ],
+            "description": "Provider action"
+          },
+          {
+            "name": "provider_id",
+            "type": "string",
+            "required": false,
+            "description": "Provider identifier (required for some actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: provider action=list",
+            "input": {
+              "action": "list"
+            }
+          }
+        ]
+      },
+      {
+        "name": "environment",
+        "description": "Workspace init + environment verification.",
+        "auth_required": false,
+        "rate_limit": null,
+        "feature_flag": "environment_tools",
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "init",
+              "verify-env",
+              "verify-toolchain",
+              "setup",
+              "detect"
+            ],
+            "description": "Environment action"
+          },
+          {
+            "name": "path",
+            "type": "string",
+            "required": false,
+            "description": "Workspace path (default: current)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: environment action=init",
+            "input": {
+              "action": "init"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lifecycle",
+        "description": "Spec lifecycle transitions.",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "move",
+              "activate",
+              "complete",
+              "archive",
+              "state"
+            ],
+            "description": "Lifecycle action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Target spec ID"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: lifecycle action=move",
+            "input": {
+              "action": "move"
+            }
+          }
+        ]
+      },
+      {
+        "name": "verification",
+        "description": "Verification definition + execution.",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "add",
+              "execute"
+            ],
+            "description": "Verification action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Target spec ID"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: verification action=add",
+            "input": {
+              "action": "add"
+            }
+          }
+        ]
+      },
+      {
+        "name": "task",
+        "description": "Task preparation, mutation, and listing.",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "prepare",
+              "next",
+              "info",
+              "check-deps",
+              "start",
+              "complete",
+              "update-status",
+              "block",
+              "unblock",
+              "list-blocked",
+              "add",
+              "remove",
+              "update-estimate",
+              "update-metadata",
+              "progress",
+              "list",
+              "query",
+              "hierarchy"
+            ],
+            "description": "Task action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Target spec ID (required for most actions)"
+          },
+          {
+            "name": "task_id",
+            "type": "string",
+            "required": false,
+            "description": "Target task ID (required for some actions)"
+          },
+          {
+            "name": "dry_run",
+            "type": "boolean",
+            "required": false,
+            "default": false,
+            "description": "Preview changes without saving (supported for update-estimate/update-metadata/add/remove)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: task action=prepare",
+            "input": {
+              "action": "prepare"
+            }
+          }
+        ]
+      },
+      {
+        "name": "spec",
+        "description": "Spec discovery, validation, and analysis.",
         "auth_required": false,
         "rate_limit": null,
         "feature_flag": "spec_helpers",
         "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "task_id", "type": "string", "required": false, "description": "Task ID to scope search"},
-          {"name": "include_tests", "type": "boolean", "required": false, "default": true},
-          {"name": "include_docs", "type": "boolean", "required": false, "default": true}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "find",
+              "list",
+              "validate",
+              "fix",
+              "stats",
+              "validate-fix",
+              "analyze",
+              "analyze-deps"
+            ],
+            "description": "Spec action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Target spec ID (required for most actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: spec action=find",
+            "input": {
+              "action": "find"
+            }
+          }
         ]
       },
       {
-        "name": "spec_find_patterns",
-        "description": "Search specs for structural or code patterns across tasks and metadata",
+        "name": "review",
+        "description": "LLM-assisted review workflows.",
         "auth_required": false,
         "rate_limit": null,
-        "feature_flag": "spec_helpers",
+        "feature_flag": "llm_tools",
         "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "pattern", "type": "string", "required": true, "description": "Pattern to search for (regex or literal)"},
-          {"name": "pattern_type", "type": "string", "required": false, "default": "literal", "enum": ["literal", "regex", "structural"]},
-          {"name": "scope", "type": "string", "required": false, "default": "all", "enum": ["all", "tasks", "metadata", "code"]}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "spec",
+              "fidelity",
+              "parse-feedback",
+              "list-tools",
+              "list-plan-tools"
+            ],
+            "description": "Review action"
+          },
+          {
+            "name": "spec_id",
+            "type": "string",
+            "required": false,
+            "description": "Target spec ID (required for spec/fidelity actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: review action=spec",
+            "input": {
+              "action": "spec"
+            }
+          }
         ]
       },
       {
-        "name": "spec_detect_cycles",
-        "description": "Detect cyclic task dependencies within a specification",
+        "name": "code",
+        "description": "Repo-local code navigation helpers.",
         "auth_required": false,
         "rate_limit": null,
-        "feature_flag": "spec_helpers",
         "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "include_soft_deps", "type": "boolean", "required": false, "default": false, "description": "Include soft dependencies in cycle detection"}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "find-class",
+              "find-function",
+              "callers",
+              "callees",
+              "trace",
+              "impact"
+            ],
+            "description": "Code navigation action"
+          },
+          {
+            "name": "symbol",
+            "type": "string",
+            "required": false,
+            "description": "Symbol name (required for most actions)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: code action=find-class",
+            "input": {
+              "action": "find-class"
+            }
+          }
         ]
       },
       {
-        "name": "spec_validate_paths",
-        "description": "Ensure file references in a spec exist on disk",
+        "name": "server",
+        "description": "Tool discovery, schemas, context, and capabilities.",
         "auth_required": false,
         "rate_limit": null,
-        "feature_flag": "spec_helpers",
         "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "base_path", "type": "string", "required": false, "description": "Base path for relative file references"},
-          {"name": "fix_mode", "type": "string", "required": false, "default": "report", "enum": ["report", "suggest", "auto"]}
-        ]
-      }
-    ],
-    "authoring_tools": [
-      {
-        "name": "spec-create",
-        "description": "Scaffold a brand-new SDD specification from scratch with template selection",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "name", "type": "string", "required": true, "description": "Specification name"},
-          {"name": "template", "type": "string", "required": false, "enum": ["simple", "medium", "complex", "security"]},
-          {"name": "category", "type": "string", "required": false, "enum": ["investigation", "implementation", "refactoring", "decision", "research"]},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "tools",
+              "schema",
+              "capabilities",
+              "context",
+              "llm-status"
+            ],
+            "description": "Server action"
+          },
+          {
+            "name": "tool_name",
+            "type": "string",
+            "required": false,
+            "description": "Tool name (required for action=schema)"
+          },
+          {
+            "name": "category",
+            "type": "string",
+            "required": false,
+            "description": "Filter tools by category (action=tools)"
+          },
+          {
+            "name": "tag",
+            "type": "string",
+            "required": false,
+            "description": "Filter tools by tag (action=tools)"
+          },
+          {
+            "name": "include_deprecated",
+            "type": "boolean",
+            "required": false,
+            "default": false
+          },
+          {
+            "name": "cursor",
+            "type": "string",
+            "required": false
+          },
+          {
+            "name": "limit",
+            "type": "integer",
+            "required": false,
+            "default": 100
+          },
+          {
+            "name": "include_llm",
+            "type": "boolean",
+            "required": false,
+            "default": true
+          },
+          {
+            "name": "include_workflow",
+            "type": "boolean",
+            "required": false,
+            "default": true
+          },
+          {
+            "name": "include_workspace",
+            "type": "boolean",
+            "required": false,
+            "default": true
+          },
+          {
+            "name": "include_capabilities",
+            "type": "boolean",
+            "required": false,
+            "default": true
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: server action=tools",
+            "input": {
+              "action": "tools"
+            }
+          }
         ]
       },
       {
-        "name": "spec-template",
-        "description": "Emit opinionated templates/snippets for spec sections (list, show, apply)",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "action", "type": "string", "required": true, "enum": ["list", "show", "apply"]},
-          {"name": "template_name", "type": "string", "required": false, "description": "Template name (required for show/apply)"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "task-add",
-        "description": "Add a new task to an SDD specification hierarchy",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "parent", "type": "string", "required": true, "description": "Parent node ID (phase-1, task-2-1)"},
-          {"name": "title", "type": "string", "required": true, "description": "Task title"},
-          {"name": "description", "type": "string", "required": false},
-          {"name": "task_type", "type": "string", "required": false, "enum": ["task", "subtask", "verify"]},
-          {"name": "hours", "type": "number", "required": false, "description": "Estimated hours"},
-          {"name": "position", "type": "integer", "required": false, "description": "Position in parent's children"},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      },
-      {
-        "name": "phase-add",
-        "description": "Add a new phase under spec-root with verification scaffolding",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "title", "type": "string", "required": true, "description": "Phase title"},
-          {"name": "description", "type": "string", "required": false},
-          {"name": "purpose", "type": "string", "required": false},
-          {"name": "estimated_hours", "type": "number", "required": false, "description": "Estimated hours for the phase"},
-          {"name": "position", "type": "integer", "required": false, "description": "Insertion index under spec-root children"},
-          {"name": "link_previous", "type": "boolean", "required": false, "default": true, "description": "Automatically block on the previous phase when appending"},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      },
-      {
-        "name": "phase-remove",
-        "description": "Remove a phase and all its children from an SDD specification with adjacent phase re-linking",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "phase_id", "type": "string", "required": true, "description": "Phase ID to remove (e.g., phase-1)"},
-          {"name": "force", "type": "boolean", "required": false, "default": false, "description": "Remove even if phase contains non-completed tasks"},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      },
-      {
-        "name": "task-remove",
-        "description": "Remove a task from an SDD specification",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "task_id", "type": "string", "required": true, "description": "Task ID to remove"},
-          {"name": "cascade", "type": "boolean", "required": false, "default": false, "description": "Remove child tasks"},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      },
-      {
-        "name": "assumption-add",
-        "description": "Add an assumption to an SDD specification",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "text", "type": "string", "required": true, "description": "Assumption text"},
-          {"name": "assumption_type", "type": "string", "required": false, "enum": ["constraint", "requirement"]},
-          {"name": "author", "type": "string", "required": false},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      },
-      {
-        "name": "assumption-list",
-        "description": "List assumptions in an SDD specification with optional filtering",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "assumption_type", "type": "string", "required": false, "enum": ["constraint", "requirement"]}
-        ]
-      },
-      {
-        "name": "revision-add",
-        "description": "Append a revision history entry to an SDD specification",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "version", "type": "string", "required": true, "description": "Revision version (e.g., 1.1, 2.0)"},
-          {"name": "changes", "type": "string", "required": true, "description": "Summary of changes"},
-          {"name": "author", "type": "string", "required": false},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      },
-      {
-        "name": "spec-update-frontmatter",
-        "description": "Mutate top-level metadata blocks in an SDD specification",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "authoring_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "key", "type": "string", "required": true, "description": "Frontmatter key (title, status, version)"},
-          {"name": "value", "type": "string", "required": true, "description": "New value for the key"},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": false}
-        ]
-      }
-    ],
-    "planning_tools": [
-      {
-        "name": "plan-format",
-        "description": "Pretty-print a task plan for sharing and review",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "task_id", "type": "string", "required": true, "description": "Task ID to format"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "phase-list",
-        "description": "Enumerate all phases in a specification with completion status",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "phase-check-complete",
-        "description": "Verify completion readiness for a phase or spec",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "phase_id", "type": "string", "required": false, "description": "Phase ID to check (mutually exclusive with task_id)"},
-          {"name": "task_id", "type": "string", "required": false, "description": "Task ID to check (mutually exclusive with phase_id)"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "phase-report-time",
-        "description": "Summarize time tracking metrics for a phase",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "phase_id", "type": "string", "required": true, "description": "Phase ID to report"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "spec-reconcile-state",
-        "description": "Compare filesystem state against spec state to detect drift",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "dry_run", "type": "boolean", "required": false, "default": true, "description": "Only report drift without changes"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "plan-report-time",
-        "description": "Generate comprehensive time tracking summary for a spec",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "spec-audit",
-        "description": "Run comprehensive quality audits on a specification",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "planning_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      }
-    ],
-    "reporting_tools": [
-      {
-        "name": "spec-report",
-        "description": "Generate comprehensive validation and analysis reports for a specification including validation results, statistics, health score, and dependency analysis",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "reporting_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "format", "type": "string", "required": false, "default": "markdown", "enum": ["markdown", "json"]},
-          {"name": "include_validation", "type": "boolean", "required": false, "default": true},
-          {"name": "include_stats", "type": "boolean", "required": false, "default": true},
-          {"name": "include_health", "type": "boolean", "required": false, "default": true},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      },
-      {
-        "name": "spec-report-summary",
-        "description": "Generate a concise summary report for a specification with key metrics and health indicators",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "reporting_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID"},
-          {"name": "path", "type": "string", "required": false, "description": "Project root path"}
-        ]
-      }
-    ],
-    "utility_tools": [
-      {
-        "name": "sdd-cache-manage",
-        "description": "Manage SDD CLI cache entries - inspect statistics and clear entries with optional filters",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "utility_tools",
-        "parameters": [
-          {"name": "action", "type": "string", "required": true, "enum": ["info", "clear"], "description": "Cache operation to perform"},
-          {"name": "spec_id", "type": "string", "required": false, "description": "Filter clear operation by spec ID"},
-          {"name": "review_type", "type": "string", "required": false, "enum": ["fidelity", "plan"], "description": "Filter clear operation by review type"}
-        ]
-      },
-      {
-        "name": "spec-schema-export",
-        "description": "Export JSON schemas for SDD specifications and tasks - useful for validation, IDE integration, and documentation",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "utility_tools",
-        "parameters": [
-          {"name": "schema_type", "type": "string", "required": false, "default": "spec", "enum": ["spec"], "description": "Type of schema to export"}
-        ]
-      }
-    ],
-    "documentation_tools": [
-      {
-        "name": "spec-doc",
-        "description": "Generate human-facing documentation bundle from a specification - renders specs to markdown for stakeholders and progress tracking",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "documentation_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID to document"},
-          {"name": "output_format", "type": "string", "required": false, "default": "markdown", "enum": ["markdown", "md"], "description": "Output format"},
-          {"name": "output_path", "type": "string", "required": false, "description": "Custom output path"},
-          {"name": "include_progress", "type": "boolean", "required": false, "default": true, "description": "Include visual progress bars"},
-          {"name": "include_journal", "type": "boolean", "required": false, "default": false, "description": "Include journal entries"},
-          {"name": "mode", "type": "string", "required": false, "default": "basic", "enum": ["basic", "enhanced"], "description": "Rendering mode"},
-          {"name": "workspace", "type": "string", "required": false, "description": "Workspace path"}
-        ]
-      },
-      {
-        "name": "spec-doc-llm",
-        "description": "Generate comprehensive LLM-powered documentation for a project - uses AI to create rich, context-aware developer guides",
-        "auth_required": false,
-        "rate_limit": {
-          "requests_per_minute": 5,
-          "reason": "AI-intensive operation with external model calls"
-        },
-        "feature_flag": "documentation_tools",
-        "parameters": [
-          {"name": "directory", "type": "string", "required": true, "description": "Project directory to document"},
-          {"name": "output_dir", "type": "string", "required": false, "description": "Output directory for documentation"},
-          {"name": "name", "type": "string", "required": false, "description": "Project name"},
-          {"name": "description", "type": "string", "required": false, "description": "Project description"},
-          {"name": "batch_size", "type": "integer", "required": false, "default": 3, "min": 1, "max": 10, "description": "Shards per batch"},
-          {"name": "use_cache", "type": "boolean", "required": false, "default": true, "description": "Enable caching"},
-          {"name": "resume", "type": "boolean", "required": false, "default": false, "description": "Resume from checkpoint"},
-          {"name": "clear_cache", "type": "boolean", "required": false, "default": false, "description": "Clear cache first"},
-          {"name": "workspace", "type": "string", "required": false, "description": "Workspace path"}
-        ]
-      },
-      {
-        "name": "spec-review-fidelity",
-        "description": "Compare implementation against specification and identify deviations - uses AI consultation for comprehensive fidelity analysis",
-        "auth_required": false,
-        "rate_limit": {
-          "requests_per_minute": 5,
-          "reason": "AI-intensive operation with multi-model consultation"
-        },
-        "feature_flag": "documentation_tools",
-        "parameters": [
-          {"name": "spec_id", "type": "string", "required": true, "description": "Specification ID to review"},
-          {"name": "task_id", "type": "string", "required": false, "description": "Review specific task (mutually exclusive with phase_id)"},
-          {"name": "phase_id", "type": "string", "required": false, "description": "Review entire phase (mutually exclusive with task_id)"},
-          {"name": "files", "type": "array", "required": false, "description": "Review specific files only"},
-          {"name": "use_ai", "type": "boolean", "required": false, "default": true, "description": "Enable AI consultation"},
-          {"name": "ai_tools", "type": "array", "required": false, "description": "Specific AI tools to consult"},
-          {"name": "model", "type": "string", "required": false, "description": "Specific model for AI consultation"},
-          {"name": "consensus_threshold", "type": "integer", "required": false, "default": 2, "min": 1, "max": 5, "description": "Minimum models that must agree"},
-          {"name": "incremental", "type": "boolean", "required": false, "default": false, "description": "Only review changed files"},
-          {"name": "include_tests", "type": "boolean", "required": false, "default": true, "description": "Include test results"},
-          {"name": "base_branch", "type": "string", "required": false, "default": "main", "description": "Base branch for diff"},
-          {"name": "workspace", "type": "string", "required": false, "description": "Workspace path"}
-        ]
-      }
-    ],
-    "provider_tools": [
-      {
-        "name": "provider-list",
-        "description": "List all registered LLM providers with availability status. Returns providers sorted by priority with availability indicators.",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "provider_tools",
-        "parameters": [
-          {"name": "include_unavailable", "type": "boolean", "required": false, "default": false, "description": "Include providers that fail availability check"}
-        ]
-      },
-      {
-        "name": "provider-status",
-        "description": "Get detailed status for a specific provider including availability, metadata, capabilities, and health status.",
-        "auth_required": false,
-        "rate_limit": null,
-        "feature_flag": "provider_tools",
-        "parameters": [
-          {"name": "provider_id", "type": "string", "required": true, "description": "Provider identifier (gemini, codex, cursor-agent, claude, opencode)"}
-        ]
-      },
-      {
-        "name": "provider-execute",
-        "description": "Execute a prompt through a specified LLM provider. Returns complete result without streaming.",
-        "auth_required": false,
-        "rate_limit": {
-          "requests_per_minute": 20,
-          "reason": "External AI provider invocation"
-        },
-        "feature_flag": "provider_tools",
-        "parameters": [
-          {"name": "provider_id", "type": "string", "required": true, "description": "Provider identifier"},
-          {"name": "prompt", "type": "string", "required": true, "description": "Prompt text to send to the provider"},
-          {"name": "model", "type": "string", "required": false, "description": "Model override (uses provider default if not specified)"},
-          {"name": "max_tokens", "type": "integer", "required": false, "description": "Maximum tokens in response"},
-          {"name": "temperature", "type": "number", "required": false, "min": 0.0, "max": 2.0, "description": "Sampling temperature"},
-          {"name": "timeout", "type": "integer", "required": false, "default": 300, "description": "Request timeout in seconds"}
-        ]
-      }
-    ],
-    "discovery_tools": [
-      {
-        "name": "tool_list",
-        "description": "List available tools with filtering by category, tag, and deprecation status. Returns paginated results.",
+        "name": "test",
+        "description": "Pytest discovery and execution.",
         "auth_required": false,
         "rate_limit": null,
         "parameters": [
-          {"name": "category", "type": "string", "required": false, "description": "Filter by tool category"},
-          {"name": "tag", "type": "string", "required": false, "description": "Filter by semantic tag"},
-          {"name": "include_deprecated", "type": "boolean", "required": false, "default": false},
-          {"name": "cursor", "type": "string", "required": false, "description": "Pagination cursor"},
-          {"name": "limit", "type": "integer", "required": false, "default": 100, "max": 1000}
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "run",
+              "discover"
+            ],
+            "description": "Test action"
+          },
+          {
+            "name": "preset",
+            "type": "string",
+            "required": false,
+            "enum": [
+              "quick",
+              "unit",
+              "full"
+            ],
+            "description": "Preset for action=run"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: test action=run",
+            "input": {
+              "action": "run"
+            }
+          }
         ]
-      },
-      {
-        "name": "tool_get_schema",
-        "description": "Get detailed JSON Schema for a specific tool, including examples, rate limits, and related tools.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {"name": "tool_name", "type": "string", "required": true, "description": "Name of the tool to get schema for"}
-        ]
-      },
-      {
-        "name": "capability_get",
-        "description": "Get server capabilities for client negotiation including response version, streaming, batch operations, and feature flags.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": []
-      },
-      {
-        "name": "capability_negotiate",
-        "description": "Negotiate capabilities with the server, requesting specific response versions and features.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {"name": "requested_version", "type": "string", "required": false, "description": "Desired response version"},
-          {"name": "requested_features", "type": "string", "required": false, "description": "Comma-separated feature list"}
-        ]
-      },
-      {
-        "name": "tool_list_categories",
-        "description": "List tool categories with tool counts for browsing available functionality.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": []
       }
     ]
   },
@@ -875,33 +880,70 @@
       "name": "start_feature",
       "description": "Guide new feature setup with template selection",
       "parameters": [
-        {"name": "feature_name", "type": "string", "required": true},
-        {"name": "description", "type": "string", "required": false},
-        {"name": "template", "type": "string", "required": false, "default": "feature"}
+        {
+          "name": "feature_name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "template",
+          "type": "string",
+          "required": false,
+          "default": "feature"
+        }
       ]
     },
     {
       "name": "debug_test",
       "description": "Systematic test debugging workflow",
       "parameters": [
-        {"name": "test_name", "type": "string", "required": false},
-        {"name": "error_message", "type": "string", "required": false},
-        {"name": "spec_id", "type": "string", "required": false}
+        {
+          "name": "test_name",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "error_message",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "spec_id",
+          "type": "string",
+          "required": false
+        }
       ]
     },
     {
       "name": "complete_phase",
       "description": "Phase completion checklist and guidance",
       "parameters": [
-        {"name": "spec_id", "type": "string", "required": true},
-        {"name": "phase_id", "type": "string", "required": false}
+        {
+          "name": "spec_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "phase_id",
+          "type": "string",
+          "required": false
+        }
       ]
     },
     {
       "name": "review_spec",
       "description": "Comprehensive spec status review",
       "parameters": [
-        {"name": "spec_id", "type": "string", "required": true}
+        {
+          "name": "spec_id",
+          "type": "string",
+          "required": true
+        }
       ]
     }
   ],
@@ -909,46 +951,6 @@
     "_documentation": "Feature flags control gradual rollouts, A/B testing, and experimental features. See docs/mcp_best_practices/14-feature-flags.md for guidance.",
     "schema_version": "1.0.0",
     "flags": {
-      "streaming_responses": {
-        "description": "Enable streaming for large response payloads",
-        "state": "experimental",
-        "default_enabled": false,
-        "percentage_rollout": 0,
-        "owner": "platform-team",
-        "dependencies": [],
-        "created_at": "2025-11-26T00:00:00Z",
-        "expires_at": null
-      },
-      "batch_operations": {
-        "description": "Support for batch tool invocations",
-        "state": "beta",
-        "default_enabled": false,
-        "percentage_rollout": 25,
-        "owner": "api-team",
-        "dependencies": [],
-        "created_at": "2025-11-26T00:00:00Z",
-        "expires_at": "2026-06-01T00:00:00Z"
-      },
-      "response_v3": {
-        "description": "New response envelope format with enhanced metadata",
-        "state": "experimental",
-        "default_enabled": false,
-        "percentage_rollout": 0,
-        "owner": "platform-team",
-        "dependencies": [],
-        "created_at": "2025-11-26T00:00:00Z",
-        "expires_at": null
-      },
-      "enhanced_validation": {
-        "description": "Enhanced spec validation with additional checks",
-        "state": "stable",
-        "default_enabled": true,
-        "percentage_rollout": 100,
-        "owner": "spec-team",
-        "dependencies": [],
-        "created_at": "2025-10-01T00:00:00Z",
-        "expires_at": null
-      },
       "environment_tools": {
         "description": "Environment setup and verification tools for SDD workflows",
         "state": "beta",
@@ -965,12 +967,14 @@
         "default_enabled": false,
         "percentage_rollout": 0,
         "owner": "platform-team",
-        "dependencies": ["environment_tools"],
+        "dependencies": [
+          "environment_tools"
+        ],
         "created_at": "2025-11-27T00:00:00Z",
         "expires_at": null
       },
       "spec_helpers": {
-        "description": "Spec helper tools for discovery, validation, and analysis (find-related-files, find-patterns, detect-cycles, validate-paths)",
+        "description": "Spec helper tools for discovery, validation, and analysis",
         "state": "beta",
         "default_enabled": true,
         "percentage_rollout": 100,
@@ -980,7 +984,7 @@
         "expires_at": null
       },
       "authoring_tools": {
-        "description": "Spec authoring tools for creating specs, adding/removing phases and tasks, managing assumptions, and updating metadata (spec-create, task-add, phase-add, phase-remove, task-remove, assumption-add, assumption-list, revision-add, spec-update-frontmatter)",
+        "description": "Spec authoring tools for creating specs, managing phases and tasks, managing assumptions, and revisions",
         "state": "beta",
         "default_enabled": true,
         "percentage_rollout": 100,
@@ -989,108 +993,75 @@
         "created_at": "2025-11-27T00:00:00Z",
         "expires_at": null
       },
-      "planning_tools": {
-        "description": "Planning and execution utilities for task formatting, phase management, time tracking, drift detection, and spec audits (plan-format, phase-list, phase-check-complete, phase-report-time, spec-reconcile-state, plan-report-time, spec-audit)",
-        "state": "beta",
+      "llm_tools": {
+        "description": "LLM-powered review tools",
+        "state": "stable",
         "default_enabled": true,
         "percentage_rollout": 100,
-        "owner": "spec-team",
+        "owner": "platform-team",
         "dependencies": [],
-        "created_at": "2025-11-27T00:00:00Z",
+        "created_at": "2025-11-26T00:00:00Z",
         "expires_at": null
       },
-      "reporting_tools": {
-        "description": "Reporting tools for generating human-readable validation reports, progress summaries, and health checks (spec-report, spec-report-summary)",
-        "state": "beta",
+      "llm_multi_provider": {
+        "description": "Multi-provider AI tool support",
+        "state": "stable",
         "default_enabled": true,
         "percentage_rollout": 100,
-        "owner": "spec-team",
+        "owner": "platform-team",
         "dependencies": [],
-        "created_at": "2025-11-27T00:00:00Z",
+        "created_at": "2025-11-26T00:00:00Z",
         "expires_at": null
       },
-      "utility_tools": {
-        "description": "Utility tools for cache management and schema exports (sdd-cache-manage, spec-schema-export)",
-        "state": "beta",
+      "llm_fidelity_review": {
+        "description": "AI-powered fidelity review",
+        "state": "stable",
         "default_enabled": true,
         "percentage_rollout": 100,
-        "owner": "spec-team",
+        "owner": "platform-team",
         "dependencies": [],
-        "created_at": "2025-11-27T00:00:00Z",
+        "created_at": "2025-11-26T00:00:00Z",
         "expires_at": null
       },
-      "documentation_tools": {
-        "description": "LLM-powered documentation tools for spec rendering, code documentation, and fidelity reviews (spec-doc, spec-doc-llm, spec-review-fidelity)",
-        "state": "beta",
+      "llm_data_only_fallback": {
+        "description": "Graceful degradation when LLM unavailable",
+        "state": "stable",
         "default_enabled": true,
         "percentage_rollout": 100,
-        "owner": "spec-team",
+        "owner": "platform-team",
         "dependencies": [],
-        "created_at": "2025-11-28T00:00:00Z",
+        "created_at": "2025-11-26T00:00:00Z",
         "expires_at": null
       },
-      "native_cli": {
-        "description": "Native SDD CLI with JSON-only output for AI coding assistants. 39 commands across specs, tasks, lifecycle, session, render, review, pr, modify, doc-query, test, llm-doc, and dev groups.",
-        "state": "beta",
-        "default_enabled": true,
-        "percentage_rollout": 100,
-        "owner": "cli-team",
-        "dependencies": [],
-        "created_at": "2025-11-28T00:00:00Z",
-        "expires_at": null
-      },
-      "enhanced_render": {
-        "description": "Enhanced rendering mode with AI-generated insights for spec visualization",
+      "unified_tools_phase2": {
+        "description": "Enable unified routers for medium tool families",
         "state": "beta",
         "default_enabled": false,
         "percentage_rollout": 0,
-        "owner": "cli-team",
-        "dependencies": ["native_cli"],
-        "created_at": "2025-11-28T00:00:00Z",
-        "expires_at": null
-      },
-      "provider_tools": {
-        "description": "LLM provider management tools for discovering, checking, and invoking AI providers (provider-list, provider-status, provider-execute)",
-        "state": "beta",
-        "default_enabled": true,
-        "percentage_rollout": 100,
-        "owner": "platform-team",
+        "owner": "foundry-mcp core",
         "dependencies": [],
-        "created_at": "2025-12-01T00:00:00Z",
+        "created_at": "2025-12-10T00:00:00Z",
         "expires_at": null
       },
-      "review_provider_integration": {
-        "description": "Use provider abstraction for review-list-tools instead of static tool list. Enables real-time availability checking via get_provider_statuses().",
+      "unified_tools_phase3": {
+        "description": "Enable unified routers for large tool families",
         "state": "beta",
-        "default_enabled": true,
-        "percentage_rollout": 100,
-        "owner": "platform-team",
-        "dependencies": ["provider_tools"],
-        "created_at": "2025-12-01T00:00:00Z",
-        "expires_at": null,
-        "rollback_notes": "Set to false to fall back to legacy static REVIEW_TOOLS list with placeholder availability"
-      }
-    },
-    "lifecycle_states": {
-      "experimental": {
-        "description": "Early development, opt-in only, may change without notice",
-        "sla": "none",
-        "default_behavior": "disabled"
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "foundry-mcp core",
+        "dependencies": [],
+        "created_at": "2025-12-10T00:00:00Z",
+        "expires_at": null
       },
-      "beta": {
-        "description": "Feature-complete but not fully validated, opt-in available",
-        "sla": "limited",
-        "default_behavior": "disabled"
-      },
-      "stable": {
-        "description": "Production-ready, full SLA guarantees",
-        "sla": "full",
-        "default_behavior": "enabled"
-      },
-      "deprecated": {
-        "description": "Being phased out, warns on use, will be removed",
-        "sla": "maintenance-only",
-        "default_behavior": "enabled-with-warning"
+      "unified_manifest": {
+        "description": "Expose only the 17 unified tools for discovery/token reduction",
+        "state": "beta",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "foundry-mcp core",
+        "dependencies": [],
+        "created_at": "2025-12-10T00:00:00Z",
+        "expires_at": null
       }
     }
   },
@@ -1098,19 +1069,12 @@
     "_documentation": "Server capabilities returned by capability_get for client negotiation",
     "response_version": {
       "current": "response-v2",
-      "supported": ["response-v2"],
+      "supported": [
+        "response-v2"
+      ],
       "description": "Response envelope contract version"
     },
     "features": {
-      "streaming": {
-        "supported": false,
-        "description": "Streaming responses for large payloads"
-      },
-      "batch_operations": {
-        "supported": true,
-        "max_batch_size": 100,
-        "description": "Batch tool invocations"
-      },
       "pagination": {
         "supported": true,
         "default_page_size": 100,
@@ -1118,60 +1082,52 @@
         "cursor_format": "opaque_base64",
         "description": "Cursor-based pagination for list operations"
       },
-      "rate_limit_headers": {
-        "supported": true,
-        "description": "Rate limit info in response meta"
-      },
       "feature_flags": {
         "supported": true,
         "description": "Feature flag system for gradual rollouts"
       },
+      "unified_tools": {
+        "supported": true,
+        "description": "Action-based unified tool surface (17 tools)",
+        "tools": [
+          "health",
+          "plan",
+          "pr",
+          "error",
+          "metrics",
+          "journal",
+          "authoring",
+          "provider",
+          "environment",
+          "lifecycle",
+          "verification",
+          "task",
+          "spec",
+          "review",
+          "code",
+          "server",
+          "test"
+        ],
+        "feature_flags": [
+          "unified_manifest",
+          "unified_tools_phase2",
+          "unified_tools_phase3"
+        ]
+      },
       "environment_readiness": {
         "supported": true,
-        "description": "Environment verification and workspace initialization tools",
-        "tools": ["sdd-verify-toolchain", "sdd-init-workspace", "sdd-detect-topology", "sdd-verify-environment"]
+        "description": "Environment verification and workspace initialization",
+        "tools": [
+          "environment"
+        ]
       },
       "spec_helpers": {
         "supported": true,
-        "description": "Spec helper tools for discovery, validation, and analysis",
-        "tools": ["spec_find_related_files", "spec_find_patterns", "spec_detect_cycles", "spec_validate_paths"]
-      },
-      "authoring_tools": {
-        "supported": true,
-        "description": "Spec authoring tools for creating specs, managing phases and tasks, and updating metadata",
-        "tools": ["spec-create", "spec-template", "task-add", "phase-add", "phase-remove", "task-remove", "assumption-add", "assumption-list", "revision-add", "spec-update-frontmatter"]
-      },
-      "planning_tools": {
-        "supported": true,
-        "description": "Planning and execution utilities for task formatting, phase management, time tracking, and spec audits",
-        "tools": ["plan-format", "phase-list", "phase-check-complete", "phase-report-time", "spec-reconcile-state", "plan-report-time", "spec-audit"]
-      },
-      "reporting_tools": {
-        "supported": true,
-        "description": "Reporting tools for generating human-readable validation reports, progress summaries, and health checks",
-        "tools": ["spec-report", "spec-report-summary"]
-      },
-      "utility_tools": {
-        "supported": true,
-        "description": "Utility tools for cache management and schema exports",
-        "tools": ["sdd-cache-manage", "spec-schema-export"]
-      },
-      "documentation_tools": {
-        "supported": true,
-        "description": "LLM-powered documentation tools for spec rendering, code documentation, and fidelity reviews",
-        "tools": ["spec-doc", "spec-doc-llm", "spec-review-fidelity"]
-      },
-      "provider_tools": {
-        "supported": true,
-        "description": "LLM provider management tools for discovering, checking, and invoking AI providers",
-        "tools": ["provider-list", "provider-status", "provider-execute"]
+        "description": "Spec discovery and analysis",
+        "tools": [
+          "spec"
+        ]
       }
-    },
-    "api_version": "2024-11-01"
-  },
-  "metadata": {
-    "generated_at": "2025-12-01T21:40:00Z",
-    "generator": "foundry-mcp",
-    "documentation_url": "https://github.com/foundry-mcp/foundry-mcp"
+    }
   }
 }

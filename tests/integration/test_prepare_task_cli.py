@@ -4,9 +4,9 @@ NOTE: These tests require a specific test fixture spec
 (prepare-task-default-context-2025-11-23-001) to be present.
 If the fixture is missing, all tests in this module are skipped.
 """
+
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ REQUIRED_SPEC_ID = "prepare-task-default-context-2025-11-23-001"
 
 def _check_spec_exists() -> bool:
     """Check if the required test fixture spec exists."""
-    cmd = ["foundry-cli", "find-specs", "--json"]
+    cmd = ["foundry-cli", "specs", "find"]
     try:
         result = subprocess.run(
             cmd,
@@ -28,7 +28,9 @@ def _check_spec_exists() -> bool:
         )
         if result.returncode == 0:
             specs_data = json.loads(result.stdout)
-            spec_ids = [s.get("spec_id", s.get("id", "")) for s in specs_data.get("specs", [])]
+            spec_ids = [
+                s.get("spec_id", s.get("id", "")) for s in specs_data.get("specs", [])
+            ]
             return REQUIRED_SPEC_ID in spec_ids
     except Exception:
         pass
@@ -39,13 +41,13 @@ def _check_spec_exists() -> bool:
 pytestmark = pytest.mark.skipif(
     not _check_spec_exists(),
     reason=f"Test fixture spec '{REQUIRED_SPEC_ID}' not found. "
-           "These tests require the sdd-toolkit test fixtures.",
+    "These tests require the sdd-toolkit test fixtures.",
 )
 
 
 def run_prepare_task_command(spec_id: str, *args) -> dict:
-    """Run sdd prepare-task command and return parsed JSON output."""
-    cmd = ["foundry-cli", "prepare-task", spec_id] + list(args)
+    """Run sdd tasks prepare command and return parsed JSON output."""
+    cmd = ["foundry-cli", "tasks", "prepare", spec_id] + list(args)
     result = subprocess.run(
         cmd,
         capture_output=True,
@@ -296,7 +298,7 @@ def test_end_to_end_json_output_compact():
     result = run_prepare_task_command(spec_id)
 
     # Serialize to compact JSON
-    compact_json = json.dumps(result, separators=(',', ':'))
+    compact_json = json.dumps(result, separators=(",", ":"))
 
     # Should be smaller than pretty version
     pretty_json = json.dumps(result, indent=2)
@@ -321,7 +323,7 @@ def test_task_info_redundant_with_prepare_task():
 
     # Get task-info output for comparison
     task_id = prepare_result["task_id"]
-    task_info_cmd = ["foundry-cli", "task-info", spec_id, task_id, "--json"]
+    task_info_cmd = ["foundry-cli", "tasks", "info", spec_id, task_id, "--json"]
     task_info_result = subprocess.run(
         task_info_cmd,
         capture_output=True,
@@ -343,8 +345,10 @@ def test_task_info_redundant_with_prepare_task():
         assert "metadata" in prepare_task_data
         # File path should match if present
         if "file_path" in task_info_data["metadata"]:
-            assert prepare_task_data["metadata"]["file_path"] == \
-                   task_info_data["metadata"]["file_path"]
+            assert (
+                prepare_task_data["metadata"]["file_path"]
+                == task_info_data["metadata"]["file_path"]
+            )
 
 
 def test_check_deps_redundant_with_prepare_task():

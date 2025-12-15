@@ -2,12 +2,12 @@
 AI Consultation Layer for foundry-mcp.
 
 This module provides a unified interface for AI-assisted operations including
-document generation, plan review, and fidelity checking. It integrates with
-the provider registry to support multiple LLM backends while providing
-caching, timeout handling, and consistent result structures.
+plan review and fidelity checking. It integrates with the provider registry
+to support multiple LLM backends while providing caching, timeout handling,
+and consistent result structures.
 
 Design Principles:
-    - Workflow-specific prompt templates (doc_generation, plan_review, fidelity_review)
+    - Workflow-specific prompt templates (plan_review, fidelity_review)
     - Provider-agnostic orchestration via the provider registry
     - Filesystem-based caching for consultation results
     - Consistent result structures across all workflows
@@ -26,9 +26,9 @@ Example Usage:
     # Check availability
     if orchestrator.is_available():
         request = ConsultationRequest(
-            workflow=ConsultationWorkflow.DOC_GENERATION,
-            prompt_id="analyze_module",
-            context={"file_path": "src/main.py", "content": "..."},
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            prompt_id="spec_review",
+            context={"spec_content": "..."},
             provider_id="gemini",
         )
         result = orchestrator.consult(request)
@@ -39,10 +39,10 @@ Example Usage:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -98,7 +98,9 @@ def _collect_provider_error(
         )
     except Exception as collect_error:
         # Never let error collection failures affect consultation execution
-        logger.debug(f"Error collection failed for provider {provider_id}: {collect_error}")
+        logger.debug(
+            f"Error collection failed for provider {provider_id}: {collect_error}"
+        )
 
 
 # =============================================================================
@@ -114,13 +116,11 @@ class ConsultationWorkflow(str, Enum):
     determines cache partitioning and result handling.
 
     Values:
-        DOC_GENERATION: Generate documentation from code analysis
         PLAN_REVIEW: Review and critique SDD specifications
         FIDELITY_REVIEW: Compare implementation against specifications
         MARKDOWN_PLAN_REVIEW: Review markdown plans before spec creation
     """
 
-    DOC_GENERATION = "doc_generation"
     PLAN_REVIEW = "plan_review"
     FIDELITY_REVIEW = "fidelity_review"
     MARKDOWN_PLAN_REVIEW = "markdown_plan_review"
@@ -313,7 +313,9 @@ class AgreementMetadata:
         return self.successful_providers >= 2
 
     @classmethod
-    def from_responses(cls, responses: Sequence["ProviderResponse"]) -> "AgreementMetadata":
+    def from_responses(
+        cls, responses: Sequence["ProviderResponse"]
+    ) -> "AgreementMetadata":
         """
         Create AgreementMetadata from a list of provider responses.
 
@@ -628,9 +630,9 @@ class ConsultationOrchestrator:
 
         if orchestrator.is_available():
             request = ConsultationRequest(
-                workflow=ConsultationWorkflow.DOC_GENERATION,
-                prompt_id="analyze_module",
-                context={"content": "def foo(): pass"},
+                workflow=ConsultationWorkflow.PLAN_REVIEW,
+                prompt_id="spec_review",
+                context={"spec_content": "..."},
             )
             result = orchestrator.consult(request)
     """
@@ -638,7 +640,6 @@ class ConsultationOrchestrator:
     def __init__(
         self,
         cache: Optional[ResultCache] = None,
-        preferred_providers: Optional[Sequence[str]] = None,
         default_timeout: Optional[float] = None,
         config: Optional["ConsultationConfig"] = None,
     ):
@@ -647,31 +648,34 @@ class ConsultationOrchestrator:
 
         Args:
             cache: ResultCache instance (creates default if None)
-            preferred_providers: Ordered list of preferred provider IDs (legacy, use config.priority)
             default_timeout: Default timeout in seconds (uses config if None)
             config: ConsultationConfig instance (uses global config if None)
         """
         # Lazy import to avoid circular dependency
-        from foundry_mcp.core.llm_config import ConsultationConfig, get_consultation_config
+        from foundry_mcp.core.llm_config import (
+            ConsultationConfig,
+            get_consultation_config,
+        )
 
         self._config: ConsultationConfig = config or get_consultation_config()
         self.cache = cache or ResultCache(default_ttl=self._config.cache_ttl)
         self.default_timeout = (
-            default_timeout if default_timeout is not None else self._config.default_timeout
+            default_timeout
+            if default_timeout is not None
+            else self._config.default_timeout
         )
 
         # Parse priority list from config into ProviderSpec objects
-        # Priority: 1) config.priority specs, 2) preferred_providers param (legacy)
+        # Priority: 1) config.priority specs
         self._priority_specs: List[ProviderSpec] = []
         if self._config.priority:
             for spec_str in self._config.priority:
                 try:
                     self._priority_specs.append(ProviderSpec.parse(spec_str))
                 except ValueError as e:
-                    logger.warning(f"Invalid provider spec in priority list: {spec_str}: {e}")
-
-        # Legacy preferred_providers for backwards compatibility
-        self.preferred_providers = list(preferred_providers) if preferred_providers else []
+                    logger.warning(
+                        f"Invalid provider spec in priority list: {spec_str}: {e}"
+                    )
 
     def is_available(self, provider_id: Optional[str] = None) -> bool:
         """
@@ -686,9 +690,9 @@ class ConsultationOrchestrator:
         if provider_id:
             return check_provider_available(provider_id)
 
-        # Check preferred providers first
-        for prov_id in self.preferred_providers:
-            if check_provider_available(prov_id):
+        # Check priority providers first
+        for spec in self._priority_specs:
+            if check_provider_available(spec.provider):
                 return True
 
         # Fall back to any available provider
@@ -698,24 +702,10 @@ class ConsultationOrchestrator:
         """
         Return list of available provider IDs.
 
-        Preferred providers are listed first (if available), followed by
-        other available providers.
-
         Returns:
             List of available provider IDs
         """
-        available = set(available_providers())
-        result = []
-
-        # Add preferred providers that are available
-        for prov_id in self.preferred_providers:
-            if prov_id in available:
-                result.append(prov_id)
-                available.discard(prov_id)
-
-        # Add remaining available providers
-        result.extend(sorted(available))
-        return result
+        return sorted(available_providers())
 
     def _select_provider(self, request: ConsultationRequest) -> str:
         """
@@ -739,10 +729,10 @@ class ConsultationOrchestrator:
                 provider=request.provider_id,
             )
 
-        # Try preferred providers
-        for prov_id in self.preferred_providers:
-            if check_provider_available(prov_id):
-                return prov_id
+        # Try priority providers
+        for spec in self._priority_specs:
+            if check_provider_available(spec.provider):
+                return spec.provider
 
         # Fall back to first available
         providers = available_providers()
@@ -794,7 +784,9 @@ class ConsultationOrchestrator:
         builder = get_prompt_builder(request.workflow)
         return builder.build(request.prompt_id, request.context)
 
-    def _resolve_spec_to_provider(self, spec: ProviderSpec) -> Optional[ResolvedProvider]:
+    def _resolve_spec_to_provider(
+        self, spec: ProviderSpec
+    ) -> Optional[ResolvedProvider]:
         """
         Resolve a ProviderSpec to a ResolvedProvider if available.
 
@@ -838,7 +830,9 @@ class ConsultationOrchestrator:
             spec_str=str(spec),
         )
 
-    def _get_providers_to_try(self, request: ConsultationRequest) -> List[ResolvedProvider]:
+    def _get_providers_to_try(
+        self, request: ConsultationRequest
+    ) -> List[ResolvedProvider]:
         """
         Get ordered list of providers to try for a request.
 
@@ -874,18 +868,7 @@ class ConsultationOrchestrator:
                 result.append(resolved)
                 seen_providers.add(resolved.provider_id)
 
-        # 3. Legacy preferred_providers (for backwards compatibility)
-        for prov_id in self.preferred_providers:
-            if prov_id not in seen_providers and check_provider_available(prov_id):
-                result.append(
-                    ResolvedProvider(
-                        provider_id=prov_id,
-                        spec_str=f"legacy:{prov_id}",
-                    )
-                )
-                seen_providers.add(prov_id)
-
-        # 4. Fallback to available providers from registry
+        # 3. Fallback to available providers from registry
         for prov_id in available_providers():
             if prov_id not in seen_providers:
                 result.append(
@@ -922,7 +905,9 @@ class ConsultationOrchestrator:
             return True
 
         # Connection errors may be transient
-        if "connection" in error_str and ("reset" in error_str or "refused" in error_str):
+        if "connection" in error_str and (
+            "reset" in error_str or "refused" in error_str
+        ):
             return True
 
         # Server errors (5xx) are potentially retryable
@@ -948,7 +933,9 @@ class ConsultationOrchestrator:
         error_str = str(error).lower()
 
         # Don't fallback for prompt-level errors (these will fail with any provider)
-        if "prompt" in error_str and ("too long" in error_str or "invalid" in error_str):
+        if "prompt" in error_str and (
+            "too long" in error_str or "invalid" in error_str
+        ):
             return False
 
         # Don't fallback for authentication errors specific to all providers
@@ -988,13 +975,19 @@ class ConsultationOrchestrator:
         effective_model = request.model or resolved.model
 
         # Apply overrides from config
-        effective_timeout = resolved.overrides.get("timeout", request.timeout) or self.default_timeout
-        effective_temperature = resolved.overrides.get("temperature", request.temperature)
+        effective_timeout = (
+            resolved.overrides.get("timeout", request.timeout) or self.default_timeout
+        )
+        effective_temperature = resolved.overrides.get(
+            "temperature", request.temperature
+        )
         effective_max_tokens = resolved.overrides.get("max_tokens", request.max_tokens)
 
         for attempt in range(max_attempts):
             try:
-                provider = resolve_provider(provider_id, hooks=hooks, model=effective_model)
+                provider = resolve_provider(
+                    provider_id, hooks=hooks, model=effective_model
+                )
                 provider_request = ProviderRequest(
                     prompt=prompt,
                     system_prompt=request.system_prompt_override,
@@ -1002,6 +995,10 @@ class ConsultationOrchestrator:
                     timeout=effective_timeout,
                     temperature=effective_temperature,
                     max_tokens=effective_max_tokens,
+                    metadata={
+                        "workflow": request.workflow.value,
+                        "prompt_id": request.prompt_id,
+                    },
                 )
                 result = provider.generate(provider_request)
 
@@ -1014,7 +1011,9 @@ class ConsultationOrchestrator:
                     return result
 
                 # Non-success status from provider
-                error_msg = f"Provider {provider_id} returned status: {result.status.value}"
+                error_msg = (
+                    f"Provider {provider_id} returned status: {result.status.value}"
+                )
                 if result.stderr:
                     error_msg += f" - {result.stderr}"
                 last_error = Exception(error_msg)
@@ -1092,13 +1091,19 @@ class ConsultationOrchestrator:
         effective_model = request.model or resolved.model
 
         # Apply overrides from config
-        effective_timeout = resolved.overrides.get("timeout", request.timeout) or self.default_timeout
-        effective_temperature = resolved.overrides.get("temperature", request.temperature)
+        effective_timeout = (
+            resolved.overrides.get("timeout", request.timeout) or self.default_timeout
+        )
+        effective_temperature = resolved.overrides.get(
+            "temperature", request.temperature
+        )
         effective_max_tokens = resolved.overrides.get("max_tokens", request.max_tokens)
 
         for attempt in range(max_attempts):
             try:
-                provider = resolve_provider(provider_id, hooks=hooks, model=effective_model)
+                provider = resolve_provider(
+                    provider_id, hooks=hooks, model=effective_model
+                )
                 provider_request = ProviderRequest(
                     prompt=prompt,
                     system_prompt=request.system_prompt_override,
@@ -1106,11 +1111,17 @@ class ConsultationOrchestrator:
                     timeout=effective_timeout,
                     temperature=effective_temperature,
                     max_tokens=effective_max_tokens,
+                    metadata={
+                        "workflow": request.workflow.value,
+                        "prompt_id": request.prompt_id,
+                    },
                 )
 
                 # Run sync provider.generate() in executor to avoid blocking
                 loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, provider.generate, provider_request)
+                result = await loop.run_in_executor(
+                    None, provider.generate, provider_request
+                )
 
                 # Success
                 if result.status == ProviderStatus.SUCCESS:
@@ -1121,7 +1132,9 @@ class ConsultationOrchestrator:
                     return result
 
                 # Non-success status from provider
-                error_msg = f"Provider {provider_id} returned status: {result.status.value}"
+                error_msg = (
+                    f"Provider {provider_id} returned status: {result.status.value}"
+                )
                 if result.stderr:
                     error_msg += f" - {result.stderr}"
                 last_error = Exception(error_msg)
@@ -1197,7 +1210,9 @@ class ConsultationOrchestrator:
 
         if result is None:
             # Provider failed after all retries
-            error_msg = warnings[-1] if warnings else f"Provider {resolved.provider_id} failed"
+            error_msg = (
+                warnings[-1] if warnings else f"Provider {resolved.provider_id} failed"
+            )
             return ProviderResponse(
                 provider_id=resolved.provider_id,
                 model_used=resolved.model or "unknown",
@@ -1328,7 +1343,9 @@ class ConsultationOrchestrator:
                 f"Trying provider {provider_id} (spec: {resolved.spec_str}, "
                 f"model: {resolved.model})"
             )
-            result = self._try_provider_with_retries(request, prompt, resolved, warnings)
+            result = self._try_provider_with_retries(
+                request, prompt, resolved, warnings
+            )
 
             if result is not None:
                 return result, provider_id, None
@@ -1340,9 +1357,11 @@ class ConsultationOrchestrator:
                 # Create a pseudo-error from the warning to check fallback eligibility
                 pseudo_error = Exception(last_warning)
                 if self._should_try_next_provider(pseudo_error):
-                    warnings.append(f"Falling back to next provider...")
+                    warnings.append("Falling back to next provider...")
                 else:
-                    last_error = f"Provider {provider_id} failed and fallback is not appropriate"
+                    last_error = (
+                        f"Provider {provider_id} failed and fallback is not appropriate"
+                    )
                     break
             else:
                 last_error = f"All {len(providers)} provider(s) failed"
@@ -1394,14 +1413,31 @@ class ConsultationOrchestrator:
                                 ConsensusResult (min_models>1)
         """
         # Delegate to async implementation
-        return asyncio.run(
-            self.consult_async(
-                request,
-                use_cache=use_cache,
-                cache_ttl=cache_ttl,
-                workflow_name=workflow_name,
+        # Check if we're already in an async context
+        try:
+            asyncio.get_running_loop()
+            # Already in async context - use thread pool to avoid nested asyncio.run()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    asyncio.run,
+                    self.consult_async(
+                        request,
+                        use_cache=use_cache,
+                        cache_ttl=cache_ttl,
+                        workflow_name=workflow_name,
+                    ),
+                )
+                return future.result()
+        except RuntimeError:
+            # No running loop - safe to use asyncio.run()
+            return asyncio.run(
+                self.consult_async(
+                    request,
+                    use_cache=use_cache,
+                    cache_ttl=cache_ttl,
+                    workflow_name=workflow_name,
+                )
             )
-        )
 
     def consult_multiple(
         self,
@@ -1499,7 +1535,9 @@ class ConsultationOrchestrator:
         if min_models > 1:
             # Multi-model mode: execute providers in parallel
             # Limit to min_models providers (or all available if fewer)
-            providers_to_use = providers[:min_models] if len(providers) >= min_models else providers
+            providers_to_use = (
+                providers[:min_models] if len(providers) >= min_models else providers
+            )
 
             result = await self._execute_parallel_providers_async(
                 request, prompt, providers_to_use, min_models
@@ -1522,7 +1560,9 @@ class ConsultationOrchestrator:
             warnings: List[str] = []
             for resolved in providers:
                 if not check_provider_available(resolved.provider_id):
-                    warnings.append(f"Provider {resolved.provider_id} is not available, skipping")
+                    warnings.append(
+                        f"Provider {resolved.provider_id} is not available, skipping"
+                    )
                     continue
 
                 response = await self._execute_single_provider_async(
@@ -1536,7 +1576,9 @@ class ConsultationOrchestrator:
                         content=response.content,
                         provider_id=response.provider_id,
                         model_used=response.model_used,
-                        tokens={"total_tokens": response.tokens} if response.tokens else {},
+                        tokens={"total_tokens": response.tokens}
+                        if response.tokens
+                        else {},
                         duration_ms=duration_ms,
                         cache_hit=False,
                         warnings=warnings,
@@ -1545,12 +1587,16 @@ class ConsultationOrchestrator:
 
                     # Cache successful results
                     if use_cache:
-                        self.cache.set(request.workflow, cache_key, result, ttl=cache_ttl)
+                        self.cache.set(
+                            request.workflow, cache_key, result, ttl=cache_ttl
+                        )
 
                     return result
 
                 # Provider failed, try next
-                warnings.append(f"Provider {resolved.provider_id} failed: {response.error}")
+                warnings.append(
+                    f"Provider {resolved.provider_id} failed: {response.error}"
+                )
 
                 if not self._config.fallback_enabled:
                     break

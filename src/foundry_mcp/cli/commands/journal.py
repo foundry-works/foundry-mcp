@@ -22,7 +22,6 @@ from foundry_mcp.core.journal import (
     find_unjournaled_tasks,
     get_journal_entries,
     save_journal,
-    VALID_ENTRY_TYPES,
 )
 
 logger = get_cli_logger()
@@ -39,14 +38,16 @@ def journal() -> None:
 @click.option("--title", "-t", required=True, help="Entry title.")
 @click.option("--content", "-c", required=True, help="Entry content.")
 @click.option(
-    "--type", "-T", "entry_type",
+    "--type",
+    "-T",
+    "entry_type",
     type=click.Choice(["note", "decision", "blocker", "deviation", "status_change"]),
     default="note",
     help="Type of journal entry.",
 )
 @click.option("--task-id", help="Associated task ID (optional).")
 @click.pass_context
-@cli_command("journal-add")
+@cli_command("add")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Journal add timed out")
 def journal_add_cmd(
@@ -135,29 +136,33 @@ def journal_add_cmd(
         )
         return
 
-    emit_success({
-        "spec_id": spec_id,
-        "entry": {
-            "timestamp": entry.timestamp,
-            "entry_type": entry.entry_type,
-            "title": entry.title,
-            "content": entry.content,
-            "task_id": entry.task_id,
-        },
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "entry": {
+                "timestamp": entry.timestamp,
+                "entry_type": entry.entry_type,
+                "title": entry.title,
+                "content": entry.content,
+                "task_id": entry.task_id,
+            },
+        }
+    )
 
 
 @journal.command("list")
 @click.argument("spec_id")
 @click.option("--task-id", help="Filter by task ID.")
 @click.option(
-    "--type", "-T", "entry_type",
+    "--type",
+    "-T",
+    "entry_type",
     type=click.Choice(["note", "decision", "blocker", "deviation", "status_change"]),
     help="Filter by entry type.",
 )
 @click.option("--limit", "-l", type=int, help="Limit number of entries returned.")
 @click.pass_context
-@cli_command("journal-list")
+@cli_command("list")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Journal list timed out")
 def journal_list_cmd(
@@ -211,32 +216,34 @@ def journal_list_cmd(
         limit=limit,
     )
 
-    emit_success({
-        "spec_id": spec_id,
-        "entry_count": len(entries),
-        "filters": {
-            "task_id": task_id,
-            "entry_type": entry_type,
-            "limit": limit,
-        },
-        "entries": [
-            {
-                "timestamp": e.timestamp,
-                "entry_type": e.entry_type,
-                "title": e.title,
-                "content": e.content,
-                "task_id": e.task_id,
-                "author": e.author,
-            }
-            for e in entries
-        ],
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "entry_count": len(entries),
+            "filters": {
+                "task_id": task_id,
+                "entry_type": entry_type,
+                "limit": limit,
+            },
+            "entries": [
+                {
+                    "timestamp": e.timestamp,
+                    "entry_type": e.entry_type,
+                    "title": e.title,
+                    "content": e.content,
+                    "task_id": e.task_id,
+                    "author": e.author,
+                }
+                for e in entries
+            ],
+        }
+    )
 
 
 @journal.command("unjournaled")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("journal-unjournaled")
+@cli_command("unjournaled")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Journal unjournaled lookup timed out")
 def journal_unjournaled_cmd(
@@ -281,19 +288,23 @@ def journal_unjournaled_cmd(
     # Find unjournaled tasks
     unjournaled = find_unjournaled_tasks(spec_data)
 
-    emit_success({
-        "spec_id": spec_id,
-        "count": len(unjournaled),
-        "tasks": unjournaled,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "count": len(unjournaled),
+            "tasks": unjournaled,
+        }
+    )
 
 
 @journal.command("get")
 @click.argument("spec_id")
 @click.option("--task-id", help="Filter by task ID.")
-@click.option("--last", "-n", "last_n", type=int, help="Get last N entries (most recent).")
+@click.option(
+    "--last", "-n", "last_n", type=int, help="Get last N entries (most recent)."
+)
 @click.pass_context
-@cli_command("journal-get")
+@cli_command("get")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Journal get timed out")
 def journal_get_cmd(
@@ -346,26 +357,21 @@ def journal_get_cmd(
         limit=last_n,
     )
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "entry_count": len(entries),
-        "entries": [
-            {
-                "timestamp": e.timestamp,
-                "entry_type": e.entry_type,
-                "title": e.title,
-                "content": e.content,
-                "task_id": e.task_id,
-                "author": e.author,
-            }
-            for e in entries
-        ],
-    })
-
-
-# Top-level aliases
-journal_add_alias_cmd = journal_add_cmd
-journal_list_alias_cmd = journal_list_cmd
-journal_unjournaled_alias_cmd = journal_unjournaled_cmd
-journal_get_alias_cmd = journal_get_cmd
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "entry_count": len(entries),
+            "entries": [
+                {
+                    "timestamp": e.timestamp,
+                    "entry_type": e.entry_type,
+                    "title": e.title,
+                    "content": e.content,
+                    "task_id": e.task_id,
+                    "author": e.author,
+                }
+                for e in entries
+            ],
+        }
+    )

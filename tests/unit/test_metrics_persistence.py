@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import tempfile
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from foundry_mcp.core.metrics_store import (
     MetricDataPoint,
-    MetricsStore,
     FileMetricsStore,
     get_metrics_store,
     reset_metrics_store,
@@ -150,7 +147,7 @@ class TestFileMetricsStore:
     def test_init_creates_directory(self, temp_storage_dir):
         """Test that store creates storage directory on init."""
         storage_path = temp_storage_dir / "nested" / "metrics"
-        store = FileMetricsStore(storage_path)
+        FileMetricsStore(storage_path)
         assert storage_path.exists()
 
     def test_append_single_data_point(self, metrics_store):

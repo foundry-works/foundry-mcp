@@ -310,10 +310,25 @@ def error_response(
     if data:
         payload.update(dict(data))
 
-    if error_code is not None and "error_code" not in payload:
-        payload["error_code"] = error_code
-    if error_type is not None and "error_type" not in payload:
-        payload["error_type"] = error_type
+    effective_error_code: Union[ErrorCode, str] = (
+        error_code if error_code is not None else ErrorCode.INTERNAL_ERROR
+    )
+    effective_error_type: Union[ErrorType, str] = (
+        error_type if error_type is not None else ErrorType.INTERNAL
+    )
+
+    if "error_code" not in payload:
+        payload["error_code"] = (
+            effective_error_code.value
+            if isinstance(effective_error_code, Enum)
+            else effective_error_code
+        )
+    if "error_type" not in payload:
+        payload["error_type"] = (
+            effective_error_type.value
+            if isinstance(effective_error_type, Enum)
+            else effective_error_type
+        )
     if remediation is not None and "remediation" not in payload:
         payload["remediation"] = remediation
     if details and "details" not in payload:
@@ -425,8 +440,13 @@ def rate_limit_error(
         error_code=ErrorCode.RATE_LIMIT_EXCEEDED,
         error_type=ErrorType.RATE_LIMIT,
         data={"retry_after_seconds": retry_after_seconds},
-        rate_limit={"limit": limit, "period": period, "retry_after": retry_after_seconds},
-        remediation=remediation or f"Wait {retry_after_seconds} seconds before retrying.",
+        rate_limit={
+            "limit": limit,
+            "period": period,
+            "retry_after": retry_after_seconds,
+        },
+        remediation=remediation
+        or f"Wait {retry_after_seconds} seconds before retrying.",
         request_id=request_id,
     )
 
@@ -486,7 +506,8 @@ def forbidden_error(
         error_code=ErrorCode.FORBIDDEN,
         error_type=ErrorType.AUTHORIZATION,
         data=data if data else None,
-        remediation=remediation or "Request appropriate permissions from the resource owner.",
+        remediation=remediation
+        or "Request appropriate permissions from the resource owner.",
         request_id=request_id,
     )
 
@@ -663,9 +684,10 @@ def ai_provider_timeout_error(
             "provider_id": provider_id,
             "timeout_seconds": timeout_seconds,
         },
-        remediation=remediation or (
-            f"Try again with a smaller context, increase the timeout, "
-            f"or use a different provider."
+        remediation=remediation
+        or (
+            "Try again with a smaller context, increase the timeout, "
+            "or use a different provider."
         ),
         request_id=request_id,
     )
@@ -705,7 +727,8 @@ def ai_provider_error(
         error_code=ErrorCode.AI_PROVIDER_ERROR,
         error_type=ErrorType.AI_PROVIDER,
         data=data,
-        remediation=remediation or (
+        remediation=remediation
+        or (
             "Check provider configuration and API key validity. "
             "Consult provider documentation for error details."
         ),
@@ -748,7 +771,8 @@ def ai_context_too_large_error(
         error_code=ErrorCode.AI_CONTEXT_TOO_LARGE,
         error_type=ErrorType.AI_PROVIDER,
         data=data,
-        remediation=remediation or (
+        remediation=remediation
+        or (
             "Reduce context size by: excluding large files, using incremental mode, "
             "or reviewing only specific tasks/phases instead of the full spec."
         ),
@@ -799,7 +823,8 @@ def ai_prompt_not_found_error(
         error_code=ErrorCode.AI_PROMPT_NOT_FOUND,
         error_type=ErrorType.NOT_FOUND,
         data=data,
-        remediation=remediation or (
+        remediation=remediation
+        or (
             "Use a valid prompt ID from the workflow's prompt builder. "
             "Call list_prompts() to see available templates."
         ),
@@ -842,7 +867,8 @@ def ai_cache_stale_error(
             "cache_age_seconds": cache_age_seconds,
             "max_age_seconds": max_age_seconds,
         },
-        remediation=remediation or (
+        remediation=remediation
+        or (
             "Re-run the consultation to refresh cached results, "
             "or use --no-cache to bypass the cache."
         ),

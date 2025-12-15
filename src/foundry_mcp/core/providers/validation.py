@@ -16,7 +16,7 @@ from datetime import datetime
 from enum import Enum
 from functools import wraps
 from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, Set, TypeVar
+from typing import Any, Callable, Dict, Optional, Set, TypeVar
 
 from .base import (
     ProviderError,

@@ -2,16 +2,14 @@
 Unit tests for environment tools.
 
 Tests the environment verification, workspace initialization, and topology
-detection tools defined in src/foundry_mcp/tools/environment.py.
+detection helpers used by the unified environment router.
 """
 
-import os
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 
 class TestVerifyToolchain:
@@ -46,7 +44,13 @@ class TestVerifyToolchain:
         data = {
             "required": required_status,
             "all_available": True,
-            "optional": {"grep": True, "cat": True, "find": True, "node": True, "npm": True},
+            "optional": {
+                "grep": True,
+                "cat": True,
+                "find": True,
+                "node": True,
+                "npm": True,
+            },
         }
 
         result = asdict(success_response(data=data))
@@ -232,7 +236,7 @@ class TestDetectTopology:
     def test_unknown_project_type(self):
         """Test handling of unknown project type."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            base_path = Path(tmpdir)
+            Path(tmpdir)
 
             # Empty directory - no markers
             project_type = "unknown"
@@ -267,7 +271,6 @@ class TestVerifyEnvironment:
         """Test Git availability check."""
         mock_which.return_value = "/usr/bin/git"
 
-        import shutil
 
         git_path = mock_which("git")
         assert git_path is not None
@@ -277,7 +280,6 @@ class TestVerifyEnvironment:
         """Test handling when Git is not available."""
         mock_which.return_value = None
 
-        import shutil
 
         git_path = mock_which("git")
         issues = []
@@ -353,7 +355,7 @@ class TestSddSetup:
     def test_fresh_project_setup(self):
         """Test setup on a project with no existing config."""
         import json
-        from foundry_mcp.tools.environment import (
+        from foundry_mcp.tools.unified.environment import (
             _init_specs_directory,
             _update_permissions,
             _write_default_toml,
@@ -384,7 +386,7 @@ class TestSddSetup:
                 settings = json.load(f)
             assert "permissions" in settings
             assert "allow" in settings["permissions"]
-            assert "mcp__foundry-mcp__spec-list" in settings["permissions"]["allow"]
+            assert "mcp__foundry-mcp__spec" in settings["permissions"]["allow"]
 
             # Create TOML
             toml_path = base_path / "foundry-mcp.toml"
@@ -394,7 +396,7 @@ class TestSddSetup:
     def test_merge_existing_permissions(self):
         """Test that existing permissions are preserved during merge."""
         import json
-        from foundry_mcp.tools.environment import _update_permissions
+        from foundry_mcp.tools.unified.environment import _update_permissions
 
         with tempfile.TemporaryDirectory() as tmpdir:
             base_path = Path(tmpdir)
@@ -423,11 +425,14 @@ class TestSddSetup:
             assert "CustomTool" in new_settings["permissions"]["allow"]
             assert "AnotherCustomTool" in new_settings["permissions"]["allow"]
             # Also verify new permissions added
-            assert "mcp__foundry-mcp__spec-list" in new_settings["permissions"]["allow"]
+            assert "mcp__foundry-mcp__spec" in new_settings["permissions"]["allow"]
 
     def test_dry_run_no_changes(self):
         """Test dry_run mode doesn't create files."""
-        from foundry_mcp.tools.environment import _init_specs_directory, _update_permissions
+        from foundry_mcp.tools.unified.environment import (
+            _init_specs_directory,
+            _update_permissions,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             base_path = Path(tmpdir)
@@ -440,31 +445,8 @@ class TestSddSetup:
 
             # Dry run permissions
             settings_file = base_path / ".claude" / "settings.local.json"
-            perm_result = _update_permissions(settings_file, "minimal", dry_run=True)
+            _update_permissions(settings_file, "minimal", dry_run=True)
             assert not (base_path / ".claude").exists()
-
-    def test_permission_presets(self):
-        """Test that permission presets have expected tools."""
-        from foundry_mcp.tools.environment import (
-            _MINIMAL_PERMISSIONS,
-            _STANDARD_PERMISSIONS,
-            _FULL_PERMISSIONS,
-        )
-
-        # Minimal should have read-only tools
-        assert "mcp__foundry-mcp__spec-list" in _MINIMAL_PERMISSIONS
-        assert "mcp__foundry-mcp__spec-get" in _MINIMAL_PERMISSIONS
-        assert "mcp__foundry-mcp__task-list" in _MINIMAL_PERMISSIONS
-        # Minimal should NOT have write tools
-        assert "mcp__foundry-mcp__spec-create" not in _MINIMAL_PERMISSIONS
-
-        # Standard should include minimal + write tools
-        assert "mcp__foundry-mcp__spec-list" in _STANDARD_PERMISSIONS
-        assert "mcp__foundry-mcp__spec-create" in _STANDARD_PERMISSIONS
-        assert "mcp__foundry-mcp__task-complete" in _STANDARD_PERMISSIONS
-
-        # Full should use wildcard
-        assert "mcp__foundry-mcp__*" in _FULL_PERMISSIONS
 
     def test_invalid_preset_validation(self):
         """Test validation of invalid permissions preset."""
@@ -527,7 +509,7 @@ class TestSddSetup:
 
     def test_toml_content(self):
         """Test that generated TOML has expected content."""
-        from foundry_mcp.tools.environment import _DEFAULT_TOML_CONTENT
+        from foundry_mcp.tools.unified.environment import _DEFAULT_TOML_CONTENT
 
         assert "[workspace]" in _DEFAULT_TOML_CONTENT
         assert "specs_dir" in _DEFAULT_TOML_CONTENT
@@ -538,7 +520,7 @@ class TestSddSetup:
     def test_idempotent_setup(self):
         """Test that running setup twice is safe (idempotent)."""
         import json
-        from foundry_mcp.tools.environment import (
+        from foundry_mcp.tools.unified.environment import (
             _init_specs_directory,
             _update_permissions,
         )

@@ -11,8 +11,7 @@ import json
 import os
 import pytest
 import time
-from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.capabilities import (
@@ -134,7 +133,8 @@ class TestNotificationEmission:
     def test_notification_manager_emit(self, notification_manager):
         """Test that notifications are emitted to handlers."""
         received = []
-        handler = lambda n: received.append(n)
+        def handler(n):
+            return received.append(n)
         notification_manager.register_handler(handler)
 
         notification = Notification(method="test/method")
@@ -158,7 +158,8 @@ class TestNotificationEmission:
     def test_notification_manager_unregister(self, notification_manager):
         """Test handler unregistration."""
         received = []
-        handler = lambda n: received.append(n)
+        def handler(n):
+            return received.append(n)
         notification_manager.register_handler(handler)
         notification_manager.unregister_handler(handler)
 

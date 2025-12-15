@@ -17,7 +17,6 @@ from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
     MEDIUM_TIMEOUT,
-    SLOW_TIMEOUT,
     with_sync_timeout,
     handle_keyboard_interrupt,
 )
@@ -66,7 +65,7 @@ def pr_group() -> None:
     help="Preview PR content without creating.",
 )
 @click.pass_context
-@cli_command("pr-create")
+@cli_command("create")
 @handle_keyboard_interrupt()
 @with_sync_timeout(PR_TIMEOUT, "PR creation timed out")
 def pr_create_cmd(
@@ -200,7 +199,7 @@ def pr_create_cmd(
     help="Include phase/task progress stats.",
 )
 @click.pass_context
-@cli_command("pr-context")
+@cli_command("context")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "PR context lookup timed out")
 def pr_context_cmd(
@@ -287,7 +286,7 @@ def pr_context_cmd(
 
 @pr_group.command("status")
 @click.pass_context
-@cli_command("pr-status")
+@cli_command("status")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "PR status check timed out")
 def pr_status_cmd(ctx: click.Context) -> None:
@@ -392,45 +391,3 @@ def _get_llm_status() -> dict:
         return {"configured": False, "error": "LLM config not available"}
     except Exception as e:
         return {"configured": False, "error": str(e)}
-
-
-# Top-level alias
-@click.command("create-pr")
-@click.argument("spec_id")
-@click.option(
-    "--title",
-    help="PR title.",
-)
-@click.option(
-    "--base",
-    "base_branch",
-    default="main",
-    help="Base branch for PR.",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Preview PR content without creating.",
-)
-@click.pass_context
-@cli_command("create-pr-alias")
-@handle_keyboard_interrupt()
-@with_sync_timeout(PR_TIMEOUT, "PR creation timed out")
-def create_pr_alias_cmd(
-    ctx: click.Context,
-    spec_id: str,
-    title: Optional[str],
-    base_branch: str,
-    dry_run: bool,
-) -> None:
-    """Create a GitHub PR with spec context (alias for pr create)."""
-    ctx.invoke(
-        pr_create_cmd,
-        spec_id=spec_id,
-        title=title,
-        base_branch=base_branch,
-        include_journals=True,
-        include_diffs=True,
-        model=None,
-        dry_run=dry_run,
-    )

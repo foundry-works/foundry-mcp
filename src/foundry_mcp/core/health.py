@@ -25,13 +25,12 @@ Usage:
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 

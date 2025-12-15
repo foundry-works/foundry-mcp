@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/discovery.py
-# hypothesis_version: 6.148.3
-
-[100, 197, 200, '$schema', '...', '1.0.0', '2024-11-01', 'F', '_deprecated', '_removal_version', '_replacement', 'active_tools', 'additionalProperties', 'api_version', 'array', 'batch', 'batch_operations', 'boolean', 'capabilities', 'categories', 'category', 'default', 'deprecated', 'deprecated_tools', 'deprecation_message', 'description', 'examples', 'feature_flags', 'features', 'formats', 'general', 'integer', 'json', 'max_batch_size', 'meta', 'name', 'negotiated', 'number', 'object', 'pagination', 'properties', 'rate_limit', 'rate_limit_headers', 'related_tools', 'removal_version', 'replacement', 'required', 'response-v2', 'response_version', 'schema', 'schema_version', 'server_version', 'streaming', 'string', 'tags', 'title', 'tool_count', 'tools', 'total_tools', 'type', 'version', 'warnings']

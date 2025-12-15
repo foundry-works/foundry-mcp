@@ -54,7 +54,6 @@ Example usage:
 import base64
 import json
 from dataclasses import asdict
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from foundry_mcp.core.responses import success_response

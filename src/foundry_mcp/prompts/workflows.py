@@ -5,7 +5,6 @@ Provides MCP prompts for common SDD workflows like starting features,
 debugging tests, and completing phases.
 """
 
-import json
 import logging
 from typing import Optional
 
@@ -18,7 +17,6 @@ from foundry_mcp.core.spec import (
     find_specs_directory,
 )
 from foundry_mcp.core.progress import get_progress_summary, list_phases
-from foundry_mcp.core.task import get_next_task, prepare_task
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +147,9 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
             [
                 "## Available Tools",
                 "Use these MCP tools to manage the spec:",
-                "- `spec-validate`: Validate spec structure",
-                "- `spec-lifecycle-activate`: Move spec to active",
-                "- `task-prepare`: Get next task to work on",
+                '- `spec(action="validate")`: Validate spec structure',
+                '- `lifecycle(action="activate")`: Move spec to active',
+                '- `task(action="next")`: Find next task to work on',
                 "",
                 "Ready to begin? Please provide more details about the feature requirements.",
             ]
@@ -244,10 +242,8 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "",
                 "## Available Tools",
                 "Use these MCP tools to help debug:",
-                "- `test-run`: Run tests with various options",
-                "- `test-discover`: Find related tests",
-                "- `code-trace-calls`: Trace function call graph",
-                "- `code-impact-analysis`: See what else might be affected",
+                '- `test(action="run", preset="quick")`: Run tests',
+                '- `test(action="discover")`: Discover available tests',
                 "",
             ]
         )
@@ -255,7 +251,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
         if spec_id:
             prompt_parts.extend(
                 [
-                    f"## Spec Context",
+                    "## Spec Context",
                     f"This test is related to spec `{spec_id}`.",
                     "After fixing, remember to update the task status.",
                     "",
@@ -355,15 +351,15 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "### Step 1: Review Remaining Tasks",
                 "List all pending/in-progress tasks in this phase:",
                 "```bash",
-                f"# Use task-progress to check status",
+                '# Use task(action="progress") to check status',
                 "```",
                 "",
                 "### Step 2: Complete Each Task",
                 "For each remaining task:",
-                "1. Start the task (`task-start`)",
+                '1. Start the task (`task(action="start")`)',
                 "2. Implement the required changes",
                 "3. Verify the implementation",
-                "4. Complete the task with journal entry (`task-complete`)",
+                '4. Complete the task with journal entry (`task(action="complete")`)',
                 "",
                 "### Step 3: Run Verification",
                 "Before marking the phase complete:",
@@ -381,14 +377,15 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "### Step 5: Prepare for Next Phase",
                 "After this phase completes:",
                 "1. Review the next phase requirements",
-                "2. Use `task-prepare` to get the first task",
+                '2. Use `task(action="next")` to get the first task',
                 "3. Continue the workflow",
                 "",
                 "## Available Tools",
-                "- `task-progress`: Check spec/phase progress",
-                "- `task-prepare`: Get next task with context",
-                "- `task-complete`: Mark task done with journal",
-                "- `test-run`: Run verification tests",
+                '- `task(action="progress")`: Check spec/phase progress',
+                '- `task(action="next")`: Find next task to work on',
+                '- `task(action="prepare")`: Get task context',
+                '- `task(action="complete")`: Mark task done with journal',
+                '- `test(action="run", preset="quick")`: Run verification tests',
                 "",
                 "Ready to proceed? Let's review the remaining tasks.",
             ]
@@ -431,7 +428,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                     "**Error:** Spec not found or could not be loaded.",
                     "",
                     f"Please verify the spec ID `{spec_id}` is correct.",
-                    "Use `spec-list` to see available specs.",
+                    'Use `spec(action="list")` to see available specs.',
                 ]
             )
             return "\n".join(prompt_parts)
@@ -513,7 +510,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "### Actions",
                 "",
                 "What would you like to do?",
-                "1. Continue with next task (`task-prepare`)",
+                '1. Continue with next task (`task(action="next")`)',
                 "2. View specific phase details",
                 "3. Check blocked tasks",
                 "4. Review journal entries",

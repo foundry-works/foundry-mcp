@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/discovery.py
-# hypothesis_version: 6.148.3
-
-[',', 'Error listing tools', 'INVALID_CURSOR', 'MISSING_REQUIRED', 'NOT_FOUND', 'categories', 'category', 'filters_applied', 'foundry_list_tools', 'include_deprecated', 'name', 'not_found', 'offset', 'stats', 'tag', 'tools', 'validation']

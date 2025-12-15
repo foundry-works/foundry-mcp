@@ -36,7 +36,7 @@ import time
 import json
 from datetime import datetime, timezone
 from typing import Final, Optional, Dict, Any, Callable, TypeVar, Union, List, Tuple
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 
 from foundry_mcp.core.context import (
@@ -44,7 +44,6 @@ from foundry_mcp.core.context import (
     get_client_id,
     generate_correlation_id,
     sync_request_context,
-    get_current_context,
 )
 
 logger = logging.getLogger(__name__)

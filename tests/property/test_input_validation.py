@@ -4,8 +4,7 @@ Property-based tests for input validation using Hypothesis.
 Tests that arbitrary inputs don't crash validation and errors are handled properly.
 """
 
-import pytest
-from hypothesis import given, strategies as st, settings, assume, HealthCheck
+from hypothesis import given, strategies as st, settings, assume
 import json
 import re
 
@@ -16,14 +15,11 @@ from foundry_mcp.core.validation import (
     Diagnostic,
     VALID_STATUSES,
     VALID_NODE_TYPES,
-    VALID_VERIFICATION_TYPES,
-    VALID_TASK_CATEGORIES,
 )
 from foundry_mcp.core.security import (
     MAX_INPUT_SIZE,
     MAX_ARRAY_LENGTH,
     MAX_STRING_LENGTH,
-    MAX_NESTED_DEPTH,
 )
 
 

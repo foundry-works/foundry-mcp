@@ -12,9 +12,8 @@ Tests cover:
 - reset_registry function
 """
 
-import os
 from typing import Dict, Optional
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

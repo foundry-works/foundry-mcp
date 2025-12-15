@@ -174,7 +174,7 @@ return asdict(error_response(
     message=f"Spec '{spec_id}' not found",
     error_code="SPEC_NOT_FOUND",
     error_type="not_found",
-    remediation="Verify the spec ID exists using spec-list",
+    remediation="Verify the spec ID exists using spec(action=\"list\")", 
     request_id=context.request_id,
 ))
 ```

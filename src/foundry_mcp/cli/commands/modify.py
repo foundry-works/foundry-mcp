@@ -57,7 +57,7 @@ def modify_group() -> None:
     help="Output path for modified spec (default: overwrite original).",
 )
 @click.pass_context
-@cli_command("modify-apply")
+@cli_command("apply")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MODIFY_TIMEOUT, "Apply modifications timed out")
 def modify_apply_cmd(
@@ -195,7 +195,7 @@ def modify_phase_group() -> None:
     help="Preview changes without applying.",
 )
 @click.pass_context
-@cli_command("modify-phase-add")
+@cli_command("phase-add")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Add phase timed out")
 def modify_phase_add_cmd(
@@ -326,7 +326,7 @@ def modify_task_group() -> None:
     help="Preview changes without applying.",
 )
 @click.pass_context
-@cli_command("modify-task-add")
+@cli_command("task-add")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Add task timed out")
 def modify_task_add_cmd(
@@ -435,7 +435,7 @@ def modify_task_add_cmd(
     help="Preview changes without applying.",
 )
 @click.pass_context
-@cli_command("modify-task-remove")
+@cli_command("task-remove")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Remove task timed out")
 def modify_task_remove_cmd(
@@ -540,7 +540,7 @@ def modify_task_remove_cmd(
     help="Preview changes without applying.",
 )
 @click.pass_context
-@cli_command("modify-assumption")
+@cli_command("assumption")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Add assumption timed out")
 def modify_assumption_cmd(
@@ -644,7 +644,7 @@ def modify_assumption_cmd(
     help="Preview changes without applying.",
 )
 @click.pass_context
-@cli_command("modify-revision")
+@cli_command("revision")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Add revision timed out")
 def modify_revision_cmd(
@@ -744,7 +744,7 @@ def modify_revision_cmd(
     help="Preview changes without applying.",
 )
 @click.pass_context
-@cli_command("modify-frontmatter")
+@cli_command("frontmatter")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Update frontmatter timed out")
 def modify_frontmatter_cmd(

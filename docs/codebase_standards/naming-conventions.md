@@ -8,30 +8,27 @@ Consistent naming shortens discovery time, improves LLM selection accuracy, and 
 
 ## Principles
 
-1. **Verb–Noun Order** – Start with the action (`review-parse`, `task-update`), followed by the subject. This groups related verbs alphabetically in discovery listings.
-2. **Domain Prefixes** – Use short prefixes to signal the artifact being touched:
-   - `spec-` for spec-wide operations (authoring, validation, reporting)
-   - `task-` for task-scoped mutation or inspection
-   - `plan-` / `phase-` for planning utilities
-   - `review-` for review workflows
-   - `provider-` for LLM provider management (listing, status, execution)
-   - `verification-`, `assumption-`, `revision-`, `journal-` for lifecycle domains
-   - `sdd-` for environment-wide helpers (bootstrap, cache, config)
-3. **Hyphen Separators** – Prefer `kebab-case` so MCP tool registries remain readable and avoid camelCase drift across adapters.
-4. **Status-Quo Mapping** – When migrating existing tools, surface the new name while aliasing the legacy command until clients update, then deprecate per [§13 Tool Discovery](../mcp_best_practices/13-tool-discovery.md#deprecation-handling).
-5. **No Overloaded Roots** – Avoid reusing generic verbs (`create`, `init`) without prefixes; collisions make tool chaining brittle for LLMs.
+1. **Router + Action** – Use a small set of domain routers (`spec`, `task`, `review`, etc.) and encode the verb in an `action` parameter. This keeps the advertised manifest small and LLM-friendly.
+2. **Action Naming** – `action` values MUST be stable, `kebab-case`, and scoped to the router (e.g., `spec: validate`, `task: next`, `review: fidelity`).
+3. **Avoid Verb Explosion** – Prefer extending an existing router with a new `action` instead of introducing a new top-level tool name.
+4. **Deprecation Discipline** – If you temporarily support legacy tool names, document the retirement timeline in specs and remove them within two releases per [§13 Tool Discovery](../mcp_best_practices/13-tool-discovery.md#deprecation-handling).
+5. **No Overloaded Actions** – Don’t reuse the same `action` string with incompatible semantics; add a new action or introduce a separate parameter for mode selection.
 
 ## Recommended Mapping Matrix
 
-| Domain | Prefix | Examples |
-|--------|--------|----------|
-| Environment & bootstrap | `sdd-` | `sdd-verify-toolchain`, `sdd-init-workspace`, `sdd-cache-manage` |
-| Spec-wide authoring | `spec-` | `spec-create`, `spec-update-frontmatter`, `spec-reconcile-state` |
-| Task lifecycle | `task-` | `task-add`, `task-update-metadata`, `task-create-commit` |
-| Planning & phasing | `plan-` / `phase-` | `plan-format`, `plan-report-time`, `phase-check-complete` |
-| Review / PR flows | `review-` / `pr-` | `review-list-tools`, `review-parse-feedback`, `pr-create-with-spec` |
-| LLM provider management | `provider-` | `provider-list`, `provider-status`, `provider-execute` |
-| Lifecycle extras | domain noun | `assumption-list`, `verification-add`, `journal-bulk-add` |
+| Domain router | `action` examples | Notes |
+|--------------|------------------|-------|
+| `environment` | `init`, `verify-env`, `verify-toolchain`, `setup`, `detect` | Workspace + toolchain hygiene |
+| `spec` | `find`, `list`, `validate`, `fix`, `stats`, `validate-fix`, `analyze`, `analyze-deps` | Discovery/validation/analysis |
+| `authoring` | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-remove`, `assumption-add`, `assumption-list`, `revision-add` | Spec mutations |
+| `task` | `next`, `prepare`, `start`, `complete`, `progress`, `query`, `hierarchy`, `block`, `unblock` | Task execution surface |
+| `lifecycle` | `activate`, `complete`, `archive`, `move`, `state` | Spec folder/state transitions |
+| `journal` | `add`, `list`, `list-unjournaled` | Journal records |
+| `test` | `run` (`preset=quick|unit|full`), `discover` | Pytest integration |
+| `review` | `spec`, `fidelity`, `parse-feedback`, `list-tools`, `list-plan-tools` | LLM review workflows |
+| `code` | `find-class`, `find-function`, `callers`, `callees`, `trace`, `impact` | Repo-local code navigation |
+| `server` | `tools`, `schema`, `capabilities`, `context`, `llm-status` | Discovery/capabilities introspection |
+| `health` | `liveness`, `readiness`, `check` | Operational health checks |
 
 ## CLI Naming Plan
 
@@ -45,19 +42,17 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 
 ### Subcommand Namespaces
 
-| CLI Namespace | Scope | Canonical Tool Prefix Alignment |
-|---------------|-------|----------------------------------|
-| `plan` | Spec creation + workspace analysis | `spec-`, `plan-`, `phase-`, `sdd-` |
-| `next` | Task discovery + preparation | `task-` |
-| `update` | Status changes, journaling, lifecycle | `task-`, `journal-`, `spec-lifecycle-` |
-| `validate` | Validation, fix, reporting | `spec-validate-*`, `spec-report-*` |
-| `render` | AI-assisted rendering | `spec-render-*`, `review-*` |
-| `doc` | Code documentation + queries | `code-*`, `doc-*` |
-| `provider` | LLM provider management | `provider-*` |
-| `test` | Test discovery/execution | `test-*` |
-| `spec-mod` | Bulk spec modifications | `spec-apply-*`, `verification-*` |
-| `plan-review` / `pr` | Reviews and PR helpers | `review-*`, `pr-*` |
-| `context` | Session + token tracking | `context-*`, `sdd-session-*` |
+| CLI Namespace | Scope | Unified router alignment |
+|---------------|-------|--------------------------|
+| `plan` | Spec creation + workspace analysis | `plan`, `authoring`, `environment` |
+| `next` | Task discovery + preparation | `task` |
+| `update` | Status changes, journaling, lifecycle | `task`, `journal`, `lifecycle` |
+| `validate` | Validation, fix, reporting | `spec` |
+| `provider` | LLM provider management | `provider` |
+| `test` | Test discovery/execution | `test` |
+| `spec-mod` | Bulk spec modifications | `authoring`, `verification` |
+| `plan-review` / `pr` | Reviews and PR helpers | `review`, `pr` |
+| `context` | Session + token tracking | `server` (context), `environment` |
 
 ### Operation Naming Workflow
 
@@ -82,21 +77,13 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 - Confirm that all adapters under `src/foundry_mcp/tools/` use the prefixes above.
 - Pay special attention to pre-guidance helpers that may still carry historical prefixes and ensure docs/specs/tests move together when renaming.
 
-## Current Implementation Audit *(2025-11-27)*
+## Current Implementation Audit *(unified routers)*
 
-| Module | Canonical Tools | Status | Notes |
-|--------|-----------------|--------|-------|
-| `server.py` | `sdd-server-capabilities`, `spec-list-basic`, `spec-get`, `spec-get-hierarchy`, `task-get` | ✅ live | Registered via `canonical_tool` with canonical names only.
-| `tools/queries.py` | `spec-find`, `spec-list`, `task-query` | ✅ live | Canonical names registered across CLI + discovery listings.
-| `validation.py` | `spec-validate`, `spec-fix`, `spec-stats`, `spec-validate-fix` | ✅ live | Canonical names ship via `canonical_tool`; no legacy aliases remain.
-| `rendering.py` | `spec-render`, `spec-render-progress`, `task-list` | ✅ live | Rendering helpers expose canonical names for registry + docs.
-| `journal.py` | `journal-add`, `journal-list`, `task-block`, `task-unblock`, `task-list-blocked`, `journal-list-unjournaled` | ✅ live | Lifecycle + journaling helpers now use canonical prefixes only.
-| `docs.py` | `code-find-class`, `code-find-function`, `code-trace-calls`, `code-impact-analysis`, `code-get-callers`, `code-get-callees`, `doc-stats` | ✅ live | Code-analysis suite follows `code-`/`doc-` naming for easier discovery.
-| `discovery.py` | `tool-list`, `tool-get-schema`, `capability-get`, `capability-negotiate`, `tool-list-categories` | ✅ live | Discovery endpoints expose canonical tool/capability prefixes.
-| `lifecycle.py` | `spec-lifecycle-move`, `spec-lifecycle-activate`, `spec-lifecycle-complete`, `spec-lifecycle-archive`, `spec-lifecycle-state`, `spec-list-by-folder` | ✅ live | All lifecycle transitions aligned to `spec-lifecycle-*` verbs.
-| `tasks.py` | `task-prepare`, `task-next`, `task-info`, `task-check-deps`, `task-update-status`, `task-complete`, `task-start`, `task-progress` | ✅ live | Task operations standardized under canonical prefixes.
-| `testing.py` | `test-run`, `test-discover`, `test-presets`, `test-run-quick`, `test-run-unit` | ✅ live | Testing adapters advertise canonical names for preset + runner variants.
-| `providers.py` | `provider-list`, `provider-status`, `provider-execute` | ✅ live | LLM provider management tools for discovery, status, and execution; see [§11 AI/LLM Integration](../mcp_best_practices/11-ai-llm-integration.md).
+The canonical advertised tool surface is the 17 unified routers in `mcp/capabilities_manifest.json`:
+
+`health`, `plan`, `pr`, `error`, `metrics`, `journal`, `authoring`, `provider`, `environment`, `lifecycle`, `verification`, `task`, `spec`, `review`, `code`, `server`, `test`.
+
+Each router exposes a stable `action` enum; add functionality by extending `action` (and updating the manifest/specs/tests) rather than introducing new top-level tool names.
 
 ## Related Documents
 

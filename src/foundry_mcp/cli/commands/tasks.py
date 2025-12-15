@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
-from foundry_mcp.cli.output import emit, emit_error, emit_success
+from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
@@ -45,7 +45,7 @@ def tasks() -> None:
 @tasks.command("next")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("tasks-next")
+@cli_command("next")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Task discovery timed out")
 def next_task(ctx: click.Context, spec_id: str) -> None:
@@ -81,50 +81,59 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
 
     if result:
         task_id, task_data = result
-        emit_success({
-            "found": True,
-            "spec_id": spec_id,
-            "task_id": task_id,
-            "title": task_data.get("title", ""),
-            "type": task_data.get("type", "task"),
-            "status": task_data.get("status", "pending"),
-            "metadata": task_data.get("metadata", {}),
-        })
+        emit_success(
+            {
+                "found": True,
+                "spec_id": spec_id,
+                "task_id": task_id,
+                "title": task_data.get("title", ""),
+                "type": task_data.get("type", "task"),
+                "status": task_data.get("status", "pending"),
+                "metadata": task_data.get("metadata", {}),
+            }
+        )
     else:
         # Check if spec is complete or blocked
         hierarchy = spec_data.get("hierarchy", {})
         all_tasks = [
             node
             for node in hierarchy.values()
-            if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
+            if isinstance(node, dict)
+            and node.get("type") in ("task", "subtask", "verify")
         ]
         completed = sum(1 for t in all_tasks if t.get("status") == "completed")
         pending = sum(1 for t in all_tasks if t.get("status") == "pending")
 
         if pending == 0 and completed > 0:
-            emit_success({
-                "found": False,
-                "spec_id": spec_id,
-                "spec_complete": True,
-                "message": "All tasks completed",
-            })
+            emit_success(
+                {
+                    "found": False,
+                    "spec_id": spec_id,
+                    "spec_complete": True,
+                    "message": "All tasks completed",
+                }
+            )
         else:
-            emit_success({
-                "found": False,
-                "spec_id": spec_id,
-                "spec_complete": False,
-                "message": "No actionable tasks (tasks may be blocked)",
-            })
+            emit_success(
+                {
+                    "found": False,
+                    "spec_id": spec_id,
+                    "spec_complete": False,
+                    "message": "No actionable tasks (tasks may be blocked)",
+                }
+            )
 
 
 @tasks.command("prepare")
 @click.argument("spec_id")
 @click.argument("task_id", required=False)
 @click.pass_context
-@cli_command("tasks-prepare")
+@cli_command("prepare")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Task preparation timed out")
-def prepare_task_cmd(ctx: click.Context, spec_id: str, task_id: Optional[str] = None) -> None:
+def prepare_task_cmd(
+    ctx: click.Context, spec_id: str, task_id: Optional[str] = None
+) -> None:
     """Prepare complete context for task implementation.
 
     SPEC_ID is the specification identifier.
@@ -159,22 +168,26 @@ def prepare_task_cmd(ctx: click.Context, spec_id: str, task_id: Optional[str] = 
     # Extract data from success response
     data = result.get("data", result)
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": data.get("task_id"),
-        "spec_complete": data.get("spec_complete", False),
-        "task_data": data.get("task_data"),
-        "dependencies": data.get("dependencies"),
-        "context": data.get("context"),
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": data.get("task_id"),
+            "spec_complete": data.get("spec_complete", False),
+            "task_data": data.get("task_data"),
+            "dependencies": data.get("dependencies"),
+            "context": data.get("context"),
+        }
+    )
 
 
 @tasks.command("info")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.option("--include-context/--no-context", default=True, help="Include task context.")
+@click.option(
+    "--include-context/--no-context", default=True, help="Include task context."
+)
 @click.pass_context
-@cli_command("tasks-info")
+@cli_command("info")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Task info lookup timed out")
 def task_info_cmd(
@@ -251,10 +264,12 @@ def task_info_cmd(
 @tasks.command("update-status")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.argument("status", type=click.Choice(["pending", "in_progress", "completed", "blocked"]))
+@click.argument(
+    "status", type=click.Choice(["pending", "in_progress", "completed", "blocked"])
+)
 @click.option("--note", "-n", help="Optional note about the status change.")
 @click.pass_context
-@cli_command("tasks-update-status")
+@cli_command("update-status")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Status update timed out")
 def update_status_cmd(
@@ -324,12 +339,14 @@ def update_status_cmd(
             details={"path": str(spec_path)},
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "status": status,
-        "note": note,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "status": status,
+            "note": note,
+        }
+    )
 
 
 @tasks.command("block")
@@ -337,14 +354,16 @@ def update_status_cmd(
 @click.argument("task_id")
 @click.option("--reason", "-r", required=True, help="Description of the blocker.")
 @click.option(
-    "--type", "-t", "blocker_type",
+    "--type",
+    "-t",
+    "blocker_type",
     type=click.Choice(["dependency", "technical", "resource", "decision"]),
     default="dependency",
     help="Type of blocker.",
 )
 @click.option("--ticket", help="Optional ticket/issue reference.")
 @click.pass_context
-@cli_command("tasks-block")
+@cli_command("block")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Block task timed out")
 def block_task_cmd(
@@ -414,14 +433,16 @@ def block_task_cmd(
             details={"path": str(spec_path)},
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "status": "blocked",
-        "blocker_type": blocker_type,
-        "reason": reason,
-        "ticket": ticket,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "status": "blocked",
+            "blocker_type": blocker_type,
+            "reason": reason,
+            "ticket": ticket,
+        }
+    )
 
 
 @tasks.command("unblock")
@@ -429,13 +450,14 @@ def block_task_cmd(
 @click.argument("task_id")
 @click.option("--resolution", "-r", help="Description of how blocker was resolved.")
 @click.option(
-    "--status", "-s",
+    "--status",
+    "-s",
     type=click.Choice(["pending", "in_progress"]),
     default="pending",
     help="Status after unblocking.",
 )
 @click.pass_context
-@cli_command("tasks-unblock")
+@cli_command("unblock")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Unblock task timed out")
 def unblock_task_cmd(
@@ -504,20 +526,27 @@ def unblock_task_cmd(
             details={"path": str(spec_path)},
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "status": status,
-        "resolution": resolution,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "status": status,
+            "resolution": resolution,
+        }
+    )
 
 
 @tasks.command("complete")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.option("--note", "-n", required=True, help="Completion note describing what was accomplished.")
+@click.option(
+    "--note",
+    "-n",
+    required=True,
+    help="Completion note describing what was accomplished.",
+)
 @click.pass_context
-@cli_command("tasks-complete")
+@cli_command("complete")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Task completion timed out")
 def complete_task_cmd(
@@ -615,25 +644,27 @@ def complete_task_cmd(
             details={"path": str(spec_path)},
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "status": "completed",
-        "title": task_title,
-        "journal_entry": {
-            "timestamp": entry.timestamp,
-            "title": entry.title,
-            "entry_type": entry.entry_type,
-        },
-        "note": note,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "status": "completed",
+            "title": task_title,
+            "journal_entry": {
+                "timestamp": entry.timestamp,
+                "title": entry.title,
+                "entry_type": entry.entry_type,
+            },
+            "note": note,
+        }
+    )
 
 
 @tasks.command("check-complete")
 @click.argument("spec_id")
 @click.argument("task_id")
 @click.pass_context
-@cli_command("tasks-check-complete")
+@cli_command("check-complete")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Check complete timed out")
 def check_complete_cmd(
@@ -696,26 +727,30 @@ def check_complete_cmd(
     # Check if already completed
     current_status = task_data.get("status", "pending")
     if current_status == "completed":
-        emit_success({
-            "spec_id": spec_id,
-            "task_id": task_id,
-            "can_complete": True,
-            "already_completed": True,
-            "status": current_status,
-            "blockers": [],
-            "message": "Task is already completed",
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "task_id": task_id,
+                "can_complete": True,
+                "already_completed": True,
+                "status": current_status,
+                "blockers": [],
+                "message": "Task is already completed",
+            }
+        )
         return
 
     # Check if task is blocked
     if current_status == "blocked":
         can_complete = False
         blocker_info = task_data.get("metadata", {}).get("blocker", {})
-        blockers.append({
-            "type": "blocked_status",
-            "reason": blocker_info.get("reason", "Task is marked as blocked"),
-            "blocker_type": blocker_info.get("type", "unknown"),
-        })
+        blockers.append(
+            {
+                "type": "blocked_status",
+                "reason": blocker_info.get("reason", "Task is marked as blocked"),
+                "blocker_type": blocker_info.get("type", "unknown"),
+            }
+        )
 
     # Check dependencies
     deps = check_dependencies(spec_data, task_id)
@@ -723,11 +758,13 @@ def check_complete_cmd(
         can_complete = False
         blocked_by = deps.get("blocked_by", [])
         for dep in blocked_by:
-            blockers.append({
-                "type": "dependency",
-                "reason": f"Depends on incomplete task: {dep}",
-                "blocking_task": dep,
-            })
+            blockers.append(
+                {
+                    "type": "dependency",
+                    "reason": f"Depends on incomplete task: {dep}",
+                    "blocking_task": dep,
+                }
+            )
 
     # Check child tasks for group/phase tasks
     children = task_data.get("children", [])
@@ -737,26 +774,34 @@ def check_complete_cmd(
         for child_id in children:
             child_data = hierarchy.get(child_id)
             if child_data and child_data.get("status") != "completed":
-                incomplete_children.append({
-                    "id": child_id,
-                    "title": child_data.get("title", child_id),
-                    "status": child_data.get("status", "pending"),
-                })
+                incomplete_children.append(
+                    {
+                        "id": child_id,
+                        "title": child_data.get("title", child_id),
+                        "status": child_data.get("status", "pending"),
+                    }
+                )
 
         if incomplete_children:
             can_complete = False
-            blockers.append({
-                "type": "incomplete_children",
-                "reason": f"{len(incomplete_children)} child task(s) not completed",
-                "children": incomplete_children,
-            })
+            blockers.append(
+                {
+                    "type": "incomplete_children",
+                    "reason": f"{len(incomplete_children)} child task(s) not completed",
+                    "children": incomplete_children,
+                }
+            )
 
-    emit_success({
-        "spec_id": spec_id,
-        "task_id": task_id,
-        "can_complete": can_complete,
-        "already_completed": False,
-        "status": current_status,
-        "blockers": blockers,
-        "message": "Ready to complete" if can_complete else f"{len(blockers)} blocker(s) found",
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "task_id": task_id,
+            "can_complete": can_complete,
+            "already_completed": False,
+            "status": current_status,
+            "blockers": blockers,
+            "message": "Ready to complete"
+            if can_complete
+            else f"{len(blockers)} blocker(s) found",
+        }
+    )

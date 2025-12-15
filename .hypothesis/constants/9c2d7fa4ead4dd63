@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/queries.py
-# hypothesis_version: 6.148.3
-
-['active', 'all', 'archived', 'array', 'boolean', 'completed', 'completed_tasks', 'count', 'cursor', 'default', 'description', 'enum', 'error', 'found', 'foundry_find_specs', 'foundry_list_specs', 'foundry_query_tasks', 'has_more', 'hierarchy', 'include_progress', 'integer', 'items', 'last_id', 'object', 'page_size', 'parent', 'path', 'pending', 'progress_percentage', 'properties', 'required', 'spec_id', 'specs', 'status', 'status_folder', 'string', 'task', 'task_id', 'tasks', 'title', 'total_tasks', 'type', 'unknown', 'workspace']

@@ -8,13 +8,10 @@ Tests cover:
 - Feature flag bootstrap
 """
 
-import io
 import json
 import sys
 import time
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,7 +43,7 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.core.feature_flags import FlagState, get_registry
+from foundry_mcp.core.feature_flags import FlagState
 
 
 class TestCLIOutput:
@@ -85,7 +82,9 @@ class TestCLIOutput:
         emit_success(data, meta=meta)
         captured = capsys.readouterr()
         result = json.loads(captured.out)
-        assert result["meta"] == meta
+        assert result["meta"]["version"] == meta["version"]
+        assert isinstance(result["meta"].get("request_id"), str)
+        assert result["meta"]["request_id"].startswith("cli_")
 
     def test_emit_error_outputs_to_stderr(self, capsys):
         """emit_error() outputs to stderr and exits."""
@@ -191,6 +190,7 @@ class TestCLIResilience:
 
     def test_with_sync_timeout_passes_on_fast_function(self):
         """with_sync_timeout passes when function completes quickly."""
+
         @with_sync_timeout(seconds=5.0)
         def fast_func():
             return "done"
@@ -200,7 +200,7 @@ class TestCLIResilience:
 
     @pytest.mark.skipif(
         sys.platform == "win32" or "xdist" in sys.modules,
-        reason="SIGALRM not available on Windows or incompatible with xdist"
+        reason="SIGALRM not available on Windows or incompatible with xdist",
     )
     def test_with_sync_timeout_raises_on_slow_function(self):
         """with_sync_timeout raises TimeoutException on slow function.
@@ -208,6 +208,7 @@ class TestCLIResilience:
         Note: This test is skipped when running with pytest-xdist because
         SIGALRM doesn't work correctly with worker processes.
         """
+
         @with_sync_timeout(seconds=0.5, error_message="Too slow!")
         def slow_func():
             time.sleep(2.0)
@@ -250,6 +251,7 @@ class TestCLIResilience:
 
     def test_cli_retryable_gives_up_after_max_retries(self):
         """cli_retryable gives up after max_retries."""
+
         @cli_retryable(max_retries=2, delay=0.01, exceptions=(ValueError,))
         def always_fails():
             raise ValueError("always")
@@ -334,6 +336,7 @@ class TestCLILogging:
 
     def test_cli_command_decorator_handles_exceptions(self):
         """@cli_command decorator handles exceptions gracefully."""
+
         @cli_command("failing_cmd", emit_metrics=False)
         def failing_cmd():
             raise ValueError("test error")
@@ -465,10 +468,12 @@ class TestIntegration:
 
         @cli_command("integrated_cmd", emit_metrics=False)
         def integrated_cmd():
-            results.append({
-                "request_id": get_request_id(),
-                "logger": get_cli_logger(),
-            })
+            results.append(
+                {
+                    "request_id": get_request_id(),
+                    "logger": get_cli_logger(),
+                }
+            )
             return "done"
 
         integrated_cmd()

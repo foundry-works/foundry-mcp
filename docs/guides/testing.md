@@ -275,35 +275,35 @@ uvx --from mcp dev foundry-mcp
 
 Once connected via Claude Desktop or MCP dev mode, test these tools:
 
-**Task Management Tools:**
-- `task-next` - Find next actionable task
-- `task-prepare` - Get task context and dependencies
-- `task-start` - Mark task as in_progress
-- `task-complete` - Mark task as completed
-- `task-info` - Get detailed task information
-- `task-progress` - Get spec progress summary
+**Task Tool (`task`)**
+- `task(action="next")` - Find next actionable task
+- `task(action="prepare")` - Get task context and dependencies
+- `task(action="start")` - Mark task as in_progress
+- `task(action="complete")` - Mark task as completed
+- `task(action="info")` - Get detailed task information
+- `task(action="progress")` - Get spec progress summary
+- `task(action="block")` / `task(action="unblock")` - Manage blocked tasks
 
-**Validation Tools:**
-- `spec-validate` - Validate spec structure
-- `spec-fix` - Auto-fix validation issues
-- `spec-stats` - Get spec statistics
+**Spec Tool (`spec`)**
+- `spec(action="list")` / `spec(action="find")` - Discover specs
+- `spec(action="validate")` - Validate spec structure
+- `spec(action="fix")` - Auto-fix validation issues
+- `spec(action="stats")` - Get spec statistics
 
-**Lifecycle Tools:**
-- `spec-lifecycle-activate` - Move spec from pending to active
-- `spec-lifecycle-complete` - Move spec from active to completed
-- `spec-lifecycle-archive` - Move spec to archived
-- `spec-lifecycle-state` - Get current lifecycle state
+**Lifecycle Tool (`lifecycle`)**
+- `lifecycle(action="activate")` - Move spec from pending to active
+- `lifecycle(action="complete")` - Move spec from active to completed
+- `lifecycle(action="archive")` - Move spec to archived
+- `lifecycle(action="state")` - Get current lifecycle state
 
-**Journal Tools:**
-- `journal-add` - Add journal entry
-- `journal-list` - Get journal entries
-- `task-block` - Mark task as blocked
-- `task-unblock` - Remove blocked status
+**Journal Tool (`journal`)**
+- `journal(action="add")` - Add journal entry
+- `journal(action="list")` - Get journal entries
+- `journal(action="list-unjournaled")` - List completed tasks needing journals
 
-**Testing Tools:**
-- `test-run` - Run tests with preset or custom config
-- `test-discover` - Discover available tests
-- `test-presets` - List available test presets
+**Test Tool (`test`)**
+- `test(action="run", preset="full")` - Run pytest suite
+- `test(action="discover")` - Discover available tests
 
 ### Testing Resources
 
@@ -344,41 +344,41 @@ Test a complete SDD workflow manually:
    - Create spec file in `specs/pending/`
 
 2. **Activate spec**
-   - `spec-lifecycle-activate(spec_id="your-spec-id")`
+   - `lifecycle(action="activate", spec_id="your-spec-id")`
    - Verify spec moves from `pending/` to `active/`
 
 3. **Find next task**
-   - `task-next(spec_id="your-spec-id")`
+   - `task(action="next", spec_id="your-spec-id")`
    - Returns first actionable task with dependencies met
 
 4. **Prepare task context**
-   - `task-prepare(spec_id="your-spec-id", task_id="1.1")`
+   - `task(action="prepare", spec_id="your-spec-id", task_id="1.1")`
    - Returns task details, dependencies, and context
 
 5. **Start task**
-   - `task-start(spec_id="your-spec-id", task_id="1.1")`
+   - `task(action="start", spec_id="your-spec-id", task_id="1.1")`
    - Task status changes to `in_progress`
 
 6. **Complete task**
-   - `task-complete(spec_id="your-spec-id", task_id="1.1")`
+   - `task(action="complete", spec_id="your-spec-id", task_id="1.1")`
    - Task status changes to `completed`
 
 7. **Check progress**
-   - `task-progress(spec_id="your-spec-id")`
+   - `task(action="progress", spec_id="your-spec-id")`
    - Returns completion percentage and phase summary
 
 8. **Complete spec**
-   - `spec-lifecycle-complete(spec_id="your-spec-id")`
+   - `lifecycle(action="complete", spec_id="your-spec-id")`
    - Spec moves from `active/` to `completed/`
 
 9. **Archive spec**
-   - `spec-lifecycle-archive(spec_id="your-spec-id")`
+   - `lifecycle(action="archive", spec_id="your-spec-id")`
    - Spec moves from `completed/` to `archived/`
 
 ### Verification Checklist
 
 - [ ] Server starts without errors
-- [ ] 40+ tools are registered
+- [ ] Unified tools are registered (17 when `unified_manifest` is enabled)
 - [ ] Resources are accessible via `foundry://` URIs
 - [ ] Prompts expand correctly
 - [ ] Lifecycle transitions work (pending -> active -> completed -> archived)
@@ -399,7 +399,7 @@ Test a complete SDD workflow manually:
 | `No specs directory found` | Missing or misconfigured specs path | Set `FOUNDRY_MCP_SPECS_DIR` |
 | `pytest not found` | pytest not installed | `pip install pytest` |
 | `Spec not found: {spec_id}` | Invalid spec ID or wrong folder | Check spec exists in status folders |
-| `Invalid spec structure` | Malformed JSON | Run `spec-validate` |
+| `Invalid spec structure` | Malformed JSON | Run `spec(action="validate")` |
 | `Dependency not met` | Task has incomplete dependencies | Complete dependency tasks first |
 
 ### Debugging Server Issues

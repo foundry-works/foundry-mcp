@@ -36,7 +36,7 @@ def validate_group() -> None:
 @validate_group.command("check")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("validate-check")
+@cli_command("check")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Validation check timed out")
 def validate_check_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -75,24 +75,28 @@ def validate_check_cmd(ctx: click.Context, spec_id: str) -> None:
     # Format diagnostics for output
     diagnostics = []
     for diag in result.diagnostics:
-        diagnostics.append({
-            "code": diag.code,
-            "message": diag.message,
-            "severity": diag.severity,
-            "category": diag.category,
-            "location": diag.location,
-            "suggested_fix": diag.suggested_fix,
-            "auto_fixable": diag.auto_fixable,
-        })
+        diagnostics.append(
+            {
+                "code": diag.code,
+                "message": diag.message,
+                "severity": diag.severity,
+                "category": diag.category,
+                "location": diag.location,
+                "suggested_fix": diag.suggested_fix,
+                "auto_fixable": diag.auto_fixable,
+            }
+        )
 
-    emit_success({
-        "spec_id": result.spec_id,
-        "is_valid": result.is_valid,
-        "error_count": result.error_count,
-        "warning_count": result.warning_count,
-        "info_count": result.info_count,
-        "diagnostics": diagnostics,
-    })
+    emit_success(
+        {
+            "spec_id": result.spec_id,
+            "is_valid": result.is_valid,
+            "error_count": result.error_count,
+            "warning_count": result.warning_count,
+            "info_count": result.info_count,
+            "diagnostics": diagnostics,
+        }
+    )
 
 
 @validate_group.command("fix")
@@ -100,7 +104,7 @@ def validate_check_cmd(ctx: click.Context, spec_id: str) -> None:
 @click.option("--dry-run", is_flag=True, help="Preview fixes without applying.")
 @click.option("--no-backup", is_flag=True, help="Skip creating backup file.")
 @click.pass_context
-@cli_command("validate-fix")
+@cli_command("fix")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Validation fix timed out")
 def validate_fix_cmd(
@@ -157,12 +161,14 @@ def validate_fix_cmd(
     actions = get_fix_actions(result, spec_data)
 
     if not actions:
-        emit_success({
-            "spec_id": spec_id,
-            "applied_count": 0,
-            "skipped_count": 0,
-            "message": "No auto-fixable issues found",
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "applied_count": 0,
+                "skipped_count": 0,
+                "message": "No auto-fixable issues found",
+            }
+        )
         return
 
     # Apply fixes
@@ -183,21 +189,23 @@ def validate_fix_cmd(
         for a in report.skipped_actions
     ]
 
-    emit_success({
-        "spec_id": spec_id,
-        "dry_run": dry_run,
-        "applied_count": len(applied),
-        "skipped_count": len(skipped),
-        "applied_actions": applied,
-        "skipped_actions": skipped,
-        "backup_path": report.backup_path,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "dry_run": dry_run,
+            "applied_count": len(applied),
+            "skipped_count": len(skipped),
+            "applied_actions": applied,
+            "skipped_actions": skipped,
+            "backup_path": report.backup_path,
+        }
+    )
 
 
 @validate_group.command("stats")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("validate-stats")
+@cli_command("stats")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Statistics calculation timed out")
 def validate_stats_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -245,19 +253,21 @@ def validate_stats_cmd(ctx: click.Context, spec_id: str) -> None:
     # Calculate stats
     stats = calculate_stats(spec_data, str(spec_path))
 
-    emit_success({
-        "spec_id": stats.spec_id,
-        "title": stats.title,
-        "version": stats.version,
-        "status": stats.status,
-        "totals": stats.totals,
-        "status_counts": stats.status_counts,
-        "max_depth": stats.max_depth,
-        "avg_tasks_per_phase": stats.avg_tasks_per_phase,
-        "verification_coverage": round(stats.verification_coverage * 100, 1),
-        "progress": round(stats.progress * 100, 1),
-        "file_size_kb": round(stats.file_size_kb, 2),
-    })
+    emit_success(
+        {
+            "spec_id": stats.spec_id,
+            "title": stats.title,
+            "version": stats.version,
+            "status": stats.status,
+            "totals": stats.totals,
+            "status_counts": stats.status_counts,
+            "max_depth": stats.max_depth,
+            "avg_tasks_per_phase": stats.avg_tasks_per_phase,
+            "verification_coverage": round(stats.verification_coverage * 100, 1),
+            "progress": round(stats.progress * 100, 1),
+            "file_size_kb": round(stats.file_size_kb, 2),
+        }
+    )
 
 
 @validate_group.command("report")
@@ -269,7 +279,7 @@ def validate_stats_cmd(ctx: click.Context, spec_id: str) -> None:
     help="Sections to include: validation,stats,health,all",
 )
 @click.pass_context
-@cli_command("validate-report")
+@cli_command("report")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Report generation timed out")
 def validate_report_cmd(
@@ -342,15 +352,17 @@ def validate_report_cmd(
         result = validate_spec(spec_data)
         diagnostics = []
         for diag in result.diagnostics:
-            diagnostics.append({
-                "code": diag.code,
-                "message": diag.message,
-                "severity": diag.severity,
-                "category": diag.category,
-                "location": diag.location,
-                "suggested_fix": diag.suggested_fix,
-                "auto_fixable": diag.auto_fixable,
-            })
+            diagnostics.append(
+                {
+                    "code": diag.code,
+                    "message": diag.message,
+                    "severity": diag.severity,
+                    "category": diag.category,
+                    "location": diag.location,
+                    "suggested_fix": diag.suggested_fix,
+                    "auto_fixable": diag.auto_fixable,
+                }
+            )
 
         if "validation" in requested_sections:
             output["validation"] = {
@@ -392,7 +404,9 @@ def validate_report_cmd(
                 health_issues.append(f"Validation errors: {error_count}")
                 health_score -= min(30, error_count * 10)
             if validation["warning_count"] > 5:
-                health_issues.append(f"High warning count: {validation['warning_count']}")
+                health_issues.append(
+                    f"High warning count: {validation['warning_count']}"
+                )
                 health_score -= min(20, validation["warning_count"] * 2)
 
         # Stats impact
@@ -450,7 +464,7 @@ def validate_report_cmd(
     help="Maximum items to return per section.",
 )
 @click.pass_context
-@cli_command("validate-analyze-deps")
+@cli_command("analyze-deps")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Dependency analysis timed out")
 def validate_analyze_deps_cmd(
@@ -510,11 +524,13 @@ def validate_analyze_deps_cmd(
         blocked_by_map[node_id] = blocked_by
 
         for blocker_id in blocked_by:
-            all_deps.append({
-                "from": blocker_id,
-                "to": node_id,
-                "type": "blocks",
-            })
+            all_deps.append(
+                {
+                    "from": blocker_id,
+                    "to": node_id,
+                    "type": "blocks",
+                }
+            )
 
         # Count how many tasks each node blocks
         for blocked_id in blocks:
@@ -529,12 +545,14 @@ def validate_analyze_deps_cmd(
     for task_id, count in sorted(blocks_count.items(), key=lambda x: -x[1]):
         if count >= bottleneck_threshold:
             task = hierarchy.get(task_id, {})
-            bottlenecks.append({
-                "id": task_id,
-                "title": task.get("title", ""),
-                "status": task.get("status", ""),
-                "blocks_count": count,
-            })
+            bottlenecks.append(
+                {
+                    "id": task_id,
+                    "title": task.get("title", ""),
+                    "status": task.get("status", ""),
+                    "blocks_count": count,
+                }
+            )
         if len(bottlenecks) >= limit:
             break
 
@@ -599,38 +617,55 @@ def validate_analyze_deps_cmd(
         for node_id, length in sorted(chain_lengths.items(), key=lambda x: -x[1]):
             if length == max_length:
                 task = hierarchy.get(node_id, {})
-                critical_path.append({
-                    "id": node_id,
-                    "title": task.get("title", ""),
-                    "status": task.get("status", ""),
-                    "chain_length": length,
-                })
+                critical_path.append(
+                    {
+                        "id": node_id,
+                        "title": task.get("title", ""),
+                        "status": task.get("status", ""),
+                        "chain_length": length,
+                    }
+                )
             if len(critical_path) >= limit:
                 break
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
-    emit_success({
-        "spec_id": spec_id,
-        "dependency_count": len(all_deps),
-        "bottlenecks": bottlenecks,
-        "bottleneck_threshold": bottleneck_threshold,
-        "circular_deps": circular_deps,
-        "has_circular_deps": len(circular_deps) > 0,
-        "critical_path": critical_path,
-        "max_chain_length": max(chain_lengths.values()) if chain_lengths else 0,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "dependency_count": len(all_deps),
+            "bottlenecks": bottlenecks,
+            "bottleneck_threshold": bottleneck_threshold,
+            "circular_deps": circular_deps,
+            "has_circular_deps": len(circular_deps) > 0,
+            "critical_path": critical_path,
+            "max_chain_length": max(chain_lengths.values()) if chain_lengths else 0,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 # Top-level validate command (alias for check)
 @click.command("validate")
 @click.argument("spec_id")
-@click.option("--fix", "auto_fix", is_flag=True, help="Auto-fix issues after validation.")
-@click.option("--dry-run", is_flag=True, help="Preview fixes without applying (requires --fix).")
-@click.option("--preview", is_flag=True, help="Show summary only (counts and issue codes).")
-@click.option("--diff", "show_diff", is_flag=True, help="Show unified diff of changes (requires --fix).")
-@click.option("--select", "select_codes", help="Only fix selected issue codes (comma-separated).")
+@click.option(
+    "--fix", "auto_fix", is_flag=True, help="Auto-fix issues after validation."
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Preview fixes without applying (requires --fix)."
+)
+@click.option(
+    "--preview", is_flag=True, help="Show summary only (counts and issue codes)."
+)
+@click.option(
+    "--diff",
+    "show_diff",
+    is_flag=True,
+    help="Show unified diff of changes (requires --fix).",
+)
+@click.option(
+    "--select", "select_codes", help="Only fix selected issue codes (comma-separated)."
+)
 @click.pass_context
 @cli_command("validate")
 @handle_keyboard_interrupt()
@@ -700,21 +735,25 @@ def validate_cmd(
             continue
         if preview:
             # Preview mode: only include code and severity
-            diagnostics.append({
-                "code": diag.code,
-                "severity": diag.severity,
-                "auto_fixable": diag.auto_fixable,
-            })
+            diagnostics.append(
+                {
+                    "code": diag.code,
+                    "severity": diag.severity,
+                    "auto_fixable": diag.auto_fixable,
+                }
+            )
         else:
-            diagnostics.append({
-                "code": diag.code,
-                "message": diag.message,
-                "severity": diag.severity,
-                "category": diag.category,
-                "location": diag.location,
-                "suggested_fix": diag.suggested_fix,
-                "auto_fixable": diag.auto_fixable,
-            })
+            diagnostics.append(
+                {
+                    "code": diag.code,
+                    "message": diag.message,
+                    "severity": diag.severity,
+                    "category": diag.category,
+                    "location": diag.location,
+                    "suggested_fix": diag.suggested_fix,
+                    "auto_fixable": diag.auto_fixable,
+                }
+            )
 
     output: dict = {
         "spec_id": result.spec_id,
@@ -733,7 +772,11 @@ def validate_cmd(
         for diag in diagnostics:
             code = diag["code"]
             if code not in code_summary:
-                code_summary[code] = {"count": 0, "severity": diag["severity"], "auto_fixable": diag["auto_fixable"]}
+                code_summary[code] = {
+                    "count": 0,
+                    "severity": diag["severity"],
+                    "auto_fixable": diag["auto_fixable"],
+                }
             code_summary[code]["count"] += 1
         output["issue_summary"] = code_summary
 
@@ -743,7 +786,12 @@ def validate_cmd(
 
         # Filter actions by selected codes
         if selected_codes:
-            actions = [a for a in actions if a.id in selected_codes or any(code in a.id for code in selected_codes)]
+            actions = [
+                a
+                for a in actions
+                if a.id in selected_codes
+                or any(code in a.id for code in selected_codes)
+            ]
 
         if actions:
             # Read original content for diff
@@ -770,14 +818,17 @@ def validate_cmd(
             # Generate diff if requested
             if show_diff and spec_path and original_content and not dry_run:
                 import difflib
+
                 with open(spec_path) as f:
                     new_content = f.read()
-                diff_lines = list(difflib.unified_diff(
-                    original_content.splitlines(keepends=True),
-                    new_content.splitlines(keepends=True),
-                    fromfile=f"{spec_id} (before)",
-                    tofile=f"{spec_id} (after)",
-                ))
+                diff_lines = list(
+                    difflib.unified_diff(
+                        original_content.splitlines(keepends=True),
+                        new_content.splitlines(keepends=True),
+                        fromfile=f"{spec_id} (before)",
+                        tofile=f"{spec_id} (after)",
+                    )
+                )
                 output["diff"] = "".join(diff_lines)
         else:
             output["fix_applied"] = False
@@ -793,7 +844,9 @@ def validate_cmd(
 @click.option("--dry-run", is_flag=True, help="Preview fixes without applying.")
 @click.option("--no-backup", is_flag=True, help="Skip creating backup file.")
 @click.option("--diff", "show_diff", is_flag=True, help="Show unified diff of changes.")
-@click.option("--select", "select_codes", help="Only fix selected issue codes (comma-separated).")
+@click.option(
+    "--select", "select_codes", help="Only fix selected issue codes (comma-separated)."
+)
 @click.pass_context
 @cli_command("fix")
 @handle_keyboard_interrupt()
@@ -858,15 +911,22 @@ def fix_cmd(
     # Parse and filter by selected codes
     if select_codes:
         selected_codes = set(code.strip() for code in select_codes.split(","))
-        actions = [a for a in actions if a.id in selected_codes or any(code in a.id for code in selected_codes)]
+        actions = [
+            a
+            for a in actions
+            if a.id in selected_codes or any(code in a.id for code in selected_codes)
+        ]
 
     if not actions:
-        emit_success({
-            "spec_id": spec_id,
-            "applied_count": 0,
-            "skipped_count": 0,
-            "message": "No auto-fixable issues found" + (" matching selection" if select_codes else ""),
-        })
+        emit_success(
+            {
+                "spec_id": spec_id,
+                "applied_count": 0,
+                "skipped_count": 0,
+                "message": "No auto-fixable issues found"
+                + (" matching selection" if select_codes else ""),
+            }
+        )
         return
 
     # Read original content for diff
@@ -906,14 +966,17 @@ def fix_cmd(
     # Generate diff if requested
     if show_diff and spec_path and original_content and not dry_run:
         import difflib
+
         with open(spec_path) as f:
             new_content = f.read()
-        diff_lines = list(difflib.unified_diff(
-            original_content.splitlines(keepends=True),
-            new_content.splitlines(keepends=True),
-            fromfile=f"{spec_id} (before)",
-            tofile=f"{spec_id} (after)",
-        ))
+        diff_lines = list(
+            difflib.unified_diff(
+                original_content.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"{spec_id} (before)",
+                tofile=f"{spec_id} (after)",
+            )
+        )
         output["diff"] = "".join(diff_lines)
 
     emit_success(output)

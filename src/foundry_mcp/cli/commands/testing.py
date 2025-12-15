@@ -20,7 +20,6 @@ from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
     MEDIUM_TIMEOUT,
-    SLOW_TIMEOUT,
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
@@ -77,7 +76,7 @@ def test_group() -> None:
     help="Run tests in parallel with N workers (requires pytest-xdist).",
 )
 @click.pass_context
-@cli_command("test-run")
+@cli_command("test")
 @handle_keyboard_interrupt()
 def test_run_cmd(
     ctx: click.Context,
@@ -226,7 +225,7 @@ def test_run_cmd(
     help="List tests without running (pass --no-list to execute them).",
 )
 @click.pass_context
-@cli_command("test-discover")
+@cli_command("discover")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Test discovery timed out")
 def test_discover_cmd(
@@ -377,7 +376,7 @@ def test_discover_cmd(
 
 @test_group.command("presets")
 @click.pass_context
-@cli_command("test-presets")
+@cli_command("presets")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Presets lookup timed out")
 def test_presets_cmd(ctx: click.Context) -> None:
@@ -430,7 +429,7 @@ def test_presets_cmd(ctx: click.Context) -> None:
 
 @test_group.command("check-tools")
 @click.pass_context
-@cli_command("test-check-tools")
+@cli_command("check-tools")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Tool check timed out")
 def test_check_tools_cmd(ctx: click.Context) -> None:
@@ -513,7 +512,7 @@ def test_check_tools_cmd(ctx: click.Context) -> None:
 @test_group.command("quick")
 @click.argument("target", required=False)
 @click.pass_context
-@cli_command("test-quick")
+@cli_command("quick")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Quick tests timed out")
 def test_quick_cmd(ctx: click.Context, target: Optional[str]) -> None:
@@ -524,7 +523,7 @@ def test_quick_cmd(ctx: click.Context, target: Optional[str]) -> None:
 @test_group.command("unit")
 @click.argument("target", required=False)
 @click.pass_context
-@cli_command("test-unit")
+@cli_command("unit")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Unit tests timed out")
 def test_unit_cmd(ctx: click.Context, target: Optional[str]) -> None:
@@ -552,7 +551,7 @@ CONSULT_TIMEOUT = 300
     help="Specific LLM model to use for analysis.",
 )
 @click.pass_context
-@cli_command("test-consult")
+@cli_command("consult")
 @handle_keyboard_interrupt()
 @with_sync_timeout(CONSULT_TIMEOUT, "Test consultation timed out")
 def test_consult_cmd(
@@ -675,23 +674,3 @@ def test_consult_cmd(
             remediation="Ensure sdd is installed and in PATH",
             details={"hint": "Run: pip install foundry-sdd"},
         )
-
-
-# Top-level alias
-@click.command("run-tests")
-@click.argument("target", required=False)
-@click.option(
-    "--preset", type=click.Choice(["quick", "full", "unit", "integration", "smoke"])
-)
-@click.option("--fail-fast", is_flag=True)
-@click.pass_context
-@cli_command("run-tests-alias")
-@handle_keyboard_interrupt()
-def run_tests_alias_cmd(
-    ctx: click.Context,
-    target: Optional[str],
-    preset: Optional[str],
-    fail_fast: bool,
-) -> None:
-    """Run tests (alias for test run)."""
-    ctx.invoke(test_run_cmd, target=target, preset=preset, fail_fast=fail_fast)

@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/docs.py
-# hypothesis_version: 6.148.3
-
-[0.0, 0.5, 1.0, '+00:00', '.docs', '1.0.0', 'Z', 'auto', 'bases', 'both', 'callees', 'callers', 'calls', 'class', 'classes', 'codebase.json', 'dependencies', 'direction', 'docs', 'docs_path', 'documentation', 'file', 'file_path', 'find_class', 'find_classes_in_file', 'find_function', 'function', 'functions', 'get_callees', 'get_callers', 'get_dependencies', 'get_metadata', 'get_stats', 'impact_analysis', 'line', 'max_depth', 'metadata', 'module', 'name', 'r', 'target', 'target_type', 'total_classes', 'total_dependencies', 'total_files', 'total_functions', 'trace_calls', 'workspace']

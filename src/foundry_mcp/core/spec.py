@@ -16,9 +16,9 @@ TEMPLATES = ("simple", "medium", "complex", "security")
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
 # Valid verification types for verify nodes
-# - run-tests: Automated tests via mcp__foundry-mcp__test-run
+# - test: Automated tests via mcp__foundry-mcp__test-run
 # - fidelity: Implementation-vs-spec comparison via mcp__foundry-mcp__spec-review-fidelity
-VERIFICATION_TYPES = ("run-tests", "fidelity")
+VERIFICATION_TYPES = ("test", "fidelity")
 
 
 def find_git_root() -> Optional[Path]:
@@ -711,7 +711,9 @@ def _collect_descendants(hierarchy: Dict[str, Any], node_id: str) -> List[str]:
     return descendants
 
 
-def _count_tasks_in_subtree(hierarchy: Dict[str, Any], node_ids: List[str]) -> Tuple[int, int]:
+def _count_tasks_in_subtree(
+    hierarchy: Dict[str, Any], node_ids: List[str]
+) -> Tuple[int, int]:
     """
     Count total and completed tasks in a list of nodes.
 
@@ -738,7 +740,9 @@ def _count_tasks_in_subtree(hierarchy: Dict[str, Any], node_ids: List[str]) -> T
     return total, completed
 
 
-def _remove_dependency_references(hierarchy: Dict[str, Any], removed_ids: List[str]) -> None:
+def _remove_dependency_references(
+    hierarchy: Dict[str, Any], removed_ids: List[str]
+) -> None:
     """
     Remove references to deleted nodes from all dependency lists.
 
@@ -838,7 +842,10 @@ def remove_phase(
             node_status = node.get("status")
             node_node_type = node.get("type")
             # Consider in_progress or pending tasks as active work
-            if node_node_type in ("task", "subtask") and node_status in ("pending", "in_progress"):
+            if node_node_type in ("task", "subtask") and node_status in (
+                "pending",
+                "in_progress",
+            ):
                 has_active_work = True
                 active_task_ids.append(node_id)
 
@@ -903,11 +910,14 @@ def remove_phase(
                     prev_blocks.append(next_phase_id)
 
                 # Update next phase's blocked_by
-                next_deps = next_phase.setdefault("dependencies", {
-                    "blocks": [],
-                    "blocked_by": [],
-                    "depends": [],
-                })
+                next_deps = next_phase.setdefault(
+                    "dependencies",
+                    {
+                        "blocks": [],
+                        "blocked_by": [],
+                        "depends": [],
+                    },
+                )
                 next_blocked_by = next_deps.setdefault("blocked_by", [])
                 if prev_phase_id not in next_blocked_by:
                     next_blocked_by.append(prev_phase_id)
@@ -1516,17 +1526,6 @@ def list_assumptions(
                 {
                     "id": f"a-{i}",
                     "text": assumption,
-                    "index": i,
-                }
-            )
-        elif isinstance(assumption, dict):
-            # Handle legacy object format
-            assumption_list.append(
-                {
-                    "id": assumption.get("id", f"a-{i}"),
-                    "text": assumption.get("text", str(assumption)),
-                    "type": assumption.get("type"),
-                    "author": assumption.get("author"),
                     "index": i,
                 }
             )

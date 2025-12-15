@@ -4,7 +4,7 @@
 
 ## 17.1 Canonical Output Modes
 
-1. **JSON First** – Every command MUST support `--json` and return data using `foundry_mcp.core.responses.success_response` / `error_response`, conforming to the schema in [mcp_response_schema.md](./mcp_response_schema.md).
+1. **JSON First** – Every command MUST support `--json` and return data using `foundry_mcp.core.responses.success_response` / `error_response`, conforming to the schema in [mcp_response_schema.md](./mcp_response_schema.md). The current `sdd` CLI always emits JSON envelopes; `--json` exists as an explicit compatibility flag.
 2. **Text as a Convenience** – Plain-text or Markdown summaries MAY be emitted when `--json` is not supplied, but they must remain ANSI-free, deterministic, and derived from the same payload as the JSON response.
 3. **No Rich UI** – Do not import or recreate pretty-print/rich-UI stacks (progress bars, colorized tables, etc.). Reuse the thin printer wrapper defined in [cli_best_practices/01-cli-runtime.md](../cli_best_practices/01-cli-runtime.md) so logging hooks stay consistent.
 

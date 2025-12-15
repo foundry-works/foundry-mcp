@@ -5,7 +5,6 @@ Provides fixture freshness validation and common test utilities.
 """
 
 import json
-import os
 import warnings
 from pathlib import Path
 from typing import Any, Dict, Optional, Set

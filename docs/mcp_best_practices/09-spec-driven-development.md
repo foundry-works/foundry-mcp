@@ -328,18 +328,20 @@ Include reasoning in specs for future maintainers:
 
 ## Keeping READMEs Synchronized
 
-### Link to Generated Docs
+### Link to Specs (Source of Truth)
 
 ```markdown
 <!-- README.md -->
 # User Tools
 
-See auto-generated documentation:
-- [get_user](./docs/generated/get_user.md)
-- [list_users](./docs/generated/list_users.md)
+See the authoritative specs:
+- `./specs/active/<spec_id>.json`
+- `./specs/completed/<spec_id>.json`
 
-> **Note**: These docs are generated from specs. Edit the spec files, not the markdown.
+> **Note**: Specs are the source of truth. If you publish rendered docs, treat them as derived artifacts and regenerate them from specs in CI.
 ```
+
+For runtime tool discovery, prefer the unified router manifest in `mcp/capabilities_manifest.json` (or call `server(action="tools")`).
 
 ### Include Spec Badges
 

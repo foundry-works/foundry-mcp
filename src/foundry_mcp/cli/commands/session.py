@@ -15,11 +15,9 @@ from foundry_mcp.cli.transcript import find_transcript_by_marker, parse_transcri
 
 TRANSCRIPT_OPT_IN_ENV = "FOUNDRY_MCP_ALLOW_TRANSCRIPTS"
 from foundry_mcp.cli.context import (
-    ContextTracker,
     get_context_tracker,
     get_session_status,
     record_consultation,
-    start_cli_session,
 )
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
@@ -52,7 +50,7 @@ def session() -> None:
 )
 @click.option("--max-tokens", type=int, help="Maximum context tokens allowed.")
 @click.pass_context
-@cli_command("session-start")
+@cli_command("start")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Session start timed out")
 def start_session_cmd(
@@ -93,7 +91,7 @@ def start_session_cmd(
 
 @session.command("status")
 @click.pass_context
-@cli_command("session-status")
+@cli_command("status")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Session status lookup timed out")
 def session_status_cmd(ctx: click.Context) -> None:
@@ -105,7 +103,7 @@ def session_status_cmd(ctx: click.Context) -> None:
 @session.command("record")
 @click.option("--tokens", type=int, default=0, help="Estimated tokens used.")
 @click.pass_context
-@cli_command("session-record")
+@cli_command("record")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Record consultation timed out")
 def record_consultation_cmd(ctx: click.Context, tokens: int) -> None:
@@ -119,7 +117,7 @@ def record_consultation_cmd(ctx: click.Context, tokens: int) -> None:
 
 @session.command("reset")
 @click.pass_context
-@cli_command("session-reset")
+@cli_command("reset")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Session reset timed out")
 def reset_session_cmd(ctx: click.Context) -> None:
@@ -131,7 +129,7 @@ def reset_session_cmd(ctx: click.Context) -> None:
 
 @session.command("limits")
 @click.pass_context
-@cli_command("session-limits")
+@cli_command("limits")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Limits lookup timed out")
 def show_limits_cmd(ctx: click.Context) -> None:
@@ -181,7 +179,7 @@ def show_limits_cmd(ctx: click.Context) -> None:
 
 @session.command("capabilities")
 @click.pass_context
-@cli_command("session-capabilities")
+@cli_command("capabilities")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Capabilities lookup timed out")
 def session_capabilities_cmd(ctx: click.Context) -> None:
@@ -207,7 +205,7 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
             command_groups[name] = {"type": "command"}
 
     # Get feature flags
-    flag_registry = get_cli_flags()
+    get_cli_flags()
     flags = flags_for_discovery()
 
     # Known CLI capabilities
@@ -252,7 +250,7 @@ def get_work_mode() -> str:
 
 @session.command("work-mode")
 @click.pass_context
-@cli_command("session-work-mode")
+@cli_command("work-mode")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Work mode lookup timed out")
 def work_mode_cmd(ctx: click.Context) -> None:
@@ -282,7 +280,7 @@ def work_mode_cmd(ctx: click.Context) -> None:
 @agent_gated("claude-code")
 @click.option("--session-marker", help="Session marker from generate-marker command.")
 @click.pass_context
-@cli_command("session-token-usage")
+@cli_command("token-usage")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Token usage lookup timed out")
 def token_usage_cmd(ctx: click.Context, session_marker: Optional[str]) -> None:
@@ -309,7 +307,7 @@ def token_usage_cmd(ctx: click.Context, session_marker: Optional[str]) -> None:
 @session.command("generate-marker")
 @agent_gated("claude-code")
 @click.pass_context
-@cli_command("session-generate-marker")
+@cli_command("generate-marker")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Marker generation timed out")
 def generate_marker_cmd(ctx: click.Context) -> None:
@@ -354,7 +352,7 @@ def generate_marker_cmd(ctx: click.Context) -> None:
     help="Allow scanning ~/.claude/projects for transcripts (requires opt-in).",
 )
 @click.pass_context
-@cli_command("session-context")
+@cli_command("context")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Context check timed out")
 def context_cmd(

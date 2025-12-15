@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/prompts/workflows.py
-# hypothesis_version: 6.148.3
-
-[500, '# Debug Test Failure', '## Active Specs', '## Available Tools', '## Current Progress', '## Instructions', '## Overview', '## Phase Details', '## Problem Details', '### Actions', '### Description', '### Phases', '### Step 5: Verify', '**Error Message:**', '- Run related tests', '- Run the fixed test', '1.0.0', 'Untitled', '```', '```bash', 'active', 'blocked', 'bugfix', 'completed', 'description', 'entry_type', 'feature', 'id', 'in_progress', 'journal', 'metadata', 'note', 'pending', 'percentage', 'spec_id', 'status', 'title', '⏳', '✅', '❓', '🔄', '🚫']

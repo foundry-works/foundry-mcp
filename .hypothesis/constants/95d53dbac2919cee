@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/journal.py
-# hypothesis_version: 6.148.3
-
-['Blocker resolved', 'Failed to save spec', 'author', 'blocked_tasks', 'blocker', 'content', 'count', 'cursor', 'decision', 'dependency', 'description', 'deviation', 'entries', 'entry_type', 'foundry-mcp', 'foundry_add_journal', 'foundry_get_journal', 'foundry_list_blocked', 'foundry_mark_blocked', 'foundry_unblock', 'has_more', 'last_id', 'last_ts', 'note', 'page_size', 'pending', 'resource', 'spec_id', 'status_change', 'task_id', 'technical', 'timestamp', 'title', 'type', 'unjournaled_tasks']

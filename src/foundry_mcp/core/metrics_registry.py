@@ -105,7 +105,7 @@ METRICS_CATALOG: Dict[str, MetricDefinition] = {
         metric_type=MetricType.COUNTER,
         category=MetricCategory.TOOL,
         labels=["tool", "error_type"],
-        examples={"tool": "spec_get", "error_type": "NotFoundError"},
+        examples={"tool": "spec", "error_type": "NotFoundError"},
     ),
     "active_operations": MetricDefinition(
         name="active_operations",
@@ -113,7 +113,7 @@ METRICS_CATALOG: Dict[str, MetricDefinition] = {
         metric_type=MetricType.GAUGE,
         category=MetricCategory.TOOL,
         labels=["operation_type"],
-        examples={"operation_type": "tool:list_specs"},
+        examples={"operation_type": "tool:list"},
     ),
     # Resource metrics
     "resource_access_total": MetricDefinition(
@@ -140,7 +140,7 @@ METRICS_CATALOG: Dict[str, MetricDefinition] = {
         metric_type=MetricType.COUNTER,
         category=MetricCategory.ERROR,
         labels=["error_type", "component"],
-        examples={"error_type": "ValidationError", "component": "spec_validate"},
+        examples={"error_type": "ValidationError", "component": "spec"},
     ),
     # System metrics
     "info": MetricDefinition(
@@ -174,7 +174,7 @@ METRICS_CATALOG: Dict[str, MetricDefinition] = {
         category=MetricCategory.CLI,
         labels=["command"],
         unit="seconds",
-        examples={"command": "run-tests"},
+        examples={"command": "test"},
     ),
     # Performance metrics
     "spec_validation_duration_seconds": MetricDefinition(

@@ -1,18 +1,13 @@
-"""Integration tests for advanced SDD CLI workflows.
+"""Integration tests for the structured CLI groups.
 
-Tests cover:
-- Render workflows (basic and enhanced modes)
-- Doc-query workflows (find-class, find-function, trace-calls)
-- Spec modification workflows (apply, task add/remove)
-- Run-tests workflows (presets, discovery)
-- LLM doc generation workflows
-- Dev utility workflows
+Covers:
+- `modify` commands
+- `test` commands
+- `dev` commands
+- Cross-group registration
 """
 
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
@@ -87,91 +82,6 @@ def temp_specs_dir(tmp_path):
     spec_file.write_text(json.dumps(test_spec, indent=2))
 
     return specs_dir
-
-
-class TestRenderWorkflows:
-    """Tests for render command workflows."""
-
-    def test_render_basic_produces_markdown(self, cli_runner, temp_specs_dir):
-        """render basic mode produces valid markdown output."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "render",
-                "advanced-test-spec",
-                "--mode",
-                "basic",
-            ],
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        assert data["data"]["mode"] == "basic"
-        assert "markdown" in data["data"]
-
-    def test_render_with_journal(self, cli_runner, temp_specs_dir):
-        """render includes journal entries when requested."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "render",
-                "advanced-test-spec",
-                "--mode",
-                "basic",
-                "--include-journal",
-            ],
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-
-    def test_render_enhanced_requires_flag(self, cli_runner, temp_specs_dir):
-        """render enhanced mode is gated by feature flag."""
-        result = cli_runner.invoke(
-            cli,
-            [
-                "--specs-dir",
-                str(temp_specs_dir),
-                "render",
-                "advanced-test-spec",
-                "--mode",
-                "enhanced",
-            ],
-        )
-        assert result.exit_code == 1
-        data = json.loads(result.output)
-        assert data["success"] is False
-        # Per response-v2: error is string message, error_code is in data
-        assert isinstance(data["error"], str)
-        assert data["data"].get("error_code") == "FEATURE_DISABLED"
-
-
-class TestDocQueryWorkflows:
-    """Tests for doc-query command workflows."""
-
-    def test_doc_group_available(self, cli_runner, temp_specs_dir):
-        """doc command group is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "doc", "--help"]
-        )
-        assert result.exit_code == 0
-        assert "find-class" in result.output
-        assert "find-function" in result.output
-        assert "trace-calls" in result.output
-        assert "impact" in result.output
-
-    def test_doc_stats_returns_metrics(self, cli_runner, temp_specs_dir):
-        """doc stats returns documentation metrics."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "doc", "stats"]
-        )
-        # May fail if docs not available but should still be valid JSON
-        data = json.loads(result.output)
-        assert "success" in data
 
 
 class TestModifyWorkflows:
@@ -250,33 +160,6 @@ class TestRunTestsWorkflows:
         assert data["data"]["tools"]["pytest"]["available"] is True
 
 
-class TestLLMDocGenWorkflows:
-    """Tests for LLM doc generation workflows."""
-
-    def test_llm_doc_group_available(self, cli_runner, temp_specs_dir):
-        """llm-doc command group is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "llm-doc", "--help"]
-        )
-        assert result.exit_code == 0
-        assert "generate" in result.output
-        assert "status" in result.output
-        assert "cache" in result.output
-
-    def test_llm_doc_status_returns_config(self, cli_runner, temp_specs_dir):
-        """llm-doc status returns documentation generation status and artifacts."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "llm-doc", "status"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        # Check for actual response fields
-        assert "status" in data["data"]
-        assert "output_dir" in data["data"]
-        assert "artifacts" in data["data"]
-
-
 class TestDevWorkflows:
     """Tests for dev utility workflows."""
 
@@ -314,11 +197,8 @@ class TestCrossWorkflowIntegration:
 
         # Check all groups are present
         expected_groups = [
-            "render",
-            "doc",
             "modify",
             "test",
-            "llm-doc",
             "dev",
             "validate",
             "review",
@@ -330,22 +210,3 @@ class TestCrossWorkflowIntegration:
         ]
         for group in expected_groups:
             assert group in result.output, f"Missing command group: {group}"
-
-    def test_all_top_level_aliases_registered(self, cli_runner, temp_specs_dir):
-        """All top-level command aliases are registered."""
-        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "--help"])
-        assert result.exit_code == 0
-
-        # Check key aliases
-        expected_aliases = [
-            "create",
-            "analyze",
-            "next-task",
-            "render",
-            "review-spec",
-            "create-pr",
-            "run-tests",
-            "generate-docs",
-        ]
-        for alias in expected_aliases:
-            assert alias in result.output, f"Missing alias: {alias}"

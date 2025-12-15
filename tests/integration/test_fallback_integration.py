@@ -7,8 +7,7 @@ import pytest
 
 # Skip all tests in this module if foundry-cli is not installed
 pytestmark = pytest.mark.skipif(
-    shutil.which("foundry-cli") is None,
-    reason="foundry-cli not installed"
+    shutil.which("foundry-cli") is None, reason="foundry-cli not installed"
 )
 
 
@@ -18,9 +17,15 @@ def test_run_tests_fallback_gemini_to_cursor():
     # (This is a simplified example - actual test would need proper setup)
 
     result = subprocess.run(
-        ["foundry-cli", "test", "consult", "--issue", "Test failed: assertion error. Root cause unknown"],
+        [
+            "foundry-cli",
+            "test",
+            "consult",
+            "--issue",
+            "Test failed: assertion error. Root cause unknown",
+        ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should succeed even if gemini unavailable (returncode 0)
@@ -35,11 +40,11 @@ def test_sdd_plan_review_with_limits():
     # Run plan review that might consult multiple models
     env = os.environ.copy()
     env["HOME"] = "/tmp/test_home"
-    result = subprocess.run(
-        ["foundry-cli", "plan-review", "test-spec-id"],
+    subprocess.run(
+        ["foundry-cli", "plan", "review", "test-spec-id"],
         capture_output=True,
         text=True,
-        env=env  # Use test config
+        env=env,  # Use test config
     )
 
     # Parse output to verify tool count
@@ -50,11 +55,17 @@ def test_sdd_plan_review_with_limits():
 def test_fidelity_review_retry_on_timeout():
     """Test fidelity review retries on timeout."""
     # Set very short timeout to force timeout
-    result = subprocess.run(
-        ["foundry-cli", "fidelity-review", "test-spec-id",
-         "--timeout", "1"],  # 1 second timeout
+    subprocess.run(
+        [
+            "foundry-cli",
+            "review",
+            "fidelity",
+            "test-spec-id",
+            "--timeout",
+            "1",
+        ],  # 1 second timeout
         capture_output=True,
-        text=True
+        text=True,
     )
 
     # Should have attempted retries (check logs or output)

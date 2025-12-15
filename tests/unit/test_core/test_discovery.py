@@ -9,7 +9,6 @@ from foundry_mcp.core.discovery import (
     ToolMetadata,
     ToolRegistry,
     ServerCapabilities,
-    get_tool_registry,
     get_capabilities,
     negotiate_capabilities,
     deprecated_tool,

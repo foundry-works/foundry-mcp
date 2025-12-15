@@ -4,12 +4,12 @@
 
 ## 2.1 Namespace Strategy
 
-- Group subcommands under the same domains listed in [docs/codebase_standards/naming-conventions.md](../codebase_standards/naming-conventions.md) (plan, next, update, validate, render, doc, test, spec-mod, plan-review/pr, context).
+- Group subcommands under the same domains listed in [docs/codebase_standards/naming-conventions.md](../codebase_standards/naming-conventions.md) (plan, next, update, validate, provider, test, spec-mod, plan-review/pr, context).
 - The `sdd --help` output MUST list namespaces in the same order as the Recommended Mapping Matrix to reinforce the mental model from the docs.
 
 ## 2.2 Canonical Names
 
-- Every CLI operation should refer to the canonical tool name in its help text (e.g., `sdd validate` maps to `spec-validate`).
+- Every CLI operation should refer to the canonical tool name in its help text (e.g., `sdd validate check` maps to MCP `spec(action="validate")`).
 - When introducing a CLI command first, reserve the canonical tool name immediately so the MCP adapter can pick it up without another rename.
 - Avoid legacy aliases unless absolutely necessary for migration; if an alias exists, document the retirement timeline inside the spec and remove it within two releases.
 

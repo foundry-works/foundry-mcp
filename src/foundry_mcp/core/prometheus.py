@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional, TypeVar
 
 # Try to import prometheus_client
@@ -34,11 +34,13 @@ try:
     _PROMETHEUS_AVAILABLE = True
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
-    # Define dummy types for type hints
-    Counter = None  # type: ignore
-    Gauge = None  # type: ignore
-    Histogram = None  # type: ignore
-    REGISTRY = None  # type: ignore
+
+    # Placeholders so type checkers don't complain.
+    Counter: Any = None
+    Gauge: Any = None
+    Histogram: Any = None
+    REGISTRY: Any = None
+    start_http_server: Any = None
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -154,6 +156,11 @@ class PrometheusExporter:
         self._resource_access: Any = None
         self._active_operations: Any = None
 
+        # Manifest/discovery metrics
+        self._manifest_tokens: Any = None
+        self._manifest_tool_count: Any = None
+        self._feature_flag_state: Any = None
+
         # Health check metrics
         self._health_status: Any = None
         self._dependency_health: Any = None
@@ -218,6 +225,23 @@ class PrometheusExporter:
                 ["operation_type"],
             )
 
+            # Manifest/discovery gauges
+            self._manifest_tokens = Gauge(
+                f"{ns}_manifest_tokens",
+                "Estimated token count for the advertised tool manifest",
+                ["manifest"],  # unified|legacy
+            )
+            self._manifest_tool_count = Gauge(
+                f"{ns}_manifest_tool_count",
+                "Tool count for the advertised tool manifest",
+                ["manifest"],  # unified|legacy
+            )
+            self._feature_flag_state = Gauge(
+                f"{ns}_feature_flag_state",
+                "Feature flag state (1=enabled, 0=disabled)",
+                ["flag"],
+            )
+
             # Health check metrics
             self._health_status = Gauge(
                 f"{ns}_health_status",
@@ -240,7 +264,9 @@ class PrometheusExporter:
 
             self._initialized = True
 
-    def start_server(self, port: Optional[int] = None, host: Optional[str] = None) -> bool:
+    def start_server(
+        self, port: Optional[int] = None, host: Optional[str] = None
+    ) -> bool:
         """Start the HTTP server for /metrics endpoint.
 
         Args:
@@ -352,6 +378,32 @@ class PrometheusExporter:
         self._tool_errors.labels(tool=tool_name, error_type=error_type).inc()
 
     # -------------------------------------------------------------------------
+    # Manifest/Discovery Metrics
+    # -------------------------------------------------------------------------
+
+    def record_manifest_snapshot(
+        self,
+        *,
+        manifest: str,
+        tokens: int,
+        tool_count: int,
+    ) -> None:
+        """Record a manifest snapshot (token count + tool count)."""
+        if not self.is_enabled():
+            return
+
+        manifest_label = manifest or "unknown"
+        self._manifest_tokens.labels(manifest=manifest_label).set(int(tokens))
+        self._manifest_tool_count.labels(manifest=manifest_label).set(int(tool_count))
+
+    def record_feature_flag_state(self, flag: str, enabled: bool) -> None:
+        """Record feature flag enabled/disabled state."""
+        if not self.is_enabled():
+            return
+
+        self._feature_flag_state.labels(flag=flag).set(1 if enabled else 0)
+
+    # -------------------------------------------------------------------------
     # Health Check Metrics
     # -------------------------------------------------------------------------
 
@@ -434,7 +486,9 @@ _exporter: Optional[PrometheusExporter] = None
 _exporter_lock = threading.Lock()
 
 
-def get_prometheus_exporter(config: Optional[PrometheusConfig] = None) -> PrometheusExporter:
+def get_prometheus_exporter(
+    config: Optional[PrometheusConfig] = None,
+) -> PrometheusExporter:
     """Get the singleton Prometheus exporter instance.
 
     On first call, initializes with provided config or defaults.
@@ -478,7 +532,9 @@ class timed_operation:
         # Automatically records duration
     """
 
-    def __init__(self, tool_name: str, exporter: Optional[PrometheusExporter] = None) -> None:
+    def __init__(
+        self, tool_name: str, exporter: Optional[PrometheusExporter] = None
+    ) -> None:
         self.tool_name = tool_name
         self.exporter = exporter or get_prometheus_exporter()
         self.start_time: Optional[float] = None

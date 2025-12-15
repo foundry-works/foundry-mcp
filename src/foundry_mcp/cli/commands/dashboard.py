@@ -6,7 +6,6 @@ Provides commands for starting, stopping, and managing the Streamlit dashboard.
 import click
 
 from foundry_mcp.cli.output import emit, emit_error
-from foundry_mcp.cli.registry import get_context
 
 
 @click.group("dashboard")
@@ -20,13 +19,15 @@ def dashboard_group() -> None:
 
 @dashboard_group.command("start")
 @click.option(
-    "--port", "-p",
+    "--port",
+    "-p",
     default=8501,
     type=int,
     help="Port to run dashboard on (default: 8501)",
 )
 @click.option(
-    "--host", "-H",
+    "--host",
+    "-H",
     default="127.0.0.1",
     help="Host to bind to (default: 127.0.0.1 for localhost only)",
 )
@@ -68,12 +69,14 @@ def dashboard_start_cmd(
         )
 
         if result.get("success"):
-            emit({
-                "success": True,
-                "message": result.get("message", "Dashboard started"),
-                "url": result.get("url"),
-                "pid": result.get("pid"),
-            })
+            emit(
+                {
+                    "success": True,
+                    "message": result.get("message", "Dashboard started"),
+                    "url": result.get("url"),
+                    "pid": result.get("pid"),
+                }
+            )
         else:
             emit_error(result.get("message", "Failed to start dashboard"))
 
@@ -99,15 +102,19 @@ def dashboard_stop_cmd(ctx: click.Context) -> None:
         result = stop_dashboard()
 
         if result.get("success"):
-            emit({
-                "success": True,
-                "message": result.get("message", "Dashboard stopped"),
-            })
+            emit(
+                {
+                    "success": True,
+                    "message": result.get("message", "Dashboard stopped"),
+                }
+            )
         else:
-            emit({
-                "success": False,
-                "message": result.get("message", "No dashboard to stop"),
-            })
+            emit(
+                {
+                    "success": False,
+                    "message": result.get("message", "No dashboard to stop"),
+                }
+            )
 
     except ImportError:
         emit_error("Dashboard module not available")
@@ -127,17 +134,15 @@ def dashboard_status_cmd(ctx: click.Context) -> None:
 
         status = get_dashboard_status()
 
-        emit({
-            "running": status.get("running", False),
-            "pid": status.get("pid"),
-            "exit_code": status.get("exit_code"),
-        })
+        emit(
+            {
+                "running": status.get("running", False),
+                "pid": status.get("pid"),
+                "exit_code": status.get("exit_code"),
+            }
+        )
 
     except ImportError:
         emit({"running": False, "message": "Dashboard module not available"})
     except Exception as e:
         emit_error(f"Failed to get dashboard status: {e}")
-
-
-# Alias for top-level access
-dashboard_start_alias_cmd = dashboard_start_cmd

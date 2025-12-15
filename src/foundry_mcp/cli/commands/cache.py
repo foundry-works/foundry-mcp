@@ -8,7 +8,7 @@ from typing import Optional
 import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
-from foundry_mcp.cli.output import emit_error, emit_success
+from foundry_mcp.cli.output import emit_success
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
     handle_keyboard_interrupt,
@@ -27,7 +27,7 @@ def cache() -> None:
 
 @cache.command("info")
 @click.pass_context
-@cli_command("cache-info")
+@cli_command("info")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Cache info lookup timed out")
 def cache_info_cmd(ctx: click.Context) -> None:
@@ -36,20 +36,24 @@ def cache_info_cmd(ctx: click.Context) -> None:
     Displays cache location, size, and entry counts.
     """
     if not is_cache_enabled():
-        emit_success({
-            "enabled": False,
-            "message": "Cache is disabled",
-            "hint": "Unset FOUNDRY_MCP_CACHE_DISABLED to enable caching",
-        })
+        emit_success(
+            {
+                "enabled": False,
+                "message": "Cache is disabled",
+                "hint": "Unset FOUNDRY_MCP_CACHE_DISABLED to enable caching",
+            }
+        )
         return
 
     manager = CacheManager()
     stats = manager.get_stats()
 
-    emit_success({
-        "enabled": True,
-        **stats,
-    })
+    emit_success(
+        {
+            "enabled": True,
+            **stats,
+        }
+    )
 
 
 @cache.command("clear")
@@ -60,7 +64,7 @@ def cache_info_cmd(ctx: click.Context) -> None:
     help="Only clear entries of this review type.",
 )
 @click.pass_context
-@cli_command("cache-clear")
+@cli_command("clear")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Cache clear timed out")
 def cache_clear_cmd(
@@ -74,11 +78,13 @@ def cache_clear_cmd(
     Use --spec-id and/or --review-type to filter.
     """
     if not is_cache_enabled():
-        emit_success({
-            "enabled": False,
-            "entries_deleted": 0,
-            "message": "Cache is disabled",
-        })
+        emit_success(
+            {
+                "enabled": False,
+                "entries_deleted": 0,
+                "message": "Cache is disabled",
+            }
+        )
         return
 
     manager = CacheManager()
@@ -90,15 +96,17 @@ def cache_clear_cmd(
     if review_type:
         filters["review_type"] = review_type
 
-    emit_success({
-        "entries_deleted": deleted,
-        "filters": filters if filters else None,
-    })
+    emit_success(
+        {
+            "entries_deleted": deleted,
+            "filters": filters if filters else None,
+        }
+    )
 
 
 @cache.command("cleanup")
 @click.pass_context
-@cli_command("cache-cleanup")
+@cli_command("cleanup")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Cache cleanup timed out")
 def cache_cleanup_cmd(ctx: click.Context) -> None:
@@ -107,17 +115,23 @@ def cache_cleanup_cmd(ctx: click.Context) -> None:
     Cleans up entries that have exceeded their TTL.
     """
     if not is_cache_enabled():
-        emit_success({
-            "enabled": False,
-            "entries_removed": 0,
-            "message": "Cache is disabled",
-        })
+        emit_success(
+            {
+                "enabled": False,
+                "entries_removed": 0,
+                "message": "Cache is disabled",
+            }
+        )
         return
 
     manager = CacheManager()
     removed = manager.cleanup_expired()
 
-    emit_success({
-        "entries_removed": removed,
-        "message": f"Removed {removed} expired entries" if removed else "No expired entries found",
-    })
+    emit_success(
+        {
+            "entries_removed": removed,
+            "message": f"Removed {removed} expired entries"
+            if removed
+            else "No expired entries found",
+        }
+    )

@@ -3,8 +3,6 @@
 Provides commands for spec lifecycle transitions: activate, complete, archive.
 """
 
-from dataclasses import asdict
-from typing import Optional
 
 import click
 
@@ -36,7 +34,7 @@ def lifecycle() -> None:
 @lifecycle.command("activate")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("lifecycle-activate")
+@cli_command("activate")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec activation timed out")
 def activate_spec_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -67,20 +65,24 @@ def activate_spec_cmd(ctx: click.Context, spec_id: str) -> None:
             details={"spec_id": spec_id, "from_folder": result.from_folder},
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "from_folder": result.from_folder,
-        "to_folder": result.to_folder,
-        "old_path": result.old_path,
-        "new_path": result.new_path,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "from_folder": result.from_folder,
+            "to_folder": result.to_folder,
+            "old_path": result.old_path,
+            "new_path": result.new_path,
+        }
+    )
 
 
 @lifecycle.command("complete")
 @click.argument("spec_id")
-@click.option("--force", "-f", is_flag=True, help="Force completion even with incomplete tasks.")
+@click.option(
+    "--force", "-f", is_flag=True, help="Force completion even with incomplete tasks."
+)
 @click.pass_context
-@cli_command("lifecycle-complete")
+@cli_command("complete")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec completion timed out")
 def complete_spec_cmd(ctx: click.Context, spec_id: str, force: bool) -> None:
@@ -108,22 +110,28 @@ def complete_spec_cmd(ctx: click.Context, spec_id: str, force: bool) -> None:
             code="CONFLICT",
             error_type="conflict",
             remediation="Verify all tasks are completed, or use --force to complete anyway",
-            details={"spec_id": spec_id, "from_folder": result.from_folder, "force": force},
+            details={
+                "spec_id": spec_id,
+                "from_folder": result.from_folder,
+                "force": force,
+            },
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "from_folder": result.from_folder,
-        "to_folder": result.to_folder,
-        "old_path": result.old_path,
-        "new_path": result.new_path,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "from_folder": result.from_folder,
+            "to_folder": result.to_folder,
+            "old_path": result.old_path,
+            "new_path": result.new_path,
+        }
+    )
 
 
 @lifecycle.command("archive")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("lifecycle-archive")
+@cli_command("archive")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec archival timed out")
 def archive_spec_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -154,20 +162,24 @@ def archive_spec_cmd(ctx: click.Context, spec_id: str) -> None:
             details={"spec_id": spec_id, "from_folder": result.from_folder},
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "from_folder": result.from_folder,
-        "to_folder": result.to_folder,
-        "old_path": result.old_path,
-        "new_path": result.new_path,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "from_folder": result.from_folder,
+            "to_folder": result.to_folder,
+            "old_path": result.old_path,
+            "new_path": result.new_path,
+        }
+    )
 
 
 @lifecycle.command("move")
 @click.argument("spec_id")
-@click.argument("to_folder", type=click.Choice(["pending", "active", "completed", "archived"]))
+@click.argument(
+    "to_folder", type=click.Choice(["pending", "active", "completed", "archived"])
+)
 @click.pass_context
-@cli_command("lifecycle-move")
+@cli_command("move")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec move timed out")
 def move_spec_cmd(ctx: click.Context, spec_id: str, to_folder: str) -> None:
@@ -196,22 +208,28 @@ def move_spec_cmd(ctx: click.Context, spec_id: str, to_folder: str) -> None:
             code="CONFLICT",
             error_type="conflict",
             remediation="Verify the spec exists and the transition is valid",
-            details={"spec_id": spec_id, "from_folder": result.from_folder, "to_folder": to_folder},
+            details={
+                "spec_id": spec_id,
+                "from_folder": result.from_folder,
+                "to_folder": to_folder,
+            },
         )
 
-    emit_success({
-        "spec_id": spec_id,
-        "from_folder": result.from_folder,
-        "to_folder": result.to_folder,
-        "old_path": result.old_path,
-        "new_path": result.new_path,
-    })
+    emit_success(
+        {
+            "spec_id": spec_id,
+            "from_folder": result.from_folder,
+            "to_folder": result.to_folder,
+            "old_path": result.old_path,
+            "new_path": result.new_path,
+        }
+    )
 
 
 @lifecycle.command("state")
 @click.argument("spec_id")
 @click.pass_context
-@cli_command("lifecycle-state")
+@cli_command("state")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Lifecycle state lookup timed out")
 def lifecycle_state_cmd(ctx: click.Context, spec_id: str) -> None:
@@ -242,13 +260,15 @@ def lifecycle_state_cmd(ctx: click.Context, spec_id: str) -> None:
             details={"spec_id": spec_id},
         )
 
-    emit_success({
-        "spec_id": state.spec_id,
-        "folder": state.folder,
-        "status": state.status,
-        "progress_percentage": state.progress_percentage,
-        "total_tasks": state.total_tasks,
-        "completed_tasks": state.completed_tasks,
-        "can_complete": state.can_complete,
-        "can_archive": state.can_archive,
-    })
+    emit_success(
+        {
+            "spec_id": state.spec_id,
+            "folder": state.folder,
+            "status": state.status,
+            "progress_percentage": state.progress_percentage,
+            "total_tasks": state.total_tasks,
+            "completed_tasks": state.completed_tasks,
+            "can_complete": state.can_complete,
+            "can_archive": state.can_archive,
+        }
+    )

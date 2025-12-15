@@ -72,26 +72,26 @@ specs/
 └── archived/     # Historical reference
 ```
 
-- Scaffold, validate, activate, complete, and archive specs via `spec-*` tools.
+- Discover and validate specs via `spec(action=...)`.
+- Transition spec folders/states via `lifecycle(action=...)`.
 - Automatically journal decisions, blockers, and dependency updates with audit metadata.
-- Cursor-based pagination and metadata envelopes keep long-running specs manageable.
 
 ### Task operations & execution
 
-- `task-next`, `task-prepare`, `task-start`, `task-complete`, and blocker flows expose the full dependency graph.
-- Planning helpers (`plan_format`, `phase_list`, `phase_report_time`, etc.) provide progress metrics powered by `planning_tools` feature flags.
+- `task(action=next|prepare|start|complete|...)` and blocker flows expose the full dependency graph.
+- `plan(action=create|list|review)` supports lightweight planning and review flows.
 - Notifications and sampling channels surface phase completions to MCP clients.
 
 ### Code, docs, and testing intelligence
 
-- Doc query tools (`doc-query`, `doc-stats`, scoped search utilities) surface architecture docs generated under `docs/generated/`.
-- Testing tools (`test-run`, `test-run-quick`, `test-presets`, `test-discover`) run pytest presets or quick validations with structured output.
+- Code navigation tools via `code(action=...)` support symbol lookup and call-graph tracing.
+- Testing tools via `test(action=run|discover, preset=quick|unit|full)` run pytest presets with structured output.
 - Shared adapters mirror claude-sdd-toolkit behavior and integrate with the regression testing harness.
 
 ### LLM-powered workflows
 
 - Configurable provider abstraction with OpenAI, Anthropic, and local backends (Ollama, etc.) plus prompt shielding and observability hooks.
-- AI-enhanced review (`spec-review`, `spec-review-fidelity`), documentation (`spec-doc-llm`, `doc-query-llm`), and PR helpers degrade gracefully when no LLM is configured.
+- AI-enhanced review via `review(action=spec|fidelity|parse-feedback)` and PR helpers degrade gracefully when no LLM is configured.
 - Timeouts, retries, and circuit breakers follow the resilience patterns from the remediation specs.
 
 ### CLI + MCP integration
@@ -130,7 +130,19 @@ All MCP tools emit the standardized envelope defined in `docs/codebase_standards
 
 - `success`, `data`, `error`, and `meta` are always present so clients never guess at output shape.
 - `response_contract_v2` is feature-flagged; clients advertise support via capability negotiation.
-- `mcp/capabilities_manifest.json` lists every tool, resource, prompt, feature flag, and response contract so MCP clients can auto-configure themselves.
+- `mcp/capabilities_manifest.json` advertises the 17 unified tools (plus feature flags like `unified_manifest`).
+
+**Legacy → unified mapping (examples)**
+
+| Legacy tool | Unified call |
+|---|---|
+| Legacy Tool (Removed) | Unified Equivalent |
+|----------------------|--------------------|
+| `task-next` | `task(action="next")` |
+| `spec-validate` | `spec(action="validate")` |
+| `test-run` | `test(action="run", preset="full")` |
+| `tool-list` | `server(action="tools")` |
+| `get-server-context` | `server(action="context")` |
 
 ## ⚙️ Configuration
 
@@ -234,14 +246,14 @@ Add foundry-mcp through Claude Code settings (Command Palette → **Claude Code:
 ### Quick usage examples
 
 ```bash
-# List specs via MCP tool
-echo '{"path": "specs"}' | foundry-mcp --tool spec-list
+# List specs via MCP tool (unified router)
+echo '{"action": "list"}' | foundry-mcp --tool spec
 
-# Run CLI command without an MCP client
-python -m foundry_mcp.cli spec validate --specs-dir ./specs
+# Validate a spec via MCP tool
+echo '{"action": "validate", "spec_id": "sdd-core-operations-2025-11-27-001"}' | foundry-mcp --tool spec
 
-# Generate AI-assisted docs when LLM configured
-python -m foundry_mcp.cli doc generate --format overview --spec-id sdd-core-operations-2025-11-27-001
+# Run CLI validation without an MCP client
+python -m foundry_mcp.cli --specs-dir ./specs validate check sdd-core-operations-2025-11-27-001
 ```
 
 ## 📚 Documentation
@@ -249,7 +261,7 @@ python -m foundry_mcp.cli doc generate --format overview --spec-id sdd-core-oper
 | Guide | Description |
 |-------|-------------|
 | [SDD Philosophy](docs/concepts/sdd-philosophy.md) | Why spec-driven development matters |
-| [Architecture Overview](docs/generated/architecture.md) | Auto-generated system architecture |
+| [Architecture Overview](docs/architecture/adr-001-cli-architecture.md) | CLI/MCP architecture decision record |
 | [Development Guide](docs/guides/development-guide.md) | Setup, architecture, contributing |
 | [Testing Guide](docs/guides/testing.md) | Running and debugging tests / fixtures |
 | [LLM Configuration](docs/guides/llm-configuration.md) | Provider setup & fallbacks |
@@ -262,7 +274,7 @@ python -m foundry_mcp.cli doc generate --format overview --spec-id sdd-core-oper
 ```bash
 pytest                          # Full suite
 pytest tests/integration/test_mcp_smoke.py  # MCP smoke tests
-pytest tests/doc_query/test_scope_command.py
+pytest tests/integration/test_mcp_tools.py  # Tool contract coverage
 ```
 
 - Regression tests keep MCP/CLI adapters aligned with the legacy claude-sdd-toolkit contracts.

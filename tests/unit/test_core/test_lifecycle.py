@@ -6,7 +6,6 @@ Tests lifecycle operations for spec status transitions.
 
 import json
 import pytest
-from pathlib import Path
 from foundry_mcp.core.lifecycle import (
     move_spec,
     activate_spec,

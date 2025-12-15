@@ -7,8 +7,6 @@ Provides commands for skills development including:
 - Development tooling
 """
 
-import json
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -54,7 +52,7 @@ def dev_group() -> None:
     help="Include private/internal APIs in documentation.",
 )
 @click.pass_context
-@cli_command("dev-gendocs")
+@cli_command("gendocs")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Documentation generation timed out")
 def dev_gendocs_cmd(
@@ -107,27 +105,31 @@ def dev_gendocs_cmd(
     duration_ms = (time.perf_counter() - start_time) * 1000
 
     if not generators:
-        emit_success({
-            "status": "no_generator",
-            "output_dir": str(output_path),
-            "format": doc_format,
-            "available_generators": [],
-            "recommendations": [
-                "Install pdoc: pip install pdoc",
-                "Or install sphinx: pip install sphinx",
-            ],
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "status": "no_generator",
+                "output_dir": str(output_path),
+                "format": doc_format,
+                "available_generators": [],
+                "recommendations": [
+                    "Install pdoc: pip install pdoc",
+                    "Or install sphinx: pip install sphinx",
+                ],
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
         return
 
-    emit_success({
-        "status": "ready",
-        "output_dir": str(output_path),
-        "format": doc_format,
-        "available_generators": generators,
-        "include_private": include_private,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "status": "ready",
+            "output_dir": str(output_path),
+            "format": doc_format,
+            "available_generators": generators,
+            "include_private": include_private,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 @dev_group.command("install")
@@ -146,7 +148,7 @@ def dev_gendocs_cmd(
     help="Comma-separated list of extras to install.",
 )
 @click.pass_context
-@cli_command("dev-install")
+@cli_command("install")
 @handle_keyboard_interrupt()
 @with_sync_timeout(300, "Installation timed out")
 def dev_install_cmd(
@@ -224,14 +226,16 @@ def dev_install_cmd(
             )
             return
 
-        emit_success({
-            "status": "installed",
-            "editable": editable,
-            "dev": dev,
-            "extras": extras,
-            "project_root": str(project_root),
-            "telemetry": {"duration_ms": round(duration_ms, 2)},
-        })
+        emit_success(
+            {
+                "status": "installed",
+                "editable": editable,
+                "dev": dev,
+                "extras": extras,
+                "project_root": str(project_root),
+                "telemetry": {"duration_ms": round(duration_ms, 2)},
+            }
+        )
 
     except subprocess.TimeoutExpired:
         emit_error(
@@ -269,7 +273,7 @@ def dev_install_cmd(
     help="Enable auto-reload on file changes.",
 )
 @click.pass_context
-@cli_command("dev-start")
+@cli_command("start")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Server check timed out")
 def dev_start_cmd(
@@ -300,10 +304,13 @@ def dev_start_cmd(
             timeout=5,
         )
         if result.returncode == 0:
-            server_configs.append({
-                "name": "uvicorn",
-                "command": f"uvicorn main:app --host {host} --port {port}" + (" --reload" if reload else ""),
-            })
+            server_configs.append(
+                {
+                    "name": "uvicorn",
+                    "command": f"uvicorn main:app --host {host} --port {port}"
+                    + (" --reload" if reload else ""),
+                }
+            )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
@@ -315,36 +322,43 @@ def dev_start_cmd(
             timeout=5,
         )
         if result.returncode == 0:
-            server_configs.append({
-                "name": "flask",
-                "command": f"flask run --host {host} --port {port}" + (" --reload" if reload else ""),
-            })
+            server_configs.append(
+                {
+                    "name": "flask",
+                    "command": f"flask run --host {host} --port {port}"
+                    + (" --reload" if reload else ""),
+                }
+            )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
     # Check for MCP server config
     mcp_config = project_root / "mcp.json"
     if mcp_config.exists():
-        server_configs.append({
-            "name": "mcp",
-            "command": f"python -m foundry_mcp.server --port {port}",
-        })
+        server_configs.append(
+            {
+                "name": "mcp",
+                "command": f"python -m foundry_mcp.server --port {port}",
+            }
+        )
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
-    emit_success({
-        "host": host,
-        "port": port,
-        "reload": reload,
-        "available_servers": server_configs,
-        "project_root": str(project_root),
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
+    emit_success(
+        {
+            "host": host,
+            "port": port,
+            "reload": reload,
+            "available_servers": server_configs,
+            "project_root": str(project_root),
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )
 
 
 @dev_group.command("check")
 @click.pass_context
-@cli_command("dev-check")
+@cli_command("check")
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Environment check timed out")
 def dev_check_cmd(ctx: click.Context) -> None:
@@ -353,7 +367,7 @@ def dev_check_cmd(ctx: click.Context) -> None:
     Verifies that all development tools are available.
     """
     start_time = time.perf_counter()
-    cli_ctx = get_context(ctx)
+    get_context(ctx)
 
     tools = {}
 
@@ -420,29 +434,13 @@ def dev_check_cmd(ctx: click.Context) -> None:
     duration_ms = (time.perf_counter() - start_time) * 1000
 
     all_required = all(
-        tools.get(t, {}).get("available", False)
-        for t in ["python", "pip", "git"]
+        tools.get(t, {}).get("available", False) for t in ["python", "pip", "git"]
     )
 
-    emit_success({
-        "tools": tools,
-        "all_required_available": all_required,
-        "telemetry": {"duration_ms": round(duration_ms, 2)},
-    })
-
-
-# Top-level alias for install
-@click.command("dev-install")
-@click.option("--dev", is_flag=True)
-@click.option("--editable/--no-editable", default=True)
-@click.pass_context
-@cli_command("dev-install-alias")
-@handle_keyboard_interrupt()
-@with_sync_timeout(300, "Installation timed out")
-def dev_install_alias_cmd(
-    ctx: click.Context,
-    dev: bool,
-    editable: bool,
-) -> None:
-    """Install for development (alias for dev install)."""
-    ctx.invoke(dev_install_cmd, dev=dev, editable=editable)
+    emit_success(
+        {
+            "tools": tools,
+            "all_required_available": all_required,
+            "telemetry": {"duration_ms": round(duration_ms, 2)},
+        }
+    )

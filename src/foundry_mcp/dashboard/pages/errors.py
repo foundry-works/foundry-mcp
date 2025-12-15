@@ -2,14 +2,30 @@
 
 import streamlit as st
 
-from foundry_mcp.dashboard.components.filters import time_range_filter, text_filter, filter_row
-from foundry_mcp.dashboard.components.tables import data_table, error_table_config, paginated_table
+from typing import Any
+
+from foundry_mcp.dashboard.components.filters import (
+    time_range_filter,
+    text_filter,
+    filter_row,
+)
+from foundry_mcp.dashboard.components.tables import (
+    error_table_config,
+    paginated_table,
+)
 from foundry_mcp.dashboard.components.charts import treemap_chart, pie_chart
-from foundry_mcp.dashboard.data.stores import get_errors, get_error_stats, get_error_patterns, get_error_by_id
+from foundry_mcp.dashboard.data.stores import (
+    get_errors,
+    get_error_stats,
+    get_error_patterns,
+    get_error_by_id,
+)
 
 # Try importing pandas
+pd: Any
 try:
     import pandas as pd
+
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
@@ -23,7 +39,9 @@ def render():
     # Check if error collection is enabled
     stats = get_error_stats()
     if not stats.get("enabled"):
-        st.warning("Error collection is disabled. Enable it in foundry-mcp.toml under [error_collection]")
+        st.warning(
+            "Error collection is disabled. Enable it in foundry-mcp.toml under [error_collection]"
+        )
         return
 
     # Filters
@@ -33,9 +51,13 @@ def render():
     with cols[0]:
         hours = time_range_filter(key="error_time_range", default="24h")
     with cols[1]:
-        tool_filter = text_filter("Tool Name", key="error_tool", placeholder="e.g., spec-list")
+        tool_filter = text_filter(
+            "Tool Name", key="error_tool", placeholder="e.g., spec"
+        )
     with cols[2]:
-        code_filter = text_filter("Error Code", key="error_code", placeholder="e.g., VALIDATION_ERROR")
+        code_filter = text_filter(
+            "Error Code", key="error_code", placeholder="e.g., VALIDATION_ERROR"
+        )
     with cols[3]:
         # Show stats
         st.metric("Total Errors", stats.get("total", 0))
@@ -84,10 +106,16 @@ def render():
                             st.markdown("**Tool:** " + error.get("tool_name", "N/A"))
                             st.markdown("**Code:** " + error.get("error_code", "N/A"))
                             st.markdown("**Type:** " + error.get("error_type", "N/A"))
-                            st.markdown("**Time:** " + str(error.get("timestamp", "N/A")))
+                            st.markdown(
+                                "**Time:** " + str(error.get("timestamp", "N/A"))
+                            )
 
                         with col2:
-                            st.markdown("**Fingerprint:** " + error.get("fingerprint", "N/A")[:20] + "...")
+                            st.markdown(
+                                "**Fingerprint:** "
+                                + error.get("fingerprint", "N/A")[:20]
+                                + "..."
+                            )
 
                         st.markdown("**Message:**")
                         st.text(error.get("message", "No message"))
@@ -108,7 +136,7 @@ def render():
         st.subheader("Error Patterns")
         patterns = get_error_patterns(min_count=2)
 
-        if patterns and PANDAS_AVAILABLE:
+        if patterns and PANDAS_AVAILABLE and pd is not None:
             # Create DataFrame for visualization
             patterns_df = pd.DataFrame(patterns)
 
@@ -116,7 +144,9 @@ def render():
             if "tool_name" in patterns_df.columns and "count" in patterns_df.columns:
                 treemap_chart(
                     patterns_df,
-                    path=["tool_name", "error_code"] if "error_code" in patterns_df.columns else ["tool_name"],
+                    path=["tool_name", "error_code"]
+                    if "error_code" in patterns_df.columns
+                    else ["tool_name"],
                     values="count",
                     title="Error Distribution by Tool",
                     height=400,
