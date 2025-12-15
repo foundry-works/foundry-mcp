@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/config.py
-# hypothesis_version: 6.148.3
-
-[1000, ',', '.foundry-mcp.toml', '0.1.0', '1', 'FOUNDRY_MCP_API_KEYS', 'INFO', 'ServerConfig', 'T', 'api_key', 'api_keys', 'args_count', 'auth', 'duration_ms', 'error', 'error_type', 'foundry-mcp', 'foundry-mcp.toml', 'foundry_mcp', 'function', 'journals_path', 'kwargs_keys', 'level', 'logging', 'metric', 'name', 'rb', 'require_auth', 'roots', 'server', 'specs_dir', 'structured', 'success', 'true', 'version', 'workspace', 'yes']

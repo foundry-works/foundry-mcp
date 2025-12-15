@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/security.py
-# hypothesis_version: 6.148.3
-
-[100, 1000, 10000, 100000, '...', '<<SYS>>|<</SYS>>', '<\\s*system\\s*>', '<\\|.*?\\|>', 'INJECTION_PATTERNS', 'MAX_ARRAY_LENGTH', 'MAX_FIELD_COUNT', 'MAX_INPUT_SIZE', 'MAX_NESTED_DEPTH', 'MAX_STRING_LENGTH', 'SizeValidationResult', 'VALIDATION_ERROR', '\\[INST\\]|\\[/INST\\]', '```\\s*<\\s*system', '```system', 'data', 'error', 'field', 'input', 'is_prompt_injection', 'matched_text', 'message', 'pattern', 'success', 'system\\s*:\\s*', 'text_preview', 'utf-8', 'validate_input_size', 'validate_size', 'validation_errors']

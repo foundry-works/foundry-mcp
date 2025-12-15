@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/spec.py
-# hypothesis_version: 6.148.3
-
-[100, '*.json', '+00:00', '--show-toplevel', '.backups', '.json', '.tmp', 'Untitled', 'Z', 'active', 'all', 'archived', 'blocked', 'completed', 'completed_tasks', 'current_phase', 'git', 'hierarchy', 'in_progress', 'last_updated', 'metadata', 'pending', 'progress_percentage', 'r', 'rev-parse', 'spec_id', 'specs', 'status', 'title', 'total_tasks', 'type', 'w']

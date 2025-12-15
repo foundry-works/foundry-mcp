@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/feature_flags.py
-# hypothesis_version: 6.148.3
-
-[0.0, 100.0, 100, 'F', 'FEATURE_DISABLED', 'FeatureFlag', 'FeatureFlagRegistry', 'FlagState', 'allowed_clients', 'anonymous', 'beta', 'blocked_clients', 'client_id', 'created_at', 'current_client_id', 'default_enabled', 'dependencies', 'deprecated', 'deprecation_notice', 'description', 'enabled', 'experimental', 'expires_at', 'feature', 'feature_flag', 'flag', 'flag_override', 'get_flag_service', 'get_registry', 'metadata', 'name', 'owner', 'percentage_rollout', 'stable', 'state', 'unspecified']

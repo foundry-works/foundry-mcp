@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/journal.py
-# hypothesis_version: 6.148.3
-
-['+00:00', '.json.backup', 'Blocker resolved', 'Z', 'author', 'blocked', 'blocked_at', 'blocked_by_external', 'blocker', 'blocker_description', 'blocker_ticket', 'blocker_type', 'children', 'claude-code', 'completed', 'completed_at', 'completed_tasks', 'content', 'decision', 'dependency', 'description', 'deviation', 'entry_type', 'hierarchy', 'in_progress', 'journal', 'journaled_at', 'last_updated', 'metadata', 'needs_journaling', 'note', 'pending', 'r', 'resolution', 'resolved_at', 'resolved_blockers', 'resource', 'spec-root', 'started_at', 'status', 'status_change', 'status_note', 'subtask', 'task', 'task_id', 'technical', 'ticket', 'timestamp', 'title', 'total_tasks', 'type', 'unknown', 'verify', 'w']

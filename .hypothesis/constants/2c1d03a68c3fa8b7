@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/responses.py
-# hypothesis_version: 6.148.3
-
-['CONFLICT', 'DUPLICATE_ENTRY', 'FEATURE_DISABLED', 'FORBIDDEN', 'INTERNAL_ERROR', 'INVALID_FORMAT', 'MISSING_REQUIRED', 'NOT_FOUND', 'RATE_LIMIT_EXCEEDED', 'SPEC_NOT_FOUND', 'TASK_NOT_FOUND', 'UNAUTHORIZED', 'UNAVAILABLE', 'VALIDATION_ERROR', 'authentication', 'authorization', 'conflict', 'details', 'error_code', 'error_type', 'feature_flag', 'field', 'internal', 'limit', 'not_found', 'pagination', 'period', 'rate_limit', 'remediation', 'request_id', 'required_permission', 'resource_id', 'resource_type', 'response-v2', 'retry_after', 'retry_after_seconds', 'telemetry', 'unavailable', 'validation', 'version', 'warnings']

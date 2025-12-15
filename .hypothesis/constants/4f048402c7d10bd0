@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/task.py
-# hypothesis_version: 6.148.3
-
-[100, 'Failed to load spec', 'author', 'blocked_by', 'blockers', 'blocks', 'can_start', 'children', 'completed', 'completed_at', 'completed_tasks', 'content', 'dependencies', 'depends', 'description', 'entries', 'entry_count', 'entry_type', 'error', 'file', 'file_path', 'hierarchy', 'id', 'in_progress', 'journal', 'journal_excerpt', 'metadata', 'note', 'parent', 'parent_task', 'pending', 'percentage', 'phase', 'position_label', 'previous_sibling', 'remaining_tasks', 'sequence_index', 'soft_depends', 'spec-root', 'status', 'subtask', 'subtasks', 'summary', 'task', 'task_id', 'task_journal', 'timestamp', 'title', 'total_tasks', 'type', 'verify']

@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/tasks.py
-# hypothesis_version: 6.148.3
-
-['+00:00', 'All tasks completed', 'Failed to save spec', 'Z', 'author', 'blocked', 'blocked_by', 'can_start', 'children', 'completed', 'completed_at', 'completed_tasks', 'content', 'dependencies', 'entry_type', 'foundry-mcp', 'foundry_check_deps', 'foundry_next_task', 'foundry_prepare_task', 'foundry_progress', 'foundry_start_task', 'foundry_task_info', 'hierarchy', 'id', 'in_progress', 'journal', 'metadata', 'parent', 'pending', 'percentage', 'phases', 'spec-root', 'spec_id', 'started_at', 'status', 'status_change', 'subtask', 'task', 'task_id', 'timestamp', 'title', 'total_tasks', 'type', 'verify']

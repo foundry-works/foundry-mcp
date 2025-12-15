@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/claude-sdd-toolkit/src/claude_skills/claude_skills/cli/sdd/verbosity.py
-# hypothesis_version: 6.148.3
-
-['VerbosityLevel', '_', 'default_verbosity', 'normal', 'output', 'quiet', 'verbose']

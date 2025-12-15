@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/docs.py
-# hypothesis_version: 6.148.3
-
-['No stats available', 'auto', 'both', 'callee', 'callee_file', 'caller', 'caller_file', 'count', 'cursor', 'data', 'file_path', 'foundry_docs_stats', 'foundry_find_class', 'foundry_get_callees', 'foundry_get_callers', 'foundry_trace_calls', 'has_more', 'last_name', 'line_number', 'name', 'page_size', 'query_type', 'results']

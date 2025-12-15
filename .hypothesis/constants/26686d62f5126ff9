@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/tools/validation.py
-# hypothesis_version: 6.148.3
-
-['auto_fixable', 'backup_path', 'category', 'code', 'description', 'diagnostics', 'error_count', 'fixes_applied', 'foundry_fix_spec', 'foundry_spec_stats', 'id', 'is_valid', 'location', 'message', 'post_fix_error_count', 'post_fix_is_valid', 'severity', 'spec_id', 'suggested_fix', 'warning_count']

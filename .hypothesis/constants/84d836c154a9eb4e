@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/server.py
-# hypothesis_version: 6.148.3
-
-[100, '1.0.0', '2.0.0', '2024-11-01', 'Untitled', '__main__', 'all', 'api_version', 'capabilities', 'completed', 'enabled_count', 'error', 'get_spec', 'get_spec_hierarchy', 'get_task', 'hierarchy', 'list_specs', 'metadata', 'response.v2', 'response_contract_v2', 'schema_version', 'server_error', 'server_start', 'spec_id', 'specs', 'specs://list', 'specs://{spec_id}', 'status', 'title', 'tool', 'tool_invocation', 'total_count']

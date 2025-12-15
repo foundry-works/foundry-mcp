@@ -1,4 +1,0 @@
-# file: /Users/tylerburleigh/Documents/GitHub/foundry-mcp/src/foundry_mcp/core/progress.py
-# hypothesis_version: 6.148.3
-
-[100, '+00:00', 'Z', 'blocked', 'children', 'completed', 'completed_at', 'completed_tasks', 'current_phase', 'error', 'group', 'hierarchy', 'id', 'in_progress', 'metadata', 'needs_journaling', 'node_id', 'parent', 'pending', 'percentage', 'phase', 'remaining_tasks', 'spec-root', 'spec_id', 'status', 'task', 'title', 'total', 'total_tasks', 'type']

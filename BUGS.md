@@ -1,1 +1,0 @@
-Opencode implementation broken?
