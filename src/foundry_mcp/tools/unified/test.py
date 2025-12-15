@@ -1,7 +1,6 @@
 """Unified test tool with action routing.
 
-Consolidates the legacy test tools into a single `test(action=...)` entry point.
-Legacy tools remain available as thin delegates.
+Provides the unified `test(action=...)` entry point.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
 """Unified spec tooling with action routing.
 
 This router consolidates the high-volume spec-* tool family behind a single
-`spec(action=...)` surface. Legacy spec-* tools should delegate into
-`legacy_spec_action` so envelopes, validation, and pagination stay consistent.
+`spec(action=...)` surface.
 """
 
 from __future__ import annotations

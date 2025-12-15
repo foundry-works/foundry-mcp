@@ -310,9 +310,7 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     telemetry = response.setdefault("meta", {}).setdefault("telemetry", {})
     telemetry["duration_ms"] = round(elapsed_ms, 2)
 
-    manifest_label = (
-        "unified" if flag_service.is_enabled("unified_manifest") else "legacy"
-    )
+    manifest_label = "unified"
     manifest_tokens = _estimate_tokens(
         json.dumps(all_tools, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     )

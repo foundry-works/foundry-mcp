@@ -58,7 +58,7 @@ level = "INFO"
 
 
 # ---------------------------------------------------------------------------
-# Helper functions reused by both unified + legacy surfaces
+# Helper functions used by unified surface
 # ---------------------------------------------------------------------------
 
 
