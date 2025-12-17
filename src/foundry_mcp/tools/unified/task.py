@@ -440,8 +440,6 @@ def _handle_progress(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     response = success_response(
         **progress,
-        spec_id=spec_id.strip(),
-        node_id=node_id.strip(),
         request_id=request_id,
     )
     _metrics.counter(_metric(action), labels={"status": "success"})

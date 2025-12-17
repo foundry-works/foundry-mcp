@@ -1,0 +1,35 @@
+#!/bin/bash
+# foundry-mcp launcher script
+#
+# This script launches the foundry-mcp MCP server using the configured Python interpreter.
+#
+# Configuration:
+#   Set FOUNDRY_MCP_PYTHON environment variable to specify the Python interpreter path.
+#   If not set, defaults to "python" (system PATH resolution).
+#
+# Examples:
+#   export FOUNDRY_MCP_PYTHON=/Users/you/anaconda3/bin/python
+#   export FOUNDRY_MCP_PYTHON=$(which python3)
+#   export FOUNDRY_MCP_PYTHON=/opt/homebrew/bin/python3.11
+#
+# Add to your shell profile (~/.zshrc, ~/.bashrc) for persistence.
+
+set -e
+
+PYTHON="${FOUNDRY_MCP_PYTHON:-python}"
+
+# Verify the Python interpreter exists
+if ! command -v "$PYTHON" &> /dev/null; then
+    echo "Error: Python interpreter not found: $PYTHON" >&2
+    echo "Set FOUNDRY_MCP_PYTHON to a valid Python path" >&2
+    exit 1
+fi
+
+# Verify foundry_mcp is importable
+if ! "$PYTHON" -c "import foundry_mcp" &> /dev/null; then
+    echo "Error: foundry_mcp module not found in $PYTHON" >&2
+    echo "Install with: $PYTHON -m pip install -e /path/to/foundry-mcp" >&2
+    exit 1
+fi
+
+exec "$PYTHON" -m foundry_mcp.server "$@"

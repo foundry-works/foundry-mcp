@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2025-12-16
+
+### Added
+- Launcher script (`bin/foundry-mcp`) for configurable Python interpreter selection
+- `FOUNDRY_MCP_PYTHON` environment variable to override the default Python interpreter
+
+### Fixed
+- Removed duplicate `spec_id` and `node_id` fields from task progress response
+
 ## [0.3.1] - 2025-12-16
 
 ### Removed
