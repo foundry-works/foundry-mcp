@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foundry-mcp"
-version = "0.3.3"
+version = "0.3.4"
 description = "MCP server for SDD toolkit spec management"
 readme = "README.md"
 license = "MIT"
@@ -56,10 +56,11 @@ dashboard = [
 [project.scripts]
 foundry-mcp = "foundry_mcp.server:main"
 foundry-cli = "foundry_mcp.cli.main:cli"
+foundry-mcp-ctl = "foundry_mcp_ctl.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/tylerburleigh/foundry-mcp"
 Repository = "https://github.com/tylerburleigh/foundry-mcp"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/foundry_mcp"]
+packages = ["src/foundry_mcp", "src/foundry_mcp_ctl"]

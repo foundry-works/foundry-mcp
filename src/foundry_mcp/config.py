@@ -730,6 +730,16 @@ def set_config(config: ServerConfig) -> None:
     _config = config
 
 
+def get_mode() -> str:
+    """Get the current server mode from FOUNDRY_MODE env var.
+
+    Returns:
+        "minimal" or "full" - defaults to "full" for backwards compatibility
+    """
+    mode = os.environ.get("FOUNDRY_MODE", "full")
+    return mode if mode in ("minimal", "full") else "full"
+
+
 # Metrics and observability decorators
 
 

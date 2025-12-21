@@ -156,6 +156,7 @@ All MCP tools emit the standardized envelope defined in `docs/codebase_standards
 | `FOUNDRY_MCP_API_KEYS` | Comma-separated API keys required for tool access | Disabled |
 | `FOUNDRY_MCP_FEATURE_FLAGS` | Additional feature flags to enable (e.g., `planning_tools`) | Based on spec rollout |
 | `FOUNDRY_MCP_RESPONSE_CONTRACT` | Force response contract version (`v2`) | Auto-negotiated |
+| `FOUNDRY_MODE` | Server mode: `full` (16 tools) or `minimal` (1 wake tool) | `full` |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | LLM provider credentials | Not set |
 
 ### TOML configuration
@@ -241,6 +242,33 @@ Add foundry-mcp through Claude Code settings (Command Palette → **Claude Code:
   }
 }
 ```
+</details>
+
+<details>
+<summary>Enable mode toggling to save context tokens</summary>
+
+Use `foundry-mcp-ctl` to wrap the server and enable runtime mode switching between full (16 tools) and minimal (1 tool) modes:
+
+```json
+{
+  "mcpServers": {
+    "foundry-mcp": {
+      "command": "python",
+      "args": ["-m", "foundry_mcp_ctl", "wrap", "--name", "foundry-mcp", "--", "python", "-m", "foundry_mcp.server"]
+    },
+    "foundry-ctl": {
+      "command": "python",
+      "args": ["-m", "foundry_mcp_ctl", "helper"]
+    }
+  }
+}
+```
+
+With this configuration:
+- Use `/sdd-on` to enable full SDD tools (16 routers)
+- Use `/sdd-off` to switch to minimal mode (1 wake tool) and save context tokens
+- The server restarts automatically when switching modes (~1-2 seconds)
+
 </details>
 
 ### Quick usage examples

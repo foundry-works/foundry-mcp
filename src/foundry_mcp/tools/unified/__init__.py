@@ -19,6 +19,7 @@ from .review import register_unified_review_tool
 from .spec import register_unified_spec_tool
 from .server import register_unified_server_tool
 from .test import register_unified_test_tool
+from .wake import register_wake_tool
 
 
 if TYPE_CHECKING:  # pragma: no cover - import-time typing only
@@ -27,8 +28,17 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
 
 
 def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:
-    """Register consolidated tool families."""
+    """Register consolidated tool families based on mode."""
+    from foundry_mcp.config import get_mode
 
+    mode = get_mode()
+
+    if mode == "minimal":
+        # Minimal mode: just the wake tool
+        register_wake_tool(mcp, config)
+        return
+
+    # Full mode: register all 17 routers
     register_unified_health_tool(mcp, config)
     register_unified_plan_tool(mcp, config)
     register_unified_pr_tool(mcp, config)

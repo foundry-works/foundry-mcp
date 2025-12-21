@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2025-12-21
+
+### Added
+
+- **Mode toggling**: New `foundry-mcp-ctl` package enables runtime switching between full (16 tools) and minimal (1 wake tool) modes
+  - `foundry-mcp-ctl wrap` - Wrapper that manages server lifecycle based on mode
+  - `foundry-mcp-ctl helper` - MCP server providing `set_sdd_mode` and `get_sdd_mode` tools
+- Wake tool (`sdd_wake`) for minimal mode - surfaces available actions and prompts mode switch
+- `FOUNDRY_MODE` environment variable: `full` (default) or `minimal`
+- New CLI entry point: `foundry-mcp-ctl`
+
+### Changed
+
+- `register_unified_tools()` now respects `FOUNDRY_MODE` to conditionally load tool routers
+- README documents mode toggling configuration for context token savings
+
 ## [0.3.3] - 2025-12-17
 
 ### Changed
