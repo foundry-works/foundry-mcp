@@ -682,7 +682,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         base_name += f"-{task_id}"
     elif phase_id:
         base_name += f"-{phase_id}"
-    provider_review_paths: List[Dict[str, str]] = []
+    provider_review_paths: List[Dict[str, Any]] = []
     review_path: Optional[str] = None
 
     spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id)

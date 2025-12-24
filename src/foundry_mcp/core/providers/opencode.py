@@ -18,8 +18,6 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Sequence
 
-logger = logging.getLogger(__name__)
-
 from .base import (
     ModelDescriptor,
     ProviderCapability,
@@ -37,6 +35,8 @@ from .base import (
 )
 from .detectors import detect_provider_availability
 from .registry import register_provider
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_BINARY = "node"
 DEFAULT_WRAPPER_SCRIPT = Path(__file__).parent / "opencode_wrapper.js"
@@ -209,7 +209,7 @@ class OpenCodeProvider(ProviderContext):
         self._model = self._ensure_model(
             model or metadata.default_model or self._first_model_id()
         )
-        self._server_process: Optional[subprocess.Popen[str]] = None
+        self._server_process: Optional[subprocess.Popen[bytes]] = None
         self._config_file_path: Optional[Path] = None
 
     def __del__(self) -> None:

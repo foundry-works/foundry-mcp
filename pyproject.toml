@@ -63,3 +63,10 @@ Repository = "https://github.com/tylerburleigh/foundry-mcp"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/foundry_mcp"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+include = ["src"]
+exclude = ["**/__pycache__"]
+typeCheckingMode = "basic"
+reportMissingImports = "warning"

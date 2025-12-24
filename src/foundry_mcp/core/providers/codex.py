@@ -15,8 +15,6 @@ import os
 import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
 
-logger = logging.getLogger(__name__)
-
 from .base import (
     ModelDescriptor,
     ProviderCapability,
@@ -34,6 +32,8 @@ from .base import (
 )
 from .detectors import detect_provider_availability
 from .registry import register_provider
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_BINARY = "codex"
 DEFAULT_TIMEOUT_SECONDS = 360

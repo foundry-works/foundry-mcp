@@ -1525,9 +1525,9 @@ def _build_bidirectional_fix(
         blocked_deps = blocked["dependencies"]
 
         # Ensure all fields exist
-        for field in ["blocks", "blocked_by", "depends"]:
-            blocker_deps.setdefault(field, [])
-            blocked_deps.setdefault(field, [])
+        for dep_key in ["blocks", "blocked_by", "depends"]:
+            blocker_deps.setdefault(dep_key, [])
+            blocked_deps.setdefault(dep_key, [])
 
         # Sync relationship
         if blocked_id not in blocker_deps["blocks"]:

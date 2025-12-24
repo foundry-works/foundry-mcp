@@ -672,8 +672,6 @@ def add_phase(
     if spec_root.get("type") not in {"spec", "root"}:
         return None, "Specification root node has invalid type"
 
-    requires_rich_tasks = _requires_rich_task_fields(spec_data)
-
     children = spec_root.get("children", []) or []
     if not isinstance(children, list):
         children = []
@@ -981,10 +979,10 @@ def add_phase_bulk(
 
     def _extract_description(task_def: Dict[str, Any]) -> tuple[Optional[str], Any]:
         description = task_def.get("description")
-        if _nonempty_string(description):
+        if _nonempty_string(description) and isinstance(description, str):
             return "description", description.strip()
         details = task_def.get("details")
-        if _nonempty_string(details):
+        if _nonempty_string(details) and isinstance(details, str):
             return "details", details.strip()
         if isinstance(details, list):
             cleaned = [
@@ -1993,8 +1991,8 @@ def create_spec(
         category=category,
         mission=mission,
     )
-    if error:
-        return None, error
+    if error or spec_data is None:
+        return None, error or "Failed to generate spec data"
 
     # Find specs directory
     if specs_dir is None:
