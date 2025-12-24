@@ -51,6 +51,8 @@ settings.json
 
 # Ignore all dotfolders under specs/ (reports, reviews, etc.)
 specs/.*/
+!specs/.plans/
+!specs/.plans/**
 
 # ModelChorus configuration
 .model-chorusrc

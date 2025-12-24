@@ -4,6 +4,8 @@ Unit tests for foundry_mcp.core.validation module.
 Tests validation functions, auto-fix capabilities, and statistics calculation.
 """
 
+import copy
+
 import pytest
 from foundry_mcp.core.validation import (
     validate_spec,
@@ -55,6 +57,17 @@ def valid_spec():
             },
         },
     }
+
+
+@pytest.fixture
+def medium_spec(valid_spec):
+    """Return a medium-complexity spec with required task fields."""
+    spec = copy.deepcopy(valid_spec)
+    spec["metadata"] = {"template": "medium", "mission": "Ship the feature"}
+    task_metadata = spec["hierarchy"]["task-1"]["metadata"]
+    task_metadata["description"] = "Implement the core task"
+    task_metadata["acceptance_criteria"] = ["Core behavior matches requirements"]
+    return spec
 
 
 @pytest.fixture
@@ -192,6 +205,34 @@ class TestValidateSpec:
         result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_VERIFICATION_TYPE" in codes
+
+    def test_missing_mission_for_medium_spec(self, medium_spec):
+        """Test that medium specs require a mission."""
+        medium_spec["metadata"]["mission"] = ""
+        result = validate_spec(medium_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_MISSION" in codes
+
+    def test_missing_task_category_for_medium_spec(self, medium_spec):
+        """Test that medium specs require task_category on tasks."""
+        del medium_spec["hierarchy"]["task-1"]["metadata"]["task_category"]
+        result = validate_spec(medium_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_TASK_CATEGORY" in codes
+
+    def test_missing_task_description_for_medium_spec(self, medium_spec):
+        """Test that medium specs require descriptions on tasks."""
+        del medium_spec["hierarchy"]["task-1"]["metadata"]["description"]
+        result = validate_spec(medium_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_TASK_DESCRIPTION" in codes
+
+    def test_missing_acceptance_criteria_for_medium_spec(self, medium_spec):
+        """Test that medium specs require acceptance criteria on tasks."""
+        del medium_spec["hierarchy"]["task-1"]["metadata"]["acceptance_criteria"]
+        result = validate_spec(medium_spec)
+        codes = [d.code for d in result.diagnostics]
+        assert "MISSING_ACCEPTANCE_CRITERIA" in codes
 
     def test_orphaned_node_detected(self, valid_spec):
         """Test that orphaned nodes are detected."""

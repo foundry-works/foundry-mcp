@@ -1165,7 +1165,7 @@ class TestPhaseTemplates:
         assert result["estimated_hours"] == 6
         assert len(result["tasks"]) == 2
         # Testing tasks should have investigation category
-        assert result["tasks"][0]["category"] == "investigation"
+        assert result["tasks"][0]["task_category"] == "investigation"
 
     def test_get_phase_template_structure_security(self):
         """Should return correct structure for security template."""
@@ -1185,15 +1185,15 @@ class TestPhaseTemplates:
         assert result["estimated_hours"] == 4
         assert len(result["tasks"]) == 2
         # Documentation tasks should have research category
-        assert result["tasks"][0]["category"] == "research"
+        assert result["tasks"][0]["task_category"] == "research"
 
     def test_get_phase_template_structure_with_category_override(self):
-        """Should apply category to tasks that use the category parameter."""
+        """Planning template tasks use investigation category (not overridable)."""
         result = get_phase_template_structure("planning", category="refactoring")
 
-        # Planning tasks use the passed category
-        assert result["tasks"][0]["category"] == "refactoring"
-        assert result["tasks"][1]["category"] == "refactoring"
+        # Planning tasks always use investigation (hardcoded for validation)
+        assert result["tasks"][0]["task_category"] == "investigation"
+        assert result["tasks"][1]["task_category"] == "investigation"
 
     def test_get_phase_template_structure_invalid_template(self):
         """Should raise ValueError for invalid template name."""

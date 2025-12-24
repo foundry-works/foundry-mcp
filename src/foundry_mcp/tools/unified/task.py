@@ -25,6 +25,7 @@ from foundry_mcp.core.pagination import (
 from foundry_mcp.core.progress import (
     get_progress_summary,
     list_phases,
+    sync_computed_fields,
     update_parent_status,
 )
 from foundry_mcp.core.responses import (
@@ -985,6 +986,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     update_parent_status(spec_data, task_id.strip())
+    sync_computed_fields(spec_data)
 
     if note:
         add_journal_entry(
@@ -1074,6 +1076,7 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     update_parent_status(spec_data, task_id.strip())
+    sync_computed_fields(spec_data)
 
     task_data = spec_data.get("hierarchy", {}).get(task_id.strip(), {})
     add_journal_entry(
@@ -1200,6 +1203,7 @@ def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         task_id=task_id.strip(),
         author="foundry-mcp",
     )
+    sync_computed_fields(spec_data)
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
         return asdict(
@@ -1299,6 +1303,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         task_id=task_id.strip(),
         author="foundry-mcp",
     )
+    sync_computed_fields(spec_data)
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
         return asdict(
@@ -1913,9 +1918,20 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
             remediation="Provide custom_metadata as a JSON object",
         )
 
+    acceptance_criteria = payload.get("acceptance_criteria")
+    if acceptance_criteria is not None and not isinstance(acceptance_criteria, list):
+        return _validation_error(
+            field="acceptance_criteria",
+            action=action,
+            message="acceptance_criteria must be a list of strings",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
     update_fields = [
         payload.get("file_path"),
         payload.get("description"),
+        acceptance_criteria,
         payload.get("task_category"),
         payload.get("actual_hours"),
         payload.get("status_note"),
@@ -1932,7 +1948,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
             message="Provide at least one metadata field",
             request_id=request_id,
             code=ErrorCode.MISSING_REQUIRED,
-            remediation="Provide file_path, description, task_category, actual_hours, status_note, verification_type, command, and/or custom_metadata",
+            remediation="Provide file_path, description, acceptance_criteria, task_category, actual_hours, status_note, verification_type, command, and/or custom_metadata",
         )
 
     workspace = payload.get("workspace")
@@ -1964,6 +1980,8 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
             fields_updated.append("file_path")
         if payload.get("description") is not None:
             fields_updated.append("description")
+        if acceptance_criteria is not None:
+            fields_updated.append("acceptance_criteria")
         if payload.get("task_category") is not None:
             fields_updated.append("task_category")
         if payload.get("actual_hours") is not None:
@@ -1999,6 +2017,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         task_id=task_id.strip(),
         file_path=payload.get("file_path"),
         description=payload.get("description"),
+        acceptance_criteria=acceptance_criteria,
         task_category=payload.get("task_category"),
         actual_hours=payload.get("actual_hours"),
         status_note=payload.get("status_note"),
@@ -2727,6 +2746,7 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         resolution: Optional[str] = None,
         title: Optional[str] = None,
         description: Optional[str] = None,
+        acceptance_criteria: Optional[List[str]] = None,
         task_type: str = "task",
         estimated_hours: Optional[float] = None,
         position: Optional[int] = None,
@@ -2770,6 +2790,7 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "resolution": resolution,
             "title": title,
             "description": description,
+            "acceptance_criteria": acceptance_criteria,
             "task_type": task_type,
             "estimated_hours": estimated_hours,
             "position": position,

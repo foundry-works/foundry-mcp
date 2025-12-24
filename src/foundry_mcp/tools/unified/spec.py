@@ -30,17 +30,28 @@ from foundry_mcp.core.responses import (
     success_response,
 )
 from foundry_mcp.core.spec import (
+    TEMPLATES,
+    TEMPLATE_DESCRIPTIONS,
     find_spec_file,
     find_specs_directory,
     list_specs,
     load_spec,
 )
 from foundry_mcp.core.validation import (
+    VALID_NODE_TYPES,
+    VALID_STATUSES,
+    VALID_TASK_CATEGORIES,
+    VALID_VERIFICATION_TYPES,
     apply_fixes,
     calculate_stats,
     get_fix_actions,
     validate_spec,
 )
+from foundry_mcp.core.journal import (
+    VALID_BLOCKER_TYPES,
+    VALID_ENTRY_TYPES,
+)
+from foundry_mcp.core.lifecycle import VALID_FOLDERS
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -100,6 +111,52 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     return asdict(success_response(found=False, spec_id=spec_id))
+
+
+def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Return raw spec JSON content in minified form."""
+    import json as _json
+
+    spec_id = payload.get("spec_id")
+    workspace = payload.get("workspace")
+
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return asdict(
+            error_response(
+                "spec_id is required",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide a spec_id parameter",
+            )
+        )
+
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
+                details={"workspace": workspace},
+            )
+        )
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return asdict(
+            error_response(
+                f"Spec not found: {spec_id}",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation=f"Verify the spec_id exists. Use spec(action='list') to see available specs.",
+                details={"spec_id": spec_id},
+            )
+        )
+
+    # Return minified JSON string to minimize token usage
+    minified_spec = _json.dumps(spec_data, separators=(",", ":"))
+    return asdict(success_response(spec=minified_spec))
 
 
 def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -723,8 +780,30 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     )
 
 
+def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Return schema information for all valid values in the spec system."""
+    # Build templates with descriptions
+    templates_with_desc = [
+        {"name": t, "description": TEMPLATE_DESCRIPTIONS.get(t, "")}
+        for t in TEMPLATES
+    ]
+    return asdict(
+        success_response(
+            templates=templates_with_desc,
+            node_types=sorted(VALID_NODE_TYPES),
+            statuses=sorted(VALID_STATUSES),
+            task_categories=sorted(VALID_TASK_CATEGORIES),
+            verification_types=sorted(VALID_VERIFICATION_TYPES),
+            journal_entry_types=sorted(VALID_ENTRY_TYPES),
+            blocker_types=sorted(VALID_BLOCKER_TYPES),
+            status_folders=sorted(VALID_FOLDERS),
+        )
+    )
+
+
 _ACTIONS = [
     ActionDefinition(name="find", handler=_handle_find, summary="Find a spec by ID"),
+    ActionDefinition(name="get", handler=_handle_get, summary="Get raw spec JSON (minified)"),
     ActionDefinition(name="list", handler=_handle_list, summary="List specs"),
     ActionDefinition(
         name="validate", handler=_handle_validate, summary="Validate a spec"
@@ -743,6 +822,11 @@ _ACTIONS = [
         name="analyze-deps",
         handler=_handle_analyze_deps,
         summary="Analyze spec dependency graph",
+    ),
+    ActionDefinition(
+        name="schema",
+        handler=_handle_schema,
+        summary="Get valid values for spec fields",
     ),
 ]
 

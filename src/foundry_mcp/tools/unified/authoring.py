@@ -33,12 +33,14 @@ from foundry_mcp.core.spec import (
     apply_phase_template,
     create_spec,
     find_specs_directory,
+    generate_spec_data,
     get_phase_template_structure,
     list_assumptions,
     load_spec,
     remove_phase,
     update_frontmatter,
 )
+from foundry_mcp.core.validation import validate_spec
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -203,6 +205,27 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             remediation=f"Use one of: {', '.join(CATEGORIES)}",
         )
 
+    mission = payload.get("mission")
+    if mission is not None and not isinstance(mission, str):
+        return _validation_error(
+            field="mission",
+            action=action,
+            message="mission must be a string",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    if template in ("medium", "complex"):
+        if not isinstance(mission, str) or not mission.strip():
+            return _validation_error(
+                field="mission",
+                action=action,
+                message="mission is required for medium/complex specifications",
+                request_id=request_id,
+                code=ErrorCode.MISSING_REQUIRED,
+                remediation="Provide a concise mission statement",
+            )
+
     dry_run = payload.get("dry_run", False)
     if dry_run is not None and not isinstance(dry_run, bool):
         return _validation_error(
@@ -228,14 +251,49 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
         return _specs_directory_missing_error(request_id)
 
     if dry_run:
+        # Generate spec data for preflight validation
+        spec_data, gen_error = generate_spec_data(
+            name=name.strip(),
+            template=template,
+            category=category,
+            mission=mission,
+        )
+        if gen_error:
+            return _validation_error(
+                field="spec",
+                action=action,
+                message=gen_error,
+                request_id=request_id,
+                code=ErrorCode.VALIDATION_ERROR,
+            )
+
+        # Run full validation on generated spec
+        validation_result = validate_spec(spec_data)
+        diagnostics = [
+            {
+                "code": d.code,
+                "message": d.message,
+                "severity": d.severity,
+                "location": d.location,
+                "suggested_fix": d.suggested_fix,
+            }
+            for d in validation_result.diagnostics
+        ]
+
         return asdict(
             success_response(
                 data={
                     "name": name.strip(),
+                    "spec_id": spec_data["spec_id"],
                     "template": template,
                     "category": category,
+                    "mission": mission.strip() if isinstance(mission, str) else None,
                     "dry_run": True,
-                    "note": "Dry run - no changes made",
+                    "is_valid": validation_result.is_valid,
+                    "error_count": validation_result.error_count,
+                    "warning_count": validation_result.warning_count,
+                    "diagnostics": diagnostics,
+                    "note": "Preflight validation complete - no changes made",
                 },
                 request_id=request_id,
             )
@@ -255,6 +313,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
         name=name.strip(),
         template=template,
         category=category,
+        mission=mission,
         specs_dir=specs_dir,
     )
     elapsed_ms = (time.perf_counter() - start_time) * 1000
@@ -2073,6 +2132,7 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
         name: Optional[str] = None,
         template: Optional[str] = None,
         category: Optional[str] = None,
+        mission: Optional[str] = None,
         template_action: Optional[str] = None,
         template_name: Optional[str] = None,
         key: Optional[str] = None,
@@ -2103,6 +2163,7 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "name": name,
             "template": template,
             "category": category,
+            "mission": mission,
             "template_action": template_action,
             "template_name": template_name,
             "key": key,

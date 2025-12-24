@@ -465,6 +465,12 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
     default="implementation",
     help="Default task category.",
 )
+@click.option(
+    "--mission",
+    type=str,
+    default="",
+    help="Mission statement (required for medium/complex templates).",
+)
 @click.pass_context
 @cli_command("create")
 @handle_keyboard_interrupt()
@@ -474,6 +480,7 @@ def create(
     name: str,
     template: str,
     category: str,
+    mission: str,
 ) -> None:
     """Create a new specification.
 
@@ -489,6 +496,15 @@ def create(
             error_type="validation",
             remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+        )
+
+    if template in ("medium", "complex") and not mission.strip():
+        emit_error(
+            "Mission is required for medium/complex specs",
+            code="MISSING_REQUIRED",
+            error_type="validation",
+            remediation="Provide --mission with a concise goal statement",
+            details={"field": "mission"},
         )
 
     # Ensure pending directory exists
@@ -523,7 +539,7 @@ def create(
         "last_updated": now,
         "metadata": {
             "description": "",
-            "mission": "",
+            "mission": mission.strip(),
             "objectives": [],
             "complexity": "medium" if template in ("medium", "complex") else "low",
             "estimated_hours": sum(

@@ -8,6 +8,7 @@ Security Note:
 """
 
 from dataclasses import dataclass, field
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 import json
@@ -126,8 +127,60 @@ VERIFICATION_TYPE_MAPPING = {
     "auto": "run-tests",
 }
 
+# Common field name typos/alternatives
+FIELD_NAME_SUGGESTIONS = {
+    "category": "task_category",
+    "type": "node type or verification_type",
+    "desc": "description",
+    "details": "description",
+}
+
+
+def _suggest_value(value: str, valid_values: set, n: int = 1) -> Optional[str]:
+    """
+    Suggest a close match for an invalid value.
+
+    Args:
+        value: The invalid value provided
+        valid_values: Set of valid values to match against
+        n: Number of suggestions to return (default 1)
+
+    Returns:
+        Suggestion string like "did you mean 'X'?" or None if no close match
+    """
+    if not value:
+        return None
+    matches = get_close_matches(value.lower(), [v.lower() for v in valid_values], n=n, cutoff=0.6)
+    if matches:
+        # Find the original-case version of the match
+        for v in valid_values:
+            if v.lower() == matches[0]:
+                return f"did you mean '{v}'?"
+        return f"did you mean '{matches[0]}'?"
+    return None
+
 
 # Validation functions
+
+
+def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
+    metadata = spec_data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return False
+
+    template = metadata.get("template")
+    if isinstance(template, str) and template.strip().lower() in {"medium", "complex"}:
+        return True
+
+    complexity = metadata.get("complexity")
+    if isinstance(complexity, str) and complexity.strip().lower() in {
+        "medium",
+        "complex",
+        "high",
+    }:
+        return True
+
+    return False
 
 
 def validate_spec_input(
@@ -253,7 +306,7 @@ def validate_spec(spec_data: Dict[str, Any]) -> ValidationResult:
         _validate_nodes(hierarchy, result)
         _validate_task_counts(hierarchy, result)
         _validate_dependencies(hierarchy, result)
-        _validate_metadata(hierarchy, result)
+        _validate_metadata(spec_data, hierarchy, result)
 
     # Count diagnostics by severity
     for diag in result.diagnostics:
@@ -416,6 +469,22 @@ def _validate_structure(spec_data: Dict[str, Any], result: ValidationResult) -> 
                     location=field_name,
                     suggested_fix="Normalize timestamp to ISO 8601 format",
                     auto_fixable=True,
+                )
+            )
+
+    if _requires_rich_task_fields(spec_data):
+        metadata = spec_data.get("metadata", {})
+        mission = metadata.get("mission") if isinstance(metadata, dict) else None
+        if not isinstance(mission, str) or not mission.strip():
+            result.diagnostics.append(
+                Diagnostic(
+                    code="MISSING_MISSION",
+                    message="Spec metadata.mission is required for medium/complex specifications",
+                    severity="error",
+                    category="metadata",
+                    location="metadata.mission",
+                    suggested_fix="Set metadata.mission to a concise goal statement",
+                    auto_fixable=False,
                 )
             )
 
@@ -627,14 +696,18 @@ def _validate_nodes(hierarchy: Dict[str, Any], result: ValidationResult) -> None
         # Validate type
         node_type = node.get("type")
         if node_type and node_type not in VALID_NODE_TYPES:
+            hint = _suggest_value(node_type, VALID_NODE_TYPES)
+            msg = f"Node '{node_id}' has invalid type '{node_type}'"
+            if hint:
+                msg += f"; {hint}"
             result.diagnostics.append(
                 Diagnostic(
                     code="INVALID_NODE_TYPE",
-                    message=f"Node '{node_id}' has invalid type '{node_type}'",
+                    message=msg,
                     severity="error",
                     category="node",
                     location=node_id,
-                    suggested_fix="Normalize node type to valid value",
+                    suggested_fix=f"Valid types: {', '.join(sorted(VALID_NODE_TYPES))}",
                     auto_fixable=True,
                 )
             )
@@ -642,14 +715,18 @@ def _validate_nodes(hierarchy: Dict[str, Any], result: ValidationResult) -> None
         # Validate status
         status = node.get("status")
         if status and status not in VALID_STATUSES:
+            hint = _suggest_value(status, VALID_STATUSES)
+            msg = f"Node '{node_id}' has invalid status '{status}'"
+            if hint:
+                msg += f"; {hint}"
             result.diagnostics.append(
                 Diagnostic(
                     code="INVALID_STATUS",
-                    message=f"Node '{node_id}' has invalid status '{status}'",
+                    message=msg,
                     severity="error",
                     category="node",
                     location=node_id,
-                    suggested_fix="Normalize status to pending/in_progress/completed/blocked",
+                    suggested_fix=f"Valid statuses: {', '.join(sorted(VALID_STATUSES))}",
                     auto_fixable=True,
                 )
             )
@@ -838,8 +915,27 @@ def _validate_dependencies(hierarchy: Dict[str, Any], result: ValidationResult) 
                         )
 
 
-def _validate_metadata(hierarchy: Dict[str, Any], result: ValidationResult) -> None:
+def _validate_metadata(
+    spec_data: Dict[str, Any],
+    hierarchy: Dict[str, Any],
+    result: ValidationResult,
+) -> None:
     """Validate type-specific metadata requirements."""
+    requires_rich_tasks = _requires_rich_task_fields(spec_data)
+
+    def _nonempty_string(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    def _has_description(metadata: Dict[str, Any]) -> bool:
+        if _nonempty_string(metadata.get("description")):
+            return True
+        details = metadata.get("details")
+        if _nonempty_string(details):
+            return True
+        if isinstance(details, list):
+            return any(_nonempty_string(item) for item in details)
+        return False
+
     for node_id, node in _iter_valid_nodes(hierarchy, result, report_invalid=False):
         node_type = node.get("type")
         metadata = node.get("metadata", {})
@@ -873,47 +969,163 @@ def _validate_metadata(hierarchy: Dict[str, Any], result: ValidationResult) -> N
                     )
                 )
             elif verification_type not in VALID_VERIFICATION_TYPES:
+                hint = _suggest_value(verification_type, VALID_VERIFICATION_TYPES)
+                msg = f"Verify node '{node_id}' has invalid verification_type '{verification_type}'"
+                if hint:
+                    msg += f"; {hint}"
                 result.diagnostics.append(
                     Diagnostic(
                         code="INVALID_VERIFICATION_TYPE",
-                        message=f"Verify node '{node_id}' verification_type must be 'run-tests', 'fidelity', or 'manual'",
+                        message=msg,
                         severity="error",
                         category="metadata",
                         location=node_id,
-                        suggested_fix="Map legacy verification_type to canonical value",
+                        suggested_fix=f"Valid types: {', '.join(sorted(VALID_VERIFICATION_TYPES))}",
                         auto_fixable=True,
                     )
                 )
 
         # Task nodes
         if node_type == "task":
-            task_category = metadata.get("task_category", "implementation")
+            raw_task_category = metadata.get("task_category")
+            task_category = None
+            if isinstance(raw_task_category, str) and raw_task_category.strip():
+                task_category = raw_task_category.strip().lower()
 
-            if (
-                "task_category" in metadata
-                and task_category not in VALID_TASK_CATEGORIES
-            ):
+            # Check for common field name typo: 'category' instead of 'task_category'
+            if task_category is None and "category" in metadata and "task_category" not in metadata:
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="UNKNOWN_FIELD",
+                        message=f"Task node '{node_id}' has unknown field 'category'; did you mean 'task_category'?",
+                        severity="warning",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Rename 'category' to 'task_category'",
+                        auto_fixable=False,
+                    )
+                )
+
+            if task_category is not None and task_category not in VALID_TASK_CATEGORIES:
+                hint = _suggest_value(task_category, VALID_TASK_CATEGORIES)
+                msg = f"Task node '{node_id}' has invalid task_category '{task_category}'"
+                if hint:
+                    msg += f"; {hint}"
                 result.diagnostics.append(
                     Diagnostic(
                         code="INVALID_TASK_CATEGORY",
-                        message=f"Task node '{node_id}' has invalid task_category '{task_category}'",
+                        message=msg,
                         severity="error",
                         category="metadata",
                         location=node_id,
-                        suggested_fix=f"Set task_category to one of: {', '.join(VALID_TASK_CATEGORIES)}",
-                        auto_fixable=True,
+                        suggested_fix=f"Valid categories: {', '.join(sorted(VALID_TASK_CATEGORIES))}",
+                        auto_fixable=False,  # Disabled: manual fix required
                     )
                 )
+
+            if requires_rich_tasks and task_category is None:
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="MISSING_TASK_CATEGORY",
+                        message=f"Task node '{node_id}' missing metadata.task_category",
+                        severity="error",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Set metadata.task_category to a valid category",
+                        auto_fixable=False,
+                    )
+                )
+
+            if requires_rich_tasks and not _has_description(metadata):
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="MISSING_TASK_DESCRIPTION",
+                        message=f"Task node '{node_id}' missing metadata.description",
+                        severity="error",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Provide metadata.description (or details) for the task",
+                        auto_fixable=False,
+                    )
+                )
+
+            if requires_rich_tasks:
+                acceptance_criteria = metadata.get("acceptance_criteria")
+                if acceptance_criteria is None:
+                    result.diagnostics.append(
+                        Diagnostic(
+                            code="MISSING_ACCEPTANCE_CRITERIA",
+                            message=f"Task node '{node_id}' missing metadata.acceptance_criteria",
+                            severity="error",
+                            category="metadata",
+                            location=node_id,
+                            suggested_fix="Provide a non-empty acceptance_criteria list",
+                            auto_fixable=False,
+                        )
+                    )
+                elif not isinstance(acceptance_criteria, list):
+                    result.diagnostics.append(
+                        Diagnostic(
+                            code="INVALID_ACCEPTANCE_CRITERIA",
+                            message=(
+                                f"Task node '{node_id}' metadata.acceptance_criteria must be a list of strings"
+                            ),
+                            severity="error",
+                            category="metadata",
+                            location=node_id,
+                            suggested_fix="Provide acceptance_criteria as an array of strings",
+                            auto_fixable=False,
+                        )
+                    )
+                elif not acceptance_criteria:
+                    result.diagnostics.append(
+                        Diagnostic(
+                            code="MISSING_ACCEPTANCE_CRITERIA",
+                            message=f"Task node '{node_id}' must include at least one acceptance criterion",
+                            severity="error",
+                            category="metadata",
+                            location=node_id,
+                            suggested_fix="Add at least one acceptance criterion",
+                            auto_fixable=False,
+                        )
+                    )
+                else:
+                    invalid_items = [
+                        idx
+                        for idx, item in enumerate(acceptance_criteria)
+                        if not _nonempty_string(item)
+                    ]
+                    if invalid_items:
+                        result.diagnostics.append(
+                            Diagnostic(
+                                code="INVALID_ACCEPTANCE_CRITERIA",
+                                message=(
+                                    f"Task node '{node_id}' has invalid acceptance_criteria entries"
+                                ),
+                                severity="error",
+                                category="metadata",
+                                location=node_id,
+                                suggested_fix="Ensure acceptance_criteria contains non-empty strings",
+                                auto_fixable=False,
+                            )
+                        )
+
+            category_for_file_path = task_category
+            if category_for_file_path is None:
+                legacy_category = metadata.get("category")
+                if isinstance(legacy_category, str) and legacy_category.strip():
+                    category_for_file_path = legacy_category.strip().lower()
 
             # file_path required for implementation and refactoring.
             # Do not auto-generate placeholder paths; the authoring agent/user must
             # provide a real path in the target codebase.
-            if task_category in ["implementation", "refactoring"]:
-                if "file_path" not in metadata:
+            if category_for_file_path in ["implementation", "refactoring"]:
+                file_path = metadata.get("file_path")
+                if not _nonempty_string(file_path):
                     result.diagnostics.append(
                         Diagnostic(
                             code="MISSING_FILE_PATH",
-                            message=f"Task node '{node_id}' with category '{task_category}' missing metadata.file_path",
+                            message=f"Task node '{node_id}' with category '{category_for_file_path}' missing metadata.file_path",
                             severity="error",
                             category="metadata",
                             location=node_id,
@@ -1007,8 +1219,9 @@ def _build_fix_action(
     if code == "INVALID_VERIFICATION_TYPE":
         return _build_invalid_verification_type_fix(diag, hierarchy)
 
-    if code == "INVALID_TASK_CATEGORY":
-        return _build_task_category_fix(diag, hierarchy)
+    # INVALID_TASK_CATEGORY auto-fix disabled - manual correction required
+    # if code == "INVALID_TASK_CATEGORY":
+    #     return _build_task_category_fix(diag, hierarchy)
 
     return None
 
@@ -1147,7 +1360,18 @@ def _build_missing_fields_fix(
         if "status" not in node:
             node["status"] = "pending"
         if "parent" not in node:
-            node["parent"] = "spec-root"
+            # Find actual parent by checking which node lists this node as a child
+            # This prevents regression where we set parent="spec-root" but the node
+            # is actually in another node's children list (causing PARENT_CHILD_MISMATCH)
+            actual_parent = "spec-root"  # fallback if not found in any children list
+            for other_id, other_node in hier.items():
+                if not isinstance(other_node, dict):
+                    continue
+                children = other_node.get("children", [])
+                if isinstance(children, list) and node_id in children:
+                    actual_parent = other_id
+                    break
+            node["parent"] = actual_parent
         if "children" not in node:
             node["children"] = []
         if "total_tasks" not in node:

@@ -12,7 +12,14 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 
 # Valid templates and categories for spec creation
-TEMPLATES = ("simple", "medium", "complex", "security")
+TEMPLATES = ("empty", "simple", "medium", "complex", "security")
+TEMPLATE_DESCRIPTIONS = {
+    "empty": "Blank spec with no phases - use for quick tasks or custom structure",
+    "simple": "1 phase with basic tasks - use for small features or bug fixes",
+    "medium": "3 phases (setup, implementation, verification) - use for standard features",
+    "complex": "5+ phases with subtasks and dependencies - use for large features or refactors",
+    "security": "Security-focused template with audit phases - use for auth, crypto, or sensitive data",
+}
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
 # Valid verification types for verify nodes
@@ -23,6 +30,43 @@ VERIFICATION_TYPES = ("run-tests", "fidelity", "manual")
 
 # Valid phase templates for reusable phase structures
 PHASE_TEMPLATES = ("planning", "implementation", "testing", "security", "documentation")
+
+
+def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
+    metadata = spec_data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return False
+
+    template = metadata.get("template")
+    if isinstance(template, str) and template.strip().lower() in {"medium", "complex"}:
+        return True
+
+    complexity = metadata.get("complexity")
+    if isinstance(complexity, str) and complexity.strip().lower() in {
+        "medium",
+        "complex",
+        "high",
+    }:
+        return True
+
+    return False
+
+
+def _normalize_acceptance_criteria(value: Any) -> Optional[List[str]]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return [cleaned] if cleaned else []
+    if isinstance(value, list):
+        cleaned_items = []
+        for item in value:
+            if isinstance(item, str):
+                cleaned = item.strip()
+                if cleaned:
+                    cleaned_items.append(cleaned)
+        return cleaned_items
+    return []
 
 
 def find_git_root() -> Optional[Path]:
@@ -165,6 +209,36 @@ def resolve_spec_file(
     return find_spec_file(search_name, specs_dir)
 
 
+def _migrate_spec_fields(spec_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Migrate spec from dual-field format to canonical format.
+
+    Moves status, progress_percentage, and current_phase from metadata
+    to top-level (their canonical location). This handles specs created
+    before the field deduplication.
+
+    Args:
+        spec_data: Spec data dictionary (modified in place)
+
+    Returns:
+        The modified spec_data
+    """
+    if not spec_data:
+        return spec_data
+
+    metadata = spec_data.get("metadata", {})
+    computed_fields = ("status", "progress_percentage", "current_phase")
+
+    for field in computed_fields:
+        # If field exists in metadata but not at top-level, migrate it
+        if field in metadata and field not in spec_data:
+            spec_data[field] = metadata[field]
+        # Remove from metadata (canonical location is top-level)
+        metadata.pop(field, None)
+
+    return spec_data
+
+
 def load_spec(
     spec_id: str, specs_dir: Optional[Path] = None
 ) -> Optional[Dict[str, Any]]:
@@ -185,7 +259,9 @@ def load_spec(
 
     try:
         with open(spec_file, "r") as f:
-            return json.load(f)
+            spec_data = json.load(f)
+            # Migrate old specs to canonical field locations
+            return _migrate_spec_fields(spec_data)
     except (json.JSONDecodeError, IOError):
         return None
 
@@ -596,6 +672,8 @@ def add_phase(
     if spec_root.get("type") not in {"spec", "root"}:
         return None, "Specification root node has invalid type"
 
+    requires_rich_tasks = _requires_rich_task_fields(spec_data)
+
     children = spec_root.get("children", []) or []
     if not isinstance(children, list):
         children = []
@@ -714,6 +792,8 @@ def add_phase_bulk(
             - type: "task" or "verify" (required)
             - title: Task title (required)
             - description: Optional description
+            - acceptance_criteria: Optional list of acceptance criteria
+            - task_category: Optional task category
             - file_path: Optional associated file path
             - estimated_hours: Optional time estimate
             - verification_type: Optional verification type for verify tasks
@@ -721,7 +801,7 @@ def add_phase_bulk(
         phase_purpose: Optional purpose/goal metadata string.
         phase_estimated_hours: Optional estimated hours for the phase.
         metadata_defaults: Optional defaults applied to tasks missing explicit values.
-            Supported keys: category, estimated_hours
+            Supported keys: task_category, category, acceptance_criteria, estimated_hours
         position: Optional zero-based insertion index in spec-root children.
         link_previous: Whether to automatically block on the previous phase.
         specs_dir: Specs directory override.
@@ -753,9 +833,20 @@ def add_phase_bulk(
         if default_est_hours is not None:
             if not isinstance(default_est_hours, (int, float)) or default_est_hours < 0:
                 return None, "metadata_defaults.estimated_hours must be a non-negative number"
-        default_category = defaults.get("category")
+        default_category = defaults.get("task_category")
+        if default_category is None:
+            default_category = defaults.get("category")
         if default_category is not None and not isinstance(default_category, str):
-            return None, "metadata_defaults.category must be a string"
+            return None, "metadata_defaults.task_category must be a string"
+        default_acceptance = defaults.get("acceptance_criteria")
+        if default_acceptance is not None and not isinstance(
+            default_acceptance, (list, str)
+        ):
+            return None, "metadata_defaults.acceptance_criteria must be a list of strings"
+        if isinstance(default_acceptance, list) and any(
+            not isinstance(item, str) for item in default_acceptance
+        ):
+            return None, "metadata_defaults.acceptance_criteria must be a list of strings"
 
     # Validate each task definition
     valid_task_types = {"task", "verify"}
@@ -776,6 +867,24 @@ def add_phase_bulk(
             if not isinstance(est_hours, (int, float)) or est_hours < 0:
                 return None, f"Task at index {idx} has invalid estimated_hours"
 
+        task_category = task_def.get("task_category")
+        if task_category is not None and not isinstance(task_category, str):
+            return None, f"Task at index {idx} has invalid task_category"
+
+        legacy_category = task_def.get("category")
+        if legacy_category is not None and not isinstance(legacy_category, str):
+            return None, f"Task at index {idx} has invalid category"
+
+        acceptance_criteria = task_def.get("acceptance_criteria")
+        if acceptance_criteria is not None and not isinstance(
+            acceptance_criteria, (list, str)
+        ):
+            return None, f"Task at index {idx} has invalid acceptance_criteria"
+        if isinstance(acceptance_criteria, list) and any(
+            not isinstance(item, str) for item in acceptance_criteria
+        ):
+            return None, f"Task at index {idx} acceptance_criteria must be a list of strings"
+
     # Find specs directory
     if specs_dir is None:
         specs_dir = find_specs_directory()
@@ -793,6 +902,8 @@ def add_phase_bulk(
     spec_data = load_spec(spec_id, specs_dir)
     if spec_data is None:
         return None, f"Failed to load specification '{spec_id}'"
+
+    requires_rich_tasks = _requires_rich_task_fields(spec_data)
 
     hierarchy = spec_data.get("hierarchy", {})
     spec_root = hierarchy.get("spec-root")
@@ -865,6 +976,26 @@ def add_phase_bulk(
                 blocks.append(phase_id)
             phase_node["dependencies"]["blocked_by"].append(candidate)
 
+    def _nonempty_string(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    def _extract_description(task_def: Dict[str, Any]) -> tuple[Optional[str], Any]:
+        description = task_def.get("description")
+        if _nonempty_string(description):
+            return "description", description.strip()
+        details = task_def.get("details")
+        if _nonempty_string(details):
+            return "details", details.strip()
+        if isinstance(details, list):
+            cleaned = [
+                item.strip()
+                for item in details
+                if isinstance(item, str) and item.strip()
+            ]
+            if cleaned:
+                return "details", cleaned
+        return None, None
+
     # Create tasks under the phase
     tasks_created: List[Dict[str, Any]] = []
     task_counter = 0
@@ -885,10 +1016,12 @@ def add_phase_bulk(
         # Build task metadata with defaults cascade
         task_metadata: Dict[str, Any] = {}
 
-        # Apply description
-        desc = task_def.get("description")
-        if desc and isinstance(desc, str):
-            task_metadata["description"] = desc.strip()
+        # Apply description/details
+        desc_field, desc_value = _extract_description(task_def)
+        if desc_field and desc_value is not None:
+            task_metadata[desc_field] = desc_value
+        elif requires_rich_tasks and task_type == "task":
+            return None, f"Task '{task_title}' missing description"
 
         # Apply file_path
         file_path = task_def.get("file_path")
@@ -902,10 +1035,45 @@ def add_phase_bulk(
         elif defaults.get("estimated_hours") is not None:
             task_metadata["estimated_hours"] = float(defaults["estimated_hours"])
 
-        # Apply category from defaults if not specified
-        category = task_def.get("category") or defaults.get("category")
-        if category and isinstance(category, str):
-            task_metadata["category"] = category.strip()
+        normalized_category = None
+        if task_type == "task":
+            # Apply acceptance_criteria
+            raw_acceptance = task_def.get("acceptance_criteria")
+            if raw_acceptance is None:
+                raw_acceptance = defaults.get("acceptance_criteria")
+            acceptance_criteria = _normalize_acceptance_criteria(raw_acceptance)
+            if acceptance_criteria is not None:
+                task_metadata["acceptance_criteria"] = acceptance_criteria
+            if requires_rich_tasks:
+                if raw_acceptance is None:
+                    return None, f"Task '{task_title}' missing acceptance_criteria"
+                if not acceptance_criteria:
+                    return (
+                        None,
+                        f"Task '{task_title}' acceptance_criteria must include at least one entry",
+                    )
+
+            # Apply task_category from defaults if not specified
+            category = task_def.get("task_category") or task_def.get("category")
+            if category is None:
+                category = defaults.get("task_category") or defaults.get("category")
+            if category and isinstance(category, str):
+                normalized_category = category.strip().lower()
+                if normalized_category not in CATEGORIES:
+                    return (
+                        None,
+                        f"Task '{task_title}' has invalid task_category '{category}'",
+                    )
+                task_metadata["task_category"] = normalized_category
+            if requires_rich_tasks and normalized_category is None:
+                return None, f"Task '{task_title}' missing task_category"
+
+            if normalized_category in {"implementation", "refactoring"}:
+                if not _nonempty_string(task_metadata.get("file_path")):
+                    return (
+                        None,
+                        f"Task '{task_title}' missing file_path for category '{normalized_category}'",
+                    )
 
         # Apply verification_type for verify tasks
         if task_type == "verify":
@@ -1263,12 +1431,35 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     All templates include per-phase verification (auto + fidelity) for each phase.
 
     Args:
-        template: Template type (simple, medium, complex, security).
+        template: Template type (empty, simple, medium, complex, security).
         category: Default task category.
 
     Returns:
         Hierarchy dict for the spec.
     """
+    # Empty template: just spec-root with no phases (for custom phase-add-bulk workflow)
+    if template == "empty":
+        return {
+            "spec-root": {
+                "type": "spec",
+                "title": "",  # Filled in later
+                "status": "pending",
+                "parent": None,
+                "children": [],
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "metadata": {
+                    "purpose": "",
+                    "category": category,
+                },
+                "dependencies": {
+                    "blocks": [],
+                    "blocked_by": [],
+                    "depends": [],
+                },
+            },
+        }
+
     base_hierarchy = {
         "spec-root": {
             "type": "spec",
@@ -1315,8 +1506,11 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
             "total_tasks": 1,
             "completed_tasks": 0,
             "metadata": {
-                "details": "Document the requirements and acceptance criteria",
-                "category": category,
+                "description": "Document the requirements and acceptance criteria",
+                "acceptance_criteria": [
+                    "Requirements and acceptance criteria are documented",
+                ],
+                "task_category": "investigation",
                 "estimated_hours": 1,
             },
             "dependencies": {
@@ -1365,8 +1559,11 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
             "total_tasks": 1,
             "completed_tasks": 0,
             "metadata": {
-                "details": "Implement the main features",
-                "category": category,
+                "description": "Implement the main features",
+                "acceptance_criteria": [
+                    "Core functionality is implemented and behaves as specified",
+                ],
+                "task_category": "investigation",
                 "estimated_hours": 4,
             },
             "dependencies": {
@@ -1410,8 +1607,11 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
             "total_tasks": 1,
             "completed_tasks": 0,
             "metadata": {
-                "details": "Review for security vulnerabilities",
-                "category": "investigation",
+                "description": "Review for security vulnerabilities",
+                "acceptance_criteria": [
+                    "Security risks are identified and documented",
+                ],
+                "task_category": "investigation",
                 "estimated_hours": 2,
             },
             "dependencies": {
@@ -1459,13 +1659,19 @@ def get_phase_template_structure(
                 {
                     "title": "Define requirements",
                     "description": "Document functional and non-functional requirements",
-                    "category": category,
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Requirements are documented and reviewed",
+                    ],
                     "estimated_hours": 2,
                 },
                 {
                     "title": "Design solution approach",
                     "description": "Outline the technical approach and architecture decisions",
-                    "category": category,
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Solution approach and key decisions are documented",
+                    ],
                     "estimated_hours": 2,
                 },
             ],
@@ -1479,13 +1685,19 @@ def get_phase_template_structure(
                 {
                     "title": "Implement core functionality",
                     "description": "Build the main features and business logic",
-                    "category": category,
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Core functionality is implemented and verified",
+                    ],
                     "estimated_hours": 6,
                 },
                 {
                     "title": "Add error handling",
                     "description": "Implement error handling and edge cases",
-                    "category": category,
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Error handling covers expected edge cases",
+                    ],
                     "estimated_hours": 2,
                 },
             ],
@@ -1499,13 +1711,19 @@ def get_phase_template_structure(
                 {
                     "title": "Write unit tests",
                     "description": "Create unit tests for individual components",
-                    "category": "investigation",
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Unit tests cover primary logic paths",
+                    ],
                     "estimated_hours": 3,
                 },
                 {
                     "title": "Write integration tests",
                     "description": "Create integration tests for component interactions",
-                    "category": "investigation",
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Integration tests cover critical workflows",
+                    ],
                     "estimated_hours": 3,
                 },
             ],
@@ -1519,13 +1737,19 @@ def get_phase_template_structure(
                 {
                     "title": "Security audit",
                     "description": "Review code for security vulnerabilities (OWASP Top 10)",
-                    "category": "investigation",
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Security findings are documented with severity",
+                    ],
                     "estimated_hours": 3,
                 },
                 {
                     "title": "Security remediation",
                     "description": "Fix identified vulnerabilities and harden implementation",
-                    "category": "implementation",
+                    "task_category": "investigation",
+                    "acceptance_criteria": [
+                        "Security findings are addressed or tracked",
+                    ],
                     "estimated_hours": 3,
                 },
             ],
@@ -1539,13 +1763,19 @@ def get_phase_template_structure(
                 {
                     "title": "Write API documentation",
                     "description": "Document public APIs, parameters, and return values",
-                    "category": "research",
+                    "task_category": "research",
+                    "acceptance_criteria": [
+                        "API documentation is updated with current behavior",
+                    ],
                     "estimated_hours": 2,
                 },
                 {
                     "title": "Write user guide",
                     "description": "Create usage examples and integration guide",
-                    "category": "research",
+                    "task_category": "research",
+                    "acceptance_criteria": [
+                        "User guide includes usage examples",
+                    ],
                     "estimated_hours": 2,
                 },
             ],
@@ -1607,7 +1837,8 @@ def apply_phase_template(
             "type": "task",
             "title": task_def["title"],
             "description": task_def.get("description", ""),
-            "category": task_def.get("category", category),
+            "task_category": task_def.get("task_category", task_def.get("category", category)),
+            "acceptance_criteria": task_def.get("acceptance_criteria"),
             "estimated_hours": task_def.get("estimated_hours", 1),
         })
 
@@ -1647,24 +1878,26 @@ def apply_phase_template(
     return result, None
 
 
-def create_spec(
+def generate_spec_data(
     name: str,
     template: str = "medium",
     category: str = "implementation",
-    specs_dir: Optional[Path] = None,
+    mission: Optional[str] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    Create a new specification file from a template.
+    Generate spec data structure without writing to disk.
+
+    Used for preflight validation (dry_run) and by create_spec.
 
     Args:
         name: Human-readable name for the specification.
-        template: Template type (simple, medium, complex, security). Default: medium.
-        category: Default task category. Default: implementation.
-        specs_dir: Path to specs directory (auto-detected if not provided).
+        template: Template type (empty, simple, medium, complex, security).
+        category: Default task category.
+        mission: Optional mission statement for the spec.
 
     Returns:
-        Tuple of (result_dict, error_message).
-        On success: ({"spec_id": ..., "spec_path": ..., ...}, None)
+        Tuple of (spec_data, error_message).
+        On success: (dict, None)
         On failure: (None, "error message")
     """
     # Validate template
@@ -1681,27 +1914,12 @@ def create_spec(
             f"Invalid category '{category}'. Must be one of: {', '.join(CATEGORIES)}",
         )
 
-    # Find specs directory
-    if specs_dir is None:
-        specs_dir = find_specs_directory()
-
-    if specs_dir is None:
-        return (
-            None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
-        )
-
-    # Ensure pending directory exists
-    pending_dir = specs_dir / "pending"
-    pending_dir.mkdir(parents=True, exist_ok=True)
+    if template in ("medium", "complex"):
+        if not isinstance(mission, str) or not mission.strip():
+            return None, "mission is required for medium/complex specifications"
 
     # Generate spec ID
     spec_id = generate_spec_id(name)
-
-    # Check if spec already exists
-    spec_path = pending_dir / f"{spec_id}.json"
-    if spec_path.exists():
-        return None, f"Specification already exists: {spec_id}"
 
     # Generate spec structure
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1717,6 +1935,9 @@ def create_spec(
         if isinstance(node, dict)
     )
 
+    # Determine current_phase (None for empty template with no phases)
+    current_phase = None if template == "empty" else "phase-1"
+
     spec_data = {
         "spec_id": spec_id,
         "title": name,
@@ -1724,24 +1945,76 @@ def create_spec(
         "last_updated": now,
         "metadata": {
             "description": "",
-            "mission": "",
+            "mission": mission.strip() if isinstance(mission, str) else "",
             "objectives": [],
             "complexity": "medium" if template in ("medium", "complex") else "low",
             "estimated_hours": estimated_hours,
             "assumptions": [],
-            "status": "pending",
             "owner": "",
-            "progress_percentage": 0,
-            "current_phase": "phase-1",
             "category": category,
             "template": template,
         },
         "progress_percentage": 0,
         "status": "pending",
-        "current_phase": "phase-1",
+        "current_phase": current_phase,
         "hierarchy": hierarchy,
         "journal": [],
     }
+
+    return spec_data, None
+
+
+def create_spec(
+    name: str,
+    template: str = "medium",
+    category: str = "implementation",
+    mission: Optional[str] = None,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Create a new specification file from a template.
+
+    Args:
+        name: Human-readable name for the specification.
+        template: Template type (simple, medium, complex, security). Default: medium.
+        category: Default task category. Default: implementation.
+        mission: Optional mission statement for the spec (required for medium/complex).
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "spec_path": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Generate spec data (handles validation)
+    spec_data, error = generate_spec_data(
+        name=name,
+        template=template,
+        category=category,
+        mission=mission,
+    )
+    if error:
+        return None, error
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
+
+    # Ensure pending directory exists
+    pending_dir = specs_dir / "pending"
+    pending_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if spec already exists
+    spec_id = spec_data["spec_id"]
+    spec_path = pending_dir / f"{spec_id}.json"
+    if spec_path.exists():
+        return None, f"Specification already exists: {spec_id}"
 
     # Write the spec file
     try:
@@ -1751,6 +2024,7 @@ def create_spec(
         return None, f"Failed to write spec file: {e}"
 
     # Count tasks and phases
+    hierarchy = spec_data["hierarchy"]
     task_count = sum(
         1
         for node in hierarchy.values()
@@ -2125,20 +2399,27 @@ def update_frontmatter(
     if "metadata" not in spec_data:
         spec_data["metadata"] = {}
 
-    # Get previous value for result
-    previous_value = spec_data["metadata"].get(key)
+    # Get previous value for result (check appropriate location)
+    if key in ("status", "progress_percentage", "current_phase"):
+        previous_value = spec_data.get(key)
+    else:
+        previous_value = spec_data["metadata"].get(key)
 
     # Process value based on type
     if isinstance(value, str):
         value = value.strip() if value else value
 
-    # Update the metadata field
-    spec_data["metadata"][key] = value
-
-    # Also update top-level fields if they exist (for backward compatibility)
-    # Some fields like title, status, progress_percentage exist at both levels
-    if key in ("title", "status", "progress_percentage", "current_phase"):
+    # Computed fields (status, progress_percentage, current_phase) are now
+    # stored only at top-level. Title is kept in metadata for descriptive purposes.
+    if key in ("status", "progress_percentage", "current_phase"):
+        # Update top-level only (canonical location for computed fields)
         spec_data[key] = value
+    else:
+        # Regular metadata field
+        spec_data["metadata"][key] = value
+        # Also sync title to top-level if updating it
+        if key == "title":
+            spec_data[key] = value
 
     # Update last_updated
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

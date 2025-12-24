@@ -85,7 +85,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "No specs directory found",
-            })
+            }, separators=(",", ":"))
 
         specs = list_specs(specs_dir=specs_dir)
 
@@ -94,7 +94,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
             "schema_version": SCHEMA_VERSION,
             "specs": specs,
             "count": len(specs),
-        })
+        }, separators=(",", ":"))
 
     # Resource: foundry://specs/{status}/ - List specs by status
     @mcp.resource("foundry://specs/{status}/")
@@ -113,7 +113,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": f"Invalid status: {status}. Must be one of: {', '.join(sorted(valid_statuses))}",
-            })
+            }, separators=(",", ":"))
 
         specs_dir = _get_specs_dir()
         if not specs_dir:
@@ -121,7 +121,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "No specs directory found",
-            })
+            }, separators=(",", ":"))
 
         specs = list_specs(specs_dir=specs_dir, status=status)
 
@@ -131,7 +131,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
             "status": status,
             "specs": specs,
             "count": len(specs),
-        })
+        }, separators=(",", ":"))
 
     # Resource: foundry://specs/{status}/{spec_id} - Get specific spec
     @mcp.resource("foundry://specs/{status}/{spec_id}")
@@ -151,7 +151,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": f"Invalid status: {status}. Must be one of: {', '.join(sorted(valid_statuses))}",
-            })
+            }, separators=(",", ":"))
 
         specs_dir = _get_specs_dir()
         if not specs_dir:
@@ -159,7 +159,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "No specs directory found",
-            })
+            }, separators=(",", ":"))
 
         # Verify spec is in the specified status folder
         spec_file = specs_dir / status / f"{spec_id}.json"
@@ -168,7 +168,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": f"Spec not found in {status}: {spec_id}",
-            })
+            }, separators=(",", ":"))
 
         # Validate sandbox
         if not _validate_sandbox(spec_file):
@@ -176,7 +176,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "Access denied: path outside workspace sandbox",
-            })
+            }, separators=(",", ":"))
 
         spec_data = load_spec(spec_id, specs_dir)
         if spec_data is None:
@@ -184,7 +184,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": f"Failed to load spec: {spec_id}",
-            })
+            }, separators=(",", ":"))
 
         # Calculate progress
         hierarchy = spec_data.get("hierarchy", {})
@@ -206,7 +206,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
             "hierarchy": hierarchy,
             "metadata": spec_data.get("metadata", {}),
             "journal": spec_data.get("journal", []),
-        })
+        }, separators=(",", ":"))
 
     # Resource: foundry://specs/{spec_id}/journal - Get spec journal
     @mcp.resource("foundry://specs/{spec_id}/journal")
@@ -225,7 +225,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "No specs directory found",
-            })
+            }, separators=(",", ":"))
 
         # Find spec file (in any status folder)
         spec_file = find_spec_file(spec_id, specs_dir)
@@ -234,7 +234,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": f"Spec not found: {spec_id}",
-            })
+            }, separators=(",", ":"))
 
         # Validate sandbox
         if not _validate_sandbox(spec_file):
@@ -242,7 +242,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "Access denied: path outside workspace sandbox",
-            })
+            }, separators=(",", ":"))
 
         spec_data = load_spec(spec_id, specs_dir)
         if spec_data is None:
@@ -250,7 +250,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": f"Failed to load spec: {spec_id}",
-            })
+            }, separators=(",", ":"))
 
         # Get journal entries
         entries = get_journal_entries(spec_data)
@@ -275,7 +275,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
             "spec_id": spec_id,
             "journal": journal_data,
             "count": len(journal_data),
-        })
+        }, separators=(",", ":"))
 
     # Resource: foundry://templates/ - List available templates
     @mcp.resource("foundry://templates/")
@@ -291,7 +291,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "No specs directory found",
-            })
+            }, separators=(",", ":"))
 
         # Look for templates in specs/templates/ directory
         templates_dir = specs_dir / "templates"
@@ -342,7 +342,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
             "builtin_templates": builtin_templates,
             "count": len(templates),
             "builtin_count": len(builtin_templates),
-        })
+        }, separators=(",", ":"))
 
     # Resource: foundry://templates/{template_id} - Get specific template
     @mcp.resource("foundry://templates/{template_id}")
@@ -361,7 +361,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "success": False,
                 "schema_version": SCHEMA_VERSION,
                 "error": "No specs directory found",
-            })
+            }, separators=(",", ":"))
 
         # Check for custom template
         templates_dir = specs_dir / "templates"
@@ -374,7 +374,7 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": "Access denied: path outside workspace sandbox",
-                })
+                }, separators=(",", ":"))
 
             try:
                 with open(template_file, "r") as f:
@@ -386,13 +386,13 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                     "template_id": template_id,
                     "template": template_data,
                     "builtin": False,
-                })
+                }, separators=(",", ":"))
             except (json.JSONDecodeError, IOError) as e:
                 return json.dumps({
                     "success": False,
                     "schema_version": SCHEMA_VERSION,
                     "error": f"Failed to load template: {e}",
-                })
+                }, separators=(",", ":"))
 
         # Check for builtin template
         builtin_templates = {
@@ -408,13 +408,13 @@ def register_spec_resources(mcp: FastMCP, config: ServerConfig) -> None:
                 "template_id": template_id,
                 "template": builtin_templates[template_id],
                 "builtin": True,
-            })
+            }, separators=(",", ":"))
 
         return json.dumps({
             "success": False,
             "schema_version": SCHEMA_VERSION,
             "error": f"Template not found: {template_id}",
-        })
+        }, separators=(",", ":"))
 
     logger.debug("Registered spec resources: foundry://specs/, foundry://specs/{status}/, "
                  "foundry://specs/{status}/{spec_id}, foundry://specs/{spec_id}/journal, "

@@ -315,3 +315,73 @@ def get_task_counts_by_status(spec_data: Dict[str, Any]) -> Dict[str, int]:
                 counts[status] += 1
 
     return counts
+
+
+def sync_computed_fields(spec_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Synchronize computed fields to their canonical top-level locations.
+
+    This function should be called after any task status change to ensure
+    progress_percentage, current_phase, and status are persisted to the spec.
+
+    Updates (in-place):
+    - progress_percentage: calculated from hierarchy counts
+    - current_phase: first in_progress phase, or first pending if none
+    - status: based on overall progress
+
+    Args:
+        spec_data: Spec data dictionary (modified in place)
+
+    Returns:
+        Dict with computed values for confirmation
+    """
+    if not spec_data:
+        return {}
+
+    hierarchy = spec_data.get("hierarchy", {})
+    root = hierarchy.get("spec-root", {})
+
+    # Calculate progress percentage
+    total = root.get("total_tasks", 0)
+    completed = root.get("completed_tasks", 0)
+    progress_pct = int((completed / total * 100)) if total > 0 else 0
+
+    # Determine current phase (first in_progress, or first pending if none)
+    current_phase = None
+    for key, node in hierarchy.items():
+        if node.get("type") == "phase":
+            if node.get("status") == "in_progress":
+                current_phase = key
+                break
+            elif current_phase is None and node.get("status") == "pending":
+                current_phase = key
+
+    # Determine overall status based on progress
+    if total == 0:
+        status = "pending"
+    elif completed == total:
+        status = "completed"
+    elif completed > 0:
+        status = "in_progress"
+    else:
+        status = "pending"
+
+    # Check if any task is blocked - if so, spec is blocked
+    for node in hierarchy.values():
+        if node.get("status") == "blocked":
+            status = "blocked"
+            break
+
+    # Update top-level fields (canonical location)
+    spec_data["progress_percentage"] = progress_pct
+    spec_data["current_phase"] = current_phase
+    spec_data["status"] = status
+
+    # Update last_updated timestamp
+    spec_data["last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    return {
+        "progress_percentage": progress_pct,
+        "current_phase": current_phase,
+        "status": status
+    }

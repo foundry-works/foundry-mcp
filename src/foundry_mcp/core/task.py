@@ -8,7 +8,14 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
-from foundry_mcp.core.spec import load_spec, save_spec, find_spec_file, find_specs_directory, get_node
+from foundry_mcp.core.spec import (
+    CATEGORIES,
+    load_spec,
+    save_spec,
+    find_spec_file,
+    find_specs_directory,
+    get_node,
+)
 from foundry_mcp.core.responses import success_response, error_response
 
 # Valid task types for add_task
@@ -1147,7 +1154,7 @@ def update_estimate(
 VERIFICATION_TYPES = ("run-tests", "fidelity", "manual")
 
 # Valid task categories
-TASK_CATEGORIES = ("implementation", "testing", "documentation", "investigation", "refactoring", "design")
+TASK_CATEGORIES = CATEGORIES
 
 
 def update_task_metadata(
@@ -1155,6 +1162,7 @@ def update_task_metadata(
     task_id: str,
     file_path: Optional[str] = None,
     description: Optional[str] = None,
+    acceptance_criteria: Optional[List[str]] = None,
     task_category: Optional[str] = None,
     actual_hours: Optional[float] = None,
     status_note: Optional[str] = None,
@@ -1175,7 +1183,8 @@ def update_task_metadata(
         task_id: Task ID to update.
         file_path: Optional file path associated with the task.
         description: Optional task description.
-        task_category: Optional task category (implementation, testing, etc.).
+        acceptance_criteria: Optional acceptance criteria list.
+        task_category: Optional task category (implementation, refactoring, investigation, decision, research).
         actual_hours: Optional actual hours spent on task (must be >= 0).
         status_note: Optional status note or completion note.
         verification_type: Optional verification type (run-tests, fidelity, manual).
@@ -1194,6 +1203,8 @@ def update_task_metadata(
         updates["file_path"] = file_path.strip() if file_path else None
     if description is not None:
         updates["description"] = description.strip() if description else None
+    if acceptance_criteria is not None:
+        updates["acceptance_criteria"] = acceptance_criteria
     if task_category is not None:
         updates["task_category"] = task_category
     if actual_hours is not None:
@@ -1215,6 +1226,16 @@ def update_task_metadata(
             return None, "actual_hours must be a number"
         if actual_hours < 0:
             return None, "actual_hours must be >= 0"
+
+    if acceptance_criteria is not None:
+        if not isinstance(acceptance_criteria, list):
+            return None, "acceptance_criteria must be a list of strings"
+        cleaned_criteria = []
+        for item in acceptance_criteria:
+            if not isinstance(item, str) or not item.strip():
+                return None, "acceptance_criteria must be a list of non-empty strings"
+            cleaned_criteria.append(item.strip())
+        updates["acceptance_criteria"] = cleaned_criteria
 
     # Validate task_category
     if task_category is not None:
