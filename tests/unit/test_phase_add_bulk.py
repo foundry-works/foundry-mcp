@@ -152,7 +152,7 @@ class TestPhaseMetadataValidation:
     def test_metadata_defaults_category_not_string(self, authoring_tool):
         result = authoring_tool(action="phase-add-bulk", spec_id="bulk-test-spec-001", phase={"title": "P", "metadata_defaults": {"category": 123}}, tasks=[{"type": "task", "title": "T"}])
         assert result["success"] is False
-        assert "metadata_defaults.category" in result["error"]
+        assert "metadata_defaults.task_category" in result["error"]
 
     def test_metadata_defaults_valid_values(self, authoring_tool):
         result = authoring_tool(action="phase-add-bulk", spec_id="bulk-test-spec-001", phase={"title": "P", "metadata_defaults": {"estimated_hours": 2.5, "category": "implementation"}}, tasks=[{"type": "task", "title": "T"}], dry_run=True)

@@ -8,6 +8,7 @@ Security Note:
 """
 
 from dataclasses import dataclass, field
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 import json
@@ -125,6 +126,38 @@ VERIFICATION_TYPE_MAPPING = {
     "test": "run-tests",
     "auto": "run-tests",
 }
+
+# Common field name typos/alternatives
+FIELD_NAME_SUGGESTIONS = {
+    "category": "task_category",
+    "type": "node type or verification_type",
+    "desc": "description",
+    "details": "description",
+}
+
+
+def _suggest_value(value: str, valid_values: set, n: int = 1) -> Optional[str]:
+    """
+    Suggest a close match for an invalid value.
+
+    Args:
+        value: The invalid value provided
+        valid_values: Set of valid values to match against
+        n: Number of suggestions to return (default 1)
+
+    Returns:
+        Suggestion string like "did you mean 'X'?" or None if no close match
+    """
+    if not value:
+        return None
+    matches = get_close_matches(value.lower(), [v.lower() for v in valid_values], n=n, cutoff=0.6)
+    if matches:
+        # Find the original-case version of the match
+        for v in valid_values:
+            if v.lower() == matches[0]:
+                return f"did you mean '{v}'?"
+        return f"did you mean '{matches[0]}'?"
+    return None
 
 
 # Validation functions
@@ -663,14 +696,18 @@ def _validate_nodes(hierarchy: Dict[str, Any], result: ValidationResult) -> None
         # Validate type
         node_type = node.get("type")
         if node_type and node_type not in VALID_NODE_TYPES:
+            hint = _suggest_value(node_type, VALID_NODE_TYPES)
+            msg = f"Node '{node_id}' has invalid type '{node_type}'"
+            if hint:
+                msg += f"; {hint}"
             result.diagnostics.append(
                 Diagnostic(
                     code="INVALID_NODE_TYPE",
-                    message=f"Node '{node_id}' has invalid type '{node_type}'",
+                    message=msg,
                     severity="error",
                     category="node",
                     location=node_id,
-                    suggested_fix="Normalize node type to valid value",
+                    suggested_fix=f"Valid types: {', '.join(sorted(VALID_NODE_TYPES))}",
                     auto_fixable=True,
                 )
             )
@@ -678,14 +715,18 @@ def _validate_nodes(hierarchy: Dict[str, Any], result: ValidationResult) -> None
         # Validate status
         status = node.get("status")
         if status and status not in VALID_STATUSES:
+            hint = _suggest_value(status, VALID_STATUSES)
+            msg = f"Node '{node_id}' has invalid status '{status}'"
+            if hint:
+                msg += f"; {hint}"
             result.diagnostics.append(
                 Diagnostic(
                     code="INVALID_STATUS",
-                    message=f"Node '{node_id}' has invalid status '{status}'",
+                    message=msg,
                     severity="error",
                     category="node",
                     location=node_id,
-                    suggested_fix="Normalize status to pending/in_progress/completed/blocked",
+                    suggested_fix=f"Valid statuses: {', '.join(sorted(VALID_STATUSES))}",
                     auto_fixable=True,
                 )
             )
@@ -928,14 +969,18 @@ def _validate_metadata(
                     )
                 )
             elif verification_type not in VALID_VERIFICATION_TYPES:
+                hint = _suggest_value(verification_type, VALID_VERIFICATION_TYPES)
+                msg = f"Verify node '{node_id}' has invalid verification_type '{verification_type}'"
+                if hint:
+                    msg += f"; {hint}"
                 result.diagnostics.append(
                     Diagnostic(
                         code="INVALID_VERIFICATION_TYPE",
-                        message=f"Verify node '{node_id}' verification_type must be 'run-tests', 'fidelity', or 'manual'",
+                        message=msg,
                         severity="error",
                         category="metadata",
                         location=node_id,
-                        suggested_fix="Map legacy verification_type to canonical value",
+                        suggested_fix=f"Valid types: {', '.join(sorted(VALID_VERIFICATION_TYPES))}",
                         auto_fixable=True,
                     )
                 )
@@ -947,15 +992,33 @@ def _validate_metadata(
             if isinstance(raw_task_category, str) and raw_task_category.strip():
                 task_category = raw_task_category.strip().lower()
 
+            # Check for common field name typo: 'category' instead of 'task_category'
+            if task_category is None and "category" in metadata and "task_category" not in metadata:
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="UNKNOWN_FIELD",
+                        message=f"Task node '{node_id}' has unknown field 'category'; did you mean 'task_category'?",
+                        severity="warning",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Rename 'category' to 'task_category'",
+                        auto_fixable=False,
+                    )
+                )
+
             if task_category is not None and task_category not in VALID_TASK_CATEGORIES:
+                hint = _suggest_value(task_category, VALID_TASK_CATEGORIES)
+                msg = f"Task node '{node_id}' has invalid task_category '{task_category}'"
+                if hint:
+                    msg += f"; {hint}"
                 result.diagnostics.append(
                     Diagnostic(
                         code="INVALID_TASK_CATEGORY",
-                        message=f"Task node '{node_id}' has invalid task_category '{task_category}'",
+                        message=msg,
                         severity="error",
                         category="metadata",
                         location=node_id,
-                        suggested_fix=f"Set task_category to one of: {', '.join(VALID_TASK_CATEGORIES)}",
+                        suggested_fix=f"Valid categories: {', '.join(sorted(VALID_TASK_CATEGORIES))}",
                         auto_fixable=False,  # Disabled: manual fix required
                     )
                 )

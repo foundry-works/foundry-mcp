@@ -30,17 +30,28 @@ from foundry_mcp.core.responses import (
     success_response,
 )
 from foundry_mcp.core.spec import (
+    TEMPLATES,
+    TEMPLATE_DESCRIPTIONS,
     find_spec_file,
     find_specs_directory,
     list_specs,
     load_spec,
 )
 from foundry_mcp.core.validation import (
+    VALID_NODE_TYPES,
+    VALID_STATUSES,
+    VALID_TASK_CATEGORIES,
+    VALID_VERIFICATION_TYPES,
     apply_fixes,
     calculate_stats,
     get_fix_actions,
     validate_spec,
 )
+from foundry_mcp.core.journal import (
+    VALID_BLOCKER_TYPES,
+    VALID_ENTRY_TYPES,
+)
+from foundry_mcp.core.lifecycle import VALID_FOLDERS
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -769,6 +780,27 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     )
 
 
+def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Return schema information for all valid values in the spec system."""
+    # Build templates with descriptions
+    templates_with_desc = [
+        {"name": t, "description": TEMPLATE_DESCRIPTIONS.get(t, "")}
+        for t in TEMPLATES
+    ]
+    return asdict(
+        success_response(
+            templates=templates_with_desc,
+            node_types=sorted(VALID_NODE_TYPES),
+            statuses=sorted(VALID_STATUSES),
+            task_categories=sorted(VALID_TASK_CATEGORIES),
+            verification_types=sorted(VALID_VERIFICATION_TYPES),
+            journal_entry_types=sorted(VALID_ENTRY_TYPES),
+            blocker_types=sorted(VALID_BLOCKER_TYPES),
+            status_folders=sorted(VALID_FOLDERS),
+        )
+    )
+
+
 _ACTIONS = [
     ActionDefinition(name="find", handler=_handle_find, summary="Find a spec by ID"),
     ActionDefinition(name="get", handler=_handle_get, summary="Get raw spec JSON (minified)"),
@@ -790,6 +822,11 @@ _ACTIONS = [
         name="analyze-deps",
         handler=_handle_analyze_deps,
         summary="Analyze spec dependency graph",
+    ),
+    ActionDefinition(
+        name="schema",
+        handler=_handle_schema,
+        summary="Get valid values for spec fields",
     ),
 ]
 

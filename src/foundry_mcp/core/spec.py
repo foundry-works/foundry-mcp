@@ -13,6 +13,13 @@ from typing import Optional, Dict, Any, List, Tuple
 
 # Valid templates and categories for spec creation
 TEMPLATES = ("empty", "simple", "medium", "complex", "security")
+TEMPLATE_DESCRIPTIONS = {
+    "empty": "Blank spec with no phases - use for quick tasks or custom structure",
+    "simple": "1 phase with basic tasks - use for small features or bug fixes",
+    "medium": "3 phases (setup, implementation, verification) - use for standard features",
+    "complex": "5+ phases with subtasks and dependencies - use for large features or refactors",
+    "security": "Security-focused template with audit phases - use for auth, crypto, or sensitive data",
+}
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
 # Valid verification types for verify nodes
@@ -1871,26 +1878,26 @@ def apply_phase_template(
     return result, None
 
 
-def create_spec(
+def generate_spec_data(
     name: str,
     template: str = "medium",
     category: str = "implementation",
     mission: Optional[str] = None,
-    specs_dir: Optional[Path] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    Create a new specification file from a template.
+    Generate spec data structure without writing to disk.
+
+    Used for preflight validation (dry_run) and by create_spec.
 
     Args:
         name: Human-readable name for the specification.
-        template: Template type (simple, medium, complex, security). Default: medium.
-        category: Default task category. Default: implementation.
-        mission: Optional mission statement for the spec (required for medium/complex).
-        specs_dir: Path to specs directory (auto-detected if not provided).
+        template: Template type (empty, simple, medium, complex, security).
+        category: Default task category.
+        mission: Optional mission statement for the spec.
 
     Returns:
-        Tuple of (result_dict, error_message).
-        On success: ({"spec_id": ..., "spec_path": ..., ...}, None)
+        Tuple of (spec_data, error_message).
+        On success: (dict, None)
         On failure: (None, "error message")
     """
     # Validate template
@@ -1911,27 +1918,8 @@ def create_spec(
         if not isinstance(mission, str) or not mission.strip():
             return None, "mission is required for medium/complex specifications"
 
-    # Find specs directory
-    if specs_dir is None:
-        specs_dir = find_specs_directory()
-
-    if specs_dir is None:
-        return (
-            None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
-        )
-
-    # Ensure pending directory exists
-    pending_dir = specs_dir / "pending"
-    pending_dir.mkdir(parents=True, exist_ok=True)
-
     # Generate spec ID
     spec_id = generate_spec_id(name)
-
-    # Check if spec already exists
-    spec_path = pending_dir / f"{spec_id}.json"
-    if spec_path.exists():
-        return None, f"Specification already exists: {spec_id}"
 
     # Generate spec structure
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1973,6 +1961,61 @@ def create_spec(
         "journal": [],
     }
 
+    return spec_data, None
+
+
+def create_spec(
+    name: str,
+    template: str = "medium",
+    category: str = "implementation",
+    mission: Optional[str] = None,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Create a new specification file from a template.
+
+    Args:
+        name: Human-readable name for the specification.
+        template: Template type (simple, medium, complex, security). Default: medium.
+        category: Default task category. Default: implementation.
+        mission: Optional mission statement for the spec (required for medium/complex).
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "spec_path": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Generate spec data (handles validation)
+    spec_data, error = generate_spec_data(
+        name=name,
+        template=template,
+        category=category,
+        mission=mission,
+    )
+    if error:
+        return None, error
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
+
+    # Ensure pending directory exists
+    pending_dir = specs_dir / "pending"
+    pending_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if spec already exists
+    spec_id = spec_data["spec_id"]
+    spec_path = pending_dir / f"{spec_id}.json"
+    if spec_path.exists():
+        return None, f"Specification already exists: {spec_id}"
+
     # Write the spec file
     try:
         with open(spec_path, "w") as f:
@@ -1981,6 +2024,7 @@ def create_spec(
         return None, f"Failed to write spec file: {e}"
 
     # Count tasks and phases
+    hierarchy = spec_data["hierarchy"]
     task_count = sum(
         1
         for node in hierarchy.values()
