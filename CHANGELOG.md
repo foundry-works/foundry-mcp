@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-12-27
+
+### Added
+
+- **Phase Metadata Updates**: New `authoring action=phase-update-metadata` for updating phase-level metadata
+  - Supports updating `estimated_hours`, `description`, and `purpose` fields
+  - Full dry-run support for previewing changes
+  - Tracks previous values for audit purposes
+  - Core function `update_phase_metadata()` in `spec.py` with comprehensive validation
+
+### Fixed
+
+- **Lifecycle Tool Router Compatibility**: Fixed `_handle_move()` and other lifecycle handlers receiving unexpected keyword arguments (`force`, `to_folder`) from the unified router dispatch
+  - All lifecycle handlers now accept full parameter set for router compatibility
+  - Resolves errors like `_handle_move() got an unexpected keyword argument 'force'`
+
 ## [0.5.0] - 2025-12-27
 
 ### Added

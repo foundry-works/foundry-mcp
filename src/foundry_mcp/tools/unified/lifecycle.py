@@ -209,6 +209,7 @@ def _handle_move(
     spec_id: Optional[str] = None,
     to_folder: Optional[str] = None,
     path: Optional[str] = None,
+    force: Optional[bool] = None,  # Unused, accepted for router compatibility
 ) -> dict:
     action = "move"
     request_id = _request_id()
@@ -293,7 +294,9 @@ def _handle_activate(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     path: Optional[str] = None,
+    force: Optional[bool] = None,  # Unused, accepted for router compatibility
 ) -> dict:
     action = "activate"
     request_id = _request_id()
@@ -356,6 +359,7 @@ def _handle_complete(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     force: Optional[bool] = False,
     path: Optional[str] = None,
 ) -> dict:
@@ -429,7 +433,9 @@ def _handle_archive(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     path: Optional[str] = None,
+    force: Optional[bool] = None,  # Unused, accepted for router compatibility
 ) -> dict:
     action = "archive"
     request_id = _request_id()
@@ -492,7 +498,9 @@ def _handle_state(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     path: Optional[str] = None,
+    force: Optional[bool] = None,  # Unused, accepted for router compatibility
 ) -> dict:
     action = "state"
     request_id = _request_id()
