@@ -255,10 +255,15 @@
               "spec-template",
               "spec-update-frontmatter",
               "phase-add",
+              "phase-add-bulk",
               "phase-remove",
+              "phase-move",
+              "phase-template",
               "assumption-add",
               "assumption-list",
-              "revision-add"
+              "revision-add",
+              "spec-find-replace",
+              "spec-rollback"
             ],
             "description": "Authoring action"
           },
@@ -322,18 +327,119 @@
             "type": "string",
             "required": false,
             "description": "Workspace path override"
+          },
+          {
+            "name": "phase_id",
+            "type": "string",
+            "required": false,
+            "description": "Phase identifier for phase-move action"
+          },
+          {
+            "name": "position",
+            "type": "integer",
+            "required": false,
+            "description": "Target position (1-based) for phase-move action"
+          },
+          {
+            "name": "link_previous",
+            "type": "boolean",
+            "required": false,
+            "default": true,
+            "description": "Update phase blockers to maintain sequential dependencies after move"
+          },
+          {
+            "name": "find",
+            "type": "string",
+            "required": false,
+            "description": "Text or regex pattern to find for spec-find-replace action"
+          },
+          {
+            "name": "replace",
+            "type": "string",
+            "required": false,
+            "description": "Replacement text for spec-find-replace action (empty string to delete matches)"
+          },
+          {
+            "name": "scope",
+            "type": "string",
+            "required": false,
+            "default": "all",
+            "enum": ["all", "titles", "descriptions"],
+            "description": "Scope of find-replace: titles only, descriptions only, or all"
+          },
+          {
+            "name": "use_regex",
+            "type": "boolean",
+            "required": false,
+            "default": false,
+            "description": "Treat find pattern as regex for spec-find-replace"
+          },
+          {
+            "name": "case_sensitive",
+            "type": "boolean",
+            "required": false,
+            "default": true,
+            "description": "Case-sensitive matching for spec-find-replace"
+          },
+          {
+            "name": "version",
+            "type": "string",
+            "required": false,
+            "description": "Backup timestamp for spec-rollback action (use spec history to list available)"
           }
         ],
         "version": "1.0.0",
         "deprecated": false,
         "tags": [
-          "unified"
+          "unified",
+          "specs",
+          "authoring"
         ],
         "examples": [
           {
-            "description": "Example: authoring action=spec-create",
+            "description": "Create a new spec from template",
             "input": {
-              "action": "spec-create"
+              "action": "spec-create",
+              "name": "my-new-feature",
+              "template": "feature"
+            }
+          },
+          {
+            "description": "Move phase to first position",
+            "input": {
+              "action": "phase-move",
+              "spec_id": "my-feature-spec-001",
+              "phase_id": "phase-3",
+              "position": 1
+            }
+          },
+          {
+            "description": "Find and replace text across spec (dry run)",
+            "input": {
+              "action": "spec-find-replace",
+              "spec_id": "my-feature-spec-001",
+              "find": "old-service",
+              "replace": "new-service",
+              "scope": "all",
+              "dry_run": true
+            }
+          },
+          {
+            "description": "Find and replace with regex",
+            "input": {
+              "action": "spec-find-replace",
+              "spec_id": "my-feature-spec-001",
+              "find": "v[0-9]+\\.[0-9]+",
+              "replace": "v2.0",
+              "use_regex": true
+            }
+          },
+          {
+            "description": "Rollback spec to previous backup",
+            "input": {
+              "action": "spec-rollback",
+              "spec_id": "my-feature-spec-001",
+              "version": "20251227T120000"
             }
           }
         ]
@@ -522,7 +628,13 @@
               "progress",
               "list",
               "query",
-              "hierarchy"
+              "hierarchy",
+              "move",
+              "add-dependency",
+              "remove-dependency",
+              "add-requirement",
+              "metadata-batch",
+              "fix-verification-types"
             ],
             "description": "Task action"
           },
@@ -543,19 +655,110 @@
             "type": "boolean",
             "required": false,
             "default": false,
-            "description": "Preview changes without saving (supported for update-estimate/update-metadata/add/remove)"
+            "description": "Preview changes without saving (supported for update-estimate/update-metadata/add/remove/move/add-dependency/remove-dependency/add-requirement)"
+          },
+          {
+            "name": "parent",
+            "type": "string",
+            "required": false,
+            "description": "Target parent ID for move action (phase or task ID)"
+          },
+          {
+            "name": "position",
+            "type": "integer",
+            "required": false,
+            "description": "Target position (1-based) within children list for move action"
+          },
+          {
+            "name": "target_id",
+            "type": "string",
+            "required": false,
+            "description": "Target task ID for dependency actions (add-dependency/remove-dependency)"
+          },
+          {
+            "name": "dependency_type",
+            "type": "string",
+            "required": false,
+            "default": "blocks",
+            "enum": ["blocks", "blocked_by", "depends"],
+            "description": "Type of dependency relationship"
+          },
+          {
+            "name": "requirement_type",
+            "type": "string",
+            "required": false,
+            "enum": ["acceptance", "technical", "constraint"],
+            "description": "Type of requirement for add-requirement action"
+          },
+          {
+            "name": "text",
+            "type": "string",
+            "required": false,
+            "description": "Requirement text for add-requirement action"
           }
         ],
         "version": "1.0.0",
         "deprecated": false,
         "tags": [
-          "unified"
+          "unified",
+          "tasks",
+          "dependencies"
         ],
         "examples": [
           {
-            "description": "Example: task action=prepare",
+            "description": "Get next recommended task",
             "input": {
-              "action": "prepare"
+              "action": "prepare",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Move task to new position within same parent",
+            "input": {
+              "action": "move",
+              "spec_id": "my-feature-spec-001",
+              "task_id": "task-1-3",
+              "position": 1
+            }
+          },
+          {
+            "description": "Move task to different phase",
+            "input": {
+              "action": "move",
+              "spec_id": "my-feature-spec-001",
+              "task_id": "task-1-3",
+              "parent": "phase-2",
+              "position": 1
+            }
+          },
+          {
+            "description": "Add blocking dependency between tasks",
+            "input": {
+              "action": "add-dependency",
+              "spec_id": "my-feature-spec-001",
+              "task_id": "task-2-1",
+              "target_id": "task-1-3",
+              "dependency_type": "blocks"
+            }
+          },
+          {
+            "description": "Remove a dependency relationship",
+            "input": {
+              "action": "remove-dependency",
+              "spec_id": "my-feature-spec-001",
+              "task_id": "task-2-1",
+              "target_id": "task-1-3",
+              "dependency_type": "blocks"
+            }
+          },
+          {
+            "description": "Add acceptance requirement to task",
+            "input": {
+              "action": "add-requirement",
+              "spec_id": "my-feature-spec-001",
+              "task_id": "task-1-2",
+              "requirement_type": "acceptance",
+              "text": "All unit tests must pass with 100% coverage"
             }
           }
         ]
@@ -573,13 +776,19 @@
             "required": true,
             "enum": [
               "find",
+              "get",
               "list",
               "validate",
               "fix",
               "stats",
               "validate-fix",
               "analyze",
-              "analyze-deps"
+              "analyze-deps",
+              "schema",
+              "diff",
+              "history",
+              "completeness-check",
+              "duplicate-detection"
             ],
             "description": "Spec action"
           },
@@ -588,18 +797,133 @@
             "type": "string",
             "required": false,
             "description": "Target spec ID (required for most actions)"
+          },
+          {
+            "name": "workspace",
+            "type": "string",
+            "required": false,
+            "description": "Workspace path override"
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "required": false,
+            "default": "all",
+            "enum": ["all", "pending", "active", "completed", "archived"],
+            "description": "Filter specs by status for list action"
+          },
+          {
+            "name": "include_progress",
+            "type": "boolean",
+            "required": false,
+            "default": true,
+            "description": "Include progress info in list results"
+          },
+          {
+            "name": "cursor",
+            "type": "string",
+            "required": false,
+            "description": "Pagination cursor for list/history actions"
+          },
+          {
+            "name": "limit",
+            "type": "integer",
+            "required": false,
+            "description": "Maximum results to return (for list/history/diff/duplicate-detection)"
+          },
+          {
+            "name": "target",
+            "type": "string",
+            "required": false,
+            "description": "Comparison target for diff action (backup timestamp or spec_id)"
+          },
+          {
+            "name": "threshold",
+            "type": "number",
+            "required": false,
+            "default": 0.8,
+            "description": "Similarity threshold (0.0-1.0) for duplicate-detection action"
+          },
+          {
+            "name": "scope",
+            "type": "string",
+            "required": false,
+            "default": "titles",
+            "enum": ["titles", "descriptions", "all"],
+            "description": "What to compare for duplicate-detection action"
+          },
+          {
+            "name": "dry_run",
+            "type": "boolean",
+            "required": false,
+            "default": false,
+            "description": "Preview changes without saving (for fix action)"
+          },
+          {
+            "name": "auto_fix",
+            "type": "boolean",
+            "required": false,
+            "default": true,
+            "description": "Automatically fix validation issues"
           }
         ],
         "version": "1.0.0",
         "deprecated": false,
         "tags": [
-          "unified"
+          "unified",
+          "specs",
+          "validation"
         ],
         "examples": [
           {
-            "description": "Example: spec action=find",
+            "description": "Find a spec by ID",
             "input": {
-              "action": "find"
+              "action": "find",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "List active specs",
+            "input": {
+              "action": "list",
+              "status": "active"
+            }
+          },
+          {
+            "description": "Diff spec against latest backup",
+            "input": {
+              "action": "diff",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Diff spec against specific backup",
+            "input": {
+              "action": "diff",
+              "spec_id": "my-feature-spec-001",
+              "target": "20251227T120000"
+            }
+          },
+          {
+            "description": "View spec history (backups and revisions)",
+            "input": {
+              "action": "history",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Check spec completeness score",
+            "input": {
+              "action": "completeness-check",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Detect duplicate tasks",
+            "input": {
+              "action": "duplicate-detection",
+              "spec_id": "my-feature-spec-001",
+              "threshold": 0.7
             }
           }
         ]

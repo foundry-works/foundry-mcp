@@ -32,12 +32,15 @@ from foundry_mcp.core.spec import (
     add_revision,
     apply_phase_template,
     create_spec,
+    find_replace_in_spec,
     find_specs_directory,
     generate_spec_data,
     get_phase_template_structure,
     list_assumptions,
     load_spec,
+    move_phase,
     remove_phase,
+    rollback_spec,
     update_frontmatter,
 )
 from foundry_mcp.core.validation import validate_spec
@@ -54,9 +57,12 @@ _ACTION_SUMMARY = {
     "spec-create": "Scaffold a new SDD specification",
     "spec-template": "List/show/apply spec templates",
     "spec-update-frontmatter": "Update a top-level metadata field",
+    "spec-find-replace": "Find and replace text across spec titles and descriptions",
+    "spec-rollback": "Restore a spec from a backup timestamp",
     "phase-add": "Add a new phase under spec-root with verification scaffolding",
     "phase-add-bulk": "Add a phase with pre-defined tasks in a single atomic operation",
     "phase-template": "List/show/apply phase templates to add pre-configured phases",
+    "phase-move": "Reorder a phase within spec-root children",
     "phase-remove": "Remove an existing phase (and optionally dependents)",
     "assumption-add": "Append an assumption entry to spec metadata",
     "assumption-list": "List recorded assumptions for a spec",
@@ -576,6 +582,324 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
             data=result,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
             request_id=request_id,
+        )
+    )
+
+
+# Valid scopes for find-replace
+_FIND_REPLACE_SCOPES = {"all", "titles", "descriptions"}
+
+
+def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
+    """Find and replace text across spec hierarchy nodes.
+
+    Supports literal or regex find/replace across titles and/or descriptions.
+    Returns a preview in dry_run mode, or applies changes and returns a summary.
+    """
+    request_id = _request_id()
+    action = "spec-find-replace"
+
+    # Required: spec_id
+    spec_id = payload.get("spec_id")
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec_id parameter",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation="Pass the spec identifier to authoring",
+        )
+    spec_id = spec_id.strip()
+
+    # Required: find
+    find = payload.get("find")
+    if not isinstance(find, str) or not find:
+        return _validation_error(
+            field="find",
+            action=action,
+            message="Provide a non-empty find pattern",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation="Specify the text or regex pattern to find",
+        )
+
+    # Required: replace (can be empty string to delete matches)
+    replace = payload.get("replace")
+    if replace is None:
+        return _validation_error(
+            field="replace",
+            action=action,
+            message="Provide a replace value (use empty string to delete matches)",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation="Provide a replacement string (use empty string to delete)",
+        )
+    if not isinstance(replace, str):
+        return _validation_error(
+            field="replace",
+            action=action,
+            message="replace must be a string",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Provide a string value for replace parameter",
+        )
+
+    # Optional: scope (default: "all")
+    scope = payload.get("scope", "all")
+    if not isinstance(scope, str) or scope not in _FIND_REPLACE_SCOPES:
+        return _validation_error(
+            field="scope",
+            action=action,
+            message=f"scope must be one of: {sorted(_FIND_REPLACE_SCOPES)}",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation=f"Use one of: {sorted(_FIND_REPLACE_SCOPES)}",
+        )
+
+    # Optional: use_regex (default: False)
+    use_regex = payload.get("use_regex", False)
+    if not isinstance(use_regex, bool):
+        return _validation_error(
+            field="use_regex",
+            action=action,
+            message="use_regex must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Set use_regex to true or false",
+        )
+
+    # Optional: case_sensitive (default: True)
+    case_sensitive = payload.get("case_sensitive", True)
+    if not isinstance(case_sensitive, bool):
+        return _validation_error(
+            field="case_sensitive",
+            action=action,
+            message="case_sensitive must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Set case_sensitive to true or false",
+        )
+
+    # Optional: dry_run (default: False)
+    dry_run = payload.get("dry_run", False)
+    if not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="dry_run must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Set dry_run to true or false",
+        )
+
+    # Optional: path (workspace)
+    path = payload.get("path")
+    if path is not None and not isinstance(path, str):
+        return _validation_error(
+            field="path",
+            action=action,
+            message="Workspace path must be a string",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    specs_dir = _resolve_specs_dir(config, path)
+    if specs_dir is None:
+        return _specs_directory_missing_error(request_id)
+
+    audit_log(
+        "tool_invocation",
+        tool="authoring",
+        action=action,
+        spec_id=spec_id,
+        find=find[:50] + "..." if len(find) > 50 else find,
+        use_regex=use_regex,
+        dry_run=dry_run,
+    )
+
+    metric_key = _metric_name(action)
+    start_time = time.perf_counter()
+
+    try:
+        result, error = find_replace_in_spec(
+            spec_id,
+            find,
+            replace,
+            scope=scope,
+            use_regex=use_regex,
+            case_sensitive=case_sensitive,
+            dry_run=dry_run,
+            specs_dir=specs_dir,
+        )
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected error in spec find-replace")
+        _metrics.counter(metric_key, labels={"status": "error"})
+        return asdict(
+            error_response(
+                sanitize_error_message(exc, context="authoring"),
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check logs for details",
+                request_id=request_id,
+            )
+        )
+
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    _metrics.timer(metric_key + ".duration_ms", elapsed_ms)
+
+    if error:
+        _metrics.counter(metric_key, labels={"status": "error"})
+        # Map error types
+        if "not found" in error.lower():
+            return asdict(
+                error_response(
+                    error,
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation="Check spec_id value",
+                    request_id=request_id,
+                    telemetry={"duration_ms": round(elapsed_ms, 2)},
+                )
+            )
+        if "invalid regex" in error.lower():
+            return asdict(
+                error_response(
+                    error,
+                    error_code=ErrorCode.INVALID_FORMAT,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Check regex syntax",
+                    request_id=request_id,
+                    telemetry={"duration_ms": round(elapsed_ms, 2)},
+                )
+            )
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Check find and replace parameters",
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    _metrics.counter(metric_key, labels={"status": "success", "dry_run": str(dry_run).lower()})
+    return asdict(
+        success_response(
+            data=result,
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
+            request_id=request_id,
+        )
+    )
+
+
+def _handle_spec_rollback(*, config: ServerConfig, **payload: Any) -> dict:
+    """Restore a spec from a backup timestamp."""
+    request_id = _request_id()
+    action = "spec-rollback"
+
+    spec_id = payload.get("spec_id")
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec_id parameter",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+        )
+    spec_id = spec_id.strip()
+
+    timestamp = payload.get("version")  # Use 'version' parameter for timestamp
+    if not isinstance(timestamp, str) or not timestamp.strip():
+        return _validation_error(
+            field="version",
+            action=action,
+            message="Provide the backup timestamp to restore (use spec history to list)",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+        )
+    timestamp = timestamp.strip()
+
+    dry_run = payload.get("dry_run", False)
+    if not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="Expected a boolean value",
+            request_id=request_id,
+        )
+
+    path = payload.get("path")
+    if path is not None and not isinstance(path, str):
+        return _validation_error(
+            field="path",
+            action=action,
+            message="Workspace path must be a string",
+            request_id=request_id,
+        )
+
+    specs_dir = _resolve_specs_dir(config, path)
+    if specs_dir is None:
+        return _specs_directory_missing_error(request_id)
+
+    audit_log(
+        "tool_invocation",
+        tool="authoring",
+        action=action,
+        spec_id=spec_id,
+        timestamp=timestamp,
+        dry_run=dry_run,
+    )
+
+    metric_key = _metric_name(action)
+    start_time = time.perf_counter()
+
+    result = rollback_spec(
+        spec_id=spec_id,
+        timestamp=timestamp,
+        specs_dir=specs_dir,
+        dry_run=dry_run,
+        create_backup=True,
+    )
+
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+    if not result.get("success"):
+        _metrics.counter(metric_key, labels={"status": "error"})
+        error_msg = result.get("error", "Unknown error during rollback")
+
+        # Determine error code based on error message
+        if "not found" in error_msg.lower():
+            error_code = ErrorCode.NOT_FOUND
+            error_type = ErrorType.NOT_FOUND
+            remediation = "Use spec(action='history') to list available backups"
+        else:
+            error_code = ErrorCode.INTERNAL_ERROR
+            error_type = ErrorType.INTERNAL
+            remediation = "Check spec and backup file permissions"
+
+        return asdict(
+            error_response(
+                error_msg,
+                error_code=error_code,
+                error_type=error_type,
+                remediation=remediation,
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    _metrics.counter(metric_key, labels={"status": "success", "dry_run": str(dry_run).lower()})
+    return asdict(
+        success_response(
+            spec_id=spec_id,
+            timestamp=timestamp,
+            dry_run=dry_run,
+            restored_from=result.get("restored_from"),
+            backup_created=result.get("backup_created"),
+            request_id=request_id,
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
     )
 
@@ -1415,6 +1739,208 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
 
+def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
+    """Handle phase-move action: reorder a phase within spec-root children."""
+    request_id = _request_id()
+    action = "phase-move"
+
+    spec_id = payload.get("spec_id")
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec_id parameter",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation='Use spec(action="list") to find available spec IDs',
+        )
+    spec_id = spec_id.strip()
+
+    phase_id = payload.get("phase_id")
+    if not isinstance(phase_id, str) or not phase_id.strip():
+        return _validation_error(
+            field="phase_id",
+            action=action,
+            message="Provide the phase identifier (e.g., phase-1)",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation="Specify a phase ID like phase-1 or phase-2",
+        )
+    phase_id = phase_id.strip()
+
+    position = payload.get("position")
+    if position is None:
+        return _validation_error(
+            field="position",
+            action=action,
+            message="Provide the target position (1-based index)",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation="Specify position as a positive integer (1 = first)",
+        )
+    if isinstance(position, bool) or not isinstance(position, int):
+        return _validation_error(
+            field="position",
+            action=action,
+            message="Position must be an integer",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Provide position as an integer, e.g. position=2",
+        )
+    if position < 1:
+        return _validation_error(
+            field="position",
+            action=action,
+            message="Position must be a positive integer (1-based)",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Use 1 for first position, 2 for second, etc.",
+        )
+
+    link_previous = payload.get("link_previous", True)
+    if not isinstance(link_previous, bool):
+        return _validation_error(
+            field="link_previous",
+            action=action,
+            message="Expected a boolean value",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Use true or false for link_previous",
+        )
+
+    dry_run = payload.get("dry_run", False)
+    if not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="Expected a boolean value",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+            remediation="Use true or false for dry_run",
+        )
+
+    path = payload.get("path")
+    if path is not None and not isinstance(path, str):
+        return _validation_error(
+            field="path",
+            action=action,
+            message="Workspace path must be a string",
+            request_id=request_id,
+            remediation="Provide a valid filesystem path string",
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    specs_dir = _resolve_specs_dir(config, path)
+    if specs_dir is None:
+        return _specs_directory_missing_error(request_id)
+
+    audit_log(
+        "tool_invocation",
+        tool="authoring",
+        action=action,
+        spec_id=spec_id,
+        phase_id=phase_id,
+        position=position,
+        link_previous=link_previous,
+        dry_run=dry_run,
+    )
+
+    metric_key = _metric_name(action)
+    start_time = time.perf_counter()
+
+    try:
+        result, error = move_phase(
+            spec_id=spec_id,
+            phase_id=phase_id,
+            position=position,
+            link_previous=link_previous,
+            dry_run=dry_run,
+            specs_dir=specs_dir,
+        )
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected error moving phase")
+        _metrics.counter(metric_key, labels={"status": "error"})
+        return asdict(
+            error_response(
+                sanitize_error_message(exc, context="authoring"),
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check logs for details",
+                request_id=request_id,
+            )
+        )
+
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    _metrics.timer(metric_key + ".duration_ms", elapsed_ms)
+
+    if error:
+        _metrics.counter(metric_key, labels={"status": "error"})
+        lowered = error.lower()
+        if "specification" in lowered and "not found" in lowered:
+            return asdict(
+                error_response(
+                    f"Specification '{spec_id}' not found",
+                    error_code=ErrorCode.SPEC_NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation='Verify the spec ID via spec(action="list")',
+                    request_id=request_id,
+                    telemetry={"duration_ms": round(elapsed_ms, 2)},
+                )
+            )
+        if "phase" in lowered and "not found" in lowered:
+            return asdict(
+                error_response(
+                    f"Phase '{phase_id}' not found in spec",
+                    error_code=ErrorCode.PHASE_NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation="Confirm the phase exists in the hierarchy",
+                    request_id=request_id,
+                    telemetry={"duration_ms": round(elapsed_ms, 2)},
+                )
+            )
+        if "not a phase" in lowered:
+            return asdict(
+                error_response(
+                    f"Node '{phase_id}' is not a phase",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Provide a valid phase ID (e.g., phase-1)",
+                    request_id=request_id,
+                    telemetry={"duration_ms": round(elapsed_ms, 2)},
+                )
+            )
+        if "invalid position" in lowered or "must be" in lowered:
+            return asdict(
+                error_response(
+                    error,
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Provide a valid 1-based position within range",
+                    request_id=request_id,
+                    telemetry={"duration_ms": round(elapsed_ms, 2)},
+                )
+            )
+        return asdict(
+            error_response(
+                f"Failed to move phase: {error}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check input values and retry",
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    _metrics.counter(metric_key, labels={"status": "success"})
+    return asdict(
+        success_response(
+            data=result or {},
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
+            request_id=request_id,
+        )
+    )
+
+
 def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-remove"
@@ -2054,6 +2580,18 @@ _AUTHORING_ROUTER = ActionRouter(
             aliases=("spec_update_frontmatter",),
         ),
         ActionDefinition(
+            name="spec-find-replace",
+            handler=_handle_spec_find_replace,
+            summary=_ACTION_SUMMARY["spec-find-replace"],
+            aliases=("spec_find_replace",),
+        ),
+        ActionDefinition(
+            name="spec-rollback",
+            handler=_handle_spec_rollback,
+            summary=_ACTION_SUMMARY["spec-rollback"],
+            aliases=("spec_rollback",),
+        ),
+        ActionDefinition(
             name="phase-add",
             handler=_handle_phase_add,
             summary=_ACTION_SUMMARY["phase-add"],
@@ -2070,6 +2608,12 @@ _AUTHORING_ROUTER = ActionRouter(
             handler=_handle_phase_template,
             summary=_ACTION_SUMMARY["phase-template"],
             aliases=("phase_template",),
+        ),
+        ActionDefinition(
+            name="phase-move",
+            handler=_handle_phase_move,
+            summary=_ACTION_SUMMARY["phase-move"],
+            aliases=("phase_move",),
         ),
         ActionDefinition(
             name="phase-remove",
@@ -2155,6 +2699,12 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
         metadata_defaults: Optional[Dict[str, Any]] = None,
         dry_run: bool = False,
         path: Optional[str] = None,
+        # spec-find-replace parameters
+        find: Optional[str] = None,
+        replace: Optional[str] = None,
+        scope: Optional[str] = None,
+        use_regex: bool = False,
+        case_sensitive: bool = True,
     ) -> dict:
         """Execute authoring workflows via the action router."""
 
@@ -2186,6 +2736,12 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "metadata_defaults": metadata_defaults,
             "dry_run": dry_run,
             "path": path,
+            # spec-find-replace parameters
+            "find": find,
+            "replace": replace,
+            "scope": scope,
+            "use_regex": use_regex,
+            "case_sensitive": case_sensitive,
         }
         return _dispatch_authoring_action(action=action, payload=payload, config=config)
 

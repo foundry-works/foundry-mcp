@@ -20,6 +20,7 @@ from foundry_mcp.core.spec import (
     update_frontmatter,
     add_phase,
     remove_phase,
+    move_phase,
 )
 
 
@@ -1360,3 +1361,350 @@ class TestApplyPhaseTemplate:
 
         assert error is None
         assert result is not None
+
+
+class TestMovePhase:
+    """Tests for move_phase function."""
+
+    def _create_spec_with_phases(
+        self,
+        temp_specs_dir,
+        spec_id: str = "test-move-phase",
+        num_phases: int = 3,
+        link_phases: bool = True,
+    ) -> Path:
+        """Helper to create a spec with multiple phases for testing."""
+        hierarchy = {
+            "spec-root": {
+                "type": "spec",
+                "title": "Test Spec",
+                "status": "pending",
+                "parent": None,
+                "children": [],
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "metadata": {"purpose": "", "category": "implementation"},
+                "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+            },
+        }
+
+        prev_phase_id = None
+        for i in range(1, num_phases + 1):
+            phase_id = f"phase-{i}"
+            hierarchy["spec-root"]["children"].append(phase_id)
+
+            phase = {
+                "type": "phase",
+                "title": f"Phase {i}",
+                "status": "pending",
+                "parent": "spec-root",
+                "children": [],
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "metadata": {"purpose": f"Work for phase {i}"},
+                "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+            }
+
+            # Link phases if requested (each phase blocked by predecessor)
+            if link_phases and prev_phase_id:
+                phase["dependencies"]["blocked_by"].append(prev_phase_id)
+                hierarchy[prev_phase_id]["dependencies"]["blocks"].append(phase_id)
+
+            hierarchy[phase_id] = phase
+            prev_phase_id = phase_id
+
+        spec_data = {
+            "spec_id": spec_id,
+            "title": "Test Spec",
+            "metadata": {"title": "Test Spec", "version": "1.0.0"},
+            "hierarchy": hierarchy,
+        }
+
+        spec_path = temp_specs_dir / "active" / f"{spec_id}.json"
+        spec_path.write_text(json.dumps(spec_data))
+        return spec_path
+
+    def test_move_phase_forward(self, temp_specs_dir):
+        """Should move phase from earlier to later position."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-forward")
+
+        result, error = move_phase(
+            spec_id="test-forward",
+            phase_id="phase-1",
+            position=3,  # Move from position 1 to 3
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["phase_id"] == "phase-1"
+        assert result["old_position"] == 1
+        assert result["new_position"] == 3
+        assert result["moved"] is True
+
+        # Verify order in spec
+        spec = load_spec("test-forward", temp_specs_dir)
+        children = spec["hierarchy"]["spec-root"]["children"]
+        assert children == ["phase-2", "phase-3", "phase-1"]
+
+    def test_move_phase_backward(self, temp_specs_dir):
+        """Should move phase from later to earlier position."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-backward")
+
+        result, error = move_phase(
+            spec_id="test-backward",
+            phase_id="phase-3",
+            position=1,  # Move from position 3 to 1
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["old_position"] == 3
+        assert result["new_position"] == 1
+        assert result["moved"] is True
+
+        # Verify order in spec
+        spec = load_spec("test-backward", temp_specs_dir)
+        children = spec["hierarchy"]["spec-root"]["children"]
+        assert children == ["phase-3", "phase-1", "phase-2"]
+
+    def test_move_phase_same_position(self, temp_specs_dir):
+        """Should return no-op when already at target position."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-same")
+
+        result, error = move_phase(
+            spec_id="test-same",
+            phase_id="phase-2",
+            position=2,  # Already at position 2
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["moved"] is False
+        assert "already at" in result.get("message", "")
+
+    def test_move_phase_updates_dependencies(self, temp_specs_dir):
+        """Should update dependency chain when link_previous=True."""
+        self._create_spec_with_phases(
+            temp_specs_dir, spec_id="test-deps", link_phases=True
+        )
+
+        # Initially: phase-1 -> phase-2 -> phase-3
+        # Move phase-2 to end: phase-1 -> phase-3 -> phase-2
+        result, error = move_phase(
+            spec_id="test-deps",
+            phase_id="phase-2",
+            position=3,
+            link_previous=True,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+
+        # Verify dependency updates were made
+        spec = load_spec("test-deps", temp_specs_dir)
+        phase1 = spec["hierarchy"]["phase-1"]
+        phase2 = spec["hierarchy"]["phase-2"]
+        phase3 = spec["hierarchy"]["phase-3"]
+
+        # phase-1 should now block phase-3 (not phase-2)
+        assert "phase-3" in phase1["dependencies"]["blocks"]
+        assert "phase-2" not in phase1["dependencies"]["blocks"]
+
+        # phase-3 should be blocked by phase-1 (not phase-2)
+        assert "phase-1" in phase3["dependencies"]["blocked_by"]
+
+        # phase-2 (now last) should be blocked by phase-3
+        assert "phase-3" in phase2["dependencies"]["blocked_by"]
+
+    def test_move_phase_preserves_dependencies(self, temp_specs_dir):
+        """Should preserve existing deps when link_previous=False."""
+        self._create_spec_with_phases(
+            temp_specs_dir, spec_id="test-preserve", link_phases=True
+        )
+
+        # Get original dependencies
+        spec_before = load_spec("test-preserve", temp_specs_dir)
+        phase2_before = spec_before["hierarchy"]["phase-2"]["dependencies"].copy()
+
+        result, error = move_phase(
+            spec_id="test-preserve",
+            phase_id="phase-2",
+            position=3,
+            link_previous=False,  # Don't update dependencies
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+
+        # Dependencies should be unchanged
+        spec = load_spec("test-preserve", temp_specs_dir)
+        phase2 = spec["hierarchy"]["phase-2"]
+        assert phase2["dependencies"]["blocked_by"] == phase2_before["blocked_by"]
+
+    def test_move_phase_invalid_position_zero(self, temp_specs_dir):
+        """Should reject position 0 (must be 1-based)."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-zero")
+
+        result, error = move_phase(
+            spec_id="test-zero",
+            phase_id="phase-1",
+            position=0,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "positive integer" in error.lower()
+
+    def test_move_phase_invalid_position_too_high(self, temp_specs_dir):
+        """Should reject position beyond phase count."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-high")
+
+        result, error = move_phase(
+            spec_id="test-high",
+            phase_id="phase-1",
+            position=10,  # Only 3 phases
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "invalid position" in error.lower()
+
+    def test_move_phase_not_found(self, temp_specs_dir):
+        """Should return error for nonexistent phase."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-missing")
+
+        result, error = move_phase(
+            spec_id="test-missing",
+            phase_id="phase-99",
+            position=1,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "not found" in error.lower()
+
+    def test_move_non_phase_node_error(self, temp_specs_dir):
+        """Should reject moving non-phase nodes."""
+        # Create spec with a task
+        spec_data = {
+            "spec_id": "test-non-phase",
+            "title": "Test",
+            "metadata": {"title": "Test"},
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Test",
+                    "status": "pending",
+                    "parent": None,
+                    "children": ["phase-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                },
+                "phase-1": {
+                    "type": "phase",
+                    "title": "Phase 1",
+                    "status": "pending",
+                    "parent": "spec-root",
+                    "children": ["task-1-1"],
+                    "total_tasks": 1,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                },
+                "task-1-1": {
+                    "type": "task",
+                    "title": "Task 1",
+                    "status": "pending",
+                    "parent": "phase-1",
+                    "children": [],
+                    "metadata": {},
+                    "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+                },
+            },
+        }
+        spec_path = temp_specs_dir / "active" / "test-non-phase.json"
+        spec_path.write_text(json.dumps(spec_data))
+
+        result, error = move_phase(
+            spec_id="test-non-phase",
+            phase_id="task-1-1",  # This is a task, not a phase
+            position=1,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "not a phase" in error.lower()
+
+    def test_move_phase_spec_not_found(self, temp_specs_dir):
+        """Should return error for nonexistent spec."""
+        result, error = move_phase(
+            spec_id="nonexistent-spec",
+            phase_id="phase-1",
+            position=1,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "not found" in error.lower()
+
+    def test_move_phase_empty_spec_id(self, temp_specs_dir):
+        """Should reject empty spec_id."""
+        result, error = move_phase(
+            spec_id="",
+            phase_id="phase-1",
+            position=1,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "Specification ID is required" in error
+
+    def test_move_phase_empty_phase_id(self, temp_specs_dir):
+        """Should reject empty phase_id."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-empty-phase")
+
+        result, error = move_phase(
+            spec_id="test-empty-phase",
+            phase_id="",
+            position=1,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert result is None
+        assert error is not None
+        assert "Phase ID is required" in error
+
+    def test_move_phase_dry_run(self, temp_specs_dir):
+        """Dry run should preview without saving."""
+        self._create_spec_with_phases(temp_specs_dir, spec_id="test-dry-run")
+
+        result, error = move_phase(
+            spec_id="test-dry-run",
+            phase_id="phase-1",
+            position=3,
+            dry_run=True,
+            specs_dir=temp_specs_dir,
+        )
+
+        assert error is None
+        assert result is not None
+        assert result["dry_run"] is True
+        assert result["new_position"] == 3
+
+        # Verify NOT saved (order unchanged)
+        spec = load_spec("test-dry-run", temp_specs_dir)
+        children = spec["hierarchy"]["spec-root"]["children"]
+        assert children == ["phase-1", "phase-2", "phase-3"]  # Unchanged

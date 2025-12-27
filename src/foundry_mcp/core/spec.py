@@ -9,7 +9,7 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, List, Tuple, Union
 
 # Valid templates and categories for spec creation
 TEMPLATES = ("empty", "simple", "medium", "complex", "security")
@@ -314,13 +314,34 @@ def save_spec(
         return False
 
 
-def backup_spec(spec_id: str, specs_dir: Optional[Path] = None) -> Optional[Path]:
+# Default retention policy for versioned backups
+DEFAULT_MAX_BACKUPS = 10
+
+
+def backup_spec(
+    spec_id: str,
+    specs_dir: Optional[Path] = None,
+    max_backups: int = DEFAULT_MAX_BACKUPS,
+) -> Optional[Path]:
     """
-    Create a backup copy of the JSON spec file in the .backups/ directory.
+    Create a versioned backup of the JSON spec file.
+
+    Creates timestamped backups in .backups/{spec_id}/ directory with a
+    configurable retention policy. Also maintains a latest.json copy for
+    quick access to the most recent backup.
+
+    Directory structure:
+        .backups/
+          └── {spec_id}/
+              ├── 2025-12-26T18-20-13.456789.json   # Timestamped backups (μs precision)
+              ├── 2025-12-26T18-30-45.123456.json
+              └── latest.json                       # Copy of most recent
 
     Args:
         spec_id: Specification ID or path to spec file
         specs_dir: Path to specs directory (optional, auto-detected if not provided)
+        max_backups: Maximum number of versioned backups to retain (default: 10).
+                     Set to 0 for unlimited backups.
 
     Returns:
         Path to backup file if created, None otherwise
@@ -336,16 +357,554 @@ def backup_spec(spec_id: str, specs_dir: Optional[Path] = None) -> Optional[Path
     if not specs_dir:
         return None
 
-    backups_dir = specs_dir / ".backups"
-    backups_dir.mkdir(parents=True, exist_ok=True)
+    # Create versioned backup directory: .backups/{spec_id}/
+    spec_backups_dir = specs_dir / ".backups" / spec_id
+    spec_backups_dir.mkdir(parents=True, exist_ok=True)
 
-    backup_file = backups_dir / f"{spec_id}.backup"
+    # Generate timestamp filename (ISO format with safe characters)
+    # Include full microseconds to handle rapid successive saves
+    now = datetime.now(timezone.utc)
+    timestamp = now.strftime("%Y-%m-%dT%H-%M-%S")
+    micros = now.strftime("%f")  # Full 6-digit microseconds
+    backup_file = spec_backups_dir / f"{timestamp}.{micros}.json"
 
     try:
+        # Create the timestamped backup
         shutil.copy2(spec_file, backup_file)
+
+        # Update latest.json to point to the newest backup
+        latest_file = spec_backups_dir / "latest.json"
+        shutil.copy2(backup_file, latest_file)
+
+        # Apply retention policy
+        if max_backups > 0:
+            _apply_backup_retention(spec_backups_dir, max_backups)
+
         return backup_file
     except (IOError, OSError):
         return None
+
+
+def _apply_backup_retention(backups_dir: Path, max_backups: int) -> int:
+    """
+    Apply retention policy by removing oldest backups exceeding the limit.
+
+    Args:
+        backups_dir: Path to the spec's backup directory
+        max_backups: Maximum number of backups to retain
+
+    Returns:
+        Number of backups deleted
+    """
+    # List all timestamped backup files (exclude latest.json)
+    backup_files = sorted(
+        [
+            f for f in backups_dir.glob("*.json")
+            if f.name != "latest.json" and f.is_file()
+        ],
+        key=lambda p: p.name,  # Sort by filename (timestamp order)
+    )
+
+    deleted_count = 0
+    while len(backup_files) > max_backups:
+        oldest = backup_files.pop(0)
+        try:
+            oldest.unlink()
+            deleted_count += 1
+        except (IOError, OSError):
+            pass  # Best effort deletion
+
+    return deleted_count
+
+
+# Default pagination settings for backup listing
+DEFAULT_BACKUP_PAGE_SIZE = 50
+MAX_BACKUP_PAGE_SIZE = 100
+
+
+def list_spec_backups(
+    spec_id: str,
+    specs_dir: Optional[Path] = None,
+    cursor: Optional[str] = None,
+    limit: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    List backups for a spec with cursor-based pagination.
+
+    Lists timestamped backup files chronologically (newest first) from the
+    .backups/{spec_id}/ directory. Returns file metadata including timestamp,
+    path, and size. Designed for use with spec.history action.
+
+    Args:
+        spec_id: Specification ID to list backups for
+        specs_dir: Base specs directory (uses find_specs_directory if None)
+        cursor: Pagination cursor from previous call (base64-encoded JSON)
+        limit: Maximum backups per page (default: 50, max: 100)
+
+    Returns:
+        Dict with structure:
+            {
+                "spec_id": str,
+                "backups": [
+                    {
+                        "timestamp": str,      # ISO-ish format from filename
+                        "file_path": str,      # Absolute path to backup file
+                        "file_size_bytes": int # File size
+                    },
+                    ...
+                ],
+                "count": int,
+                "pagination": {
+                    "cursor": Optional[str],
+                    "has_more": bool,
+                    "page_size": int
+                }
+            }
+
+        Returns empty backups list if spec or backup directory doesn't exist.
+    """
+    # Import pagination helpers
+    from foundry_mcp.core.pagination import (
+        CursorError,
+        decode_cursor,
+        encode_cursor,
+        normalize_page_size,
+    )
+
+    # Resolve specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    # Normalize page size
+    page_size = normalize_page_size(
+        limit, default=DEFAULT_BACKUP_PAGE_SIZE, maximum=MAX_BACKUP_PAGE_SIZE
+    )
+
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "backups": [],
+        "count": 0,
+        "pagination": {
+            "cursor": None,
+            "has_more": False,
+            "page_size": page_size,
+        },
+    }
+
+    if not specs_dir:
+        return result
+
+    # Locate backup directory: .backups/{spec_id}/
+    backups_dir = specs_dir / ".backups" / spec_id
+    if not backups_dir.is_dir():
+        return result
+
+    # List all timestamped backup files (exclude latest.json)
+    backup_files = sorted(
+        [
+            f
+            for f in backups_dir.glob("*.json")
+            if f.name != "latest.json" and f.is_file()
+        ],
+        key=lambda p: p.name,
+        reverse=True,  # Newest first
+    )
+
+    if not backup_files:
+        return result
+
+    # Handle cursor-based pagination
+    start_after_timestamp: Optional[str] = None
+    if cursor:
+        try:
+            cursor_data = decode_cursor(cursor)
+            start_after_timestamp = cursor_data.get("last_id")
+        except CursorError:
+            # Invalid cursor - return from beginning
+            pass
+
+    # Find start position based on cursor
+    if start_after_timestamp:
+        start_index = 0
+        for idx, backup_file in enumerate(backup_files):
+            # Filename without extension is the timestamp
+            timestamp = backup_file.stem
+            if timestamp == start_after_timestamp:
+                start_index = idx + 1
+                break
+        backup_files = backup_files[start_index:]
+
+    # Fetch one extra to check for more pages
+    page_files = backup_files[: page_size + 1]
+    has_more = len(page_files) > page_size
+    if has_more:
+        page_files = page_files[:page_size]
+
+    # Build backup entries with metadata
+    backups = []
+    for backup_file in page_files:
+        try:
+            file_stat = backup_file.stat()
+            backups.append(
+                {
+                    "timestamp": backup_file.stem,
+                    "file_path": str(backup_file.absolute()),
+                    "file_size_bytes": file_stat.st_size,
+                }
+            )
+        except OSError:
+            # Skip files we can't stat
+            continue
+
+    # Generate next cursor if more pages exist
+    next_cursor = None
+    if has_more and backups:
+        next_cursor = encode_cursor({"last_id": backups[-1]["timestamp"]})
+
+    result["backups"] = backups
+    result["count"] = len(backups)
+    result["pagination"] = {
+        "cursor": next_cursor,
+        "has_more": has_more,
+        "page_size": page_size,
+    }
+
+    return result
+
+
+# Default settings for diff operations
+DEFAULT_DIFF_MAX_RESULTS = 100
+
+
+def _load_spec_source(
+    source: Union[str, Path, Dict[str, Any]],
+    specs_dir: Optional[Path] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Load a spec from various source types.
+
+    Args:
+        source: Spec ID, file path, or already-loaded dict
+        specs_dir: Base specs directory for ID lookups
+
+    Returns:
+        Loaded spec dict, or None if not found/invalid
+    """
+    # Already a dict - return as-is
+    if isinstance(source, dict):
+        return source
+
+    # Path object or string path
+    source_path = Path(source) if isinstance(source, str) else source
+
+    # If it's an existing file path, load directly
+    if source_path.is_file():
+        try:
+            with open(source_path, "r") as f:
+                return json.load(f)
+        except (IOError, json.JSONDecodeError):
+            return None
+
+    # Otherwise treat as spec_id and use resolve_spec_file
+    if isinstance(source, str):
+        return load_spec(source, specs_dir)
+
+    return None
+
+
+def _diff_node(
+    old_node: Dict[str, Any],
+    new_node: Dict[str, Any],
+    node_id: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Compare two nodes and return field-level changes.
+
+    Args:
+        old_node: Original node data
+        new_node: Updated node data
+        node_id: Node identifier for the result
+
+    Returns:
+        Dict with node info and field_changes list, or None if no changes
+    """
+    # Fields to compare (excluding computed/transient fields)
+    compare_fields = ["title", "status", "type", "parent", "children", "metadata", "dependencies"]
+
+    field_changes = []
+    for field in compare_fields:
+        old_val = old_node.get(field)
+        new_val = new_node.get(field)
+
+        if old_val != new_val:
+            field_changes.append({
+                "field": field,
+                "old": old_val,
+                "new": new_val,
+            })
+
+    if not field_changes:
+        return None
+
+    return {
+        "node_id": node_id,
+        "type": new_node.get("type", old_node.get("type")),
+        "title": new_node.get("title", old_node.get("title")),
+        "field_changes": field_changes,
+    }
+
+
+def diff_specs(
+    source: Union[str, Path, Dict[str, Any]],
+    target: Union[str, Path, Dict[str, Any]],
+    specs_dir: Optional[Path] = None,
+    max_results: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Compare two specs and categorize changes as added, removed, or modified.
+
+    Compares hierarchy nodes between source (base/older) and target (comparison/newer)
+    specs, identifying structural and content changes at the task level.
+
+    Args:
+        source: Base spec - spec_id, file path (including backup), or loaded dict
+        target: Comparison spec - spec_id, file path, or loaded dict
+        specs_dir: Base specs directory (auto-detected if None)
+        max_results: Maximum changes to return per category (default: 100)
+
+    Returns:
+        Dict with structure:
+            {
+                "summary": {
+                    "added_count": int,
+                    "removed_count": int,
+                    "modified_count": int,
+                    "total_changes": int
+                },
+                "changes": {
+                    "added": [{"node_id": str, "type": str, "title": str}, ...],
+                    "removed": [{"node_id": str, "type": str, "title": str}, ...],
+                    "modified": [{
+                        "node_id": str,
+                        "type": str,
+                        "title": str,
+                        "field_changes": [{"field": str, "old": Any, "new": Any}, ...]
+                    }, ...]
+                },
+                "partial": bool,  # True if results truncated
+                "source_spec_id": Optional[str],
+                "target_spec_id": Optional[str]
+            }
+
+        Returns error structure if specs cannot be loaded:
+            {"error": str, "success": False}
+    """
+    # Resolve specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    # Load source spec
+    source_spec = _load_spec_source(source, specs_dir)
+    if source_spec is None:
+        return {
+            "error": f"Could not load source spec: {source}",
+            "success": False,
+        }
+
+    # Load target spec
+    target_spec = _load_spec_source(target, specs_dir)
+    if target_spec is None:
+        return {
+            "error": f"Could not load target spec: {target}",
+            "success": False,
+        }
+
+    # Get hierarchies
+    source_hierarchy = source_spec.get("hierarchy", {})
+    target_hierarchy = target_spec.get("hierarchy", {})
+
+    source_ids = set(source_hierarchy.keys())
+    target_ids = set(target_hierarchy.keys())
+
+    # Categorize changes
+    added_ids = target_ids - source_ids
+    removed_ids = source_ids - target_ids
+    common_ids = source_ids & target_ids
+
+    # Apply max_results limit
+    limit = max_results if max_results is not None else DEFAULT_DIFF_MAX_RESULTS
+    partial = False
+
+    # Build added list
+    added = []
+    for node_id in sorted(added_ids):
+        if len(added) >= limit:
+            partial = True
+            break
+        node = target_hierarchy[node_id]
+        added.append({
+            "node_id": node_id,
+            "type": node.get("type"),
+            "title": node.get("title"),
+        })
+
+    # Build removed list
+    removed = []
+    for node_id in sorted(removed_ids):
+        if len(removed) >= limit:
+            partial = True
+            break
+        node = source_hierarchy[node_id]
+        removed.append({
+            "node_id": node_id,
+            "type": node.get("type"),
+            "title": node.get("title"),
+        })
+
+    # Build modified list
+    modified = []
+    for node_id in sorted(common_ids):
+        if len(modified) >= limit:
+            partial = True
+            break
+        old_node = source_hierarchy[node_id]
+        new_node = target_hierarchy[node_id]
+        diff = _diff_node(old_node, new_node, node_id)
+        if diff:
+            modified.append(diff)
+
+    # Calculate actual counts (may exceed displayed if partial)
+    total_added = len(added_ids)
+    total_removed = len(removed_ids)
+    total_modified = sum(
+        1 for nid in common_ids
+        if _diff_node(source_hierarchy[nid], target_hierarchy[nid], nid)
+    ) if not partial else len(modified)  # Only count all if not already partial
+
+    return {
+        "summary": {
+            "added_count": total_added,
+            "removed_count": total_removed,
+            "modified_count": total_modified if not partial else len(modified),
+            "total_changes": total_added + total_removed + (total_modified if not partial else len(modified)),
+        },
+        "changes": {
+            "added": added,
+            "removed": removed,
+            "modified": modified,
+        },
+        "partial": partial,
+        "source_spec_id": source_spec.get("spec_id"),
+        "target_spec_id": target_spec.get("spec_id"),
+    }
+
+
+def rollback_spec(
+    spec_id: str,
+    timestamp: str,
+    specs_dir: Optional[Path] = None,
+    dry_run: bool = False,
+    create_backup: bool = True,
+) -> Dict[str, Any]:
+    """
+    Restore a spec from a specific backup timestamp.
+
+    Creates a safety backup of the current state before rollback (by default),
+    then replaces the spec file with the contents from the specified backup.
+
+    Args:
+        spec_id: Specification ID to rollback
+        timestamp: Backup timestamp to restore (e.g., "2025-12-26T18-20-13.456789")
+        specs_dir: Base specs directory (auto-detected if None)
+        dry_run: If True, validate and return what would happen without changes
+        create_backup: If True (default), create safety backup before rollback
+
+    Returns:
+        Dict with structure:
+            {
+                "success": bool,
+                "spec_id": str,
+                "timestamp": str,
+                "dry_run": bool,
+                "backup_created": Optional[str],  # Safety backup path
+                "restored_from": str,              # Source backup path
+                "error": Optional[str]             # Error if failed
+            }
+    """
+    # Resolve specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    result: Dict[str, Any] = {
+        "success": False,
+        "spec_id": spec_id,
+        "timestamp": timestamp,
+        "dry_run": dry_run,
+        "backup_created": None,
+        "restored_from": None,
+        "error": None,
+    }
+
+    if not specs_dir:
+        result["error"] = "Could not find specs directory"
+        return result
+
+    # Find current spec file
+    spec_file = find_spec_file(spec_id, specs_dir)
+    if not spec_file:
+        result["error"] = f"Spec '{spec_id}' not found"
+        return result
+
+    # Locate backup directory
+    backups_dir = specs_dir / ".backups" / spec_id
+    if not backups_dir.is_dir():
+        result["error"] = f"No backups directory for spec '{spec_id}'"
+        return result
+
+    # Find the backup file matching the timestamp
+    backup_file = backups_dir / f"{timestamp}.json"
+    if not backup_file.is_file():
+        result["error"] = f"Backup not found for timestamp '{timestamp}'"
+        return result
+
+    result["restored_from"] = str(backup_file)
+
+    # Validate backup is valid JSON
+    try:
+        with open(backup_file, "r") as f:
+            backup_data = json.load(f)
+        if not isinstance(backup_data, dict):
+            result["error"] = "Backup file is not a valid spec (not a JSON object)"
+            return result
+    except json.JSONDecodeError as e:
+        result["error"] = f"Backup file is not valid JSON: {e}"
+        return result
+    except IOError as e:
+        result["error"] = f"Could not read backup file: {e}"
+        return result
+
+    # dry_run - return success without making changes
+    if dry_run:
+        result["success"] = True
+        if create_backup:
+            result["backup_created"] = "(would be created)"
+        return result
+
+    # Create safety backup of current state before rollback
+    if create_backup:
+        safety_backup = backup_spec(spec_id, specs_dir)
+        if safety_backup:
+            result["backup_created"] = str(safety_backup)
+
+    # Perform rollback - copy backup to spec location
+    try:
+        shutil.copy2(backup_file, spec_file)
+        result["success"] = True
+    except (IOError, OSError) as e:
+        result["error"] = f"Failed to restore backup: {e}"
+        return result
+
+    return result
 
 
 def _validate_spec_structure(spec_data: Dict[str, Any]) -> bool:
@@ -1422,6 +1981,348 @@ def remove_phase(
     return result, None
 
 
+def move_phase(
+    spec_id: str,
+    phase_id: str,
+    position: int,
+    link_previous: bool = True,
+    dry_run: bool = False,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Move a phase to a new position within spec-root's children.
+
+    Supports reordering phases and optionally re-linking phase dependencies
+    according to the link_previous pattern (each phase blocked by its predecessor).
+
+    Args:
+        spec_id: Specification ID containing the phase.
+        phase_id: Phase ID to move (e.g., "phase-2").
+        position: Target position (1-based index) in spec-root children.
+        link_previous: If True, update dependencies to maintain the sequential
+                       blocking pattern. If False, preserve existing dependencies.
+        dry_run: If True, validate and return preview without saving changes.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "phase_id": ..., "old_position": ..., "new_position": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate inputs
+    if not spec_id or not spec_id.strip():
+        return None, "Specification ID is required"
+
+    if not phase_id or not phase_id.strip():
+        return None, "Phase ID is required"
+
+    if not isinstance(position, int) or position < 1:
+        return None, "Position must be a positive integer (1-based)"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    # Validate phase exists
+    phase = hierarchy.get(phase_id)
+    if phase is None:
+        return None, f"Phase '{phase_id}' not found"
+
+    # Validate node type is phase
+    node_type = phase.get("type")
+    if node_type != "phase":
+        return None, f"Node '{phase_id}' is not a phase (type: {node_type})"
+
+    # Get spec-root
+    spec_root = hierarchy.get("spec-root")
+    if spec_root is None:
+        return None, "Specification root node 'spec-root' not found"
+
+    children = spec_root.get("children", [])
+    if not isinstance(children, list):
+        children = []
+
+    # Find current position
+    try:
+        old_index = children.index(phase_id)
+    except ValueError:
+        return None, f"Phase '{phase_id}' not found in spec-root children"
+
+    # Convert to 0-based index for internal use
+    new_index = position - 1
+
+    # Validate position is within bounds
+    if new_index < 0 or new_index >= len(children):
+        return None, f"Invalid position {position}. Must be 1-{len(children)}"
+
+    # No change needed if same position
+    if old_index == new_index:
+        return {
+            "spec_id": spec_id,
+            "phase_id": phase_id,
+            "phase_title": phase.get("title", ""),
+            "old_position": old_index + 1,
+            "new_position": new_index + 1,
+            "moved": False,
+            "dry_run": dry_run,
+            "message": "Phase is already at the specified position",
+        }, None
+
+    # Identify old neighbors for dependency cleanup
+    old_prev_id: Optional[str] = None
+    old_next_id: Optional[str] = None
+
+    if old_index > 0:
+        candidate = children[old_index - 1]
+        if hierarchy.get(candidate, {}).get("type") == "phase":
+            old_prev_id = candidate
+
+    if old_index < len(children) - 1:
+        candidate = children[old_index + 1]
+        if hierarchy.get(candidate, {}).get("type") == "phase":
+            old_next_id = candidate
+
+    # Perform the move in children list
+    children.remove(phase_id)
+    # After removal, adjust target index if moving forward
+    insert_index = new_index if new_index <= old_index else new_index
+    if insert_index >= len(children):
+        children.append(phase_id)
+    else:
+        children.insert(insert_index, phase_id)
+
+    # Identify new neighbors
+    actual_new_index = children.index(phase_id)
+    new_prev_id: Optional[str] = None
+    new_next_id: Optional[str] = None
+
+    if actual_new_index > 0:
+        candidate = children[actual_new_index - 1]
+        if hierarchy.get(candidate, {}).get("type") == "phase":
+            new_prev_id = candidate
+
+    if actual_new_index < len(children) - 1:
+        candidate = children[actual_new_index + 1]
+        if hierarchy.get(candidate, {}).get("type") == "phase":
+            new_next_id = candidate
+
+    # Track dependency changes
+    dependencies_updated: List[Dict[str, Any]] = []
+
+    if link_previous:
+        # Remove old dependency links
+        phase_deps = phase.setdefault(
+            "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
+        )
+
+        # 1. Remove this phase from old_prev's blocks list
+        if old_prev_id:
+            old_prev = hierarchy.get(old_prev_id)
+            if old_prev:
+                old_prev_deps = old_prev.get("dependencies", {})
+                old_prev_blocks = old_prev_deps.get("blocks", [])
+                if phase_id in old_prev_blocks:
+                    old_prev_blocks.remove(phase_id)
+                    dependencies_updated.append({
+                        "action": "removed",
+                        "from": old_prev_id,
+                        "relationship": "blocks",
+                        "target": phase_id,
+                    })
+
+        # 2. Remove old_prev from this phase's blocked_by
+        phase_blocked_by = phase_deps.setdefault("blocked_by", [])
+        if old_prev_id and old_prev_id in phase_blocked_by:
+            phase_blocked_by.remove(old_prev_id)
+            dependencies_updated.append({
+                "action": "removed",
+                "from": phase_id,
+                "relationship": "blocked_by",
+                "target": old_prev_id,
+            })
+
+        # 3. Remove this phase from old_next's blocked_by
+        if old_next_id:
+            old_next = hierarchy.get(old_next_id)
+            if old_next:
+                old_next_deps = old_next.get("dependencies", {})
+                old_next_blocked_by = old_next_deps.get("blocked_by", [])
+                if phase_id in old_next_blocked_by:
+                    old_next_blocked_by.remove(phase_id)
+                    dependencies_updated.append({
+                        "action": "removed",
+                        "from": old_next_id,
+                        "relationship": "blocked_by",
+                        "target": phase_id,
+                    })
+
+        # 4. Remove old_next from this phase's blocks
+        phase_blocks = phase_deps.setdefault("blocks", [])
+        if old_next_id and old_next_id in phase_blocks:
+            phase_blocks.remove(old_next_id)
+            dependencies_updated.append({
+                "action": "removed",
+                "from": phase_id,
+                "relationship": "blocks",
+                "target": old_next_id,
+            })
+
+        # 5. Link old neighbors to each other (if they were adjacent via this phase)
+        if old_prev_id and old_next_id:
+            old_prev = hierarchy.get(old_prev_id)
+            old_next = hierarchy.get(old_next_id)
+            if old_prev and old_next:
+                old_prev_deps = old_prev.setdefault(
+                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
+                )
+                old_prev_blocks = old_prev_deps.setdefault("blocks", [])
+                if old_next_id not in old_prev_blocks:
+                    old_prev_blocks.append(old_next_id)
+                    dependencies_updated.append({
+                        "action": "added",
+                        "from": old_prev_id,
+                        "relationship": "blocks",
+                        "target": old_next_id,
+                    })
+
+                old_next_deps = old_next.setdefault(
+                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
+                )
+                old_next_blocked_by = old_next_deps.setdefault("blocked_by", [])
+                if old_prev_id not in old_next_blocked_by:
+                    old_next_blocked_by.append(old_prev_id)
+                    dependencies_updated.append({
+                        "action": "added",
+                        "from": old_next_id,
+                        "relationship": "blocked_by",
+                        "target": old_prev_id,
+                    })
+
+        # Add new dependency links
+        # 6. New prev blocks this phase
+        if new_prev_id:
+            new_prev = hierarchy.get(new_prev_id)
+            if new_prev:
+                new_prev_deps = new_prev.setdefault(
+                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
+                )
+                new_prev_blocks = new_prev_deps.setdefault("blocks", [])
+                if phase_id not in new_prev_blocks:
+                    new_prev_blocks.append(phase_id)
+                    dependencies_updated.append({
+                        "action": "added",
+                        "from": new_prev_id,
+                        "relationship": "blocks",
+                        "target": phase_id,
+                    })
+
+                # This phase is blocked by new prev
+                if new_prev_id not in phase_blocked_by:
+                    phase_blocked_by.append(new_prev_id)
+                    dependencies_updated.append({
+                        "action": "added",
+                        "from": phase_id,
+                        "relationship": "blocked_by",
+                        "target": new_prev_id,
+                    })
+
+        # 7. This phase blocks new next
+        if new_next_id:
+            new_next = hierarchy.get(new_next_id)
+            if new_next:
+                if new_next_id not in phase_blocks:
+                    phase_blocks.append(new_next_id)
+                    dependencies_updated.append({
+                        "action": "added",
+                        "from": phase_id,
+                        "relationship": "blocks",
+                        "target": new_next_id,
+                    })
+
+                new_next_deps = new_next.setdefault(
+                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
+                )
+                new_next_blocked_by = new_next_deps.setdefault("blocked_by", [])
+                if phase_id not in new_next_blocked_by:
+                    new_next_blocked_by.append(phase_id)
+                    dependencies_updated.append({
+                        "action": "added",
+                        "from": new_next_id,
+                        "relationship": "blocked_by",
+                        "target": phase_id,
+                    })
+
+                # Remove old link from new prev to new next (now goes through this phase)
+                if new_prev_id:
+                    new_prev = hierarchy.get(new_prev_id)
+                    if new_prev:
+                        new_prev_deps = new_prev.get("dependencies", {})
+                        new_prev_blocks = new_prev_deps.get("blocks", [])
+                        if new_next_id in new_prev_blocks:
+                            new_prev_blocks.remove(new_next_id)
+                            dependencies_updated.append({
+                                "action": "removed",
+                                "from": new_prev_id,
+                                "relationship": "blocks",
+                                "target": new_next_id,
+                            })
+
+                    if new_prev_id in new_next_blocked_by:
+                        new_next_blocked_by.remove(new_prev_id)
+                        dependencies_updated.append({
+                            "action": "removed",
+                            "from": new_next_id,
+                            "relationship": "blocked_by",
+                            "target": new_prev_id,
+                        })
+
+    # Update spec-root children
+    spec_root["children"] = children
+
+    # Build result
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "phase_id": phase_id,
+        "phase_title": phase.get("title", ""),
+        "old_position": old_index + 1,
+        "new_position": actual_new_index + 1,
+        "moved": True,
+        "link_previous": link_previous,
+        "dry_run": dry_run,
+    }
+
+    if dependencies_updated:
+        result["dependencies_updated"] = dependencies_updated
+
+    if dry_run:
+        result["message"] = "Dry run - changes not saved"
+        return result, None
+
+    # Save the spec
+    saved = save_spec(spec_id, spec_data, specs_dir)
+    if not saved:
+        return None, "Failed to save specification"
+
+    return result, None
+
+
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     Get the hierarchical structure for a spec template.
@@ -2434,3 +3335,546 @@ def update_frontmatter(
         "value": value,
         "previous_value": previous_value,
     }, None
+
+
+# Safety constraints for find/replace operations
+_FR_MAX_PATTERN_LENGTH = 256
+_FR_DEFAULT_MAX_REPLACEMENTS = 1000
+_FR_VALID_SCOPES = {"all", "titles", "descriptions"}
+_FR_MAX_SAMPLE_DIFFS = 10
+
+
+def find_replace_in_spec(
+    spec_id: str,
+    find: str,
+    replace: str,
+    *,
+    scope: str = "all",
+    use_regex: bool = False,
+    case_sensitive: bool = True,
+    dry_run: bool = False,
+    max_replacements: int = _FR_DEFAULT_MAX_REPLACEMENTS,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Find and replace text across spec hierarchy nodes.
+
+    Performs literal or regex find/replace across titles and/or descriptions
+    in a specification's hierarchy nodes.
+
+    Args:
+        spec_id: Specification ID to modify.
+        find: Text or regex pattern to find.
+        replace: Replacement text (supports backreferences if use_regex=True).
+        scope: Where to search - "all", "titles", or "descriptions".
+        use_regex: If True, treat `find` as a regex pattern.
+        case_sensitive: If False, perform case-insensitive matching.
+        dry_run: If True, preview changes without modifying the spec.
+        max_replacements: Maximum number of replacements (safety limit).
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "total_replacements": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate find pattern
+    if not find or not isinstance(find, str):
+        return None, "find must be a non-empty string"
+    # Don't strip the pattern - use exactly what user provides (whitespace may be intentional)
+    if not find.strip():
+        return None, "find must be a non-empty string"
+    if len(find) > _FR_MAX_PATTERN_LENGTH:
+        return None, f"find pattern exceeds maximum length of {_FR_MAX_PATTERN_LENGTH} characters"
+
+    # Validate replace
+    if replace is None:
+        return None, "replace must be provided (use empty string to delete matches)"
+    if not isinstance(replace, str):
+        return None, "replace must be a string"
+
+    # Validate scope
+    if scope not in _FR_VALID_SCOPES:
+        return None, f"scope must be one of: {sorted(_FR_VALID_SCOPES)}"
+
+    # Validate max_replacements
+    if not isinstance(max_replacements, int) or max_replacements <= 0:
+        return None, "max_replacements must be a positive integer"
+
+    # Compile regex if needed
+    compiled_pattern = None
+    if use_regex:
+        try:
+            flags = 0 if case_sensitive else re.IGNORECASE
+            compiled_pattern = re.compile(find, flags)
+        except re.error as e:
+            return None, f"Invalid regex pattern: {e}"
+    else:
+        # For literal search, prepare flags
+        if not case_sensitive:
+            # Create case-insensitive literal pattern
+            compiled_pattern = re.compile(re.escape(find), re.IGNORECASE)
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found"
+
+    # Load spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if not spec_path:
+        return None, f"Specification '{spec_id}' not found"
+    spec_data = load_spec(spec_id, specs_dir)
+    if not spec_data:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    if not hierarchy:
+        return {
+            "spec_id": spec_id,
+            "total_replacements": 0,
+            "nodes_affected": 0,
+            "changes": [],
+            "dry_run": dry_run,
+            "message": "No hierarchy nodes to process",
+        }, None
+
+    # Track changes
+    changes: List[Dict[str, Any]] = []
+    total_replacements = 0
+    nodes_affected = set()
+    warnings: List[str] = []
+    limit_reached = False
+
+    # Helper to perform replacement
+    def do_replace(text: str) -> Tuple[str, int]:
+        if compiled_pattern:
+            new_text, count = compiled_pattern.subn(replace, text)
+            return new_text, count
+        else:
+            # Case-sensitive literal replace
+            count = text.count(find)
+            new_text = text.replace(find, replace)
+            return new_text, count
+
+    # Process hierarchy nodes
+    for node_id, node_data in hierarchy.items():
+        if node_id == "spec-root":
+            continue
+        if limit_reached:
+            break
+
+        # Process title if in scope
+        if scope in ("all", "titles"):
+            title = node_data.get("title", "")
+            if title and isinstance(title, str):
+                new_title, count = do_replace(title)
+                if count > 0:
+                    if total_replacements + count > max_replacements:
+                        count = max_replacements - total_replacements
+                        # Partial replacement not supported, skip this field
+                        warnings.append(
+                            f"max_replacements limit ({max_replacements}) reached"
+                        )
+                        limit_reached = True
+                    else:
+                        total_replacements += count
+                        nodes_affected.add(node_id)
+                        changes.append({
+                            "node_id": node_id,
+                            "field": "title",
+                            "old": title,
+                            "new": new_title,
+                            "replacement_count": count,
+                        })
+                        if not dry_run:
+                            node_data["title"] = new_title
+
+        # Process description if in scope
+        if scope in ("all", "descriptions") and not limit_reached:
+            metadata = node_data.get("metadata", {})
+            if isinstance(metadata, dict):
+                description = metadata.get("description", "")
+                if description and isinstance(description, str):
+                    new_description, count = do_replace(description)
+                    if count > 0:
+                        if total_replacements + count > max_replacements:
+                            warnings.append(
+                                f"max_replacements limit ({max_replacements}) reached"
+                            )
+                            limit_reached = True
+                        else:
+                            total_replacements += count
+                            nodes_affected.add(node_id)
+                            changes.append({
+                                "node_id": node_id,
+                                "field": "description",
+                                "old": description,
+                                "new": new_description,
+                                "replacement_count": count,
+                            })
+                            if not dry_run:
+                                metadata["description"] = new_description
+
+    # Save if not dry_run and there were changes
+    if not dry_run and total_replacements > 0:
+        if not save_spec(spec_id, spec_data, specs_dir):
+            return None, "Failed to save specification after replacements"
+
+    # Build result
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "total_replacements": total_replacements,
+        "nodes_affected": len(nodes_affected),
+        "dry_run": dry_run,
+        "scope": scope,
+        "find": find,
+        "replace": replace,
+        "use_regex": use_regex,
+        "case_sensitive": case_sensitive,
+    }
+
+    # Include sample diffs (limited)
+    if changes:
+        result["changes"] = changes[:_FR_MAX_SAMPLE_DIFFS]
+        if len(changes) > _FR_MAX_SAMPLE_DIFFS:
+            result["changes_truncated"] = True
+            result["total_changes"] = len(changes)
+
+    if warnings:
+        result["warnings"] = warnings
+
+    if total_replacements == 0:
+        result["message"] = "No matches found"
+
+    return result, None
+
+
+# Completeness check constants
+_CC_WEIGHT_TITLES = 0.20
+_CC_WEIGHT_DESCRIPTIONS = 0.30
+_CC_WEIGHT_FILE_PATHS = 0.25
+_CC_WEIGHT_ESTIMATES = 0.25
+
+
+def check_spec_completeness(
+    spec_id: str,
+    *,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Check spec completeness and calculate a score (0-100).
+
+    Evaluates spec quality by checking for:
+    - Empty titles
+    - Missing task descriptions
+    - Missing file_path for implementation/refactoring tasks
+    - Missing estimated_hours
+
+    Args:
+        spec_id: Specification ID to check.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "completeness_score": ..., ...}, None)
+        On failure: (None, "error message")
+    """
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found"
+
+    # Load spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if not spec_path:
+        return None, f"Specification '{spec_id}' not found"
+    spec_data = load_spec(spec_id, specs_dir)
+    if not spec_data:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    if not hierarchy:
+        return {
+            "spec_id": spec_id,
+            "completeness_score": 100,
+            "categories": {},
+            "issues": [],
+            "message": "No hierarchy nodes to check",
+        }, None
+
+    # Helper functions
+    def _nonempty_string(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip())
+
+    def _has_description(metadata: Dict[str, Any]) -> bool:
+        if _nonempty_string(metadata.get("description")):
+            return True
+        details = metadata.get("details")
+        if _nonempty_string(details):
+            return True
+        if isinstance(details, list):
+            return any(_nonempty_string(item) for item in details)
+        return False
+
+    # Tracking
+    issues: List[Dict[str, Any]] = []
+    categories: Dict[str, Dict[str, Any]] = {
+        "titles": {"complete": 0, "total": 0, "score": 0.0},
+        "descriptions": {"complete": 0, "total": 0, "score": 0.0},
+        "file_paths": {"complete": 0, "total": 0, "score": 0.0},
+        "estimates": {"complete": 0, "total": 0, "score": 0.0},
+    }
+
+    # Check each node
+    for node_id, node in hierarchy.items():
+        if node_id == "spec-root":
+            continue
+        if not isinstance(node, dict):
+            continue
+
+        node_type = node.get("type", "")
+        title = node.get("title", "")
+        metadata = node.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        # Check title (all nodes)
+        categories["titles"]["total"] += 1
+        if _nonempty_string(title):
+            categories["titles"]["complete"] += 1
+        else:
+            issues.append({
+                "node_id": node_id,
+                "category": "titles",
+                "message": "Empty or missing title",
+            })
+
+        # Check description (tasks and verify nodes only)
+        if node_type in ("task", "verify"):
+            categories["descriptions"]["total"] += 1
+            if _has_description(metadata):
+                categories["descriptions"]["complete"] += 1
+            else:
+                issues.append({
+                    "node_id": node_id,
+                    "category": "descriptions",
+                    "message": "Missing description",
+                })
+
+            # Check file_path (implementation/refactoring tasks only)
+            task_category = metadata.get("task_category", "")
+            if task_category in ("implementation", "refactoring"):
+                categories["file_paths"]["total"] += 1
+                if _nonempty_string(metadata.get("file_path")):
+                    categories["file_paths"]["complete"] += 1
+                else:
+                    issues.append({
+                        "node_id": node_id,
+                        "category": "file_paths",
+                        "message": "Missing file_path for implementation task",
+                    })
+
+            # Check estimated_hours (tasks only)
+            if node_type == "task":
+                categories["estimates"]["total"] += 1
+                est = metadata.get("estimated_hours")
+                if isinstance(est, (int, float)) and est > 0:
+                    categories["estimates"]["complete"] += 1
+                else:
+                    issues.append({
+                        "node_id": node_id,
+                        "category": "estimates",
+                        "message": "Missing or invalid estimated_hours",
+                    })
+
+    # Calculate category scores
+    for cat_data in categories.values():
+        if cat_data["total"] > 0:
+            cat_data["score"] = round(cat_data["complete"] / cat_data["total"], 2)
+        else:
+            cat_data["score"] = 1.0  # No items to check = complete
+
+    # Calculate weighted completeness score
+    weighted_score = 0.0
+    total_weight = 0.0
+
+    if categories["titles"]["total"] > 0:
+        weighted_score += categories["titles"]["score"] * _CC_WEIGHT_TITLES
+        total_weight += _CC_WEIGHT_TITLES
+
+    if categories["descriptions"]["total"] > 0:
+        weighted_score += categories["descriptions"]["score"] * _CC_WEIGHT_DESCRIPTIONS
+        total_weight += _CC_WEIGHT_DESCRIPTIONS
+
+    if categories["file_paths"]["total"] > 0:
+        weighted_score += categories["file_paths"]["score"] * _CC_WEIGHT_FILE_PATHS
+        total_weight += _CC_WEIGHT_FILE_PATHS
+
+    if categories["estimates"]["total"] > 0:
+        weighted_score += categories["estimates"]["score"] * _CC_WEIGHT_ESTIMATES
+        total_weight += _CC_WEIGHT_ESTIMATES
+
+    # Normalize score
+    if total_weight > 0:
+        completeness_score = int(round((weighted_score / total_weight) * 100))
+    else:
+        completeness_score = 100  # Nothing to check
+
+    return {
+        "spec_id": spec_id,
+        "completeness_score": completeness_score,
+        "categories": categories,
+        "issues": issues,
+        "issue_count": len(issues),
+    }, None
+
+
+# Duplicate detection constants
+_DD_DEFAULT_THRESHOLD = 0.8
+_DD_MAX_PAIRS = 100
+_DD_VALID_SCOPES = {"titles", "descriptions", "both"}
+
+
+def detect_duplicate_tasks(
+    spec_id: str,
+    *,
+    scope: str = "titles",
+    threshold: float = _DD_DEFAULT_THRESHOLD,
+    max_pairs: int = _DD_MAX_PAIRS,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Detect duplicate or near-duplicate tasks in a spec.
+
+    Uses text similarity to find tasks with similar titles or descriptions.
+
+    Args:
+        spec_id: Specification ID to check.
+        scope: What to compare - "titles", "descriptions", or "both".
+        threshold: Similarity threshold (0.0-1.0). Default 0.8.
+        max_pairs: Maximum duplicate pairs to return. Default 100.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "duplicates": [...], ...}, None)
+        On failure: (None, "error message")
+    """
+    from difflib import SequenceMatcher
+
+    # Validate scope
+    if scope not in _DD_VALID_SCOPES:
+        return None, f"scope must be one of: {sorted(_DD_VALID_SCOPES)}"
+
+    # Validate threshold
+    if not isinstance(threshold, (int, float)) or not 0.0 <= threshold <= 1.0:
+        return None, "threshold must be a number between 0.0 and 1.0"
+
+    # Validate max_pairs
+    if not isinstance(max_pairs, int) or max_pairs <= 0:
+        return None, "max_pairs must be a positive integer"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+    if specs_dir is None:
+        return None, "No specs directory found"
+
+    # Load spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if not spec_path:
+        return None, f"Specification '{spec_id}' not found"
+    spec_data = load_spec(spec_id, specs_dir)
+    if not spec_data:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    if not hierarchy:
+        return {
+            "spec_id": spec_id,
+            "duplicates": [],
+            "duplicate_count": 0,
+            "scope": scope,
+            "threshold": threshold,
+            "message": "No hierarchy nodes to check",
+        }, None
+
+    # Collect tasks/verify nodes with their text
+    nodes: List[Dict[str, Any]] = []
+    for node_id, node in hierarchy.items():
+        if node_id == "spec-root":
+            continue
+        if not isinstance(node, dict):
+            continue
+        node_type = node.get("type", "")
+        if node_type not in ("task", "verify"):
+            continue
+
+        title = node.get("title", "") or ""
+        metadata = node.get("metadata", {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        description = metadata.get("description", "") or ""
+
+        nodes.append({
+            "id": node_id,
+            "title": title.strip().lower(),
+            "description": description.strip().lower(),
+        })
+
+    # Compare pairs
+    duplicates: List[Dict[str, Any]] = []
+    truncated = False
+    total_compared = 0
+
+    def similarity(a: str, b: str) -> float:
+        if not a or not b:
+            return 0.0
+        return SequenceMatcher(None, a, b).ratio()
+
+    for i, node_a in enumerate(nodes):
+        if len(duplicates) >= max_pairs:
+            truncated = True
+            break
+        for node_b in nodes[i + 1:]:
+            total_compared += 1
+            if len(duplicates) >= max_pairs:
+                truncated = True
+                break
+
+            # Calculate similarity based on scope
+            if scope == "titles":
+                sim = similarity(node_a["title"], node_b["title"])
+            elif scope == "descriptions":
+                sim = similarity(node_a["description"], node_b["description"])
+            else:  # both
+                title_sim = similarity(node_a["title"], node_b["title"])
+                desc_sim = similarity(node_a["description"], node_b["description"])
+                sim = max(title_sim, desc_sim)
+
+            if sim >= threshold:
+                duplicates.append({
+                    "node_a": node_a["id"],
+                    "node_b": node_b["id"],
+                    "similarity": round(sim, 2),
+                    "scope": scope,
+                })
+
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "duplicates": duplicates,
+        "duplicate_count": len(duplicates),
+        "scope": scope,
+        "threshold": threshold,
+        "nodes_checked": len(nodes),
+        "pairs_compared": total_compared,
+    }
+
+    if truncated:
+        result["truncated"] = True
+        result["warnings"] = [f"Results limited to {max_pairs} pairs"]
+
+    return result, None

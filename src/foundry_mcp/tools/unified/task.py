@@ -45,12 +45,17 @@ from foundry_mcp.core.journal import (
 )
 from foundry_mcp.core.task import (
     add_task,
+    batch_update_tasks,
     check_dependencies,
     get_next_task,
+    manage_task_dependency,
+    move_task,
     prepare_task as core_prepare_task,
     remove_task,
+    REQUIREMENT_TYPES,
     update_estimate,
     update_task_metadata,
+    update_task_requirements,
 )
 from foundry_mcp.core.validation import (
     VALID_VERIFICATION_TYPES,
@@ -1929,6 +1934,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         )
 
     update_fields = [
+        payload.get("title"),
         payload.get("file_path"),
         payload.get("description"),
         acceptance_criteria,
@@ -1943,12 +1949,12 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
     )
     if not has_update:
         return _validation_error(
-            field="file_path",
+            field="title",
             action=action,
-            message="Provide at least one metadata field",
+            message="Provide at least one field to update",
             request_id=request_id,
             code=ErrorCode.MISSING_REQUIRED,
-            remediation="Provide file_path, description, acceptance_criteria, task_category, actual_hours, status_note, verification_type, command, and/or custom_metadata",
+            remediation="Provide title, file_path, description, acceptance_criteria, task_category, actual_hours, status_note, verification_type, command, and/or custom_metadata",
         )
 
     workspace = payload.get("workspace")
@@ -1976,6 +1982,8 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
             )
 
         fields_updated: List[str] = []
+        if payload.get("title") is not None:
+            fields_updated.append("title")
         if payload.get("file_path") is not None:
             fields_updated.append("file_path")
         if payload.get("description") is not None:
@@ -2015,6 +2023,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
     result, error = update_task_metadata(
         spec_id=spec_id.strip(),
         task_id=task_id.strip(),
+        title=payload.get("title"),
         file_path=payload.get("file_path"),
         description=payload.get("description"),
         acceptance_criteria=acceptance_criteria,
@@ -2024,6 +2033,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         verification_type=payload.get("verification_type"),
         command=payload.get("command"),
         custom_metadata=custom_metadata,
+        dry_run=dry_run_bool,
         specs_dir=specs_dir,
     )
     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -2054,6 +2064,537 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
+    return asdict(response)
+
+
+def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Move a task to a new position or parent.
+
+    Supports two modes:
+    1. Reorder within parent: only specify position (new_parent=None)
+    2. Reparent to different phase/task: specify new_parent, optionally position
+
+    Updates task counts on affected parents. Prevents circular references.
+    Emits warnings for cross-phase moves that might affect dependencies.
+    """
+    request_id = _request_id()
+    action = "move"
+    spec_id = payload.get("spec_id")
+    task_id = payload.get("task_id")
+    new_parent = payload.get("parent")  # Target parent (phase or task ID)
+    position = payload.get("position")  # 1-based position in children list
+
+    # Validate required fields
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec identifier",
+            request_id=request_id,
+        )
+    if not isinstance(task_id, str) or not task_id.strip():
+        return _validation_error(
+            field="task_id",
+            action=action,
+            message="Provide a non-empty task identifier",
+            request_id=request_id,
+        )
+
+    # Validate optional new_parent
+    if new_parent is not None and (
+        not isinstance(new_parent, str) or not new_parent.strip()
+    ):
+        return _validation_error(
+            field="parent",
+            action=action,
+            message="parent must be a non-empty string if provided",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    # Validate optional position (must be positive integer)
+    if position is not None:
+        if not isinstance(position, int) or position < 1:
+            return _validation_error(
+                field="position",
+                action=action,
+                message="position must be a positive integer (1-based)",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+
+    # Validate dry_run
+    dry_run = payload.get("dry_run", False)
+    if dry_run is not None and not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="dry_run must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+    dry_run_bool = bool(dry_run)
+
+    workspace = payload.get("workspace")
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if specs_dir is None:
+        return _specs_dir_missing_error(request_id)
+
+    start = time.perf_counter()
+
+    # Call the core move_task function
+    result, error, warnings = move_task(
+        spec_id=spec_id.strip(),
+        task_id=task_id.strip(),
+        new_parent=new_parent.strip() if new_parent else None,
+        position=position,
+        dry_run=dry_run_bool,
+        specs_dir=specs_dir,
+    )
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    if error or result is None:
+        # Determine appropriate error code based on error message
+        error_lower = (error or "").lower()
+        if "not found" in error_lower:
+            code = ErrorCode.TASK_NOT_FOUND
+            err_type = ErrorType.NOT_FOUND
+            remediation = "Verify the task ID and parent ID exist in the specification"
+        elif "circular" in error_lower:
+            code = ErrorCode.CIRCULAR_DEPENDENCY
+            err_type = ErrorType.CONFLICT
+            remediation = "Task cannot be moved under its own descendants"
+        elif "invalid position" in error_lower:
+            code = ErrorCode.INVALID_POSITION
+            err_type = ErrorType.VALIDATION
+            remediation = "Specify a valid position within the children list"
+        elif "cannot move" in error_lower or "invalid" in error_lower:
+            code = ErrorCode.INVALID_PARENT
+            err_type = ErrorType.VALIDATION
+            remediation = "Specify a valid phase, group, or task as the target parent"
+        else:
+            code = ErrorCode.VALIDATION_ERROR
+            err_type = ErrorType.VALIDATION
+            remediation = "Check task ID, parent, and position parameters"
+
+        return asdict(
+            error_response(
+                error or "Failed to move task",
+                error_code=code,
+                error_type=err_type,
+                remediation=remediation,
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    # Build success response with warnings if any
+    response = success_response(
+        **result,
+        request_id=request_id,
+        warnings=warnings if warnings else None,
+        telemetry={"duration_ms": round(elapsed_ms, 2)},
+    )
+    _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
+    _metrics.counter(
+        _metric(action),
+        labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
+    )
+    return asdict(response)
+
+
+def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Add a dependency relationship between two tasks.
+
+    Manages blocks, blocked_by, and depends relationships.
+    Updates both source and target tasks atomically.
+
+    Dependency types:
+    - blocks: Source task blocks target (target cannot start until source completes)
+    - blocked_by: Source task is blocked by target (source cannot start until target completes)
+    - depends: Soft dependency (informational, doesn't block)
+    """
+    request_id = _request_id()
+    action = "add-dependency"
+    spec_id = payload.get("spec_id")
+    task_id = payload.get("task_id")  # Source task
+    target_id = payload.get("target_id")  # Target task
+    dependency_type = payload.get("dependency_type", "blocks")
+
+    # Validate required fields
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec identifier",
+            request_id=request_id,
+        )
+    if not isinstance(task_id, str) or not task_id.strip():
+        return _validation_error(
+            field="task_id",
+            action=action,
+            message="Provide a non-empty source task identifier",
+            request_id=request_id,
+        )
+    if not isinstance(target_id, str) or not target_id.strip():
+        return _validation_error(
+            field="target_id",
+            action=action,
+            message="Provide a non-empty target task identifier",
+            request_id=request_id,
+        )
+
+    # Validate dependency_type
+    valid_types = ("blocks", "blocked_by", "depends")
+    if dependency_type not in valid_types:
+        return _validation_error(
+            field="dependency_type",
+            action=action,
+            message=f"Must be one of: {', '.join(valid_types)}",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    # Validate dry_run
+    dry_run = payload.get("dry_run", False)
+    if dry_run is not None and not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="dry_run must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+    dry_run_bool = bool(dry_run)
+
+    workspace = payload.get("workspace")
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if specs_dir is None:
+        return _specs_dir_missing_error(request_id)
+
+    start = time.perf_counter()
+
+    # Call the core function
+    result, error = manage_task_dependency(
+        spec_id=spec_id.strip(),
+        source_task_id=task_id.strip(),
+        target_task_id=target_id.strip(),
+        dependency_type=dependency_type,
+        action="add",
+        dry_run=dry_run_bool,
+        specs_dir=specs_dir,
+    )
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    if error or result is None:
+        # Determine appropriate error code based on error message
+        error_lower = (error or "").lower()
+        if "not found" in error_lower:
+            code = ErrorCode.TASK_NOT_FOUND
+            err_type = ErrorType.NOT_FOUND
+            remediation = "Verify both task IDs exist in the specification"
+        elif "circular" in error_lower:
+            code = ErrorCode.CIRCULAR_DEPENDENCY
+            err_type = ErrorType.CONFLICT
+            remediation = "This dependency would create a cycle"
+        elif "itself" in error_lower:
+            code = ErrorCode.SELF_REFERENCE
+            err_type = ErrorType.VALIDATION
+            remediation = "A task cannot depend on itself"
+        elif "already exists" in error_lower:
+            code = ErrorCode.DUPLICATE_ENTRY
+            err_type = ErrorType.CONFLICT
+            remediation = "This dependency already exists"
+        else:
+            code = ErrorCode.VALIDATION_ERROR
+            err_type = ErrorType.VALIDATION
+            remediation = "Check task IDs and dependency type"
+
+        return asdict(
+            error_response(
+                error or "Failed to add dependency",
+                error_code=code,
+                error_type=err_type,
+                remediation=remediation,
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    # Build success response
+    response = success_response(
+        **result,
+        request_id=request_id,
+        telemetry={"duration_ms": round(elapsed_ms, 2)},
+    )
+    _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
+    _metrics.counter(
+        _metric(action),
+        labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
+    )
+    return asdict(response)
+
+
+def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Remove a dependency relationship between two tasks.
+
+    Removes blocks, blocked_by, or depends relationships.
+    Updates both source and target tasks atomically for reciprocal relationships.
+    """
+    request_id = _request_id()
+    action = "remove-dependency"
+    spec_id = payload.get("spec_id")
+    task_id = payload.get("task_id")  # Source task
+    target_id = payload.get("target_id")  # Target task
+    dependency_type = payload.get("dependency_type", "blocks")
+
+    # Validate required fields
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec identifier",
+            request_id=request_id,
+        )
+    if not isinstance(task_id, str) or not task_id.strip():
+        return _validation_error(
+            field="task_id",
+            action=action,
+            message="Provide a non-empty source task identifier",
+            request_id=request_id,
+        )
+    if not isinstance(target_id, str) or not target_id.strip():
+        return _validation_error(
+            field="target_id",
+            action=action,
+            message="Provide a non-empty target task identifier",
+            request_id=request_id,
+        )
+
+    # Validate dependency_type
+    valid_types = ("blocks", "blocked_by", "depends")
+    if dependency_type not in valid_types:
+        return _validation_error(
+            field="dependency_type",
+            action=action,
+            message=f"Must be one of: {', '.join(valid_types)}",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    # Validate dry_run
+    dry_run = payload.get("dry_run", False)
+    if dry_run is not None and not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="dry_run must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+    dry_run_bool = bool(dry_run)
+
+    workspace = payload.get("workspace")
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if specs_dir is None:
+        return _specs_dir_missing_error(request_id)
+
+    start = time.perf_counter()
+
+    # Call the core function
+    result, error = manage_task_dependency(
+        spec_id=spec_id.strip(),
+        source_task_id=task_id.strip(),
+        target_task_id=target_id.strip(),
+        dependency_type=dependency_type,
+        action="remove",
+        dry_run=dry_run_bool,
+        specs_dir=specs_dir,
+    )
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    if error or result is None:
+        # Determine appropriate error code based on error message
+        error_lower = (error or "").lower()
+        if "does not exist" in error_lower:
+            # Dependency relationship doesn't exist
+            code = ErrorCode.DEPENDENCY_NOT_FOUND
+            err_type = ErrorType.NOT_FOUND
+            remediation = "This dependency does not exist"
+        elif "not found" in error_lower:
+            # Task or spec not found
+            code = ErrorCode.TASK_NOT_FOUND
+            err_type = ErrorType.NOT_FOUND
+            remediation = "Verify both task IDs exist in the specification"
+        else:
+            code = ErrorCode.VALIDATION_ERROR
+            err_type = ErrorType.VALIDATION
+            remediation = "Check task IDs and dependency type"
+
+        return asdict(
+            error_response(
+                error or "Failed to remove dependency",
+                error_code=code,
+                error_type=err_type,
+                remediation=remediation,
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    # Build success response
+    response = success_response(
+        **result,
+        request_id=request_id,
+        telemetry={"duration_ms": round(elapsed_ms, 2)},
+    )
+    _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
+    _metrics.counter(
+        _metric(action),
+        labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
+    )
+    return asdict(response)
+
+
+def _handle_add_requirement(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Add a structured requirement to a task's metadata.
+
+    Requirements are stored in metadata.requirements as a list of objects:
+    [{"id": "req-1", "type": "acceptance", "text": "..."}, ...]
+
+    Each requirement has:
+    - id: Auto-generated unique ID (e.g., "req-1", "req-2")
+    - type: Requirement type (acceptance, technical, constraint)
+    - text: Requirement description text
+    """
+    request_id = _request_id()
+    action = "add-requirement"
+    spec_id = payload.get("spec_id")
+    task_id = payload.get("task_id")
+    requirement_type = payload.get("requirement_type")
+    text = payload.get("text")
+
+    # Validate required fields
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec identifier",
+            request_id=request_id,
+        )
+    if not isinstance(task_id, str) or not task_id.strip():
+        return _validation_error(
+            field="task_id",
+            action=action,
+            message="Provide a non-empty task identifier",
+            request_id=request_id,
+        )
+    if not isinstance(requirement_type, str) or not requirement_type.strip():
+        return _validation_error(
+            field="requirement_type",
+            action=action,
+            message="Provide a requirement type",
+            request_id=request_id,
+        )
+
+    # Validate requirement_type
+    requirement_type_lower = requirement_type.lower().strip()
+    if requirement_type_lower not in REQUIREMENT_TYPES:
+        return _validation_error(
+            field="requirement_type",
+            action=action,
+            message=f"Must be one of: {', '.join(REQUIREMENT_TYPES)}",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    # Validate text
+    if not isinstance(text, str) or not text.strip():
+        return _validation_error(
+            field="text",
+            action=action,
+            message="Provide non-empty requirement text",
+            request_id=request_id,
+        )
+
+    # Validate dry_run
+    dry_run = payload.get("dry_run", False)
+    if dry_run is not None and not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="dry_run must be a boolean",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+    dry_run_bool = bool(dry_run)
+
+    workspace = payload.get("workspace")
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if specs_dir is None:
+        return _specs_dir_missing_error(request_id)
+
+    start = time.perf_counter()
+
+    # Call the core function
+    result, error = update_task_requirements(
+        spec_id=spec_id.strip(),
+        task_id=task_id.strip(),
+        action="add",
+        requirement_type=requirement_type_lower,
+        text=text.strip(),
+        dry_run=dry_run_bool,
+        specs_dir=specs_dir,
+    )
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    if error or result is None:
+        # Determine appropriate error code based on error message
+        error_lower = (error or "").lower()
+        if "not found" in error_lower:
+            if "specification" in error_lower:
+                code = ErrorCode.SPEC_NOT_FOUND
+                err_type = ErrorType.NOT_FOUND
+                remediation = "Verify the spec ID exists"
+            else:
+                code = ErrorCode.TASK_NOT_FOUND
+                err_type = ErrorType.NOT_FOUND
+                remediation = "Verify the task ID exists in the specification"
+        elif "maximum" in error_lower or "limit" in error_lower:
+            code = ErrorCode.LIMIT_EXCEEDED
+            err_type = ErrorType.VALIDATION
+            remediation = "Remove some requirements before adding new ones"
+        elif "requirement_type" in error_lower:
+            code = ErrorCode.INVALID_FORMAT
+            err_type = ErrorType.VALIDATION
+            remediation = f"Use one of: {', '.join(REQUIREMENT_TYPES)}"
+        else:
+            code = ErrorCode.VALIDATION_ERROR
+            err_type = ErrorType.VALIDATION
+            remediation = "Check task ID and requirement fields"
+
+        return asdict(
+            error_response(
+                error or "Failed to add requirement",
+                error_code=code,
+                error_type=err_type,
+                remediation=remediation,
+                request_id=request_id,
+                telemetry={"duration_ms": round(elapsed_ms, 2)},
+            )
+        )
+
+    # Build success response
+    response = success_response(
+        **result,
+        request_id=request_id,
+        telemetry={"duration_ms": round(elapsed_ms, 2)},
+    )
+    _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
+    _metrics.counter(
+        _metric(action),
+        labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
+    )
     return asdict(response)
 
 
@@ -2111,19 +2652,23 @@ def _match_nodes_for_batch(
 
 
 def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
-    """Batch update metadata across multiple nodes matching specified criteria.
+    """Batch update metadata across multiple tasks matching specified criteria.
 
     Filters (combined with AND logic):
-    - phase_id: Target all tasks under a specific phase
+    - status_filter: Filter by task status (pending, in_progress, completed, blocked)
+    - parent_filter: Filter by parent node ID (e.g., phase-1, task-2-1)
     - pattern: Regex pattern to match task titles/IDs
-    - node_type: Target by node type (task, verify, phase, subtask)
 
-    Metadata keys supported:
-    - file_path, verification_type, owners, labels, estimated_hours,
-      description, category, command
+    Legacy filters (deprecated, use parent_filter instead):
+    - phase_id: Alias for parent_filter
+
+    Metadata fields supported:
+    - description, file_path, estimated_hours, category, labels, owners
+    - update_metadata: Dict for custom metadata fields (verification_type, command, etc.)
     """
     request_id = _request_id()
     action = "metadata-batch"
+    start = time.perf_counter()
 
     # Required: spec_id
     spec_id = payload.get("spec_id")
@@ -2134,21 +2679,42 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
             message="Provide a non-empty spec identifier",
             request_id=request_id,
         )
+    spec_id = spec_id.strip()
 
-    # At least one filter is required
-    phase_id = payload.get("phase_id")
+    # Extract filter parameters
+    status_filter = payload.get("status_filter")
+    parent_filter = payload.get("parent_filter")
+    phase_id = payload.get("phase_id")  # Legacy alias for parent_filter
     pattern = payload.get("pattern")
-    node_type = payload.get("node_type")
 
-    if phase_id is not None and (not isinstance(phase_id, str) or not phase_id.strip()):
-        return _validation_error(
-            field="phase_id",
-            action=action,
-            message="phase_id must be a non-empty string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
+    # Use phase_id as parent_filter if parent_filter not provided (backwards compat)
+    if parent_filter is None and phase_id is not None:
+        parent_filter = phase_id
 
+    # Validate status_filter
+    if status_filter is not None:
+        if not isinstance(status_filter, str) or status_filter not in _ALLOWED_STATUS:
+            return _validation_error(
+                field="status_filter",
+                action=action,
+                message=f"status_filter must be one of: {sorted(_ALLOWED_STATUS)}",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+
+    # Validate parent_filter
+    if parent_filter is not None:
+        if not isinstance(parent_filter, str) or not parent_filter.strip():
+            return _validation_error(
+                field="parent_filter",
+                action=action,
+                message="parent_filter must be a non-empty string",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+        parent_filter = parent_filter.strip()
+
+    # Validate pattern
     if pattern is not None:
         if not isinstance(pattern, str) or not pattern.strip():
             return _validation_error(
@@ -2158,7 +2724,6 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
                 request_id=request_id,
                 code=ErrorCode.INVALID_FORMAT,
             )
-        # Validate regex
         try:
             re.compile(pattern)
         except re.error as exc:
@@ -2169,38 +2734,38 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
                 request_id=request_id,
                 code=ErrorCode.INVALID_FORMAT,
             )
-
-    if node_type is not None:
-        if not isinstance(node_type, str) or node_type not in _VALID_NODE_TYPES:
-            return _validation_error(
-                field="node_type",
-                action=action,
-                message=f"node_type must be one of: {sorted(_VALID_NODE_TYPES)}",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
+        pattern = pattern.strip()
 
     # At least one filter must be provided
-    has_filter = any([phase_id, pattern, node_type])
-    if not has_filter:
+    if not any([status_filter, parent_filter, pattern]):
         return _validation_error(
-            field="phase_id",
+            field="status_filter",
             action=action,
-            message="Provide at least one filter: phase_id, pattern, or node_type",
+            message="Provide at least one filter: status_filter, parent_filter, or pattern",
             request_id=request_id,
             code=ErrorCode.MISSING_REQUIRED,
-            remediation="Specify phase_id, pattern (regex), and/or node_type to target nodes",
+            remediation="Specify status_filter, parent_filter (or phase_id), and/or pattern to target tasks",
         )
 
-    # Validate metadata fields
-    file_path = payload.get("file_path")
-    verification_type = payload.get("verification_type")
-    owners = payload.get("owners")
-    labels = payload.get("labels")
-    estimated_hours = payload.get("estimated_hours")
+    # Extract metadata fields
     description = payload.get("description")
+    file_path = payload.get("file_path")
+    estimated_hours = payload.get("estimated_hours")
     category = payload.get("category")
-    command = payload.get("command")
+    labels = payload.get("labels")
+    owners = payload.get("owners")
+    update_metadata = payload.get("update_metadata")  # Dict for custom fields
+    dry_run = payload.get("dry_run", False)
+
+    # Validate metadata fields
+    if description is not None and not isinstance(description, str):
+        return _validation_error(
+            field="description",
+            action=action,
+            message="description must be a string",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
 
     if file_path is not None and not isinstance(file_path, str):
         return _validation_error(
@@ -2211,20 +2776,33 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    if verification_type is not None:
-        if not isinstance(verification_type, str):
+    if estimated_hours is not None:
+        if not isinstance(estimated_hours, (int, float)) or estimated_hours < 0:
             return _validation_error(
-                field="verification_type",
+                field="estimated_hours",
                 action=action,
-                message="verification_type must be a string",
+                message="estimated_hours must be a non-negative number",
                 request_id=request_id,
                 code=ErrorCode.INVALID_FORMAT,
             )
-        if verification_type not in VALID_VERIFICATION_TYPES:
+
+    if category is not None and not isinstance(category, str):
+        return _validation_error(
+            field="category",
+            action=action,
+            message="category must be a string",
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    if labels is not None:
+        if not isinstance(labels, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
+        ):
             return _validation_error(
-                field="verification_type",
+                field="labels",
                 action=action,
-                message=f"verification_type must be one of: {sorted(VALID_VERIFICATION_TYPES)}",
+                message="labels must be a dict with string keys and values",
                 request_id=request_id,
                 code=ErrorCode.INVALID_FORMAT,
             )
@@ -2239,77 +2817,15 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
                 code=ErrorCode.INVALID_FORMAT,
             )
 
-    if labels is not None:
-        if not isinstance(labels, dict) or not all(
-            isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
-        ):
-            return _validation_error(
-                field="labels",
-                action=action,
-                message="labels must be a dict with string keys and values",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-
-    if estimated_hours is not None and not isinstance(estimated_hours, (int, float)):
+    if update_metadata is not None and not isinstance(update_metadata, dict):
         return _validation_error(
-            field="estimated_hours",
+            field="update_metadata",
             action=action,
-            message="estimated_hours must be a number",
+            message="update_metadata must be a dict",
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    if description is not None and not isinstance(description, str):
-        return _validation_error(
-            field="description",
-            action=action,
-            message="description must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if category is not None and not isinstance(category, str):
-        return _validation_error(
-            field="category",
-            action=action,
-            message="category must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if command is not None and not isinstance(command, str):
-        return _validation_error(
-            field="command",
-            action=action,
-            message="command must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    # At least one metadata field must be provided
-    metadata_fields = [
-        file_path,
-        verification_type,
-        owners,
-        labels,
-        estimated_hours,
-        description,
-        category,
-        command,
-    ]
-    has_metadata = any(field is not None for field in metadata_fields)
-    if not has_metadata:
-        return _validation_error(
-            field="file_path",
-            action=action,
-            message="Provide at least one metadata field to update",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-            remediation="Specify file_path, verification_type, owners, labels, estimated_hours, description, category, or command",
-        )
-
-    dry_run = payload.get("dry_run", False)
     if dry_run is not None and not isinstance(dry_run, bool):
         return _validation_error(
             field="dry_run",
@@ -2318,164 +2834,117 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
-    dry_run_bool = bool(dry_run)
 
-    # Load spec
+    # At least one metadata field must be provided
+    has_metadata = any([
+        description is not None,
+        file_path is not None,
+        estimated_hours is not None,
+        category is not None,
+        labels is not None,
+        owners is not None,
+        update_metadata,
+    ])
+    if not has_metadata:
+        return _validation_error(
+            field="description",
+            action=action,
+            message="Provide at least one metadata field to update",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+            remediation="Specify description, file_path, estimated_hours, category, labels, owners, or update_metadata",
+        )
+
+    # Resolve specs directory
     workspace = payload.get("workspace")
     specs_dir = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
-    if error:
-        return error
-    assert spec_data is not None
+    if specs_dir is None:
+        return _specs_dir_missing_error(request_id)
 
-    start = time.perf_counter()
-    hierarchy = spec_data.get("hierarchy", {})
-
-    # Find matching nodes
-    matched_nodes = _match_nodes_for_batch(
-        hierarchy,
-        phase_id=phase_id.strip() if phase_id else None,
-        pattern=pattern.strip() if pattern else None,
-        node_type=node_type,
+    # Delegate to core helper
+    result, error = batch_update_tasks(
+        spec_id,
+        status_filter=status_filter,
+        parent_filter=parent_filter,
+        pattern=pattern,
+        description=description,
+        file_path=file_path,
+        estimated_hours=float(estimated_hours) if estimated_hours is not None else None,
+        category=category,
+        labels=labels,
+        owners=owners,
+        custom_metadata=update_metadata,
+        dry_run=bool(dry_run),
+        specs_dir=specs_dir,
     )
 
-    if not matched_nodes:
-        elapsed_ms = (time.perf_counter() - start) * 1000
+    elapsed_ms = (time.perf_counter() - start) * 1000
+
+    if error:
+        _metrics.counter(_metric(action), labels={"status": "error"})
+        # Map helper errors to response-v2 format
+        if "not found" in error.lower():
+            return asdict(
+                error_response(
+                    error,
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation="Check spec_id and parent_filter values",
+                    request_id=request_id,
+                )
+            )
+        if "at least one" in error.lower() or "must be" in error.lower():
+            return asdict(
+                error_response(
+                    error,
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Check filter and metadata parameters",
+                    request_id=request_id,
+                )
+            )
         return asdict(
-            success_response(
-                spec_id=spec_id.strip(),
-                matched_count=0,
-                updated_count=0,
-                nodes=[],
-                filters={
-                    "phase_id": phase_id,
-                    "pattern": pattern,
-                    "node_type": node_type,
-                },
-                dry_run=dry_run_bool,
-                message="No nodes matched the specified filters",
+            error_response(
+                error,
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check filesystem permissions and retry",
                 request_id=request_id,
-                telemetry={"duration_ms": round(elapsed_ms, 2)},
             )
         )
 
-    # Build metadata update dict
-    metadata_update: Dict[str, Any] = {}
-    if file_path is not None:
-        metadata_update["file_path"] = file_path
-    if verification_type is not None:
-        metadata_update["verification_type"] = verification_type
-    if owners is not None:
-        metadata_update["owners"] = owners
-    if labels is not None:
-        metadata_update["labels"] = labels
-    if estimated_hours is not None:
-        metadata_update["estimated_hours"] = float(estimated_hours)
-    if description is not None:
-        metadata_update["description"] = description
-    if category is not None:
-        metadata_update["category"] = category
-    if command is not None:
-        metadata_update["command"] = command
+    assert result is not None
 
-    # Capture original values for diff preview and rollback
-    original_metadata: Dict[str, Dict[str, Any]] = {}
-    for node_id in matched_nodes:
-        node = hierarchy.get(node_id, {})
-        existing_meta = node.get("metadata", {})
-        # Store only the fields we're updating
-        original_metadata[node_id] = {
-            key: existing_meta.get(key) for key in metadata_update.keys()
-        }
-
-    # Preview or apply
-    updated_nodes: List[Dict[str, Any]] = []
-    for node_id in matched_nodes:
-        node = hierarchy.get(node_id, {})
-        orig_vals = original_metadata[node_id]
-        node_info: Dict[str, Any] = {
-            "node_id": node_id,
-            "title": node.get("title", ""),
-            "type": node.get("type", ""),
-            "fields_updated": list(metadata_update.keys()),
-        }
-
-        # Add diff preview: show old vs new values for each field
-        diff: Dict[str, Dict[str, Any]] = {}
-        for key, new_val in metadata_update.items():
-            old_val = orig_vals.get(key)
-            if old_val != new_val:
-                diff[key] = {"old": old_val, "new": new_val}
-        if diff:
-            node_info["diff"] = diff
-
-        updated_nodes.append(node_info)
-
-        if not dry_run_bool:
-            # Apply metadata update
-            if "metadata" not in node:
-                node["metadata"] = {}
-            node["metadata"].update(metadata_update)
-
-    # Save if not dry_run, with rollback on failure
-    if not dry_run_bool:
-        if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-            # Rollback: restore original metadata values
-            for node_id, orig_vals in original_metadata.items():
-                node = hierarchy.get(node_id, {})
-                if "metadata" in node:
-                    for key, orig_val in orig_vals.items():
-                        if orig_val is None:
-                            node["metadata"].pop(key, None)
-                        else:
-                            node["metadata"][key] = orig_val
-            return asdict(
-                error_response(
-                    "Failed to save spec after batch update; changes rolled back",
-                    error_code=ErrorCode.INTERNAL_ERROR,
-                    error_type=ErrorType.INTERNAL,
-                    remediation="Check filesystem permissions and retry",
-                    request_id=request_id,
-                    data={
-                        "rollback_applied": True,
-                        "nodes_affected": len(matched_nodes),
-                    },
-                )
-            )
-
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    warnings: List[str] = []
-    if len(matched_nodes) > _TASK_WARNING_THRESHOLD:
+    # Build response with response-v2 envelope
+    warnings: List[str] = result.get("warnings", [])
+    if result["matched_count"] > _TASK_WARNING_THRESHOLD and not warnings:
         warnings.append(
-            f"Updated {len(matched_nodes)} nodes; consider using more specific filters."
+            f"Updated {result['matched_count']} tasks; consider using more specific filters."
         )
 
     response = success_response(
-        spec_id=spec_id.strip(),
-        matched_count=len(matched_nodes),
-        updated_count=len(matched_nodes) if not dry_run_bool else 0,
-        nodes=updated_nodes,
-        filters={
-            "phase_id": phase_id,
-            "pattern": pattern,
-            "node_type": node_type,
-        },
-        metadata_applied=metadata_update,
-        dry_run=dry_run_bool,
+        spec_id=result["spec_id"],
+        matched_count=result["matched_count"],
+        updated_count=result["updated_count"],
+        skipped_count=result.get("skipped_count", 0),
+        nodes=result["nodes"],
+        filters=result["filters"],
+        metadata_applied=result["metadata_applied"],
+        dry_run=result["dry_run"],
         request_id=request_id,
         telemetry={"duration_ms": round(elapsed_ms, 2)},
     )
+
+    response_dict = asdict(response)
     if warnings:
-        response_dict = asdict(response)
         meta = response_dict.setdefault("meta", {})
         meta["warnings"] = warnings
-        _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
-        _metrics.counter(_metric(action), labels={"status": "success"})
-        return response_dict
+    if result.get("skipped_tasks"):
+        response_dict["data"]["skipped_tasks"] = result["skipped_tasks"]
 
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return response_dict
 
 
 def _handle_fix_verification_types(
@@ -2654,6 +3123,26 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="add", handler=_handle_add, summary="Add a task"),
     ActionDefinition(name="remove", handler=_handle_remove, summary="Remove a task"),
     ActionDefinition(
+        name="move",
+        handler=_handle_move,
+        summary="Move task to new position or parent",
+    ),
+    ActionDefinition(
+        name="add-dependency",
+        handler=_handle_add_dependency,
+        summary="Add a dependency between two tasks",
+    ),
+    ActionDefinition(
+        name="remove-dependency",
+        handler=_handle_remove_dependency,
+        summary="Remove a dependency between two tasks",
+    ),
+    ActionDefinition(
+        name="add-requirement",
+        handler=_handle_add_requirement,
+        summary="Add a structured requirement to a task",
+    ),
+    ActionDefinition(
         name="update-estimate",
         handler=_handle_update_estimate,
         summary="Update estimated effort",
@@ -2769,6 +3258,8 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         owners: Optional[List[str]] = None,
         labels: Optional[Dict[str, str]] = None,
         category: Optional[str] = None,
+        parent_filter: Optional[str] = None,
+        update_metadata: Optional[Dict[str, Any]] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
@@ -2813,6 +3304,8 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "owners": owners,
             "labels": labels,
             "category": category,
+            "parent_filter": parent_filter,
+            "update_metadata": update_metadata,
         }
         return _dispatch_task_action(action=action, payload=payload, config=config)
 

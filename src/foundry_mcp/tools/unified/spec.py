@@ -32,8 +32,12 @@ from foundry_mcp.core.responses import (
 from foundry_mcp.core.spec import (
     TEMPLATES,
     TEMPLATE_DESCRIPTIONS,
+    check_spec_completeness,
+    detect_duplicate_tasks,
+    diff_specs,
     find_spec_file,
     find_specs_directory,
+    list_spec_backups,
     list_specs,
     load_spec,
 )
@@ -801,6 +805,263 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
 
 
+def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Compare two specs and return categorized changes."""
+    spec_id = payload.get("spec_id")
+    if not spec_id:
+        return asdict(
+            error_response(
+                "spec_id is required for diff action",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide the spec_id of the current spec to compare",
+            )
+        )
+
+    # Target can be a backup timestamp or another spec_id
+    target = payload.get("target")
+    workspace = payload.get("workspace")
+    max_results = payload.get("limit")
+
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory",
+            )
+        )
+
+    # If no target specified, diff against latest backup
+    if not target:
+        backups = list_spec_backups(spec_id, specs_dir=specs_dir)
+        if backups["count"] == 0:
+            return asdict(
+                error_response(
+                    f"No backups found for spec '{spec_id}'",
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation="Create a backup first using spec save operations",
+                )
+            )
+        # Use latest backup as source (older state)
+        source_path = backups["backups"][0]["file_path"]
+    else:
+        # Check if target is a timestamp (backup) or spec_id
+        backup_file = specs_dir / ".backups" / spec_id / f"{target}.json"
+        if backup_file.is_file():
+            source_path = str(backup_file)
+        else:
+            # Treat as another spec_id
+            source_path = target
+
+    result = diff_specs(
+        source=source_path,
+        target=spec_id,
+        specs_dir=specs_dir,
+        max_results=max_results,
+    )
+
+    if "error" in result and not result.get("success", True):
+        return asdict(
+            error_response(
+                result["error"],
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Verify both specs exist and are accessible",
+            )
+        )
+
+    return asdict(
+        success_response(
+            spec_id=spec_id,
+            compared_to=source_path if not target else target,
+            summary=result["summary"],
+            changes=result["changes"],
+            partial=result["partial"],
+        )
+    )
+
+
+def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """List spec history including backups and revision history."""
+    spec_id = payload.get("spec_id")
+    if not spec_id:
+        return asdict(
+            error_response(
+                "spec_id is required for history action",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide the spec_id to view history",
+            )
+        )
+
+    workspace = payload.get("workspace")
+    cursor = payload.get("cursor")
+    limit = payload.get("limit")
+
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory",
+            )
+        )
+
+    # Get backups with pagination
+    backups_result = list_spec_backups(
+        spec_id, specs_dir=specs_dir, cursor=cursor, limit=limit
+    )
+
+    # Get revision history from spec metadata
+    spec_data = load_spec(spec_id, specs_dir)
+    revision_history = []
+    if spec_data:
+        metadata = spec_data.get("metadata", {})
+        revision_history = metadata.get("revision_history", [])
+
+    # Merge and sort entries (backups and revisions)
+    history_entries = []
+
+    # Add backups as history entries
+    for backup in backups_result["backups"]:
+        history_entries.append({
+            "type": "backup",
+            "timestamp": backup["timestamp"],
+            "file_path": backup["file_path"],
+            "file_size_bytes": backup["file_size_bytes"],
+        })
+
+    # Add revision history entries
+    for rev in revision_history:
+        history_entries.append({
+            "type": "revision",
+            "timestamp": rev.get("date"),
+            "version": rev.get("version"),
+            "changes": rev.get("changes"),
+            "author": rev.get("author"),
+        })
+
+    return asdict(
+        success_response(
+            spec_id=spec_id,
+            entries=history_entries,
+            backup_count=backups_result["count"],
+            revision_count=len(revision_history),
+            pagination=backups_result["pagination"],
+        )
+    )
+
+
+def _handle_completeness_check(
+    *, config: ServerConfig, payload: Dict[str, Any]
+) -> dict:
+    """Check spec completeness and return a score (0-100)."""
+    spec_id = payload.get("spec_id")
+    if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
+        return asdict(
+            error_response(
+                "spec_id is required for completeness-check action",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide the spec_id to check completeness",
+            )
+        )
+
+    workspace = payload.get("workspace")
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory",
+            )
+        )
+
+    result, error = check_spec_completeness(spec_id, specs_dir=specs_dir)
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.SPEC_NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation='Verify the spec ID exists using spec(action="list").',
+                details={"spec_id": spec_id},
+            )
+        )
+
+    return asdict(success_response(**result))
+
+
+def _handle_duplicate_detection(
+    *, config: ServerConfig, payload: Dict[str, Any]
+) -> dict:
+    """Detect duplicate or near-duplicate tasks in a spec."""
+    spec_id = payload.get("spec_id")
+    if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
+        return asdict(
+            error_response(
+                "spec_id is required for duplicate-detection action",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide the spec_id to check for duplicates",
+            )
+        )
+
+    workspace = payload.get("workspace")
+    scope = payload.get("scope", "titles")
+    threshold = payload.get("threshold", 0.8)
+    max_pairs = payload.get("max_pairs", 100)
+
+    # Validate threshold
+    if not isinstance(threshold, (int, float)) or not 0.0 <= threshold <= 1.0:
+        return asdict(
+            error_response(
+                "threshold must be a number between 0.0 and 1.0",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+            )
+        )
+
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory",
+            )
+        )
+
+    result, error = detect_duplicate_tasks(
+        spec_id,
+        scope=scope,
+        threshold=threshold,
+        max_pairs=max_pairs,
+        specs_dir=specs_dir,
+    )
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.SPEC_NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation='Verify the spec ID exists using spec(action="list").',
+                details={"spec_id": spec_id},
+            )
+        )
+
+    return asdict(success_response(**result))
+
+
 _ACTIONS = [
     ActionDefinition(name="find", handler=_handle_find, summary="Find a spec by ID"),
     ActionDefinition(name="get", handler=_handle_get, summary="Get raw spec JSON (minified)"),
@@ -827,6 +1088,26 @@ _ACTIONS = [
         name="schema",
         handler=_handle_schema,
         summary="Get valid values for spec fields",
+    ),
+    ActionDefinition(
+        name="diff",
+        handler=_handle_diff,
+        summary="Compare spec against backup or another spec",
+    ),
+    ActionDefinition(
+        name="history",
+        handler=_handle_history,
+        summary="List spec backups and revision history",
+    ),
+    ActionDefinition(
+        name="completeness-check",
+        handler=_handle_completeness_check,
+        summary="Check spec completeness and return a score (0-100)",
+    ),
+    ActionDefinition(
+        name="duplicate-detection",
+        handler=_handle_duplicate_detection,
+        summary="Detect duplicate or near-duplicate tasks",
     ),
 ]
 
@@ -869,6 +1150,7 @@ def register_unified_spec_tool(mcp: FastMCP, config: ServerConfig) -> None:
         directory: Optional[str] = None,
         path: Optional[str] = None,
         bottleneck_threshold: Optional[int] = None,
+        target: Optional[str] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
@@ -883,6 +1165,7 @@ def register_unified_spec_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "directory": directory,
             "path": path,
             "bottleneck_threshold": bottleneck_threshold,
+            "target": target,
         }
         return _dispatch_spec_action(action=action, payload=payload, config=config)
 
