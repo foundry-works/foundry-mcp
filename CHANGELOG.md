@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-27
+
+### Added
+
+- **Spec Modification Capabilities**: Complete implementation of dynamic spec modification (7 phases, 54 tasks)
+  - **Task Hierarchy Mutations**: `task action=move` for repositioning tasks within/across phases with circular reference prevention
+  - **Dependency Management**: `task action=add-dependency`, `task action=remove-dependency` for blocks/blocked_by/depends relationships
+  - **Task Requirements**: `task action=add-requirement` for adding structured requirements to tasks
+  - **Bulk Operations**: `authoring action=phase-add-bulk` for batch phase creation, `authoring action=phase-template` for applying predefined structures
+  - **Metadata Batch Updates**: `task action=metadata-batch` with AND-based filtering by node_type, phase_id, or pattern regex
+  - **Find-Replace**: `authoring action=spec-find-replace` with regex support and scope filtering for bulk spec modifications
+  - **Spec Rollback**: `authoring action=spec-rollback` for restoring specs from automatic backups
+  - **Spec History & Diff**: `spec action=history` for backup timeline, `spec action=diff` for comparing specs
+  - **Validation Enhancements**: `spec action=completeness-check` with weighted scoring (0-100), `spec action=duplicate-detection` with configurable similarity threshold
+- **Standardized Error Codes**: New `ErrorCode` enum with semantic error codes per 07-error-semantics.md
+- **Contract Tests**: Comprehensive test suite for response-v2 envelope compliance across all phases
+
+### Changed
+
+- Updated capabilities manifest with 15 new actions documented
+- Spec modification spec moved from pending to active (100% complete)
+
 ## [0.4.2] - 2025-12-24
 
 ### Added

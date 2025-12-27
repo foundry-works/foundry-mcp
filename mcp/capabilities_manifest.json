@@ -2,7 +2,7 @@
   "schema_version": "1.1.0",
   "server": {
     "name": "foundry-mcp",
-    "version": "0.2.0",
+    "version": "0.5.0",
     "description": "MCP server for SDD spec management with tools, resources, and prompts"
   },
   "tools": {

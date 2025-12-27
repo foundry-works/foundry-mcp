@@ -458,7 +458,7 @@ class ServerConfig:
 
     # Server configuration
     server_name: str = "foundry-mcp"
-    server_version: str = "0.1.0"
+    server_version: str = "0.5.0"
 
     # Git workflow configuration
     git: GitSettings = field(default_factory=GitSettings)
