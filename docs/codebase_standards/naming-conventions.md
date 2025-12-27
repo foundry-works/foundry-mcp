@@ -20,7 +20,7 @@ Consistent naming shortens discovery time, improves LLM selection accuracy, and 
 |--------------|------------------|-------|
 | `environment` | `init`, `verify-env`, `verify-toolchain`, `setup`, `detect` | Workspace + toolchain hygiene |
 | `spec` | `find`, `list`, `validate`, `fix`, `stats`, `validate-fix`, `analyze`, `analyze-deps` | Discovery/validation/analysis |
-| `authoring` | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-remove`, `assumption-add`, `assumption-list`, `revision-add` | Spec mutations |
+| `authoring` | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-add-bulk`, `phase-remove`, `phase-move`, `phase-template`, `phase-update-metadata`, `assumption-add`, `assumption-list`, `revision-add`, `spec-find-replace`, `spec-rollback` | Spec mutations |
 | `task` | `next`, `prepare`, `start`, `complete`, `progress`, `query`, `hierarchy`, `block`, `unblock` | Task execution surface |
 | `lifecycle` | `activate`, `complete`, `archive`, `move`, `state` | Spec folder/state transitions |
 | `journal` | `add`, `list`, `list-unjournaled` | Journal records |

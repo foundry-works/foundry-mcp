@@ -2,7 +2,7 @@
   "schema_version": "1.1.0",
   "server": {
     "name": "foundry-mcp",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "description": "MCP server for SDD spec management with tools, resources, and prompts"
   },
   "tools": {
@@ -259,6 +259,7 @@
               "phase-remove",
               "phase-move",
               "phase-template",
+              "phase-update-metadata",
               "assumption-add",
               "assumption-list",
               "revision-add",
@@ -332,7 +333,7 @@
             "name": "phase_id",
             "type": "string",
             "required": false,
-            "description": "Phase identifier for phase-move action"
+            "description": "Phase identifier for phase-move/phase-update-metadata actions"
           },
           {
             "name": "position",
@@ -346,6 +347,24 @@
             "required": false,
             "default": true,
             "description": "Update phase blockers to maintain sequential dependencies after move"
+          },
+          {
+            "name": "estimated_hours",
+            "type": "number",
+            "required": false,
+            "description": "Estimated hours for phase-update-metadata action (must be >= 0)"
+          },
+          {
+            "name": "description",
+            "type": "string",
+            "required": false,
+            "description": "Description text for phase-update-metadata action"
+          },
+          {
+            "name": "purpose",
+            "type": "string",
+            "required": false,
+            "description": "Purpose text for phase-update-metadata action"
           },
           {
             "name": "find",
@@ -411,6 +430,17 @@
               "spec_id": "my-feature-spec-001",
               "phase_id": "phase-3",
               "position": 1
+            }
+          },
+          {
+            "description": "Update phase metadata",
+            "input": {
+              "action": "phase-update-metadata",
+              "spec_id": "my-feature-spec-001",
+              "phase_id": "phase-1",
+              "estimated_hours": 4.5,
+              "description": "Core implementation phase",
+              "purpose": "Build foundational components"
             }
           },
           {

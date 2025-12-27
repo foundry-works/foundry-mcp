@@ -42,6 +42,7 @@ from foundry_mcp.core.spec import (
     remove_phase,
     rollback_spec,
     update_frontmatter,
+    update_phase_metadata,
 )
 from foundry_mcp.core.validation import validate_spec
 from foundry_mcp.tools.unified.router import (
@@ -63,6 +64,7 @@ _ACTION_SUMMARY = {
     "phase-add-bulk": "Add a phase with pre-defined tasks in a single atomic operation",
     "phase-template": "List/show/apply phase templates to add pre-configured phases",
     "phase-move": "Reorder a phase within spec-root children",
+    "phase-update-metadata": "Update metadata fields of an existing phase",
     "phase-remove": "Remove an existing phase (and optionally dependents)",
     "assumption-add": "Append an assumption entry to spec metadata",
     "assumption-list": "List recorded assumptions for a spec",
@@ -1108,6 +1110,209 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
         success_response(
             data={"spec_id": spec_id, "dry_run": False, **(result or {})},
             warnings=warnings or None,
+            telemetry={"duration_ms": round(elapsed_ms, 2)},
+            request_id=request_id,
+        )
+    )
+
+
+def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
+    """Update metadata fields of an existing phase."""
+    request_id = _request_id()
+    action = "phase-update-metadata"
+
+    spec_id = payload.get("spec_id")
+    if not isinstance(spec_id, str) or not spec_id.strip():
+        return _validation_error(
+            field="spec_id",
+            action=action,
+            message="Provide a non-empty spec_id parameter",
+            remediation="Pass the spec identifier to authoring",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+        )
+    spec_id = spec_id.strip()
+
+    phase_id = payload.get("phase_id")
+    if not isinstance(phase_id, str) or not phase_id.strip():
+        return _validation_error(
+            field="phase_id",
+            action=action,
+            message="Provide a non-empty phase_id parameter",
+            remediation="Pass the phase identifier (e.g., 'phase-1')",
+            request_id=request_id,
+            code=ErrorCode.MISSING_REQUIRED,
+        )
+    phase_id = phase_id.strip()
+
+    # Extract optional metadata fields
+    estimated_hours = payload.get("estimated_hours")
+    description = payload.get("description")
+    purpose = payload.get("purpose")
+
+    # Validate at least one field is provided
+    has_update = any(v is not None for v in [estimated_hours, description, purpose])
+    if not has_update:
+        return _validation_error(
+            field="metadata",
+            action=action,
+            message="At least one metadata field must be provided",
+            remediation="Include estimated_hours, description, or purpose",
+            request_id=request_id,
+            code=ErrorCode.VALIDATION_FAILED,
+        )
+
+    # Validate estimated_hours if provided
+    if estimated_hours is not None:
+        if isinstance(estimated_hours, bool) or not isinstance(
+            estimated_hours, (int, float)
+        ):
+            return _validation_error(
+                field="estimated_hours",
+                action=action,
+                message="Provide a numeric value",
+                remediation="Set estimated_hours to a number >= 0",
+                request_id=request_id,
+            )
+        if estimated_hours < 0:
+            return _validation_error(
+                field="estimated_hours",
+                action=action,
+                message="Value must be non-negative",
+                remediation="Set hours to zero or greater",
+                request_id=request_id,
+            )
+        estimated_hours = float(estimated_hours)
+
+    # Validate description if provided
+    if description is not None and not isinstance(description, str):
+        return _validation_error(
+            field="description",
+            action=action,
+            message="Description must be a string",
+            remediation="Provide a text description",
+            request_id=request_id,
+        )
+
+    # Validate purpose if provided
+    if purpose is not None and not isinstance(purpose, str):
+        return _validation_error(
+            field="purpose",
+            action=action,
+            message="Purpose must be a string",
+            remediation="Provide a text purpose",
+            request_id=request_id,
+        )
+
+    dry_run = payload.get("dry_run", False)
+    if not isinstance(dry_run, bool):
+        return _validation_error(
+            field="dry_run",
+            action=action,
+            message="Expected a boolean value",
+            remediation="Set dry_run to true or false",
+            request_id=request_id,
+        )
+
+    path = payload.get("path")
+    if path is not None and not isinstance(path, str):
+        return _validation_error(
+            field="path",
+            action=action,
+            message="Workspace path must be a string",
+            remediation="Provide a valid workspace path",
+            request_id=request_id,
+        )
+
+    specs_dir = _resolve_specs_dir(config, path)
+    if specs_dir is None:
+        return _specs_directory_missing_error(request_id)
+
+    audit_log(
+        "tool_invocation",
+        tool="authoring",
+        action=action,
+        spec_id=spec_id,
+        phase_id=phase_id,
+        dry_run=dry_run,
+    )
+
+    metric_key = _metric_name(action)
+    start_time = time.perf_counter()
+
+    try:
+        result, error = update_phase_metadata(
+            spec_id=spec_id,
+            phase_id=phase_id,
+            estimated_hours=estimated_hours,
+            description=description,
+            purpose=purpose,
+            dry_run=dry_run,
+            specs_dir=specs_dir,
+        )
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Unexpected error updating phase metadata")
+        _metrics.counter(metric_key, labels={"status": "error"})
+        return asdict(
+            error_response(
+                sanitize_error_message(exc, context="authoring"),
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check logs for details",
+                request_id=request_id,
+            )
+        )
+
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    _metrics.timer(metric_key + ".duration_ms", elapsed_ms)
+
+    if error:
+        _metrics.counter(metric_key, labels={"status": "error"})
+        lowered = error.lower()
+        if "specification" in lowered and "not found" in lowered:
+            return asdict(
+                error_response(
+                    f"Specification '{spec_id}' not found",
+                    error_code=ErrorCode.SPEC_NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation='Verify the spec ID via spec(action="list")',
+                    request_id=request_id,
+                )
+            )
+        if "phase" in lowered and "not found" in lowered:
+            return asdict(
+                error_response(
+                    f"Phase '{phase_id}' not found in spec '{spec_id}'",
+                    error_code=ErrorCode.TASK_NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation='Verify the phase ID via task(action="query")',
+                    request_id=request_id,
+                )
+            )
+        if "not a phase" in lowered:
+            return asdict(
+                error_response(
+                    f"Node '{phase_id}' is not a phase",
+                    error_code=ErrorCode.VALIDATION_FAILED,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Provide a valid phase ID (e.g., 'phase-1')",
+                    request_id=request_id,
+                )
+            )
+        return asdict(
+            error_response(
+                f"Failed to update phase metadata: {error}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check input values and retry",
+                request_id=request_id,
+            )
+        )
+
+    _metrics.counter(metric_key, labels={"status": "success"})
+    return asdict(
+        success_response(
+            data={"spec_id": spec_id, "phase_id": phase_id, **(result or {})},
             telemetry={"duration_ms": round(elapsed_ms, 2)},
             request_id=request_id,
         )
@@ -2614,6 +2819,12 @@ _AUTHORING_ROUTER = ActionRouter(
             handler=_handle_phase_move,
             summary=_ACTION_SUMMARY["phase-move"],
             aliases=("phase_move",),
+        ),
+        ActionDefinition(
+            name="phase-update-metadata",
+            handler=_handle_phase_update_metadata,
+            summary=_ACTION_SUMMARY["phase-update-metadata"],
+            aliases=("phase_update_metadata",),
         ),
         ActionDefinition(
             name="phase-remove",

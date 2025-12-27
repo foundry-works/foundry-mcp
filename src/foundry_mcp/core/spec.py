@@ -2323,6 +2323,148 @@ def move_phase(
     return result, None
 
 
+def update_phase_metadata(
+    spec_id: str,
+    phase_id: str,
+    *,
+    estimated_hours: Optional[float] = None,
+    description: Optional[str] = None,
+    purpose: Optional[str] = None,
+    dry_run: bool = False,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Update metadata fields of a phase in a specification.
+
+    Allows updating phase-level metadata such as estimated_hours, description,
+    and purpose. Tracks previous values for audit purposes.
+
+    Args:
+        spec_id: Specification ID containing the phase.
+        phase_id: Phase ID to update (e.g., "phase-1").
+        estimated_hours: New estimated hours value (must be >= 0 if provided).
+        description: New description text for the phase.
+        purpose: New purpose text for the phase.
+        dry_run: If True, validate and return preview without saving changes.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "phase_id": ..., "updates": [...], ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate spec_id
+    if not spec_id or not spec_id.strip():
+        return None, "Specification ID is required"
+
+    # Validate phase_id
+    if not phase_id or not phase_id.strip():
+        return None, "Phase ID is required"
+
+    # Validate estimated_hours if provided
+    if estimated_hours is not None:
+        if not isinstance(estimated_hours, (int, float)):
+            return None, "estimated_hours must be a number"
+        if estimated_hours < 0:
+            return None, "estimated_hours must be >= 0"
+
+    # Check that at least one field is being updated
+    has_update = any(
+        v is not None for v in [estimated_hours, description, purpose]
+    )
+    if not has_update:
+        return None, "At least one field (estimated_hours, description, purpose) must be provided"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return (
+            None,
+            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+        )
+
+    # Find and load the spec
+    spec_path = find_spec_file(spec_id, specs_dir)
+    if spec_path is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Failed to load specification '{spec_id}'"
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    # Validate phase exists
+    phase = hierarchy.get(phase_id)
+    if phase is None:
+        return None, f"Phase '{phase_id}' not found"
+
+    # Validate node type is phase
+    node_type = phase.get("type")
+    if node_type != "phase":
+        return None, f"Node '{phase_id}' is not a phase (type: {node_type})"
+
+    # Ensure metadata exists on phase
+    if "metadata" not in phase:
+        phase["metadata"] = {}
+
+    phase_metadata = phase["metadata"]
+
+    # Track updates with previous values
+    updates: List[Dict[str, Any]] = []
+
+    if estimated_hours is not None:
+        previous = phase_metadata.get("estimated_hours")
+        phase_metadata["estimated_hours"] = estimated_hours
+        updates.append({
+            "field": "estimated_hours",
+            "previous_value": previous,
+            "new_value": estimated_hours,
+        })
+
+    if description is not None:
+        description = description.strip() if description else description
+        previous = phase_metadata.get("description")
+        phase_metadata["description"] = description
+        updates.append({
+            "field": "description",
+            "previous_value": previous,
+            "new_value": description,
+        })
+
+    if purpose is not None:
+        purpose = purpose.strip() if purpose else purpose
+        previous = phase_metadata.get("purpose")
+        phase_metadata["purpose"] = purpose
+        updates.append({
+            "field": "purpose",
+            "previous_value": previous,
+            "new_value": purpose,
+        })
+
+    # Build result
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "phase_id": phase_id,
+        "phase_title": phase.get("title", ""),
+        "updates": updates,
+        "dry_run": dry_run,
+    }
+
+    if dry_run:
+        result["message"] = "Dry run - changes not saved"
+        return result, None
+
+    # Save the spec
+    saved = save_spec(spec_id, spec_data, specs_dir)
+    if not saved:
+        return None, "Failed to save specification"
+
+    return result, None
+
+
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     Get the hierarchical structure for a spec template.
