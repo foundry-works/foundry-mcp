@@ -264,7 +264,10 @@
               "assumption-list",
               "revision-add",
               "spec-find-replace",
-              "spec-rollback"
+              "spec-rollback",
+              "intake-add",
+              "intake-list",
+              "intake-dismiss"
             ],
             "description": "Authoring action"
           },
@@ -405,6 +408,92 @@
             "type": "string",
             "required": false,
             "description": "Backup timestamp for spec-rollback action (use spec history to list available)"
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "min_length": 1,
+              "max_length": 140
+            },
+            "description": "Title for intake-add action (required, 1-140 characters)"
+          },
+          {
+            "name": "priority",
+            "type": "string",
+            "required": false,
+            "default": "p2",
+            "enum": ["p0", "p1", "p2", "p3", "p4"],
+            "description": "Priority level for intake-add (p0=highest, p4=lowest, default p2)"
+          },
+          {
+            "name": "tags",
+            "type": "array",
+            "required": false,
+            "default": [],
+            "constraints": {
+              "max_items": 20,
+              "item_max_length": 32,
+              "item_pattern": "^[a-z0-9_-]+$"
+            },
+            "description": "Tags for intake-add (max 20 items, each 1-32 chars, lowercase alphanumeric with hyphens/underscores)"
+          },
+          {
+            "name": "source",
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "max_length": 100
+            },
+            "description": "Source context for intake-add (e.g., 'slack', 'email', max 100 chars)"
+          },
+          {
+            "name": "requester",
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "max_length": 100
+            },
+            "description": "Requester name for intake-add (max 100 chars)"
+          },
+          {
+            "name": "idempotency_key",
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "max_length": 64
+            },
+            "description": "Idempotency key for intake-add to prevent duplicates (max 64 chars)"
+          },
+          {
+            "name": "limit",
+            "type": "integer",
+            "required": false,
+            "default": 50,
+            "constraints": {
+              "min": 1,
+              "max": 200
+            },
+            "description": "Maximum items to return for intake-list (1-200, default 50)"
+          },
+          {
+            "name": "intake_id",
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "pattern": "^intake-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "description": "Intake item ID for intake-dismiss (required, format: intake-<uuid>)"
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "max_length": 200
+            },
+            "description": "Reason for dismissing intake item (max 200 chars)"
           }
         ],
         "version": "1.0.0",
@@ -470,6 +559,41 @@
               "action": "spec-rollback",
               "spec_id": "my-feature-spec-001",
               "version": "20251227T120000"
+            }
+          },
+          {
+            "description": "Capture a new work idea in the bikelane intake queue",
+            "input": {
+              "action": "intake-add",
+              "title": "Add dark mode support",
+              "description": "Users have requested dark mode for reduced eye strain",
+              "priority": "p2",
+              "tags": ["ui", "accessibility"],
+              "source": "user-feedback",
+              "requester": "product-team"
+            }
+          },
+          {
+            "description": "List pending intake items awaiting triage",
+            "input": {
+              "action": "intake-list",
+              "limit": 20
+            }
+          },
+          {
+            "description": "List intake items with pagination cursor",
+            "input": {
+              "action": "intake-list",
+              "cursor": "eyJvZmZzZXQiOiAyMH0=",
+              "limit": 50
+            }
+          },
+          {
+            "description": "Dismiss an intake item from the triage queue",
+            "input": {
+              "action": "intake-dismiss",
+              "intake_id": "intake-12345678-1234-1234-1234-123456789012",
+              "reason": "Duplicate of existing feature request"
             }
           }
         ]
@@ -1345,6 +1469,16 @@
         "owner": "spec-team",
         "dependencies": [],
         "created_at": "2025-11-27T00:00:00Z",
+        "expires_at": null
+      },
+      "intake_tools": {
+        "description": "Bikelane intake queue tools for fast work idea capture and triage (intake-add, intake-list, intake-dismiss)",
+        "state": "beta",
+        "default_enabled": true,
+        "percentage_rollout": 100,
+        "owner": "spec-team",
+        "dependencies": ["authoring_tools"],
+        "created_at": "2025-12-28T00:00:00Z",
         "expires_at": null
       },
       "llm_tools": {

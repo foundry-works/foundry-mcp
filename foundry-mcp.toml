@@ -4,6 +4,7 @@
 
 [workspace]
 specs_dir = "./specs"
+# bikelane_dir = "./specs/.bikelane"  # Optional: custom path for intake queue storage
 
 [logging]
 level = "INFO"

@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Intake Item Schema",
+  "description": "Schema for bikelane intake items - fast work idea capture",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "intake-v1",
+      "description": "Schema version identifier, fixed value 'intake-v1'"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^intake-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$",
+      "description": "Unique intake item identifier in format 'intake-<uuid4>'"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 140,
+      "description": "Brief title for the intake item (1-140 characters)"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "maxLength": 2000,
+      "description": "Detailed description of the work item (max 2000 characters)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["new", "dismissed"],
+      "description": "Item status: 'new' for triage queue, 'dismissed' for archived"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["p0", "p1", "p2", "p3", "p4"],
+      "default": "p2",
+      "description": "Priority level from p0 (highest) to p4 (lowest), defaults to p2"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32,
+        "pattern": "^[a-z0-9_-]+$"
+      },
+      "maxItems": 20,
+      "uniqueItems": true,
+      "default": [],
+      "description": "Tags for categorization (max 20 items, each 1-32 chars, lowercase alphanumeric with _ and -)"
+    },
+    "source": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Origin of the intake item (e.g., 'user-note', 'slack', 'email') max 100 chars"
+    },
+    "requester": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Person or entity who requested the work (max 100 chars)"
+    },
+    "idempotency_key": {
+      "type": ["string", "null"],
+      "maxLength": 64,
+      "description": "Optional client-provided key for deduplication (max 64 chars)"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": ".*Z$",
+      "description": "ISO 8601 UTC timestamp with Z suffix when item was created"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": ".*Z$",
+      "description": "ISO 8601 UTC timestamp with Z suffix of last update"
+    }
+  },
+  "additionalProperties": false
+}

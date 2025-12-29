@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-12-29
+
+### Added
+
+- **Bikelane Intake System**: Fast-capture queue for rapid idea/task capture with automatic triage workflow
+  - **intake-add**: Add items to the intake queue with title, description, priority (p0-p4), tags, source, and requester fields
+    - Idempotency key support for deduplication (checks last 100 items)
+    - Tag normalization to lowercase
+    - Full dry-run support for validation without persistence
+  - **intake-list**: List pending intake items in FIFO order with cursor-based pagination
+    - Configurable page size (1-200, default 50)
+    - Efficient line-hint seeking with fallback to full scan
+    - Returns total_count for queue size visibility
+  - **intake-dismiss**: Mark items as dismissed with optional reason
+    - Atomic file rewrite pattern for data integrity
+    - Supports dry-run mode
+  - JSONL-based storage at `specs/.bikelane/intake.jsonl` with fcntl file locking
+  - Automatic file rotation at 1000 items or 1MB
+  - Thread-safe and cross-process safe with 5-second lock timeout
+  - Security hardening: path traversal prevention, prompt injection sanitization, control character stripping
+  - Feature flag gated: `intake_tools` (experimental, opt-in)
+- **Intake Schema**: JSON Schema for intake-v1 format with comprehensive validation constraints
+- **Intake Documentation**: User guide at `docs/guides/intake.md`
+- **RESOURCE_BUSY Error Code**: New error code for lock contention scenarios
+
 ## [0.5.1] - 2025-12-27
 
 ### Added

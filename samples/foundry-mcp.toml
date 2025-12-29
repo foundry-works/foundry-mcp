@@ -22,6 +22,10 @@ specs_dir = "./specs"
 # Path to journals directory (defaults to specs_dir/journals)
 # journals_path = "./specs/journals"
 
+# Path to bikelane intake queue storage (defaults to specs_dir/.bikelane)
+# Env var: FOUNDRY_MCP_BIKELANE_DIR
+# bikelane_dir = "./specs/.bikelane"
+
 # =============================================================================
 # Logging Configuration
 # =============================================================================

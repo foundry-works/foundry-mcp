@@ -10,6 +10,7 @@ Environment variables:
 - FOUNDRY_MCP_WORKSPACE_ROOTS: Comma-separated list of workspace root paths
 - FOUNDRY_MCP_SPECS_DIR: Path to specs directory
 - FOUNDRY_MCP_JOURNALS_PATH: Path to journals directory
+- FOUNDRY_MCP_BIKELANE_DIR: Path to bikelane intake queue directory (default: specs/.bikelane)
 - FOUNDRY_MCP_LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR)
 - FOUNDRY_MCP_API_KEYS: Comma-separated list of valid API keys (optional)
 - FOUNDRY_MCP_REQUIRE_AUTH: Whether to require API key authentication (true/false)
@@ -459,6 +460,7 @@ class ServerConfig:
     workspace_roots: List[Path] = field(default_factory=list)
     specs_dir: Optional[Path] = None
     journals_path: Optional[Path] = None
+    bikelane_dir: Optional[Path] = None  # Intake queue storage (default: specs/.bikelane)
 
     # Logging configuration
     log_level: str = "INFO"
@@ -540,6 +542,8 @@ class ServerConfig:
                     self.specs_dir = Path(ws["specs_dir"])
                 if "journals_path" in ws:
                     self.journals_path = Path(ws["journals_path"])
+                if "bikelane_dir" in ws:
+                    self.bikelane_dir = Path(ws["bikelane_dir"])
 
             # Logging settings
             if "logging" in data:
@@ -633,6 +637,10 @@ class ServerConfig:
         # Journals path
         if journals := os.environ.get("FOUNDRY_MCP_JOURNALS_PATH"):
             self.journals_path = Path(journals)
+
+        # Bikelane directory (intake queue storage)
+        if bikelane := os.environ.get("FOUNDRY_MCP_BIKELANE_DIR"):
+            self.bikelane_dir = Path(bikelane)
 
         # Log level
         if level := os.environ.get("FOUNDRY_MCP_LOG_LEVEL"):
@@ -806,6 +814,28 @@ class ServerConfig:
             return False
 
         return key in self.api_keys
+
+    def get_bikelane_dir(self, specs_dir: Optional[Path] = None) -> Path:
+        """
+        Get the resolved bikelane directory path.
+
+        Priority:
+        1. Explicitly configured bikelane_dir (from TOML or env var)
+        2. Default: specs_dir/.bikelane (where specs_dir is resolved)
+
+        Args:
+            specs_dir: Optional specs directory to use for default path.
+                      If not provided, uses self.specs_dir or "./specs"
+
+        Returns:
+            Path to bikelane directory
+        """
+        if self.bikelane_dir is not None:
+            return self.bikelane_dir.expanduser()
+
+        # Fall back to default: specs/.bikelane
+        base_specs = specs_dir or self.specs_dir or Path("./specs")
+        return base_specs / ".bikelane"
 
     def setup_logging(self) -> None:
         """Configure logging based on settings."""
