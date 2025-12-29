@@ -207,11 +207,13 @@ class TestCLIResilience:
 
         Note: This test is skipped when running with pytest-xdist because
         SIGALRM doesn't work correctly with worker processes.
+
+        Uses 1 second timeout because signal.alarm requires int (0.5 becomes 0).
         """
 
-        @with_sync_timeout(seconds=0.5, error_message="Too slow!")
+        @with_sync_timeout(seconds=1, error_message="Too slow!")
         def slow_func():
-            time.sleep(2.0)
+            time.sleep(3.0)
             return "done"
 
         with pytest.raises(TimeoutException) as exc_info:

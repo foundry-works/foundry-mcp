@@ -65,11 +65,23 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip provider tests if the provider CLI is not available."""
+    """Skip provider tests if the provider CLI is not available or not configured."""
+    import os
+
     provider_markers = {"gemini", "codex", "claude", "cursor_agent", "opencode"}
+
+    # Check if live provider tests are explicitly enabled
+    live_tests_enabled = os.environ.get("FOUNDRY_ENABLE_LIVE_PROVIDER_TESTS", "").lower() in ("1", "true", "yes")
 
     for item in items:
         item_markers = {m.name for m in item.iter_markers()}
+
+        # Skip all live_providers tests unless explicitly enabled
+        if "live_providers" in item_markers and not live_tests_enabled:
+            item.add_marker(
+                pytest.mark.skip(reason="Live provider tests disabled (set FOUNDRY_ENABLE_LIVE_PROVIDER_TESTS=1 to enable)")
+            )
+            continue
 
         # Check provider availability for specific provider tests
         for provider in provider_markers:

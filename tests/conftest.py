@@ -233,6 +233,14 @@ def assert_response_contract():
     return _assert
 
 
+# Check if pytest-asyncio is available
+try:
+    import pytest_asyncio
+    HAS_PYTEST_ASYNCIO = True
+except ImportError:
+    HAS_PYTEST_ASYNCIO = False
+
+
 # Configure pytest to recognize our custom markers
 def pytest_configure(config):
     """Register custom markers."""
@@ -244,11 +252,21 @@ def pytest_configure(config):
         "markers",
         "requires_fresh_fixtures: mark test that requires up-to-date fixtures",
     )
+    config.addinivalue_line(
+        "markers",
+        "asyncio: mark test as async (requires pytest-asyncio)",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    """Modify test collection based on fixture requirements."""
+    """Modify test collection based on fixture requirements and async support."""
+    skip_asyncio = pytest.mark.skip(reason="pytest-asyncio not installed")
+
     for item in items:
+        # Skip async tests when pytest-asyncio is not available
+        if not HAS_PYTEST_ASYNCIO and item.get_closest_marker("asyncio"):
+            item.add_marker(skip_asyncio)
+
         # Check for requires_fresh_fixtures marker
         if item.get_closest_marker("requires_fresh_fixtures"):
             # These tests will fail-fast if any fixtures are stale

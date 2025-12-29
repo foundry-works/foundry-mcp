@@ -436,7 +436,15 @@ class TestLLMProviderBase:
 # OpenAIProvider Tests
 # =============================================================================
 
+# Check if openai package is available
+try:
+    import openai
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
 
+
+@pytest.mark.skipif(not HAS_OPENAI, reason="openai package not installed")
 class TestOpenAIProvider:
     """Tests for OpenAIProvider."""
 
