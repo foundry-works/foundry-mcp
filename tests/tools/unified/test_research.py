@@ -724,7 +724,7 @@ class TestFeatureFlag:
 
         # _dispatch_research_action doesn't check feature flag
         # The feature flag is checked in the registered tool function wrapper
-        result = _dispatch_research_action(action="route", prompt="Hello")
+        result = _dispatch_research_action(action="thread-list")
 
         assert result["success"] is True
 
