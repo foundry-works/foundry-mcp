@@ -63,7 +63,8 @@ def valid_spec():
 def medium_spec(valid_spec):
     """Return a medium-complexity spec with required task fields."""
     spec = copy.deepcopy(valid_spec)
-    spec["metadata"] = {"template": "medium", "mission": "Ship the feature"}
+    # Use explicit complexity metadata (template no longer indicates complexity)
+    spec["metadata"] = {"complexity": "medium", "mission": "Ship the feature"}
     task_metadata = spec["hierarchy"]["task-1"]["metadata"]
     task_metadata["description"] = "Implement the core task"
     task_metadata["acceptance_criteria"] = ["Core behavior matches requirements"]

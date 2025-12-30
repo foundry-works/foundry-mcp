@@ -27,7 +27,8 @@ from foundry_mcp.core.spec import list_specs as core_list_specs, load_spec
 logger = get_cli_logger()
 
 # Valid templates and categories
-TEMPLATES = ("simple", "medium", "complex", "security")
+# Note: Only 'empty' template is supported. Use phase templates to add structure.
+TEMPLATES = ("empty",)
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
 
@@ -51,20 +52,31 @@ def generate_spec_id(name: str) -> str:
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """Get the hierarchical structure for a spec template.
 
+    Only 'empty' template is supported. Use phase templates to add structure.
+
     Args:
-        template: Template type (simple, medium, complex, security).
+        template: Template type (only 'empty' is valid).
         category: Default task category.
 
     Returns:
         Hierarchy dict for the spec.
+
+    Raises:
+        ValueError: If template is not 'empty'.
     """
-    base_hierarchy = {
+    if template != "empty":
+        raise ValueError(
+            f"Invalid template '{template}'. Only 'empty' template is supported. "
+            f"Use phase templates to add structure."
+        )
+
+    return {
         "spec-root": {
             "type": "spec",
             "title": "",  # Filled in later
             "status": "pending",
             "parent": None,
-            "children": ["phase-1"],
+            "children": [],
             "total_tasks": 0,
             "completed_tasks": 0,
             "metadata": {
@@ -77,179 +89,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
                 "depends": [],
             },
         },
-        "phase-1": {
-            "type": "phase",
-            "title": "Planning & Discovery",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["task-1-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Initial planning and requirements gathering",
-                "estimated_hours": 2,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        },
-        "task-1-1": {
-            "type": "task",
-            "title": "Define requirements",
-            "status": "pending",
-            "parent": "phase-1",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "details": "Document the requirements and acceptance criteria",
-                "category": category,
-                "estimated_hours": 1,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        },
     }
-
-    if template == "simple":
-        return base_hierarchy
-
-    # Medium template adds implementation phase
-    if template in ("medium", "complex", "security"):
-        base_hierarchy["spec-root"]["children"].append("phase-2")
-        base_hierarchy["phase-1"]["dependencies"]["blocks"].append("phase-2")
-        base_hierarchy["phase-2"] = {
-            "type": "phase",
-            "title": "Implementation",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["task-2-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Core implementation work",
-                "estimated_hours": 8,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": ["phase-1"],
-                "depends": [],
-            },
-        }
-        base_hierarchy["task-2-1"] = {
-            "type": "task",
-            "title": "Implement core functionality",
-            "status": "pending",
-            "parent": "phase-2",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "details": "Implement the main features",
-                "category": category,
-                "estimated_hours": 4,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        }
-        base_hierarchy["spec-root"]["total_tasks"] = 2
-        base_hierarchy["phase-1"]["total_tasks"] = 1
-
-    # Complex template adds verification phase
-    if template in ("complex", "security"):
-        base_hierarchy["spec-root"]["children"].append("phase-3")
-        base_hierarchy["phase-2"]["dependencies"]["blocks"].append("phase-3")
-        base_hierarchy["phase-3"] = {
-            "type": "phase",
-            "title": "Verification & Testing",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["verify-3-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Verify implementation meets requirements",
-                "estimated_hours": 4,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": ["phase-2"],
-                "depends": [],
-            },
-        }
-        base_hierarchy["verify-3-1"] = {
-            "type": "verify",
-            "title": "Run test suite",
-            "status": "pending",
-            "parent": "phase-3",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "verification_type": "run-tests",
-                "command": "pytest",
-                "expected": "All tests pass",
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        }
-        base_hierarchy["spec-root"]["total_tasks"] = 3
-
-    # Security template adds security review phase
-    if template == "security":
-        base_hierarchy["spec-root"]["children"].append("phase-4")
-        base_hierarchy["phase-3"]["dependencies"]["blocks"].append("phase-4")
-        base_hierarchy["phase-4"] = {
-            "type": "phase",
-            "title": "Security Review",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["task-4-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Security audit and hardening",
-                "estimated_hours": 4,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": ["phase-3"],
-                "depends": [],
-            },
-        }
-        base_hierarchy["task-4-1"] = {
-            "type": "task",
-            "title": "Security audit",
-            "status": "pending",
-            "parent": "phase-4",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "details": "Review for security vulnerabilities",
-                "category": "investigation",
-                "estimated_hours": 2,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        }
-        base_hierarchy["spec-root"]["total_tasks"] = 4
-
-    return base_hierarchy
 
 
 @click.group("specs")
@@ -260,35 +100,17 @@ def specs() -> None:
 
 # Template definitions for listing/showing
 TEMPLATE_INFO = {
-    "simple": {
-        "name": "simple",
-        "description": "Minimal spec with single planning phase",
-        "phases": 1,
-        "tasks": 1,
-        "use_cases": ["Quick fixes", "Small features", "Simple investigations"],
-    },
-    "medium": {
-        "name": "medium",
-        "description": "Standard spec with planning and implementation phases",
-        "phases": 2,
-        "tasks": 2,
-        "use_cases": ["New features", "Moderate refactoring", "Standard development"],
-    },
-    "complex": {
-        "name": "complex",
-        "description": "Full spec with planning, implementation, and verification phases",
-        "phases": 3,
-        "tasks": 3,
-        "use_cases": ["Large features", "Major refactoring", "Critical systems"],
-    },
-    "security": {
-        "name": "security",
-        "description": "Complete spec with security review phase",
-        "phases": 4,
-        "tasks": 4,
-        "use_cases": ["Security-sensitive features", "Authentication", "Data handling"],
+    "empty": {
+        "name": "empty",
+        "description": "Blank spec with no phases - use phase templates to add structure",
+        "phases": 0,
+        "tasks": 0,
+        "use_cases": ["All specs - add phases via phase-add-bulk or phase-template apply"],
     },
 }
+
+# Phase templates available for adding structure
+PHASE_TEMPLATES = ("planning", "implementation", "testing", "security", "documentation")
 
 
 @specs.command("template")
@@ -456,8 +278,8 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
 @click.option(
     "--template",
     type=click.Choice(TEMPLATES),
-    default="medium",
-    help="Spec template: simple, medium, complex, or security.",
+    default="empty",
+    help="Spec template (only 'empty' supported - use phase templates to add structure).",
 )
 @click.option(
     "--category",
@@ -469,7 +291,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
     "--mission",
     type=str,
     default="",
-    help="Mission statement (required for medium/complex templates).",
+    help="Optional mission statement for the spec.",
 )
 @click.pass_context
 @cli_command("create")
@@ -496,15 +318,6 @@ def create(
             error_type="validation",
             remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
-        )
-
-    if template in ("medium", "complex") and not mission.strip():
-        emit_error(
-            "Mission is required for medium/complex specs",
-            code="MISSING_REQUIRED",
-            error_type="validation",
-            remediation="Provide --mission with a concise goal statement",
-            details={"field": "mission"},
         )
 
     # Ensure pending directory exists
@@ -541,7 +354,7 @@ def create(
             "description": "",
             "mission": mission.strip(),
             "objectives": [],
-            "complexity": "medium" if template in ("medium", "complex") else "low",
+            "complexity": "low",  # Set explicitly via metadata, not template
             "estimated_hours": sum(
                 node.get("metadata", {}).get("estimated_hours", 0)
                 for node in hierarchy.values()
@@ -551,13 +364,13 @@ def create(
             "status": "pending",
             "owner": "",
             "progress_percentage": 0,
-            "current_phase": "phase-1",
+            "current_phase": None,  # Empty template has no phases
             "category": category,
             "template": template,
         },
         "progress_percentage": 0,
         "status": "pending",
-        "current_phase": "phase-1",
+        "current_phase": None,  # Empty template has no phases
         "hierarchy": hierarchy,
         "journal": [],
     }

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: Simplified Spec Templates**: Removed pre-baked spec templates (simple, medium, complex, security)
+  - Only `empty` template is now supported - creates a blank spec with no phases
+  - Use phase templates (`planning`, `implementation`, `testing`, `security`, `documentation`) to add structure
+  - Default template changed from `medium` to `empty`
+  - Mission statement no longer required (was required for medium/complex)
+  - `_requires_rich_task_fields()` now checks explicit `complexity` metadata instead of template
+  - Passing deprecated templates (simple, medium, complex, security) returns validation error
+
+### Migration
+
+```python
+# Old approach (no longer works)
+authoring(action="spec-create", name="my-feature", template="medium", mission="...")
+
+# New approach
+authoring(action="spec-create", name="my-feature")
+authoring(action="phase-template", template_action="apply", template_name="planning", spec_id="...")
+authoring(action="phase-template", template_action="apply", template_name="implementation", spec_id="...")
+```
+
 ## [0.7.0] - 2025-12-30
 
 ### Added

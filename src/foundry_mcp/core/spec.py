@@ -12,13 +12,10 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple, Union
 
 # Valid templates and categories for spec creation
-TEMPLATES = ("empty", "simple", "medium", "complex", "security")
+# Note: Only 'empty' template is supported. Use phase templates to add structure.
+TEMPLATES = ("empty",)
 TEMPLATE_DESCRIPTIONS = {
-    "empty": "Blank spec with no phases - use for quick tasks or custom structure",
-    "simple": "1 phase with basic tasks - use for small features or bug fixes",
-    "medium": "3 phases (setup, implementation, verification) - use for standard features",
-    "complex": "5+ phases with subtasks and dependencies - use for large features or refactors",
-    "security": "Security-focused template with audit phases - use for auth, crypto, or sensitive data",
+    "empty": "Blank spec with no phases - use phase templates to add structure",
 }
 CATEGORIES = ("investigation", "implementation", "refactoring", "decision", "research")
 
@@ -33,14 +30,12 @@ PHASE_TEMPLATES = ("planning", "implementation", "testing", "security", "documen
 
 
 def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
+    """Check if spec requires rich task fields based on explicit complexity metadata."""
     metadata = spec_data.get("metadata", {})
     if not isinstance(metadata, dict):
         return False
 
-    template = metadata.get("template")
-    if isinstance(template, str) and template.strip().lower() in {"medium", "complex"}:
-        return True
-
+    # Only check explicit complexity metadata (template no longer indicates complexity)
     complexity = metadata.get("complexity")
     if isinstance(complexity, str) and complexity.strip().lower() in {
         "medium",
@@ -2469,45 +2464,31 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     Get the hierarchical structure for a spec template.
 
-    All templates include per-phase verification (auto + fidelity) for each phase.
+    Only the 'empty' template is supported. Use phase templates to add structure.
 
     Args:
-        template: Template type (empty, simple, medium, complex, security).
+        template: Template type (only 'empty' is valid).
         category: Default task category.
 
     Returns:
         Hierarchy dict for the spec.
-    """
-    # Empty template: just spec-root with no phases (for custom phase-add-bulk workflow)
-    if template == "empty":
-        return {
-            "spec-root": {
-                "type": "spec",
-                "title": "",  # Filled in later
-                "status": "pending",
-                "parent": None,
-                "children": [],
-                "total_tasks": 0,
-                "completed_tasks": 0,
-                "metadata": {
-                    "purpose": "",
-                    "category": category,
-                },
-                "dependencies": {
-                    "blocks": [],
-                    "blocked_by": [],
-                    "depends": [],
-                },
-            },
-        }
 
-    base_hierarchy = {
+    Raises:
+        ValueError: If template is not 'empty'.
+    """
+    if template != "empty":
+        raise ValueError(
+            f"Invalid template '{template}'. Only 'empty' template is supported. "
+            f"Use phase templates (phase-add-bulk or phase-template apply) to add structure."
+        )
+
+    return {
         "spec-root": {
             "type": "spec",
             "title": "",  # Filled in later
             "status": "pending",
             "parent": None,
-            "children": ["phase-1"],
+            "children": [],
             "total_tasks": 0,
             "completed_tasks": 0,
             "metadata": {
@@ -2520,152 +2501,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
                 "depends": [],
             },
         },
-        "phase-1": {
-            "type": "phase",
-            "title": "Planning & Discovery",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["task-1-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Initial planning and requirements gathering",
-                "estimated_hours": 2,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        },
-        "task-1-1": {
-            "type": "task",
-            "title": "Define requirements",
-            "status": "pending",
-            "parent": "phase-1",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "description": "Document the requirements and acceptance criteria",
-                "acceptance_criteria": [
-                    "Requirements and acceptance criteria are documented",
-                ],
-                "task_category": "investigation",
-                "estimated_hours": 1,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        },
     }
-
-    # Add verification to phase-1 (all templates)
-    _add_phase_verification(base_hierarchy, 1, "phase-1")
-    base_hierarchy["spec-root"]["total_tasks"] = 3  # task + 2 verify
-
-    if template == "simple":
-        return base_hierarchy
-
-    # Medium/complex/security: add implementation phase
-    if template in ("medium", "complex", "security"):
-        base_hierarchy["spec-root"]["children"].append("phase-2")
-        base_hierarchy["phase-1"]["dependencies"]["blocks"].append("phase-2")
-        base_hierarchy["phase-2"] = {
-            "type": "phase",
-            "title": "Implementation",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["task-2-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Core implementation work",
-                "estimated_hours": 8,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": ["phase-1"],
-                "depends": [],
-            },
-        }
-        base_hierarchy["task-2-1"] = {
-            "type": "task",
-            "title": "Implement core functionality",
-            "status": "pending",
-            "parent": "phase-2",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "description": "Implement the main features",
-                "acceptance_criteria": [
-                    "Core functionality is implemented and behaves as specified",
-                ],
-                "task_category": "investigation",
-                "estimated_hours": 4,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        }
-        # Add verification to phase-2
-        _add_phase_verification(base_hierarchy, 2, "phase-2")
-        base_hierarchy["spec-root"]["total_tasks"] = 6  # 2 tasks + 4 verify
-
-    # Security: add security review phase
-    if template == "security":
-        base_hierarchy["spec-root"]["children"].append("phase-3")
-        base_hierarchy["phase-2"]["dependencies"]["blocks"].append("phase-3")
-        base_hierarchy["phase-3"] = {
-            "type": "phase",
-            "title": "Security Review",
-            "status": "pending",
-            "parent": "spec-root",
-            "children": ["task-3-1"],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "purpose": "Security audit and hardening",
-                "estimated_hours": 4,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": ["phase-2"],
-                "depends": [],
-            },
-        }
-        base_hierarchy["task-3-1"] = {
-            "type": "task",
-            "title": "Security audit",
-            "status": "pending",
-            "parent": "phase-3",
-            "children": [],
-            "total_tasks": 1,
-            "completed_tasks": 0,
-            "metadata": {
-                "description": "Review for security vulnerabilities",
-                "acceptance_criteria": [
-                    "Security risks are identified and documented",
-                ],
-                "task_category": "investigation",
-                "estimated_hours": 2,
-            },
-            "dependencies": {
-                "blocks": [],
-                "blocked_by": [],
-                "depends": [],
-            },
-        }
-        # Add verification to phase-3
-        _add_phase_verification(base_hierarchy, 3, "phase-3")
-        base_hierarchy["spec-root"]["total_tasks"] = 9  # 3 tasks + 6 verify
-
-    return base_hierarchy
 
 
 def get_phase_template_structure(
@@ -2921,7 +2757,7 @@ def apply_phase_template(
 
 def generate_spec_data(
     name: str,
-    template: str = "medium",
+    template: str = "empty",
     category: str = "implementation",
     mission: Optional[str] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -2932,7 +2768,7 @@ def generate_spec_data(
 
     Args:
         name: Human-readable name for the specification.
-        template: Template type (empty, simple, medium, complex, security).
+        template: Template type (only 'empty' is valid).
         category: Default task category.
         mission: Optional mission statement for the spec.
 
@@ -2941,11 +2777,12 @@ def generate_spec_data(
         On success: (dict, None)
         On failure: (None, "error message")
     """
-    # Validate template
+    # Validate template - only 'empty' is supported
     if template not in TEMPLATES:
         return (
             None,
-            f"Invalid template '{template}'. Must be one of: {', '.join(TEMPLATES)}",
+            f"Invalid template '{template}'. Only 'empty' template is supported. "
+            f"Use phase templates to add structure.",
         )
 
     # Validate category
@@ -2954,10 +2791,6 @@ def generate_spec_data(
             None,
             f"Invalid category '{category}'. Must be one of: {', '.join(CATEGORIES)}",
         )
-
-    if template in ("medium", "complex"):
-        if not isinstance(mission, str) or not mission.strip():
-            return None, "mission is required for medium/complex specifications"
 
     # Generate spec ID
     spec_id = generate_spec_id(name)
@@ -2976,9 +2809,6 @@ def generate_spec_data(
         if isinstance(node, dict)
     )
 
-    # Determine current_phase (None for empty template with no phases)
-    current_phase = None if template == "empty" else "phase-1"
-
     spec_data = {
         "spec_id": spec_id,
         "title": name,
@@ -2988,7 +2818,7 @@ def generate_spec_data(
             "description": "",
             "mission": mission.strip() if isinstance(mission, str) else "",
             "objectives": [],
-            "complexity": "medium" if template in ("medium", "complex") else "low",
+            "complexity": "low",  # Complexity set via explicit metadata, not template
             "estimated_hours": estimated_hours,
             "assumptions": [],
             "owner": "",
@@ -2997,7 +2827,7 @@ def generate_spec_data(
         },
         "progress_percentage": 0,
         "status": "pending",
-        "current_phase": current_phase,
+        "current_phase": None,  # Empty template has no phases
         "hierarchy": hierarchy,
         "journal": [],
     }
@@ -3007,7 +2837,7 @@ def generate_spec_data(
 
 def create_spec(
     name: str,
-    template: str = "medium",
+    template: str = "empty",
     category: str = "implementation",
     mission: Optional[str] = None,
     specs_dir: Optional[Path] = None,
@@ -3017,9 +2847,9 @@ def create_spec(
 
     Args:
         name: Human-readable name for the specification.
-        template: Template type (simple, medium, complex, security). Default: medium.
+        template: Template type (only 'empty' is valid). Use phase templates to add structure.
         category: Default task category. Default: implementation.
-        mission: Optional mission statement for the spec (required for medium/complex).
+        mission: Optional mission statement for the spec.
         specs_dir: Path to specs directory (auto-detected if not provided).
 
     Returns:

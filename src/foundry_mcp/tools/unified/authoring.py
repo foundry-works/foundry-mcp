@@ -213,7 +213,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             code=ErrorCode.MISSING_REQUIRED,
         )
 
-    template = payload.get("template") or "medium"
+    template = payload.get("template") or "empty"
     if not isinstance(template, str):
         return _validation_error(
             field="template",
@@ -222,14 +222,14 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
-    template = template.strip() or "medium"
+    template = template.strip() or "empty"
     if template not in TEMPLATES:
         return _validation_error(
             field="template",
             action=action,
-            message=f"Template must be one of: {', '.join(TEMPLATES)}",
+            message=f"Only 'empty' template is supported. Use phase templates to add structure.",
             request_id=request_id,
-            remediation=f"Use one of: {', '.join(TEMPLATES)}",
+            remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply",
         )
 
     category = payload.get("category") or "implementation"
@@ -260,17 +260,6 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
-
-    if template in ("medium", "complex"):
-        if not isinstance(mission, str) or not mission.strip():
-            return _validation_error(
-                field="mission",
-                action=action,
-                message="mission is required for medium/complex specifications",
-                request_id=request_id,
-                code=ErrorCode.MISSING_REQUIRED,
-                remediation="Provide a concise mission statement",
-            )
 
     dry_run = payload.get("dry_run", False)
     if dry_run is not None and not isinstance(dry_run, bool):
@@ -460,38 +449,34 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
     if template_action == "list":
         data["templates"] = [
             {
-                "name": "simple",
-                "description": "Minimal spec with 1 phase and basic tasks",
-            },
-            {
-                "name": "medium",
-                "description": "Standard spec with 2-3 phases (default)",
-            },
-            {
-                "name": "complex",
-                "description": "Multi-phase spec with groups and subtasks",
-            },
-            {
-                "name": "security",
-                "description": "Security-focused spec with audit tasks",
+                "name": "empty",
+                "description": "Blank spec with no phases - use phase templates to add structure",
             },
         ]
-        data["total_count"] = len(data["templates"])
+        data["phase_templates"] = [
+            {"name": t, "description": f"Add {t} phase structure"}
+            for t in PHASE_TEMPLATES
+        ]
+        data["total_count"] = 1
+        data["message"] = "Use 'empty' template, then add phases via phase-add-bulk or phase-template apply"
     elif template_action == "show":
         data["template_name"] = template_name
         data["content"] = {
             "name": template_name,
-            "description": f"Template structure for '{template_name}' specs",
-            "usage": f"Use authoring(action='spec-create', template='{template_name}') to create a spec",
+            "description": "Blank spec with no phases",
+            "usage": "Use authoring(action='spec-create', name='your-spec') to create, then add phases",
+            "phase_templates": list(PHASE_TEMPLATES),
         }
     else:
         data["template_name"] = template_name
         data["generated"] = {
             "template": template_name,
-            "message": f"Use authoring(action='spec-create', template='{template_name}') to create a new spec",
+            "message": "Use spec-create to create an empty spec, then add phases",
         }
         data["instructions"] = (
-            f"Call authoring(action='spec-create', name='your-spec-name', template='{template_name}')"
+            "1. Create spec: authoring(action='spec-create', name='your-spec-name')\n"
+            "2. Add phases: authoring(action='phase-template', template_action='apply', "
+            "template_name='planning', spec_id='...')"
         )
 
     return asdict(success_response(data=data, request_id=request_id))

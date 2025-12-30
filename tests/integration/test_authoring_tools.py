@@ -399,7 +399,7 @@ class TestSpecCreation:
         """Test spec-create validates template parameter."""
         tools = mcp_server._tool_manager._tools
 
-        # Valid templates are: simple, medium, complex, security
+        # Only 'empty' template is valid
         result = _call_tool(
             tools,
             "spec-create",
@@ -426,22 +426,35 @@ class TestSpecCreation:
         assert "category" in result["error"].lower()
 
     def test_spec_create_valid_templates_accepted(self, mcp_server):
-        """Test spec-create accepts all valid templates."""
+        """Test spec-create accepts the valid 'empty' template."""
         tools = mcp_server._tool_manager._tools
 
-        valid_templates = ["simple", "medium", "complex", "security"]
-        for template in valid_templates:
+        # Only 'empty' template is valid
+        result = _call_tool(
+            tools,
+            "spec-create",
+            name="test-empty",
+            template="empty",
+        )
+        # May fail due to CLI not being available, but should not fail validation
+        if result["success"] is False:
+            assert "VALIDATION_ERROR" not in str(
+                result["data"].get("error_code", "")
+            ), "Template 'empty' should be valid"
+
+    def test_spec_create_rejects_deprecated_templates(self, mcp_server):
+        """Test spec-create rejects deprecated templates."""
+        tools = mcp_server._tool_manager._tools
+
+        deprecated_templates = ["simple", "medium", "complex", "security"]
+        for template in deprecated_templates:
             result = _call_tool(
                 tools,
                 "spec-create",
                 name=f"test-{template}",
                 template=template,
             )
-            # May fail due to CLI not being available, but should not fail validation
-            if result["success"] is False:
-                assert "VALIDATION_ERROR" not in str(
-                    result["data"].get("error_code", "")
-                ), f"Template '{template}' should be valid"
+            assert result["success"] is False, f"Template '{template}' should be rejected"
 
     def test_spec_create_valid_categories_accepted(self, mcp_server):
         """Test spec-create accepts all valid categories."""
@@ -777,7 +790,7 @@ class TestAuthoringWorkflows:
 
         # Step 2: If templates exist and successful, try to show one
         if list_result["success"] and list_result["data"].get("templates"):
-            template_name = list_result["data"]["templates"][0].get("name", "simple")
+            template_name = list_result["data"]["templates"][0].get("name", "empty")
             show_result = _call_tool(
                 tools,
                 "spec-template",
@@ -805,7 +818,7 @@ class TestAuthoringWorkflows:
             tools,
             "spec-create",
             name="test",
-            template="simple",
+            template="empty",
         )
         # Should not fail validation
         if valid_result["success"] is False:

@@ -164,14 +164,12 @@ def _suggest_value(value: str, valid_values: set, n: int = 1) -> Optional[str]:
 
 
 def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
+    """Check if spec requires rich task fields based on explicit complexity metadata."""
     metadata = spec_data.get("metadata", {})
     if not isinstance(metadata, dict):
         return False
 
-    template = metadata.get("template")
-    if isinstance(template, str) and template.strip().lower() in {"medium", "complex"}:
-        return True
-
+    # Only check explicit complexity metadata (template no longer indicates complexity)
     complexity = metadata.get("complexity")
     if isinstance(complexity, str) and complexity.strip().lower() in {
         "medium",
@@ -479,7 +477,7 @@ def _validate_structure(spec_data: Dict[str, Any], result: ValidationResult) -> 
             result.diagnostics.append(
                 Diagnostic(
                     code="MISSING_MISSION",
-                    message="Spec metadata.mission is required for medium/complex specifications",
+                    message="Spec metadata.mission is required when complexity is medium/complex/high",
                     severity="error",
                     category="metadata",
                     location="metadata.mission",
