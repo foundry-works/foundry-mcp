@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Provider Model Validation Removed**: Model allowlists removed from all CLI providers
+  - Providers no longer pre-register or validate model IDs against hardcoded lists
+  - Any model string is now passed through to the underlying CLI for validation
+  - Eliminates sync issues when providers release new models
+  - Affected providers: `claude`, `gemini`, `codex`, `cursor-agent`
+  - Default models remain as fallbacks: opus, pro, gpt-5.2, composer-1
+
 - **BREAKING: Simplified Spec Templates**: Removed pre-baked spec templates (simple, medium, complex, security)
   - Only `empty` template is now supported - creates a blank spec with no phases
   - Use phase templates (`planning`, `implementation`, `testing`, `security`, `documentation`) to add structure
