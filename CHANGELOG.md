@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.10] - 2025-12-30
+
+### Fixed
+
+- **Research Workflow Provider Spec Parsing**: Fixed `_resolve_provider` to handle full provider specs
+  - Full specs like `[cli]codex:gpt-5.2-codex` in `default_provider` config now work correctly
+  - Extracts base provider ID for availability check (e.g., `codex` from full spec)
+  - Passes model from spec to `resolve_provider()` for proper model selection
+  - Caches providers by full spec string to differentiate model variants
+
 ## [0.7.9] - 2025-12-30
 
 ### Fixed
