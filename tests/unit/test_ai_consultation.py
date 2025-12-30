@@ -893,6 +893,314 @@ class TestBackwardCompatibility:
 
 
 # =============================================================================
+# ResolvedProvider Tests
+# =============================================================================
+
+
+class TestResolvedProvider:
+    """Tests for ResolvedProvider dataclass."""
+
+    def test_creation_minimal(self):
+        """ResolvedProvider can be created with just provider_id."""
+        from foundry_mcp.core.ai_consultation import ResolvedProvider
+
+        resolved = ResolvedProvider(provider_id="gemini")
+        assert resolved.provider_id == "gemini"
+        assert resolved.model is None
+        assert resolved.overrides == {}
+        assert resolved.spec_str == ""
+
+    def test_creation_full(self):
+        """ResolvedProvider can be created with all fields."""
+        from foundry_mcp.core.ai_consultation import ResolvedProvider
+
+        resolved = ResolvedProvider(
+            provider_id="opencode",
+            model="openai/gpt-4",
+            overrides={"timeout": 120, "temperature": 0.7},
+            spec_str="opencode:openai/gpt-4",
+        )
+        assert resolved.provider_id == "opencode"
+        assert resolved.model == "openai/gpt-4"
+        assert resolved.overrides["timeout"] == 120
+        assert resolved.overrides["temperature"] == 0.7
+        assert resolved.spec_str == "opencode:openai/gpt-4"
+
+    def test_overrides_default_to_empty_dict(self):
+        """ResolvedProvider.overrides defaults to empty dict."""
+        from foundry_mcp.core.ai_consultation import ResolvedProvider
+
+        resolved = ResolvedProvider(provider_id="claude")
+        # Verify default_factory creates new dict each time
+        resolved.overrides["key"] = "value"
+
+        resolved2 = ResolvedProvider(provider_id="claude")
+        assert resolved2.overrides == {}
+
+    def test_spec_str_for_logging(self):
+        """ResolvedProvider.spec_str is useful for logging."""
+        from foundry_mcp.core.ai_consultation import ResolvedProvider
+
+        resolved = ResolvedProvider(
+            provider_id="gemini",
+            spec_str="explicit:gemini",
+        )
+        # spec_str can be used in log messages
+        log_msg = f"Using provider: {resolved.spec_str}"
+        assert "explicit:gemini" in log_msg
+
+
+# =============================================================================
+# ResultCache Tests
+# =============================================================================
+
+
+class TestResultCache:
+    """Tests for ResultCache class."""
+
+    def test_init_default_path(self, tmp_path):
+        """ResultCache initializes with default path if not provided."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        import os
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            cache = ResultCache()
+            assert cache.base_dir.parts[-3:] == (".cache", "foundry-mcp", "consultations")
+            assert cache.default_ttl == 3600
+        finally:
+            os.chdir(original_cwd)
+
+    def test_init_custom_path(self, tmp_path):
+        """ResultCache can be initialized with custom path."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        custom_path = tmp_path / "my-cache"
+        cache = ResultCache(base_dir=custom_path, default_ttl=7200)
+        assert cache.base_dir == custom_path
+        assert cache.default_ttl == 7200
+
+    def test_set_and_get(self, tmp_path):
+        """ResultCache can store and retrieve results."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Test content",
+            provider_id="gemini",
+            model_used="gemini-2.0-flash",
+            tokens={"total": 150},
+        )
+
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "test-key", result)
+        cached = cache.get(ConsultationWorkflow.PLAN_REVIEW, "test-key")
+
+        assert cached is not None
+        assert cached["content"] == "Test content"
+        assert cached["provider_id"] == "gemini"
+        assert cached["model_used"] == "gemini-2.0-flash"
+        assert cached["tokens"] == {"total": 150}
+
+    def test_get_nonexistent_key(self, tmp_path):
+        """ResultCache.get returns None for nonexistent keys."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        cached = cache.get(ConsultationWorkflow.PLAN_REVIEW, "nonexistent")
+        assert cached is None
+
+    def test_cache_expiration(self, tmp_path):
+        """ResultCache.get returns None for expired entries."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+        import time
+
+        cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=1)
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Expiring content",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "expire-key", result)
+
+        # Should be available immediately
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "expire-key") is not None
+
+        # Wait for TTL to expire
+        time.sleep(1.1)
+
+        # Should be None after expiration
+        cached = cache.get(ConsultationWorkflow.PLAN_REVIEW, "expire-key")
+        assert cached is None
+
+    def test_custom_ttl_override(self, tmp_path):
+        """ResultCache.set can override default TTL."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+        import time
+
+        cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=3600)
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Short-lived content",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        # Set with short TTL override
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "short-ttl", result, ttl=1)
+
+        # Should be available immediately
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "short-ttl") is not None
+
+        # Wait for custom TTL to expire
+        time.sleep(1.1)
+
+        # Should be None after custom TTL
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "short-ttl") is None
+
+    def test_invalidate_specific_entry(self, tmp_path):
+        """ResultCache.invalidate can remove a specific entry."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="To be invalidated",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key1", result)
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key2", result)
+
+        count = cache.invalidate(ConsultationWorkflow.PLAN_REVIEW, "key1")
+        assert count == 1
+
+        # key1 should be gone
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "key1") is None
+        # key2 should still exist
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "key2") is not None
+
+    def test_invalidate_workflow(self, tmp_path):
+        """ResultCache.invalidate can remove all entries for a workflow."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Content",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key1", result)
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key2", result)
+        cache.set(ConsultationWorkflow.FIDELITY_REVIEW, "key3", result)
+
+        count = cache.invalidate(ConsultationWorkflow.PLAN_REVIEW)
+        assert count == 2
+
+        # PLAN_REVIEW entries should be gone
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "key1") is None
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "key2") is None
+        # FIDELITY_REVIEW should remain
+        assert cache.get(ConsultationWorkflow.FIDELITY_REVIEW, "key3") is not None
+
+    def test_invalidate_all(self, tmp_path):
+        """ResultCache.invalidate can remove all entries."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Content",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key1", result)
+        cache.set(ConsultationWorkflow.FIDELITY_REVIEW, "key2", result)
+
+        count = cache.invalidate()
+        assert count == 2
+
+        assert cache.get(ConsultationWorkflow.PLAN_REVIEW, "key1") is None
+        assert cache.get(ConsultationWorkflow.FIDELITY_REVIEW, "key2") is None
+
+    def test_stats_empty_cache(self, tmp_path):
+        """ResultCache.stats returns zero counts for empty cache."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        stats = cache.stats()
+
+        assert stats["total_entries"] == 0
+        assert stats["total_size_bytes"] == 0
+        assert "by_workflow" in stats
+
+    def test_stats_with_entries(self, tmp_path):
+        """ResultCache.stats returns correct counts."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Test content",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key1", result)
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key2", result)
+        cache.set(ConsultationWorkflow.FIDELITY_REVIEW, "key3", result)
+
+        stats = cache.stats()
+
+        assert stats["total_entries"] == 3
+        assert stats["total_size_bytes"] > 0
+        assert stats["by_workflow"]["plan_review"]["entries"] == 2
+        assert stats["by_workflow"]["fidelity_review"]["entries"] == 1
+
+    def test_cache_key_sanitization(self, tmp_path):
+        """ResultCache sanitizes keys to be filesystem-safe."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Content",
+            provider_id="test",
+            model_used="test-model",
+        )
+
+        # Keys with special characters should be sanitized
+        cache.set(ConsultationWorkflow.PLAN_REVIEW, "key/with:special<chars>", result)
+        cached = cache.get(ConsultationWorkflow.PLAN_REVIEW, "key/with:special<chars>")
+        assert cached is not None
+        assert cached["content"] == "Content"
+
+    def test_corrupt_cache_file_handling(self, tmp_path):
+        """ResultCache handles corrupt cache files gracefully."""
+        from foundry_mcp.core.ai_consultation import ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache")
+
+        # Create a corrupt cache file
+        workflow_dir = tmp_path / "cache" / "plan_review"
+        workflow_dir.mkdir(parents=True)
+        corrupt_file = workflow_dir / "corrupt-key.json"
+        corrupt_file.write_text("not valid json {{{")
+
+        # Should return None and not raise
+        cached = cache.get(ConsultationWorkflow.PLAN_REVIEW, "corrupt-key")
+        assert cached is None
+
+
+# =============================================================================
 # Multi-Model Consensus Fallback Tests
 # =============================================================================
 
@@ -1067,3 +1375,659 @@ class TestConsensusWithFallback:
         # p4 and p5 should NOT be tried since we reached min_models=2
         assert len(result.responses) == 3
         assert result.agreement.successful_providers == 2
+
+
+# =============================================================================
+# ConsultationOrchestrator Tests
+# =============================================================================
+
+
+class TestConsultationOrchestrator:
+    """Tests for ConsultationOrchestrator class with mocked providers."""
+
+    @pytest.fixture
+    def mock_config(self, tmp_path):
+        """Create a mock ConsultationConfig."""
+        from foundry_mcp.core.llm_config import ConsultationConfig
+
+        return ConsultationConfig(
+            priority=["gemini", "claude"],
+            default_timeout=60.0,
+            fallback_enabled=True,
+            max_retries=1,
+            retry_delay=0.1,
+            cache_ttl=3600,
+        )
+
+    @pytest.fixture
+    def orchestrator(self, tmp_path, mock_config):
+        """Create a ConsultationOrchestrator with mock config."""
+        from foundry_mcp.core.ai_consultation import ConsultationOrchestrator, ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=3600)
+        return ConsultationOrchestrator(cache=cache, config=mock_config)
+
+    @pytest.fixture
+    def mock_provider_result(self):
+        """Create a mock ProviderResult factory."""
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus, TokenUsage
+
+        def _create(
+            content: str = "Generated response content",
+            success: bool = True,
+            provider_id: str = "gemini",
+            model: str = "gemini-2.0-flash",
+        ):
+            return ProviderResult(
+                content=content,
+                status=ProviderStatus.SUCCESS if success else ProviderStatus.ERROR,
+                provider_id=provider_id,
+                model_used=model,
+                tokens=TokenUsage(input_tokens=50, output_tokens=100, total_tokens=150),
+                duration_ms=500.0,
+            )
+
+        return _create
+
+    def test_init_default(self):
+        """ConsultationOrchestrator can be initialized with defaults."""
+        from foundry_mcp.core.ai_consultation import ConsultationOrchestrator
+
+        # Should not raise
+        orchestrator = ConsultationOrchestrator()
+        assert orchestrator.cache is not None
+        assert orchestrator.default_timeout > 0
+
+    def test_is_available_no_providers(self, orchestrator):
+        """is_available returns False when no providers available."""
+        from unittest.mock import patch
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=False,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=[],
+            ):
+                assert orchestrator.is_available() is False
+
+    def test_is_available_with_providers(self, orchestrator):
+        """is_available returns True when providers available."""
+        from unittest.mock import patch
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            assert orchestrator.is_available() is True
+
+    def test_is_available_specific_provider(self, orchestrator):
+        """is_available checks specific provider when provided."""
+        from unittest.mock import patch
+
+        def mock_check(provider_id):
+            return provider_id == "gemini"
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            side_effect=mock_check,
+        ):
+            assert orchestrator.is_available("gemini") is True
+            assert orchestrator.is_available("nonexistent") is False
+
+    def test_get_available_providers(self, orchestrator):
+        """get_available_providers returns sorted list."""
+        from unittest.mock import patch
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.available_providers",
+            return_value=["claude", "gemini", "openai"],
+        ):
+            providers = orchestrator.get_available_providers()
+            assert providers == ["claude", "gemini", "openai"]
+
+    def test_consult_cache_hit(self, orchestrator, tmp_path):
+        """consult returns cached result on cache hit."""
+        from foundry_mcp.core.ai_consultation import (
+            ConsultationRequest,
+            ConsultationResult,
+        )
+
+        # Pre-populate cache
+        result = ConsultationResult(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            content="Cached content",
+            provider_id="gemini",
+            model_used="gemini-2.0-flash",
+        )
+        cache_key = orchestrator._generate_cache_key(
+            ConsultationRequest(
+                workflow=ConsultationWorkflow.PLAN_REVIEW,
+                prompt_id="PLAN_REVIEW_FULL_V1",
+                context={"spec_content": "test"},
+            )
+        )
+        orchestrator.cache.set(ConsultationWorkflow.PLAN_REVIEW, cache_key, result)
+
+        # Make request
+        request = ConsultationRequest(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            prompt_id="PLAN_REVIEW_FULL_V1",
+            context={"spec_content": "test"},
+        )
+        outcome = orchestrator.consult(request, use_cache=True)
+
+        assert outcome.cache_hit is True
+        assert outcome.content == "Cached content"
+
+    def test_consult_success_single_provider(
+        self, orchestrator, mock_provider_result
+    ):
+        """consult succeeds with single provider mode."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = mock_provider_result()
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content here",
+                        },
+                    )
+                    outcome = orchestrator.consult(request, use_cache=False)
+
+        assert outcome.content == "Generated response content"
+        assert outcome.error is None
+        assert isinstance(outcome, ConsultationResult)
+
+    def test_consult_all_providers_fail(self, orchestrator):
+        """consult returns error when all providers fail."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = ProviderResult(
+            content="",
+            status=ProviderStatus.ERROR,
+            provider_id="gemini",
+            model_used="gemini-2.0-flash",
+            stderr="Connection timeout",
+        )
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                    )
+                    outcome = orchestrator.consult(request, use_cache=False)
+
+        assert outcome.error is not None
+        assert outcome.content == ""
+
+    def test_consult_no_providers_available(self, orchestrator):
+        """consult returns error when no providers available."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=False,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=[],
+            ):
+                request = ConsultationRequest(
+                    workflow=ConsultationWorkflow.PLAN_REVIEW,
+                    prompt_id="PLAN_REVIEW_FULL_V1",
+                    context={
+                        "spec_id": "test-001",
+                        "title": "Test",
+                        "version": "1.0",
+                        "spec_content": "Spec content",
+                    },
+                )
+                outcome = orchestrator.consult(request, use_cache=False)
+
+        assert outcome.error is not None
+        assert "no" in outcome.error.lower() and "provider" in outcome.error.lower()
+
+    def test_consult_prompt_build_error(self, orchestrator):
+        """consult handles prompt build errors."""
+        from unittest.mock import patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini"],
+            ):
+                # Request with invalid/missing context will cause prompt build error
+                request = ConsultationRequest(
+                    workflow=ConsultationWorkflow.PLAN_REVIEW,
+                    prompt_id="NONEXISTENT_PROMPT",
+                    context={},
+                )
+                outcome = orchestrator.consult(request, use_cache=False)
+
+        assert outcome.error is not None
+        assert "prompt" in outcome.error.lower() or "failed" in outcome.error.lower()
+
+    def test_consult_fallback_on_provider_failure(
+        self, orchestrator, mock_provider_result
+    ):
+        """consult falls back to next provider on failure."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus
+
+        call_count = [0]
+
+        def mock_generate(request):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # First provider fails
+                return ProviderResult(
+                    content="",
+                    status=ProviderStatus.ERROR,
+                    provider_id="gemini",
+                    model_used="gemini-2.0-flash",
+                    stderr="Rate limit exceeded",
+                )
+            else:
+                # Second provider succeeds
+                return mock_provider_result(provider_id="claude")
+
+        mock_provider = MagicMock()
+        mock_provider.generate.side_effect = mock_generate
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini", "claude"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                    )
+                    outcome = orchestrator.consult(request, use_cache=False)
+
+        # Should have succeeded via fallback
+        assert outcome.content != ""
+        assert outcome.error is None
+
+    def test_generate_cache_key_deterministic(self, orchestrator):
+        """_generate_cache_key produces deterministic keys."""
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        request = ConsultationRequest(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            prompt_id="test_prompt",
+            context={"a": 1, "b": 2},
+        )
+
+        key1 = orchestrator._generate_cache_key(request)
+        key2 = orchestrator._generate_cache_key(request)
+
+        assert key1 == key2
+
+    def test_generate_cache_key_explicit_override(self, orchestrator):
+        """_generate_cache_key uses explicit cache_key if provided."""
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        request = ConsultationRequest(
+            workflow=ConsultationWorkflow.PLAN_REVIEW,
+            prompt_id="test_prompt",
+            context={},
+            cache_key="explicit-key",
+        )
+
+        key = orchestrator._generate_cache_key(request)
+        assert key == "explicit-key"
+
+    def test_consult_uses_timeout_from_request(
+        self, orchestrator, mock_provider_result
+    ):
+        """consult uses timeout from request."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = mock_provider_result()
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                        timeout=300.0,  # Custom timeout
+                    )
+                    orchestrator.consult(request, use_cache=False)
+
+        # Verify generate was called with the custom timeout
+        call_args = mock_provider.generate.call_args
+        assert call_args is not None
+        provider_request = call_args[0][0]
+        assert provider_request.timeout == 300.0
+
+    def test_consult_result_includes_duration(
+        self, orchestrator, mock_provider_result
+    ):
+        """consult result includes duration_ms."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import ConsultationRequest
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = mock_provider_result()
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                    )
+                    outcome = orchestrator.consult(request, use_cache=False)
+
+        # Duration should be recorded
+        assert outcome.duration_ms >= 0
+
+
+class TestConsultationOrchestratorMultiModel:
+    """Tests for ConsultationOrchestrator multi-model mode."""
+
+    @pytest.fixture
+    def mock_multi_model_config(self, tmp_path):
+        """Create a mock ConsultationConfig for multi-model mode."""
+        from foundry_mcp.core.llm_config import ConsultationConfig, WorkflowConsultationConfig
+
+        return ConsultationConfig(
+            priority=["gemini", "claude", "openai"],
+            default_timeout=60.0,
+            fallback_enabled=True,
+            max_retries=1,
+            retry_delay=0.1,
+            cache_ttl=3600,
+            workflows={
+                "plan_review": WorkflowConsultationConfig(min_models=2),
+            },
+        )
+
+    @pytest.fixture
+    def multi_model_orchestrator(self, tmp_path, mock_multi_model_config):
+        """Create a ConsultationOrchestrator for multi-model mode."""
+        from foundry_mcp.core.ai_consultation import ConsultationOrchestrator, ResultCache
+
+        cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=3600)
+        return ConsultationOrchestrator(cache=cache, config=mock_multi_model_config)
+
+    @pytest.fixture
+    def mock_provider_result(self):
+        """Create a mock ProviderResult factory."""
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus, TokenUsage
+
+        def _create(
+            content: str = "Generated response content",
+            success: bool = True,
+            provider_id: str = "gemini",
+            model: str = "gemini-2.0-flash",
+        ):
+            return ProviderResult(
+                content=content,
+                status=ProviderStatus.SUCCESS if success else ProviderStatus.ERROR,
+                provider_id=provider_id,
+                model_used=model,
+                tokens=TokenUsage(input_tokens=50, output_tokens=100, total_tokens=150),
+                duration_ms=500.0,
+            )
+
+        return _create
+
+    def test_consult_multi_model_returns_consensus_result(
+        self, multi_model_orchestrator, mock_provider_result
+    ):
+        """consult returns ConsensusResult when min_models > 1."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import (
+            ConsensusResult,
+            ConsultationRequest,
+        )
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = mock_provider_result()
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini", "claude"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                    )
+                    outcome = multi_model_orchestrator.consult(
+                        request, use_cache=False
+                    )
+
+        # Should return ConsensusResult for multi-model workflow
+        assert isinstance(outcome, ConsensusResult)
+        assert len(outcome.responses) >= 1
+        assert outcome.agreement is not None
+
+    def test_consult_multi_model_with_failures(
+        self, multi_model_orchestrator, mock_provider_result
+    ):
+        """consult handles partial failures in multi-model mode."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import (
+            ConsensusResult,
+            ConsultationRequest,
+        )
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus
+
+        call_count = [0]
+
+        def mock_generate(request):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # First provider fails
+                return ProviderResult(
+                    content="",
+                    status=ProviderStatus.ERROR,
+                    provider_id="gemini",
+                    model_used="gemini-2.0-flash",
+                    stderr="Error",
+                )
+            else:
+                # Other providers succeed
+                return mock_provider_result(provider_id=f"provider-{call_count[0]}")
+
+        mock_provider = MagicMock()
+        mock_provider.generate.side_effect = mock_generate
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini", "claude", "openai"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                    )
+                    outcome = multi_model_orchestrator.consult(
+                        request, use_cache=False
+                    )
+
+        assert isinstance(outcome, ConsensusResult)
+        # Should have tracked both successes and failures
+        assert outcome.agreement.total_providers >= 2
+        # Should have at least some successful providers via fallback
+        assert len(outcome.warnings) > 0  # Should have recorded the failure
+
+    def test_consult_multi_model_all_fail(self, multi_model_orchestrator):
+        """consult returns failure ConsensusResult when all providers fail."""
+        from unittest.mock import MagicMock, patch
+
+        from foundry_mcp.core.ai_consultation import (
+            ConsensusResult,
+            ConsultationRequest,
+        )
+        from foundry_mcp.core.providers import ProviderResult, ProviderStatus
+
+        mock_provider = MagicMock()
+        mock_provider.generate.return_value = ProviderResult(
+            content="",
+            status=ProviderStatus.ERROR,
+            provider_id="test",
+            model_used="test-model",
+            stderr="All providers failing",
+        )
+
+        with patch(
+            "foundry_mcp.core.ai_consultation.check_provider_available",
+            return_value=True,
+        ):
+            with patch(
+                "foundry_mcp.core.ai_consultation.available_providers",
+                return_value=["gemini", "claude"],
+            ):
+                with patch(
+                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    return_value=mock_provider,
+                ):
+                    request = ConsultationRequest(
+                        workflow=ConsultationWorkflow.PLAN_REVIEW,
+                        prompt_id="PLAN_REVIEW_FULL_V1",
+                        context={
+                            "spec_id": "test-001",
+                            "title": "Test",
+                            "version": "1.0",
+                            "spec_content": "Spec content",
+                        },
+                    )
+                    outcome = multi_model_orchestrator.consult(
+                        request, use_cache=False
+                    )
+
+        assert isinstance(outcome, ConsensusResult)
+        assert outcome.success is False
+        assert outcome.agreement.successful_providers == 0

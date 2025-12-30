@@ -55,6 +55,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "fidelity_review: fidelity review workflow tests")
     config.addinivalue_line("markers", "slow: tests that may take >30 seconds")
     config.addinivalue_line("markers", "synthesis: multi-model synthesis workflow tests")
+    config.addinivalue_line("markers", "router_smoke: router-level smoke tests with real providers")
     config.addinivalue_line("markers", "plan_synthesis: plan review synthesis tests")
     config.addinivalue_line("markers", "fidelity_synthesis: fidelity review synthesis tests")
 

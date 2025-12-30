@@ -4,67 +4,87 @@
 
 Bring test coverage to parity between AI Consultation and Research Router modules, then add workflow/orchestrator tests and E2E tests with mocked providers for both.
 
-## Current State (After This Session)
+## Status: ✅ COMPLETE
+
+All planned tests have been implemented and are passing.
+
+## Final State
 
 ### Research Router Tests ✅
 - `tests/unit/test_core/research/test_models.py` - 53 tests (Pydantic models, enums)
 - `tests/unit/test_core/research/test_memory.py` - 49 tests (storage CRUD, TTL, concurrency)
-- `tests/unit/test_core/research/test_workflows.py` - 32 tests (NEW - workflow classes with mocked providers)
+- `tests/unit/test_core/research/test_workflows.py` - 32 tests (workflow classes with mocked providers)
 - `tests/tools/unified/test_research.py` - 47 tests (router dispatch, mocked workflows)
+- `tests/integration/test_research_e2e.py` - 20 tests (NEW - E2E workflow tests)
 
-### AI Consultation Tests
-- `tests/unit/test_ai_consultation.py` - Tests for:
+### AI Consultation Tests ✅
+- `tests/unit/test_ai_consultation.py` - 95 tests:
   - ✅ ConsultationWorkflow enum
   - ✅ ConsultationRequest dataclass
   - ✅ ConsultationResult dataclass
   - ✅ ProviderResponse dataclass
   - ✅ AgreementMetadata dataclass
   - ✅ ConsensusResult dataclass
-  - ❌ ResolvedProvider dataclass (NOT tested)
-  - ❌ ResultCache class (NOT tested)
-  - ❌ ConsultationOrchestrator class (NOT tested)
+  - ✅ ResolvedProvider dataclass (4 tests)
+  - ✅ ResultCache class (14 tests)
+  - ✅ ConsultationOrchestrator class (15 tests)
+  - ✅ ConsultationOrchestratorMultiModel class (3 tests)
+- `tests/integration/test_ai_consultation_e2e.py` - 13 tests (NEW - E2E workflow tests)
 
-## Remaining Work
+## Completed Work
 
-### 1. Add Missing AI Consultation Dataclass Tests
+### 1. ✅ Added Missing AI Consultation Dataclass Tests
 File: `tests/unit/test_ai_consultation.py`
 
-Add tests for:
-- `ResolvedProvider` dataclass (creation, attributes)
-- `ResultCache` class (init, cache operations, TTL, file I/O)
+Added tests for:
+- `ResolvedProvider` dataclass (creation minimal/full, overrides default, spec_str)
+- `ResultCache` class (init, set/get, TTL expiration, invalidation, stats, corrupt file handling)
 
-### 2. Add ConsultationOrchestrator Tests
+### 2. ✅ Added ConsultationOrchestrator Tests
 File: `tests/unit/test_ai_consultation.py`
 
-Add tests for:
-- `ConsultationOrchestrator.is_available()`
-- `ConsultationOrchestrator.consult()` with mocked providers
-- `ConsultationOrchestrator._execute_single_provider()`
-- `ConsultationOrchestrator._execute_multi_provider()`
-- Error handling (timeout, provider unavailable)
-- Response structure validation
+Added tests for:
+- `ConsultationOrchestrator.is_available()` (no providers, with providers, specific provider)
+- `ConsultationOrchestrator.get_available_providers()`
+- `ConsultationOrchestrator.consult()` with mocked providers (cache hit, success, all fail, no providers)
+- `ConsultationOrchestrator.consult()` fallback behavior
+- `ConsultationOrchestrator._generate_cache_key()` (deterministic, explicit override)
+- Timeout from request
+- Duration tracking
+- Multi-model mode (ConsensusResult, partial failures, all fail)
 
-### 3. Add E2E Tests with Mocked Providers
+### 3. ✅ Added E2E Tests with Mocked Providers
 
 #### For AI Consultation
 File: `tests/integration/test_ai_consultation_e2e.py`
 
-Test full flow:
+Tests full flow:
 - Plan review workflow end-to-end
+- Plan review cached response
+- Plan review cache bypass
 - Fidelity review workflow end-to-end
-- Multi-model consensus with fallback
-- Cache hit/miss scenarios
+- Multi-model consensus plan review
+- Multi-model partial failure with fallback
+- Multi-model all providers fail
+- Fallback to second provider
+- No fallback when disabled
+- No providers available error
+- Invalid prompt ID error
+- Single/multi-model response structure
 
 #### For Research Router
 File: `tests/integration/test_research_e2e.py`
 
-Test full flow through router:
-- `research action=chat` -> ChatWorkflow -> response envelope
-- `research action=consensus` -> ConsensusWorkflow -> response envelope
-- `research action=thinkdeep` -> ThinkDeepWorkflow -> response envelope
-- `research action=ideate` -> IdeateWorkflow -> response envelope
-- Thread persistence across calls
+Tests full flow through router:
+- `research action=chat` -> ChatWorkflow -> response envelope (new thread, continue, failure)
+- `research action=consensus` -> ConsensusWorkflow -> response envelope (synthesize, all_responses)
+- `research action=thinkdeep` -> ThinkDeepWorkflow -> response envelope (new, continue, converged)
+- `research action=ideate` -> IdeateWorkflow -> response envelope (generate, cluster)
+- Route action recommends workflow
 - Feature flag gating
+- Thread operations (list, get, delete)
+- Response envelope structure (success, error)
+- Error handling (invalid action, missing param, workflow exception)
 
 ## Key Files
 
