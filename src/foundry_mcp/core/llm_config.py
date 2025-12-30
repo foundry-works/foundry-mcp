@@ -163,6 +163,14 @@ class ProviderSpec:
             "[api]provider/model or [cli]transport[:backend/model|:model]"
         )
 
+    @classmethod
+    def parse_flexible(cls, spec: str) -> "ProviderSpec":
+        """Parse with fallback for simple provider IDs."""
+        spec = spec.strip()
+        if spec.startswith("["):
+            return cls.parse(spec)
+        return cls(type="cli", provider=spec.lower(), raw=spec)
+
     def validate(self) -> List[str]:
         """Validate the provider specification.
 
