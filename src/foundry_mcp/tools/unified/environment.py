@@ -7,7 +7,6 @@ import logging
 import shutil
 import subprocess
 import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
@@ -23,6 +22,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
@@ -235,7 +235,7 @@ def _feature_flag_blocked(request_id: str) -> Optional[dict]:
     if _flag_service.is_enabled("environment_tools"):
         return None
 
-    return asdict(
+    return to_json(
         error_response(
             "Environment tools are disabled by feature flag",
             error_code=ErrorCode.FEATURE_DISABLED,
@@ -256,7 +256,7 @@ def _validation_error(
     remediation: Optional[str] = None,
     code: ErrorCode = ErrorCode.VALIDATION_ERROR,
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for environment.{action}: {message}",
             error_code=code,
@@ -337,7 +337,7 @@ def _handle_verify_toolchain(
 
         if missing_required:
             _metrics.counter(metric_key, labels={"status": "missing_required"})
-            return asdict(
+            return to_json(
                 error_response(
                     f"Required tools missing: {', '.join(missing_required)}",
                     error_code=ErrorCode.MISSING_REQUIRED,
@@ -349,7 +349,7 @@ def _handle_verify_toolchain(
             )
 
         _metrics.counter(metric_key, labels={"status": "success"})
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 warnings=warnings or None,
@@ -359,7 +359,7 @@ def _handle_verify_toolchain(
     except Exception:
         logger.exception("Error verifying toolchain")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to verify toolchain",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -441,7 +441,7 @@ def _handle_init_workspace(
             "created_dirs": created_dirs,
             "existing_dirs": existing_dirs,
         }
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 warnings=warnings or None,
@@ -451,7 +451,7 @@ def _handle_init_workspace(
     except PermissionError as exc:
         logger.exception("Permission denied during workspace initialization")
         _metrics.counter(metric_key, labels={"status": "forbidden"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Permission denied: {exc}",
                 error_code=ErrorCode.FORBIDDEN,
@@ -463,7 +463,7 @@ def _handle_init_workspace(
     except Exception as exc:
         logger.exception("Error initializing workspace")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to initialize workspace: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -559,7 +559,7 @@ def _handle_detect_topology(
             )
 
         _metrics.counter(metric_key, labels={"status": "success"})
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 warnings=warnings or None,
@@ -569,7 +569,7 @@ def _handle_detect_topology(
     except Exception as exc:
         logger.exception("Error detecting topology")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to detect topology: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -743,7 +743,7 @@ def _handle_detect_test_runner(
             )
 
         _metrics.counter(metric_key, labels={"status": "success"})
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 warnings=warnings or None,
@@ -753,7 +753,7 @@ def _handle_detect_test_runner(
     except Exception as exc:
         logger.exception("Error detecting test runner")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to detect test runner: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -892,7 +892,7 @@ def _handle_verify_environment(
 
         if not all_valid:
             _metrics.counter(metric_key, labels={"status": "invalid"})
-            return asdict(
+            return to_json(
                 error_response(
                     f"Environment validation failed: {len(issues)} issue(s) found",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -904,7 +904,7 @@ def _handle_verify_environment(
             )
 
         _metrics.counter(metric_key, labels={"status": "success"})
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 request_id=request_id,
@@ -913,7 +913,7 @@ def _handle_verify_environment(
     except Exception as exc:
         logger.exception("Error verifying environment", extra={"path": path})
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to verify environment: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -967,7 +967,7 @@ def _handle_setup(
     try:
         base_path = Path(path) if path else Path.cwd()
         if not base_path.exists():
-            return asdict(
+            return to_json(
                 error_response(
                     f"Path does not exist: {base_path}",
                     error_code=ErrorCode.NOT_FOUND,
@@ -1017,7 +1017,7 @@ def _handle_setup(
             },
         )
 
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "specs_dir": str(base_path / "specs"),
@@ -1033,7 +1033,7 @@ def _handle_setup(
     except PermissionError as exc:
         logger.exception("Permission denied during environment setup")
         _metrics.counter(metric_key, labels={"status": "forbidden"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Permission denied: {exc}",
                 error_code=ErrorCode.FORBIDDEN,
@@ -1045,7 +1045,7 @@ def _handle_setup(
     except Exception as exc:
         logger.exception("Error in environment setup")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Setup failed: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1115,7 +1115,7 @@ def _dispatch_environment_action(
     except ActionRouterError as exc:
         request_id = _request_id()
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported environment action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

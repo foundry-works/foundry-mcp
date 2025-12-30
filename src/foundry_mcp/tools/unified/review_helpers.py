@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -24,6 +23,7 @@ from foundry_mcp.core.responses import (
     ai_provider_timeout_error,
     error_response,
     success_response,
+    to_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ def _run_quick_review(
 ) -> dict:
     if dry_run:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return asdict(
+        return to_json(
             success_response(
                 spec_id=spec_id,
                 review_type="quick",
@@ -86,7 +86,7 @@ def _run_quick_review(
         result = quick_review(spec_id=spec_id, specs_dir=specs_dir)
     except Exception as exc:
         logger.exception("Quick review failed")
-        return asdict(
+        return to_json(
             error_response(
                 f"Quick review failed: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -100,7 +100,7 @@ def _run_quick_review(
     payload = asdict(result)
     payload["llm_status"] = llm_status
 
-    return asdict(
+    return to_json(
         success_response(
             **payload,
             telemetry={"duration_ms": round(duration_ms, 2)},
@@ -123,7 +123,7 @@ def _run_ai_review(
 ) -> dict:
     template_id = _REVIEW_TYPE_TO_TEMPLATE.get(review_type)
     if template_id is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Unknown review type: {review_type}",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -144,7 +144,7 @@ def _run_ai_review(
         )
     except Exception as exc:
         logger.exception("Failed preparing review context")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed preparing review context: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -154,7 +154,7 @@ def _run_ai_review(
         )
 
     if context is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Specification '{spec_id}' not found",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -166,7 +166,7 @@ def _run_ai_review(
 
     if dry_run:
         duration_ms = (time.perf_counter() - start_time) * 1000
-        return asdict(
+        return to_json(
             success_response(
                 spec_id=spec_id,
                 title=context.title,
@@ -194,7 +194,7 @@ def _run_ai_review(
             ConsultationWorkflow,
         )
     except ImportError:
-        return asdict(
+        return to_json(
             error_response(
                 "AI consultation layer not available",
                 error_code=ErrorCode.UNAVAILABLE,
@@ -206,7 +206,7 @@ def _run_ai_review(
     orchestrator = ConsultationOrchestrator(default_timeout=ai_timeout)
 
     if not orchestrator.is_available(provider_id=ai_provider):
-        return asdict(
+        return to_json(
             ai_no_provider_error(
                 "AI-enhanced review requested but no providers available",
                 required_providers=[ai_provider] if ai_provider else None,
@@ -234,14 +234,14 @@ def _run_ai_review(
     except Exception as exc:
         error_lower = str(exc).lower()
         if "timeout" in error_lower or "timed out" in error_lower:
-            return asdict(
+            return to_json(
                 ai_provider_timeout_error(
                     ai_provider or "unknown",
                     int(ai_timeout),
                 )
             )
 
-        return asdict(ai_provider_error(ai_provider or "unknown", str(exc)))
+        return to_json(ai_provider_error(ai_provider or "unknown", str(exc)))
 
     from foundry_mcp.core.ai_consultation import ConsensusResult
 
@@ -274,7 +274,7 @@ def _run_ai_review(
         context.stats.status_counts.get("completed", 0) if context.stats else 0
     )
 
-    return asdict(
+    return to_json(
         success_response(
             spec_id=spec_id,
             title=context.title,

@@ -87,7 +87,7 @@ Key Principle:
 import json
 import logging
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, Mapping, Optional, Sequence, Union
 
@@ -194,6 +194,26 @@ class ToolResponse:
     data: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=lambda: {"version": "response-v2"})
+
+
+def to_json(response: ToolResponse) -> str:
+    """Serialize a ToolResponse to minified JSON string.
+
+    This function produces minified JSON (no whitespace) for MCP tool responses,
+    ensuring consistent, compact output across all tools. FastMCP passes strings
+    through unchanged, bypassing its default indent=2 serialization.
+
+    Args:
+        response: The ToolResponse dataclass to serialize.
+
+    Returns:
+        Minified JSON string representation of the response.
+
+    Example:
+        >>> return to_json(success_response(data={"count": 42}))
+        '{"success":true,"data":{"count":42},"error":null,"meta":{"version":"response-v2"}}'
+    """
+    return json.dumps(asdict(response), separators=(",", ":"), default=str)
 
 
 def _build_meta(

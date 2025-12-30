@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from typing import Any, Dict, Optional, Tuple
 
 from mcp.server.fastmcp import FastMCP
@@ -22,6 +21,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
@@ -41,7 +41,7 @@ _ACTION_SUMMARY = {
 
 
 def _error_collection_disabled_response() -> dict:
-    return asdict(
+    return to_json(
         error_response(
             "Error collection is disabled",
             error_code=ErrorCode.UNAVAILABLE,
@@ -53,7 +53,7 @@ def _error_collection_disabled_response() -> dict:
 
 
 def _collector_unavailable_response() -> dict:
-    return asdict(
+    return to_json(
         error_response(
             "Error collector is not enabled",
             error_code=ErrorCode.UNAVAILABLE,
@@ -64,7 +64,7 @@ def _collector_unavailable_response() -> dict:
 
 
 def _invalid_cursor_response(exc: CursorError) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid cursor: {exc}",
             error_code=ErrorCode.VALIDATION_ERROR,
@@ -75,7 +75,7 @@ def _invalid_cursor_response(exc: CursorError) -> dict:
 
 
 def _missing_parameter_response(param: str, action: str) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Missing required parameter '{param}' for error.{action}",
             error_code=ErrorCode.MISSING_REQUIRED,
@@ -156,7 +156,7 @@ def perform_error_list(
         )
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error querying errors")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to query errors: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -197,7 +197,7 @@ def perform_error_get(*, config: ServerConfig, error_id: Optional[str] = None) -
         record = store.get(error_id)
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error retrieving error record")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to retrieve error: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -207,7 +207,7 @@ def perform_error_get(*, config: ServerConfig, error_id: Optional[str] = None) -
         )
 
     if record is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Error record not found: {error_id}",
                 error_code=ErrorCode.NOT_FOUND,
@@ -216,7 +216,7 @@ def perform_error_get(*, config: ServerConfig, error_id: Optional[str] = None) -
             )
         )
 
-    return asdict(success_response(data={"error": record.to_dict()}))
+    return to_json(success_response(data={"error": record.to_dict()}))
 
 
 def perform_error_stats(*, config: ServerConfig) -> dict:
@@ -229,7 +229,7 @@ def perform_error_stats(*, config: ServerConfig) -> dict:
         stats = store.get_stats()
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error retrieving error stats")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to get error stats: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -238,7 +238,7 @@ def perform_error_stats(*, config: ServerConfig) -> dict:
             )
         )
 
-    return asdict(success_response(data=stats))
+    return to_json(success_response(data=stats))
 
 
 def perform_error_patterns(*, config: ServerConfig, min_count: int = 3) -> dict:
@@ -254,7 +254,7 @@ def perform_error_patterns(*, config: ServerConfig, min_count: int = 3) -> dict:
 
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error retrieving error patterns")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to get error patterns: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -263,7 +263,7 @@ def perform_error_patterns(*, config: ServerConfig, min_count: int = 3) -> dict:
             )
         )
 
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "patterns": patterns,
@@ -292,7 +292,7 @@ def perform_error_cleanup(
     try:
         if dry_run:
             current_count = store.count()
-            return asdict(
+            return to_json(
                 success_response(
                     data={
                         "current_count": current_count,
@@ -310,7 +310,7 @@ def perform_error_cleanup(
         )
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error cleaning up error records")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to cleanup errors: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -319,7 +319,7 @@ def perform_error_cleanup(
             )
         )
 
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "deleted_count": deleted_count,
@@ -412,7 +412,7 @@ def _dispatch_error_action(
         return _ERROR_ROUTER.dispatch(action=action, config=config, **payload)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported error action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

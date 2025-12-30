@@ -10,7 +10,6 @@ import json
 import logging
 import time
 from datetime import datetime
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -36,6 +35,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spec
@@ -95,7 +95,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     review_type = payload.get("review_type") or default_review_type
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -105,7 +105,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
 
     if review_type not in REVIEW_TYPES:
-        return asdict(
+        return to_json(
             error_response(
                 f"Invalid review_type: {review_type}",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -132,7 +132,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
             and isinstance(field_value, str)
             and is_prompt_injection(field_value)
         ):
-            return asdict(
+            return to_json(
                 error_response(
                     f"Input validation failed for {field_name}",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -149,7 +149,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         elif candidate.is_file():
             specs_dir = candidate.parent
         else:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid path: {path}",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -162,7 +162,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
 
     dry_run_value = payload.get("dry_run", False)
     if dry_run_value is not None and not isinstance(dry_run_value, bool):
-        return asdict(
+        return to_json(
             error_response(
                 "dry_run must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -185,7 +185,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     try:
         ai_timeout = float(payload.get("ai_timeout", DEFAULT_AI_TIMEOUT))
     except (TypeError, ValueError):
-        return asdict(
+        return to_json(
             error_response(
                 "ai_timeout must be a number",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -195,7 +195,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
 
     if ai_timeout <= 0:
-        return asdict(
+        return to_json(
             error_response(
                 "ai_timeout must be greater than 0",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -208,7 +208,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     if consultation_cache_value is not None and not isinstance(
         consultation_cache_value, bool
     ):
-        return asdict(
+        return to_json(
             error_response(
                 "consultation_cache must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -256,7 +256,7 @@ def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
         duration_ms = (time.perf_counter() - start_time) * 1000
         _metrics.timer("review.review_list_tools.duration_ms", duration_ms)
 
-        return asdict(
+        return to_json(
             success_response(
                 tools=tools_info,
                 llm_status=llm_status,
@@ -269,7 +269,7 @@ def _handle_list_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
 
     except Exception as exc:
         logger.exception("Error listing review tools")
-        return asdict(
+        return to_json(
             error_response(
                 f"Error listing review tools: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -326,7 +326,7 @@ def _handle_list_plan_tools(*, config: ServerConfig, payload: Dict[str, Any]) ->
         duration_ms = (time.perf_counter() - start_time) * 1000
         _metrics.timer("review.review_list_plan_tools.duration_ms", duration_ms)
 
-        return asdict(
+        return to_json(
             success_response(
                 plan_tools=plan_tools,
                 llm_status=llm_status,
@@ -337,7 +337,7 @@ def _handle_list_plan_tools(*, config: ServerConfig, payload: Dict[str, Any]) ->
 
     except Exception as exc:
         logger.exception("Error listing plan review tools")
-        return asdict(
+        return to_json(
             error_response(
                 f"Error listing plan review tools: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -352,7 +352,7 @@ def _handle_parse_feedback(*, config: ServerConfig, payload: Dict[str, Any]) -> 
     review_path = payload.get("review_path")
     output_path = payload.get("output_path")
 
-    return asdict(
+    return to_json(
         error_response(
             "Review feedback parsing requires complex text/markdown parsing. "
             "Use the sdd-toolkit:sdd-modify skill to apply review feedback.",
@@ -541,7 +541,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     consensus_threshold = payload.get("consensus_threshold", 2)
     incremental_value = payload.get("incremental", False)
     if incremental_value is not None and not isinstance(incremental_value, bool):
-        return asdict(
+        return to_json(
             error_response(
                 "incremental must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -554,7 +554,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     include_tests_value = payload.get("include_tests", True)
     if include_tests_value is not None and not isinstance(include_tests_value, bool):
-        return asdict(
+        return to_json(
             error_response(
                 "include_tests must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -570,7 +570,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id:
-        return asdict(
+        return to_json(
             error_response(
                 "Specification ID is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -580,7 +580,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     if task_id and phase_id:
-        return asdict(
+        return to_json(
             error_response(
                 "Cannot specify both task_id and phase_id",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -594,7 +594,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         or consensus_threshold < 1
         or consensus_threshold > 5
     ):
-        return asdict(
+        return to_json(
             error_response(
                 f"Invalid consensus_threshold: {consensus_threshold}. Must be between 1 and 5.",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -616,7 +616,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             and isinstance(field_value, str)
             and is_prompt_injection(field_value)
         ):
-            return asdict(
+            return to_json(
                 error_response(
                     f"Input validation failed for {field_name}",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -628,7 +628,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     if files:
         for idx, file_path in enumerate(files):
             if isinstance(file_path, str) and is_prompt_injection(file_path):
-                return asdict(
+                return to_json(
                     error_response(
                         f"Input validation failed for files[{idx}]",
                         error_code=ErrorCode.VALIDATION_ERROR,
@@ -642,7 +642,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     specs_dir = find_specs_directory(str(ws_path))
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "Could not find specs directory",
                 error_code=ErrorCode.NOT_FOUND,
@@ -653,7 +653,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_file = find_spec_file(spec_id, specs_dir)
     if not spec_file:
-        return asdict(
+        return to_json(
             error_response(
                 f"Specification not found: {spec_id}",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -664,7 +664,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to load specification: {spec_id}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -708,7 +708,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     consultation_config = load_consultation_config(config_file=config_file)
     orchestrator = ConsultationOrchestrator(config=consultation_config)
     if not orchestrator.is_available(provider_id=first_provider):
-        return asdict(
+        return to_json(
             error_response(
                 "Fidelity review requested but no providers available",
                 error_code=ErrorCode.AI_NO_PROVIDER,
@@ -930,7 +930,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         if "synthesis_metadata" in parsed:
             response_data["synthesis_metadata"] = parsed["synthesis_metadata"]
 
-    return asdict(
+    return to_json(
         success_response(
             **response_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
@@ -972,7 +972,7 @@ def _dispatch_review_action(
         return _REVIEW_ROUTER.dispatch(action=action, payload=payload, config=config)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported review action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

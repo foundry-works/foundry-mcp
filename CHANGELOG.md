@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Consistent JSON Output**: Fixed inconsistent JSON formatting in MCP tool responses
+  - Some tools returned pretty-printed JSON (indent=2), others returned minified JSON
+  - Root cause: Unreliable monkey-patch of FastMCP's `_convert_to_content` function
+  - Solution: Tools now serialize directly to minified JSON strings via new `to_json()` helper
+  - All 17 unified tools updated to return consistent minified JSON output
+  - Removed deprecated `_patch_fastmcp_json_serialization()` from server.py
+
 - **AI Consultation Config Loading**: Fixed issue where AI consultation features returned `model_used: "none"` because config was loaded from CWD instead of workspace path
   - `review.py`: Now loads `foundry-mcp.toml` from workspace path for fidelity reviews
   - `plan.py`: Added `_find_config_file()` helper to walk up directories and find config

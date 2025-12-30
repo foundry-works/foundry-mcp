@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +27,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.spec import (
     TEMPLATES,
@@ -82,7 +82,7 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -93,7 +93,7 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -105,7 +105,7 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_file = find_spec_file(spec_id, specs_dir)
     if spec_file:
-        return asdict(
+        return to_json(
             success_response(
                 found=True,
                 spec_id=spec_id,
@@ -114,7 +114,7 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    return asdict(success_response(found=False, spec_id=spec_id))
+    return to_json(success_response(found=False, spec_id=spec_id))
 
 
 def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -125,7 +125,7 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -136,7 +136,7 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -148,7 +148,7 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_data = load_spec(spec_id, specs_dir)
     if spec_data is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.NOT_FOUND,
@@ -160,7 +160,7 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     # Return minified JSON string to minimize token usage
     minified_spec = _json.dumps(spec_data, separators=(",", ":"))
-    return asdict(success_response(spec=minified_spec))
+    return to_json(success_response(spec=minified_spec))
 
 
 def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -172,7 +172,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -192,7 +192,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             cursor_data = decode_cursor(cursor)
             start_after_id = cursor_data.get("last_id")
         except CursorError as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid pagination cursor: {exc}",
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -228,7 +228,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     if has_more and page_specs:
         next_cursor = encode_cursor({"last_id": page_specs[-1].get("spec_id")})
 
-    return asdict(
+    return to_json(
         success_response(
             specs=page_specs,
             count=len(page_specs),
@@ -246,7 +246,7 @@ def _handle_validate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -256,7 +256,7 @@ def _handle_validate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -268,7 +268,7 @@ def _handle_validate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -292,7 +292,7 @@ def _handle_validate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         for diag in result.diagnostics
     ]
 
-    return asdict(
+    return to_json(
         success_response(
             spec_id=result.spec_id,
             is_valid=result.is_valid,
@@ -309,7 +309,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     dry_run_value = payload.get("dry_run", False)
     if dry_run_value is not None and not isinstance(dry_run_value, bool):
-        return asdict(
+        return to_json(
             error_response(
                 "dry_run must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -322,7 +322,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     create_backup_value = payload.get("create_backup", True)
     if create_backup_value is not None and not isinstance(create_backup_value, bool):
-        return asdict(
+        return to_json(
             error_response(
                 "create_backup must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -338,7 +338,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -348,7 +348,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -360,7 +360,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -372,7 +372,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to load spec: {spec_id}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -386,7 +386,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     actions = get_fix_actions(validation_result, spec_data)
 
     if not actions:
-        return asdict(
+        return to_json(
             success_response(
                 spec_id=spec_id,
                 applied_count=0,
@@ -416,7 +416,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         for action in report.skipped_actions
     ]
 
-    return asdict(
+    return to_json(
         success_response(
             spec_id=spec_id,
             dry_run=dry_run,
@@ -434,7 +434,7 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -444,7 +444,7 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -456,7 +456,7 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -468,7 +468,7 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to load spec: {spec_id}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -479,7 +479,7 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     stats = calculate_stats(spec_data, str(spec_path))
-    return asdict(
+    return to_json(
         success_response(
             spec_id=stats.spec_id,
             title=stats.title,
@@ -501,7 +501,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     auto_fix_value = payload.get("auto_fix", True)
     if auto_fix_value is not None and not isinstance(auto_fix_value, bool):
-        return asdict(
+        return to_json(
             error_response(
                 "auto_fix must be a boolean",
                 error_code=ErrorCode.INVALID_FORMAT,
@@ -515,7 +515,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     workspace = payload.get("workspace")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -525,7 +525,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -537,7 +537,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -549,7 +549,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to load spec: {spec_id}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -599,7 +599,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
         for diag in result.diagnostics
     ]
 
-    return asdict(success_response(**response_data))
+    return to_json(success_response(**response_data))
 
 
 def _handle_analyze(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -650,7 +650,7 @@ def _handle_analyze(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     _metrics.counter(f"analysis.{tool_name}", labels={"status": "success"})
     _metrics.timer(f"analysis.{tool_name}.duration_ms", duration_ms)
 
-    return asdict(
+    return to_json(
         success_response(
             **analysis_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
@@ -667,7 +667,7 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     path = payload.get("path")
 
     if not isinstance(spec_id, str) or not spec_id:
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -689,7 +689,7 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     specs_dir = find_specs_directory(str(ws_path))
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 f"Specs directory not found in {ws_path}",
                 data={"spec_id": spec_id, "workspace": str(ws_path)},
@@ -698,7 +698,7 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     spec_file = find_spec_file(spec_id, specs_dir)
     if not spec_file:
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec '{spec_id}' not found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -710,7 +710,7 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to load spec '{spec_id}'",
                 data={"spec_id": spec_id, "spec_file": str(spec_file)},
@@ -771,7 +771,7 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     _metrics.counter(f"analysis.{tool_name}", labels={"status": "success"})
     _metrics.timer(f"analysis.{tool_name}.duration_ms", duration_ms)
 
-    return asdict(
+    return to_json(
         success_response(
             spec_id=spec_id,
             dependency_count=dependency_count,
@@ -791,7 +791,7 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         {"name": t, "description": TEMPLATE_DESCRIPTIONS.get(t, "")}
         for t in TEMPLATES
     ]
-    return asdict(
+    return to_json(
         success_response(
             templates=templates_with_desc,
             node_types=sorted(VALID_NODE_TYPES),
@@ -809,7 +809,7 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Compare two specs and return categorized changes."""
     spec_id = payload.get("spec_id")
     if not spec_id:
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required for diff action",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -825,7 +825,7 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -838,7 +838,7 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     if not target:
         backups = list_spec_backups(spec_id, specs_dir=specs_dir)
         if backups["count"] == 0:
-            return asdict(
+            return to_json(
                 error_response(
                     f"No backups found for spec '{spec_id}'",
                     error_code=ErrorCode.NOT_FOUND,
@@ -865,7 +865,7 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
 
     if "error" in result and not result.get("success", True):
-        return asdict(
+        return to_json(
             error_response(
                 result["error"],
                 error_code=ErrorCode.NOT_FOUND,
@@ -874,7 +874,7 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    return asdict(
+    return to_json(
         success_response(
             spec_id=spec_id,
             compared_to=source_path if not target else target,
@@ -889,7 +889,7 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """List spec history including backups and revision history."""
     spec_id = payload.get("spec_id")
     if not spec_id:
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required for history action",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -904,7 +904,7 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -947,7 +947,7 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             "author": rev.get("author"),
         })
 
-    return asdict(
+    return to_json(
         success_response(
             spec_id=spec_id,
             entries=history_entries,
@@ -964,7 +964,7 @@ def _handle_completeness_check(
     """Check spec completeness and return a score (0-100)."""
     spec_id = payload.get("spec_id")
     if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required for completeness-check action",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -976,7 +976,7 @@ def _handle_completeness_check(
     workspace = payload.get("workspace")
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -987,7 +987,7 @@ def _handle_completeness_check(
 
     result, error = check_spec_completeness(spec_id, specs_dir=specs_dir)
     if error:
-        return asdict(
+        return to_json(
             error_response(
                 error,
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -997,7 +997,7 @@ def _handle_completeness_check(
             )
         )
 
-    return asdict(success_response(**result))
+    return to_json(success_response(**result))
 
 
 def _handle_duplicate_detection(
@@ -1006,7 +1006,7 @@ def _handle_duplicate_detection(
     """Detect duplicate or near-duplicate tasks in a spec."""
     spec_id = payload.get("spec_id")
     if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
+        return to_json(
             error_response(
                 "spec_id is required for duplicate-detection action",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -1022,7 +1022,7 @@ def _handle_duplicate_detection(
 
     # Validate threshold
     if not isinstance(threshold, (int, float)) or not 0.0 <= threshold <= 1.0:
-        return asdict(
+        return to_json(
             error_response(
                 "threshold must be a number between 0.0 and 1.0",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -1032,7 +1032,7 @@ def _handle_duplicate_detection(
 
     specs_dir = _resolve_specs_dir(config, workspace)
     if not specs_dir:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -1049,7 +1049,7 @@ def _handle_duplicate_detection(
         specs_dir=specs_dir,
     )
     if error:
-        return asdict(
+        return to_json(
             error_response(
                 error,
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -1059,7 +1059,7 @@ def _handle_duplicate_detection(
             )
         )
 
-    return asdict(success_response(**result))
+    return to_json(success_response(**result))
 
 
 _ACTIONS = [
@@ -1121,7 +1121,7 @@ def _dispatch_spec_action(
         return _SPEC_ROUTER.dispatch(action=action, payload=payload, config=config)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported spec action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

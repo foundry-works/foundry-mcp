@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -19,6 +18,7 @@ from foundry_mcp.core.responses import (
     error_response,
     sanitize_error_message,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
 from foundry_mcp.core.validation import add_verification, execute_verification
@@ -54,7 +54,7 @@ def _validation_error(
     remediation: Optional[str] = None,
     code: ErrorCode = ErrorCode.VALIDATION_ERROR,
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for verification.{action}: {message}",
             error_code=code,
@@ -152,7 +152,7 @@ def _handle_add(
     specs_dir = find_specs_directory(path)
     if not specs_dir:
         _metrics.counter(metric_key, labels={"status": "specs_not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 "Could not find specs directory",
                 error_code=ErrorCode.NOT_FOUND,
@@ -165,7 +165,7 @@ def _handle_add(
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
         _metrics.counter(metric_key, labels={"status": "spec_not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Specification '{spec_id}' not found",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -179,7 +179,7 @@ def _handle_add(
         hierarchy = spec_data.get("hierarchy", {})
         if not isinstance(hierarchy, dict) or hierarchy.get(verify_id) is None:
             _metrics.counter(metric_key, labels={"status": "verify_not_found"})
-            return asdict(
+            return to_json(
                 error_response(
                     f"Verification '{verify_id}' not found in spec",
                     error_code=ErrorCode.NOT_FOUND,
@@ -198,7 +198,7 @@ def _handle_add(
         if command:
             data["command"] = command
         _metrics.counter(metric_key, labels={"status": "dry_run"})
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 request_id=request_id,
@@ -218,7 +218,7 @@ def _handle_add(
     except Exception as exc:
         logger.exception("Unexpected error adding verification")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="verification"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -240,7 +240,7 @@ def _handle_add(
             code = ErrorCode.VALIDATION_ERROR
             error_type = ErrorType.VALIDATION
         _metrics.counter(metric_key, labels={"status": error_type.value})
-        return asdict(
+        return to_json(
             error_response(
                 error_msg or "Failed to add verification",
                 error_code=code,
@@ -252,7 +252,7 @@ def _handle_add(
 
     if not save_spec(spec_id, spec_data, specs_dir):
         _metrics.counter(metric_key, labels={"status": "save_failed"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to save specification",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -272,7 +272,7 @@ def _handle_add(
     if command:
         response_data["command"] = command
 
-    return asdict(
+    return to_json(
         success_response(
             data=response_data,
             request_id=request_id,
@@ -342,7 +342,7 @@ def _handle_execute(
     specs_dir = find_specs_directory(path)
     if not specs_dir:
         _metrics.counter(metric_key, labels={"status": "specs_not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 "Could not find specs directory",
                 error_code=ErrorCode.NOT_FOUND,
@@ -355,7 +355,7 @@ def _handle_execute(
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
         _metrics.counter(metric_key, labels={"status": "spec_not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Specification '{spec_id}' not found",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -376,7 +376,7 @@ def _handle_execute(
     except Exception as exc:
         logger.exception("Unexpected error executing verification")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="verification"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -406,7 +406,7 @@ def _handle_execute(
             code = ErrorCode.INTERNAL_ERROR
             error_type = ErrorType.INTERNAL
         _metrics.counter(metric_key, labels={"status": error_type.value})
-        return asdict(
+        return to_json(
             error_response(
                 error_msg if error_msg else "Failed to execute verification",
                 error_code=code,
@@ -431,7 +431,7 @@ def _handle_execute(
         response_data["exit_code"] = result_data["exit_code"]
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=response_data,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -467,7 +467,7 @@ def _dispatch_verification_action(
     except ActionRouterError as exc:
         request_id = _request_id()
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported verification action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

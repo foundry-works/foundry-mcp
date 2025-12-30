@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import asdict
 from functools import lru_cache
 from typing import Any, Dict, Optional
 
@@ -38,6 +37,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.tools.unified.context_helpers import (
     build_llm_status_response,
@@ -92,7 +92,7 @@ def _estimate_tokens(text: str) -> int:
 def _validation_error(
     *, message: str, request_id: str, remediation: Optional[str] = None
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             message,
             error_code=ErrorCode.VALIDATION_ERROR,
@@ -283,7 +283,7 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             cursor_data = decode_cursor(cursor)
             start_idx = int(cursor_data.get("offset", 0))
         except (CursorError, ValueError, TypeError) as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid cursor: {exc}",
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -381,7 +381,7 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     registry = get_tool_registry()
     schema = registry.get_tool_schema(tool_name.strip())
     if schema is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Tool '{tool_name}' not found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -391,17 +391,17 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    return asdict(success_response(data=schema, request_id=request_id))
+    return to_json(success_response(data=schema, request_id=request_id))
 
 
 def _handle_capabilities(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     request_id = _request_id()
     try:
         caps = get_capabilities()
-        return asdict(success_response(data=caps, request_id=request_id))
+        return to_json(success_response(data=caps, request_id=request_id))
     except Exception as exc:
         logger.exception("Error getting capabilities")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to get capabilities: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -529,7 +529,7 @@ def _dispatch_server_action(
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
         request_id = _request_id()
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported server action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

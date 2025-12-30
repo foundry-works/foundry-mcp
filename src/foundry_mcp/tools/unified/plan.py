@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -29,6 +28,7 @@ from foundry_mcp.core.responses import (
     ai_no_provider_error,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_specs_directory
@@ -227,7 +227,7 @@ def perform_plan_review(
     start_time = time.perf_counter()
 
     if review_type not in REVIEW_TYPES:
-        return asdict(
+        return to_json(
             error_response(
                 f"Invalid review_type: {review_type}. Must be one of: {', '.join(REVIEW_TYPES)}",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -246,7 +246,7 @@ def perform_plan_review(
                 "plan_review.security_blocked",
                 labels={"tool": "plan-review", "reason": "prompt_injection"},
             )
-            return asdict(
+            return to_json(
                 error_response(
                     f"Input validation failed for {field_name}",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -266,7 +266,7 @@ def perform_plan_review(
             "plan_review.errors",
             labels={"tool": "plan-review", "error_type": "not_found"},
         )
-        return asdict(
+        return to_json(
             error_response(
                 f"Plan file not found: {plan_path}",
                 error_code=ErrorCode.NOT_FOUND,
@@ -283,7 +283,7 @@ def perform_plan_review(
             "plan_review.errors",
             labels={"tool": "plan-review", "error_type": "read_error"},
         )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to read plan file: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -298,7 +298,7 @@ def perform_plan_review(
             "plan_review.errors",
             labels={"tool": "plan-review", "error_type": "empty_plan"},
         )
-        return asdict(
+        return to_json(
             error_response(
                 "Plan file is empty",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -311,7 +311,7 @@ def perform_plan_review(
     plan_name = _extract_plan_name(plan_file.name)
 
     if dry_run:
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "plan_path": str(plan_file),
@@ -328,7 +328,7 @@ def perform_plan_review(
         )
 
     if not llm_status["available"]:
-        return asdict(
+        return to_json(
             ai_no_provider_error(
                 "No AI provider available for plan review",
                 required_providers=["gemini", "codex", "cursor-agent"],
@@ -361,7 +361,7 @@ def perform_plan_review(
 
         if isinstance(result, ConsultationResult):
             if not result.success:
-                return asdict(
+                return to_json(
                     error_response(
                         f"AI consultation failed: {result.error}",
                         error_code=ErrorCode.AI_PROVIDER_ERROR,
@@ -373,7 +373,7 @@ def perform_plan_review(
             provider_used = result.provider_id
         elif isinstance(result, ConsensusResult):
             if not result.success:
-                return asdict(
+                return to_json(
                     error_response(
                         "AI consultation failed - no successful responses",
                         error_code=ErrorCode.AI_PROVIDER_ERROR,
@@ -412,7 +412,7 @@ def perform_plan_review(
                 # Multi-model mode: save per-provider files, then synthesize
                 specs_dir = find_specs_directory()
                 if specs_dir is None:
-                    return asdict(
+                    return to_json(
                         error_response(
                             "No specs directory found for storing plan review",
                             error_code=ErrorCode.NOT_FOUND,
@@ -502,7 +502,7 @@ def perform_plan_review(
                 review_content = result.primary_content
         else:  # pragma: no cover - defensive branch
             logger.error("Unknown consultation result type: %s", type(result))
-            return asdict(
+            return to_json(
                 error_response(
                     "Unsupported consultation result",
                     error_code=ErrorCode.AI_PROVIDER_ERROR,
@@ -514,7 +514,7 @@ def perform_plan_review(
             "plan_review.errors",
             labels={"tool": "plan-review", "error_type": "consultation_error"},
         )
-        return asdict(
+        return to_json(
             error_response(
                 f"AI consultation failed: {exc}",
                 error_code=ErrorCode.AI_PROVIDER_ERROR,
@@ -528,7 +528,7 @@ def perform_plan_review(
 
     specs_dir = find_specs_directory()
     if specs_dir is None:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found for storing plan review",
                 error_code=ErrorCode.NOT_FOUND,
@@ -547,7 +547,7 @@ def perform_plan_review(
             "plan_review.errors",
             labels={"tool": "plan-review", "error_type": "write_error"},
         )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to write review file: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -577,7 +577,7 @@ def perform_plan_review(
     if consensus_info:
         response_data["consensus"] = consensus_info
 
-    return asdict(
+    return to_json(
         success_response(
             data=response_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
@@ -591,7 +591,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
     start_time = time.perf_counter()
 
     if template not in PLAN_TEMPLATES:
-        return asdict(
+        return to_json(
             error_response(
                 f"Invalid template: {template}. Must be one of: simple, detailed",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -609,7 +609,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
             "plan_create.security_blocked",
             labels={"tool": "plan-create", "reason": "prompt_injection"},
         )
-        return asdict(
+        return to_json(
             error_response(
                 "Input validation failed for name",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -620,7 +620,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
 
     specs_dir = find_specs_directory()
     if specs_dir is None:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -633,7 +633,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
     try:
         plans_dir.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to create plans directory: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -646,7 +646,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
     plan_file = plans_dir / f"{plan_slug}.md"
 
     if plan_file.exists():
-        return asdict(
+        return to_json(
             error_response(
                 f"Plan already exists: {plan_file}",
                 error_code=ErrorCode.DUPLICATE_ENTRY,
@@ -660,7 +660,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
     try:
         plan_file.write_text(plan_content, encoding="utf-8")
     except Exception as exc:  # pragma: no cover - filesystem errors
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to write plan file: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -675,7 +675,7 @@ def perform_plan_create(name: str, template: str = "detailed") -> dict:
         labels={"tool": "plan-create", "template": template},
     )
 
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "plan_name": name,
@@ -695,7 +695,7 @@ def perform_plan_list() -> dict:
 
     specs_dir = find_specs_directory()
     if specs_dir is None:
-        return asdict(
+        return to_json(
             error_response(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -706,7 +706,7 @@ def perform_plan_list() -> dict:
 
     plans_dir = specs_dir / ".plans"
     if not plans_dir.exists():
-        return asdict(
+        return to_json(
             success_response(
                 data={"plans": [], "count": 0, "plans_dir": str(plans_dir)},
                 telemetry={
@@ -740,7 +740,7 @@ def perform_plan_list() -> dict:
     duration_ms = (time.perf_counter() - start_time) * 1000
     _metrics.counter("plan_list.completed", labels={"tool": "plan-list"})
 
-    return asdict(
+    return to_json(
         success_response(
             data={"plans": plans, "count": len(plans), "plans_dir": str(plans_dir)},
             telemetry={"duration_ms": round(duration_ms, 2)},
@@ -759,7 +759,7 @@ def _handle_plan_create(**payload: Any) -> dict:
     name = payload.get("name")
     template = payload.get("template", "detailed")
     if not name:
-        return asdict(
+        return to_json(
             error_response(
                 "Missing required parameter 'name' for plan.create",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -777,7 +777,7 @@ def _handle_plan_list(**_: Any) -> dict:
 def _handle_plan_review(**payload: Any) -> dict:
     plan_path = payload.get("plan_path")
     if not plan_path:
-        return asdict(
+        return to_json(
             error_response(
                 "Missing required parameter 'plan_path' for plan.review",
                 error_code=ErrorCode.MISSING_REQUIRED,
@@ -821,7 +821,7 @@ def _dispatch_plan_action(action: str, payload: Dict[str, Any]) -> dict:
         return _PLAN_ROUTER.dispatch(action=action, **payload)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported plan action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

@@ -11,7 +11,6 @@ non-unified public tool surfaces.
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from foundry_mcp.config import ServerConfig
@@ -20,6 +19,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,10 +32,10 @@ def build_llm_status_response(*, request_id: Optional[str] = None) -> dict:
         from foundry_mcp.core.review import get_llm_status
 
         llm_status = get_llm_status()
-        return asdict(success_response(llm_status=llm_status, request_id=request_id))
+        return to_json(success_response(llm_status=llm_status, request_id=request_id))
     except Exception as exc:
         logger.exception("Failed to build llm_status response")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to build llm_status response: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -95,4 +95,4 @@ def build_server_context_response(
             logger.debug("Failed to compute capabilities: %s", exc)
             payload["capabilities"] = {}
 
-    return asdict(success_response(data=payload, request_id=request_id))
+    return to_json(success_response(data=payload, request_id=request_id))

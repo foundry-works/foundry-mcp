@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -20,6 +19,7 @@ from foundry_mcp.core.responses import (
     error_response,
     sanitize_error_message,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.lifecycle import (
@@ -59,7 +59,7 @@ def _request_id() -> str:
 
 
 def _missing_specs_dir_response(request_id: str) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
             error_code=ErrorCode.NOT_FOUND,
@@ -79,7 +79,7 @@ def _validation_error(
     remediation: Optional[str] = None,
     code: ErrorCode = ErrorCode.VALIDATION_ERROR,
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for lifecycle.{action}: {message}",
             error_code=code,
@@ -155,7 +155,7 @@ def _move_result_response(
             "old_path": result.old_path,
             "new_path": result.new_path,
         }
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 warnings=warnings,
@@ -166,7 +166,7 @@ def _move_result_response(
 
     error_message = result.error or f"Failed to execute lifecycle.{action}"
     error_code, error_type, remediation = _classify_error(error_message)
-    return asdict(
+    return to_json(
         error_response(
             error_message,
             error_code=error_code,
@@ -185,7 +185,7 @@ def _move_result_response(
 def _state_response(
     state: LifecycleState, *, request_id: str, elapsed_ms: float
 ) -> dict:
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "spec_id": state.spec_id,
@@ -271,7 +271,7 @@ def _handle_move(
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error moving spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="lifecycle"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -336,7 +336,7 @@ def _handle_activate(
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error activating spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="lifecycle"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -410,7 +410,7 @@ def _handle_complete(
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error completing spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="lifecycle"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -475,7 +475,7 @@ def _handle_archive(
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error archiving spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="lifecycle"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -533,7 +533,7 @@ def _handle_state(
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error fetching lifecycle state")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="lifecycle"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -547,7 +547,7 @@ def _handle_state(
 
     if state is None:
         _metrics.counter(_metric_name(action), labels={"status": "not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Spec '{spec_id.strip()}' not found",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -601,7 +601,7 @@ def _dispatch_lifecycle_action(
     except ActionRouterError as exc:
         request_id = _request_id()
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported lifecycle action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

@@ -137,48 +137,10 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     return mcp
 
 
-def _patch_fastmcp_json_serialization() -> None:
-    """Patch FastMCP to use minified JSON for tool responses.
-
-    FastMCP serializes dict responses with indent=2 by default.
-    This patch makes responses minified (no indentation) for smaller payloads.
-    """
-    try:
-        import pydantic_core
-        from itertools import chain
-        from mcp.types import TextContent, ContentBlock
-        from mcp.server.fastmcp.utilities import func_metadata
-        from mcp.server.fastmcp.utilities.types import Image, Audio
-
-        def _minified_convert_to_content(result):
-            if result is None:
-                return []
-            if isinstance(result, ContentBlock):
-                return [result]
-            if isinstance(result, Image):
-                return [result.to_image_content()]
-            if isinstance(result, Audio):
-                return [result.to_audio_content()]
-            if isinstance(result, (list, tuple)):
-                return list(chain.from_iterable(
-                    _minified_convert_to_content(item) for item in result
-                ))
-            if not isinstance(result, str):
-                # Minified: no indent
-                result = pydantic_core.to_json(result, fallback=str).decode()
-            return [TextContent(type="text", text=result)]
-
-        func_metadata._convert_to_content = _minified_convert_to_content
-        logger.debug("Patched FastMCP for minified JSON responses")
-    except Exception as e:
-        logger.warning("Failed to patch FastMCP JSON serialization: %s", e)
-
-
 def main() -> None:
     """Main entry point for the foundry-mcp server."""
 
     try:
-        _patch_fastmcp_json_serialization()
         config = get_config()
         server = create_server(config)
 

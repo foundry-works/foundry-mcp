@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
 from typing import Any, Dict, Mapping, Optional, Tuple, TypedDict
 
 from mcp.server.fastmcp import FastMCP
@@ -22,6 +21,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
@@ -78,7 +78,7 @@ _ACTION_SUMMARY = {
 
 
 def _metrics_disabled_response() -> dict:
-    return asdict(
+    return to_json(
         error_response(
             "Metrics persistence is disabled",
             error_code=ErrorCode.UNAVAILABLE,
@@ -90,7 +90,7 @@ def _metrics_disabled_response() -> dict:
 
 
 def _invalid_cursor_response(exc: CursorError) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid cursor: {exc}",
             error_code=ErrorCode.INVALID_FORMAT,
@@ -108,7 +108,7 @@ def _validation_error(
     code: ErrorCode = ErrorCode.INVALID_FORMAT,
     remediation: Optional[str] = None,
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for metrics.{action}: {message}",
             error_code=code,
@@ -425,7 +425,7 @@ def perform_metrics_query(
         )
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error querying metrics")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to query metrics: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -483,7 +483,7 @@ def perform_metrics_list(
         all_metrics = store.list_metrics()
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error listing metrics")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to list metrics: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -533,7 +533,7 @@ def perform_metrics_summary(
         )
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error getting metrics summary")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to get metrics summary: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -541,7 +541,7 @@ def perform_metrics_summary(
             )
         )
 
-    return asdict(success_response(data={"summary": summary}))
+    return to_json(success_response(data={"summary": summary}))
 
 
 def perform_metrics_stats(*, config: ServerConfig) -> dict:
@@ -555,7 +555,7 @@ def perform_metrics_stats(*, config: ServerConfig) -> dict:
         total_records = store.count()
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error getting metrics stats")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to get metrics stats: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -566,7 +566,7 @@ def perform_metrics_stats(*, config: ServerConfig) -> dict:
     unique_metrics = len(metrics_list)
     total_samples = sum(metric.get("count", 0) for metric in metrics_list)
 
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "total_records": total_records,
@@ -611,7 +611,7 @@ def perform_metrics_cleanup(
     try:
         if dry_run:
             current_count = store.count()
-            return asdict(
+            return to_json(
                 success_response(
                     data={
                         "current_count": current_count,
@@ -629,7 +629,7 @@ def perform_metrics_cleanup(
         )
     except Exception as exc:  # pragma: no cover - backend failure guard
         logger.exception("Error cleaning up metrics")
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to cleanup metrics: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -637,7 +637,7 @@ def perform_metrics_cleanup(
             )
         )
 
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "deleted_count": deleted_count,
@@ -720,7 +720,7 @@ def _dispatch_metrics_action(
         return _METRICS_ROUTER.dispatch(action=action, config=config, **payload)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported metrics action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

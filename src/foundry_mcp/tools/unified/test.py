@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -22,6 +21,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.testing import (
     TestRunner,
@@ -77,7 +77,7 @@ def _get_test_runner(
 def _validation_error(
     *, message: str, request_id: str, remediation: Optional[str] = None
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             message,
             error_code=ErrorCode.VALIDATION_ERROR,
@@ -215,7 +215,7 @@ def _handle_run(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
 
     if result.error:
-        return asdict(
+        return to_json(
             error_response(
                 result.error,
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -230,7 +230,7 @@ def _handle_run(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         else [t for t in result.tests if t.outcome in ("failed", "error")]
     )
 
-    return asdict(
+    return to_json(
         success_response(
             execution_id=result.execution_id,
             timestamp=result.timestamp,
@@ -319,7 +319,7 @@ def _handle_discover(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
 
     if result.error:
-        return asdict(
+        return to_json(
             error_response(
                 result.error,
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -328,7 +328,7 @@ def _handle_discover(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    return asdict(
+    return to_json(
         success_response(
             timestamp=result.timestamp,
             total=result.total,
@@ -380,7 +380,7 @@ def _dispatch_test_action(
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
         request_id = _request_id()
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported test action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +22,7 @@ from foundry_mcp.core.responses import (
     error_response,
     sanitize_error_message,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.spec import (
     ASSUMPTION_TYPES,
@@ -77,7 +77,7 @@ def _intake_feature_flag_blocked(request_id: str) -> Optional[dict]:
     if _flag_service.is_enabled("intake_tools"):
         return None
 
-    return asdict(
+    return to_json(
         error_response(
             "Intake tools are disabled by feature flag",
             error_code=ErrorCode.FEATURE_DISABLED,
@@ -127,7 +127,7 @@ def _validation_error(
     code: ErrorCode = ErrorCode.VALIDATION_ERROR,
     remediation: Optional[str] = None,
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for authoring.{action}: {message}",
             error_code=code,
@@ -140,7 +140,7 @@ def _validation_error(
 
 
 def _specs_directory_missing_error(request_id: str) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
             error_code=ErrorCode.NOT_FOUND,
@@ -315,7 +315,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             for d in validation_result.diagnostics
         ]
 
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "name": name.strip(),
@@ -359,7 +359,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = error.lower()
         if "already exists" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"A specification with name '{name.strip()}' already exists",
                     error_code=ErrorCode.DUPLICATE_ENTRY,
@@ -369,7 +369,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
                     telemetry={"duration_ms": round(elapsed_ms, 2)},
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to create specification: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -391,7 +391,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
         data["structure"] = result["structure"]
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=data,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -435,7 +435,7 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
             )
         template_name = template_name.strip()
         if template_name not in TEMPLATES:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Template '{template_name}' not found",
                     error_code=ErrorCode.NOT_FOUND,
@@ -479,7 +479,7 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
             "template_name='planning', spec_id='...')"
         )
 
-    return asdict(success_response(data=data, request_id=request_id))
+    return to_json(success_response(data=data, request_id=request_id))
 
 
 def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> dict:
@@ -541,7 +541,7 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
         return _specs_directory_missing_error(request_id)
 
     if dry_run:
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "spec_id": spec_id.strip(),
@@ -569,7 +569,7 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = (error or "").lower()
         if "not found" in lowered and "spec" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id.strip()}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -580,7 +580,7 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
                 )
             )
         if "use dedicated" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     error or "Invalid metadata key",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -590,7 +590,7 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
                     telemetry={"duration_ms": round(elapsed_ms, 2)},
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to update frontmatter",
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -602,7 +602,7 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
         )
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=result,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -760,7 +760,7 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error in spec find-replace")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -777,7 +777,7 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "error"})
         # Map error types
         if "not found" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     error,
                     error_code=ErrorCode.NOT_FOUND,
@@ -788,7 +788,7 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "invalid regex" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     error,
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -798,7 +798,7 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
                     telemetry={"duration_ms": round(elapsed_ms, 2)},
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 error,
                 error_code=ErrorCode.VALIDATION_ERROR,
@@ -810,7 +810,7 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     _metrics.counter(metric_key, labels={"status": "success", "dry_run": str(dry_run).lower()})
-    return asdict(
+    return to_json(
         success_response(
             data=result,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -904,7 +904,7 @@ def _handle_spec_rollback(*, config: ServerConfig, **payload: Any) -> dict:
             error_type = ErrorType.INTERNAL
             remediation = "Check spec and backup file permissions"
 
-        return asdict(
+        return to_json(
             error_response(
                 error_msg,
                 error_code=error_code,
@@ -916,7 +916,7 @@ def _handle_spec_rollback(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     _metrics.counter(metric_key, labels={"status": "success", "dry_run": str(dry_run).lower()})
-    return asdict(
+    return to_json(
         success_response(
             spec_id=spec_id,
             timestamp=timestamp,
@@ -1063,7 +1063,7 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
 
     if dry_run:
         _metrics.counter(metric_key, labels={"status": "success", "dry_run": "true"})
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "spec_id": spec_id,
@@ -1092,7 +1092,7 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error adding phase")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1109,7 +1109,7 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = error.lower()
         if "specification" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -1118,7 +1118,7 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to add phase: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1129,7 +1129,7 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data={"spec_id": spec_id, "dry_run": False, **(result or {})},
             warnings=warnings or None,
@@ -1276,7 +1276,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error updating phase metadata")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1293,7 +1293,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = error.lower()
         if "specification" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -1303,7 +1303,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
                 )
             )
         if "phase" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Phase '{phase_id}' not found in spec '{spec_id}'",
                     error_code=ErrorCode.TASK_NOT_FOUND,
@@ -1313,7 +1313,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
                 )
             )
         if "not a phase" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Node '{phase_id}' is not a phase",
                     error_code=ErrorCode.VALIDATION_FAILED,
@@ -1322,7 +1322,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to update phase metadata: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1333,7 +1333,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
         )
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data={"spec_id": spec_id, "phase_id": phase_id, **(result or {})},
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -1583,7 +1583,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             {"task_id": "(preview)", "title": t.get("title", ""), "type": t.get("type", "")}
             for t in tasks
         ]
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "spec_id": spec_id,
@@ -1616,7 +1616,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error in phase-add-bulk")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1633,7 +1633,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = error.lower()
         if "specification" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -1643,7 +1643,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "task at index" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     error,
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -1652,7 +1652,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to add phase with tasks: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1663,7 +1663,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data={"spec_id": spec_id, "dry_run": False, **(result or {})},
             warnings=warnings or None,
@@ -1709,7 +1709,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
             )
         template_name = template_name.strip()
         if template_name not in PHASE_TEMPLATES:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Phase template '{template_name}' not found",
                     error_code=ErrorCode.NOT_FOUND,
@@ -1756,7 +1756,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
         ]
         data["total_count"] = len(data["templates"])
         data["note"] = "All templates include automatic verification scaffolding (run-tests + fidelity)"
-        return asdict(success_response(data=data, request_id=request_id))
+        return to_json(success_response(data=data, request_id=request_id))
 
     elif template_action == "show":
         try:
@@ -1775,9 +1775,9 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
                 f"Use authoring(action='phase-template', template_action='apply', "
                 f"template_name='{template_name}', spec_id='your-spec-id') to apply this template"
             )
-            return asdict(success_response(data=data, request_id=request_id))
+            return to_json(success_response(data=data, request_id=request_id))
         except ValueError as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     str(exc),
                     error_code=ErrorCode.NOT_FOUND,
@@ -1879,7 +1879,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
         if dry_run:
             _metrics.counter(metric_key, labels={"status": "success", "dry_run": "true"})
             template_struct = get_phase_template_structure(template_name, category)
-            return asdict(
+            return to_json(
                 success_response(
                     data={
                         "spec_id": spec_id,
@@ -1911,7 +1911,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
         except Exception as exc:  # pragma: no cover - defensive guard
             logger.exception("Unexpected error in phase-template apply")
             _metrics.counter(metric_key, labels={"status": "error"})
-            return asdict(
+            return to_json(
                 error_response(
                     sanitize_error_message(exc, context="authoring"),
                     error_code=ErrorCode.INTERNAL_ERROR,
@@ -1928,7 +1928,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
             _metrics.counter(metric_key, labels={"status": "error"})
             lowered = error.lower()
             if "specification" in lowered and "not found" in lowered:
-                return asdict(
+                return to_json(
                     error_response(
                         f"Specification '{spec_id}' not found",
                         error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -1938,7 +1938,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
                     )
                 )
             if "invalid phase template" in lowered:
-                return asdict(
+                return to_json(
                     error_response(
                         error,
                         error_code=ErrorCode.VALIDATION_ERROR,
@@ -1947,7 +1947,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
                         request_id=request_id,
                     )
                 )
-            return asdict(
+            return to_json(
                 error_response(
                     f"Failed to apply phase template: {error}",
                     error_code=ErrorCode.INTERNAL_ERROR,
@@ -1958,7 +1958,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
             )
 
         _metrics.counter(metric_key, labels={"status": "success"})
-        return asdict(
+        return to_json(
             success_response(
                 data={"spec_id": spec_id, "dry_run": False, **(result or {})},
                 telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -2088,7 +2088,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error moving phase")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2105,7 +2105,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = error.lower()
         if "specification" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -2116,7 +2116,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "phase" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Phase '{phase_id}' not found in spec",
                     error_code=ErrorCode.PHASE_NOT_FOUND,
@@ -2127,7 +2127,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "not a phase" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Node '{phase_id}' is not a phase",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -2138,7 +2138,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "invalid position" in lowered or "must be" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     error,
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -2148,7 +2148,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
                     telemetry={"duration_ms": round(elapsed_ms, 2)},
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to move phase: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2160,7 +2160,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=result or {},
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -2241,7 +2241,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(
             metric_key, labels={"status": "success", "force": str(force).lower()}
         )
-        return asdict(
+        return to_json(
             success_response(
                 data={
                     "spec_id": spec_id,
@@ -2265,7 +2265,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error removing phase")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2282,7 +2282,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
         _metrics.counter(metric_key, labels={"status": "error"})
         lowered = error.lower()
         if "spec" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -2292,7 +2292,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "phase" in lowered and "not found" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Phase '{phase_id}' not found in spec",
                     error_code=ErrorCode.PHASE_NOT_FOUND,
@@ -2302,7 +2302,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "not a phase" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Node '{phase_id}' is not a phase",
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -2312,7 +2312,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
                 )
             )
         if "non-completed" in lowered or "has" in lowered and "task" in lowered:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Phase '{phase_id}' has non-completed tasks. Use force=True to remove anyway",
                     error_code=ErrorCode.CONFLICT,
@@ -2321,7 +2321,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to remove phase: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2334,7 +2334,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
     _metrics.counter(
         metric_key, labels={"status": "success", "force": str(force).lower()}
     )
-    return asdict(
+    return to_json(
         success_response(
             data={"spec_id": spec_id, "dry_run": False, **(result or {})},
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -2438,7 +2438,7 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
         }
         if author:
             data["author"] = author
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 warnings=warnings or None,
@@ -2458,7 +2458,7 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error adding assumption")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2474,7 +2474,7 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
     if error:
         _metrics.counter(metric_key, labels={"status": "error"})
         if "not found" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -2483,7 +2483,7 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to add assumption: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2504,7 +2504,7 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
         data["author"] = author
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=data,
             warnings=warnings or None,
@@ -2570,7 +2570,7 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error listing assumptions")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2586,7 +2586,7 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
     if error:
         _metrics.counter(metric_key, labels={"status": "error"})
         if "not found" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -2595,7 +2595,7 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to list assumptions: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2612,7 +2612,7 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=result or {"spec_id": spec_id, "assumptions": [], "total_count": 0},
             warnings=warnings or None,
@@ -2711,7 +2711,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
         }
         if author:
             data["author"] = author
-        return asdict(
+        return to_json(
             success_response(
                 data=data,
                 request_id=request_id,
@@ -2730,7 +2730,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error adding revision")
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2746,7 +2746,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
     if error:
         _metrics.counter(metric_key, labels={"status": "error"})
         if "not found" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specification '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -2755,7 +2755,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to add revision: {error}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -2777,7 +2777,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
         data["date"] = result["date"]
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=data,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -3044,7 +3044,7 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     except LockAcquisitionError:
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to acquire file lock within timeout. Resource is busy.",
                 error_code=ErrorCode.RESOURCE_BUSY,
@@ -3058,7 +3058,7 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
         logger.exception("Unexpected error adding intake item")
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring.intake-add"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -3083,7 +3083,7 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     if dry_run:
         meta_extra["dry_run"] = True
 
-    return asdict(
+    return to_json(
         success_response(
             data=data,
             telemetry={"duration_ms": round(elapsed_ms, 2), "lock_wait_ms": round(lock_wait_ms, 2)},
@@ -3181,7 +3181,7 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
     except LockAcquisitionError:
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to acquire file lock within timeout. Resource is busy.",
                 error_code=ErrorCode.RESOURCE_BUSY,
@@ -3195,7 +3195,7 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
         logger.exception("Unexpected error listing intake items")
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring.intake-list"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -3225,7 +3225,7 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
             "page_size": limit,
         }
 
-    return asdict(
+    return to_json(
         success_response(
             data=data,
             pagination=pagination,
@@ -3346,7 +3346,7 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     except LockAcquisitionError:
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to acquire file lock within timeout. Resource is busy.",
                 error_code=ErrorCode.RESOURCE_BUSY,
@@ -3360,7 +3360,7 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
         logger.exception("Unexpected error dismissing intake item")
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="authoring.intake-dismiss"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -3376,7 +3376,7 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     # Handle not found case
     if item is None:
         _metrics.counter(metric_key, labels={"status": "not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Intake item not found: {intake_id}",
                 error_code=ErrorCode.NOT_FOUND,
@@ -3399,7 +3399,7 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     if dry_run:
         meta_extra["dry_run"] = True
 
-    return asdict(
+    return to_json(
         success_response(
             data=data,
             telemetry={
@@ -3529,7 +3529,7 @@ def _dispatch_authoring_action(
     except ActionRouterError as exc:
         request_id = _request_id()
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported authoring action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

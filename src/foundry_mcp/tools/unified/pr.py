@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -19,8 +18,9 @@ from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
     error_response,
-    success_response,
     sanitize_error_message,
+    success_response,
+    to_json,
 )
 from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spec
 from foundry_mcp.tools.unified.router import (
@@ -51,7 +51,7 @@ def perform_pr_create_with_spec(
 ) -> dict:
     """Return the not-implemented response for PR creation."""
 
-    return asdict(
+    return to_json(
         error_response(
             "PR creation requires GitHub CLI integration and LLM-powered description generation. "
             "Use the sdd-toolkit:sdd-pr skill for AI-powered PR creation.",
@@ -91,7 +91,7 @@ def perform_pr_get_context(
 
         specs_dir = find_specs_directory(str(ws_path))
         if not specs_dir:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Specs directory not found in {ws_path}",
                     error_code=ErrorCode.NOT_FOUND,
@@ -103,7 +103,7 @@ def perform_pr_get_context(
 
         spec_file = find_spec_file(spec_id, specs_dir)
         if not spec_file:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Spec '{spec_id}' not found",
                     error_code=ErrorCode.SPEC_NOT_FOUND,
@@ -115,7 +115,7 @@ def perform_pr_get_context(
 
         spec_data = load_spec(str(spec_file), specs_dir)
         if not spec_data:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Failed to load spec '{spec_id}'",
                     error_code=ErrorCode.INTERNAL_ERROR,
@@ -173,7 +173,7 @@ def perform_pr_get_context(
         duration_ms = (time.perf_counter() - start_time) * 1000
         _metrics.timer("pr_workflow.pr_get_spec_context.duration_ms", duration_ms)
 
-        return asdict(
+        return to_json(
             success_response(
                 **context,
                 telemetry={"duration_ms": round(duration_ms, 2)},
@@ -182,7 +182,7 @@ def perform_pr_get_context(
 
     except Exception as exc:  # pragma: no cover - defensive fallback
         logger.exception(f"Error getting spec context for {spec_id}")
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="PR workflow"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -239,7 +239,7 @@ def _dispatch_pr_action(action: str, payload: Dict[str, Any]) -> dict:
         return _PR_ROUTER.dispatch(action=action, **payload)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported pr action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

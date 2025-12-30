@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from typing import Any, Dict
 
 from mcp.server.fastmcp import FastMCP
@@ -23,6 +22,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
@@ -79,10 +79,10 @@ def perform_health_liveness() -> dict:
         duration = time.perf_counter() - start_time
         _record_batch_metrics("liveness", result.status, duration)
 
-        return asdict(success_response(data=result.to_dict()))
+        return to_json(success_response(data=result.to_dict()))
     except Exception as exc:  # pragma: no cover - defensive safeguard
         logger.exception("Error during liveness check")
-        return asdict(
+        return to_json(
             error_response(
                 f"Liveness check failed: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -103,10 +103,10 @@ def perform_health_readiness() -> dict:
         deps = {dep.name: dep.healthy for dep in result.dependencies}
         _record_batch_metrics("readiness", result.status, duration, deps)
 
-        return asdict(success_response(data=result.to_dict()))
+        return to_json(success_response(data=result.to_dict()))
     except Exception as exc:  # pragma: no cover - defensive safeguard
         logger.exception("Error during readiness check")
-        return asdict(
+        return to_json(
             error_response(
                 f"Readiness check failed: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -131,10 +131,10 @@ def perform_health_check(include_details: bool = True) -> dict:
         if not include_details:
             data.pop("dependencies", None)
 
-        return asdict(success_response(data=data))
+        return to_json(success_response(data=data))
     except Exception as exc:  # pragma: no cover - defensive safeguard
         logger.exception("Error during health check")
-        return asdict(
+        return to_json(
             error_response(
                 f"Health check failed: {exc}",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -189,7 +189,7 @@ def _dispatch_health_action(action: str, *, include_details: bool = True) -> dic
         return _HEALTH_ROUTER.dispatch(action=action, **kwargs)
     except ActionRouterError as exc:
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported health action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -33,6 +32,7 @@ from foundry_mcp.core.responses import (
     error_response,
     sanitize_error_message,
     success_response,
+    to_json,
 )
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
@@ -80,7 +80,7 @@ def _validation_error(
     remediation: Optional[str] = None,
     code: ErrorCode = ErrorCode.VALIDATION_ERROR,
 ) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for provider.{action}: {message}",
             error_code=code,
@@ -96,7 +96,7 @@ def _feature_flag_blocked(request_id: str) -> Optional[dict]:
     if _flag_service.is_enabled("provider_tools"):
         return None
 
-    return asdict(
+    return to_json(
         error_response(
             "Provider tools are disabled by feature flag",
             error_code=ErrorCode.FEATURE_DISABLED,
@@ -134,7 +134,7 @@ def _handle_list(
     except Exception:
         logger.exception("Failed to describe providers")
         _metrics.counter(_metric_name("list"), labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to list providers",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -162,7 +162,7 @@ def _handle_list(
         )
 
     _metrics.counter(_metric_name("list"), labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "providers": visible,
@@ -206,7 +206,7 @@ def _handle_status(
             "Failed to load provider status", extra={"provider_id": provider_id}
         )
         _metrics.counter(_metric_name("status"), labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to retrieve status for provider '{provider_id}'",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -251,7 +251,7 @@ def _handle_status(
 
     if not availability and not metadata_dict and health_dict is None:
         _metrics.counter(_metric_name("status"), labels={"status": "not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Provider '{provider_id}' not found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -262,7 +262,7 @@ def _handle_status(
         )
 
     _metrics.counter(_metric_name("status"), labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data={
                 "provider_id": provider_id,
@@ -388,7 +388,7 @@ def _handle_execute(
     except Exception:
         logger.exception("Failed to describe providers before execution")
         _metrics.counter(_metric_name(action), labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to resolve provider registry",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -403,7 +403,7 @@ def _handle_execute(
     }
     if provider_id not in known_providers:
         _metrics.counter(_metric_name(action), labels={"status": "not_found"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Provider '{provider_id}' not found",
                 error_code=ErrorCode.NOT_FOUND,
@@ -416,7 +416,7 @@ def _handle_execute(
     try:
         if not check_provider_available(provider_id):
             _metrics.counter(_metric_name(action), labels={"status": "unavailable"})
-            return asdict(
+            return to_json(
                 error_response(
                     f"Provider '{provider_id}' is not available",
                     error_code=ErrorCode.UNAVAILABLE,
@@ -431,7 +431,7 @@ def _handle_execute(
             "Failed to check provider availability", extra={"provider_id": provider_id}
         )
         _metrics.counter(_metric_name(action), labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to validate provider availability",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -446,7 +446,7 @@ def _handle_execute(
         provider_ctx = resolve_provider(provider_id, hooks=hooks, model=model_name)
     except ProviderUnavailableError as exc:
         _metrics.counter(_metric_name(action), labels={"status": "unavailable"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="providers"),
                 error_code=ErrorCode.UNAVAILABLE,
@@ -473,7 +473,7 @@ def _handle_execute(
     except RateLimitError as exc:
         _metrics.counter(metric_key, labels={"status": "rate_limited"})
         retry_after = exc.retry_after if exc.retry_after is not None else 0
-        return asdict(
+        return to_json(
             error_response(
                 f"Provider '{provider_id}' rate limited the request",
                 error_code=ErrorCode.RATE_LIMIT_EXCEEDED,
@@ -490,7 +490,7 @@ def _handle_execute(
         )
     except ProviderTimeoutError:
         _metrics.counter(metric_key, labels={"status": "timeout"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Provider '{provider_id}' timed out",
                 error_code=ErrorCode.AI_PROVIDER_TIMEOUT,
@@ -502,7 +502,7 @@ def _handle_execute(
         )
     except ProviderExecutionError:
         _metrics.counter(metric_key, labels={"status": "provider_error"})
-        return asdict(
+        return to_json(
             error_response(
                 f"Provider '{provider_id}' execution failed",
                 error_code=ErrorCode.AI_PROVIDER_ERROR,
@@ -517,7 +517,7 @@ def _handle_execute(
             "Unexpected provider execution failure", extra={"provider_id": provider_id}
         )
         _metrics.counter(metric_key, labels={"status": "error"})
-        return asdict(
+        return to_json(
             error_response(
                 sanitize_error_message(exc, context="providers"),
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -542,7 +542,7 @@ def _handle_execute(
         }
 
     _metrics.counter(metric_key, labels={"status": "success"})
-    return asdict(
+    return to_json(
         success_response(
             data=response_data,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
@@ -584,7 +584,7 @@ def _dispatch_provider_action(
     except ActionRouterError as exc:
         request_id = _request_id()
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported provider action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,

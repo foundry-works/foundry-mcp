@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -33,6 +32,7 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+    to_json,
 )
 from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
 from foundry_mcp.core.journal import (
@@ -85,7 +85,7 @@ def _metric(action: str) -> str:
 
 
 def _specs_dir_missing_error(request_id: str) -> dict:
-    return asdict(
+    return to_json(
         error_response(
             "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
             error_code=ErrorCode.NOT_FOUND,
@@ -106,7 +106,7 @@ def _validation_error(
     remediation: Optional[str] = None,
 ) -> dict:
     effective_remediation = remediation or f"Provide a valid '{field}' value"
-    return asdict(
+    return to_json(
         error_response(
             f"Invalid field '{field}' for task.{action}: {message}",
             error_code=code,
@@ -315,7 +315,7 @@ def _handle_next(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_info(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -347,7 +347,7 @@ def _handle_info(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     task = spec_data.get("hierarchy", {}).get(task_id.strip())
     if task is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Task not found: {task_id.strip()}",
                 error_code=ErrorCode.TASK_NOT_FOUND,
@@ -364,7 +364,7 @@ def _handle_info(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         request_id=request_id,
     )
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_check_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -405,7 +405,7 @@ def _handle_check_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_progress(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -454,7 +454,7 @@ def _handle_progress(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         request_id=request_id,
     )
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -503,7 +503,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             cursor_data = decode_cursor(cursor)
             start_after_id = cursor_data.get("last_id")
         except CursorError as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid cursor: {exc.reason or exc}",
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -628,7 +628,7 @@ def _handle_query(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             cursor_data = decode_cursor(cursor)
             start_after_id = cursor_data.get("last_id")
         except CursorError as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid cursor: {exc.reason or exc}",
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -750,7 +750,7 @@ def _handle_hierarchy(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             cursor_data = decode_cursor(cursor)
             start_after_id = cursor_data.get("last_id")
         except CursorError as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid cursor: {exc.reason or exc}",
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -863,7 +863,7 @@ def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     hierarchy = spec_data.get("hierarchy", {})
     task_key = task_id.strip()
     if task_key not in hierarchy:
-        return asdict(
+        return to_json(
             error_response(
                 f"Task not found: {task_key}",
                 error_code=ErrorCode.TASK_NOT_FOUND,
@@ -876,7 +876,7 @@ def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     start = time.perf_counter()
     updated = update_task_status(spec_data, task_key, status, note=None)
     if not updated:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to update task status for {task_key}",
                 error_code=ErrorCode.CONFLICT,
@@ -899,7 +899,7 @@ def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> d
         )
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to save spec",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -919,7 +919,7 @@ def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -967,7 +967,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             for b in (deps.get("blocked_by") or [])
             if isinstance(b, dict)
         ]
-        return asdict(
+        return to_json(
             error_response(
                 "Task is blocked by: " + ", ".join([b for b in blockers if b]),
                 error_code=ErrorCode.CONFLICT,
@@ -980,7 +980,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     updated = update_task_status(spec_data, task_id.strip(), "in_progress", note=None)
     if not updated:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to start task: {task_id.strip()}",
                 error_code=ErrorCode.CONFLICT,
@@ -1004,7 +1004,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to save spec",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1028,7 +1028,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1070,7 +1070,7 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     start = time.perf_counter()
     updated = update_task_status(spec_data, task_id.strip(), "completed", note=None)
     if not updated:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to complete task: {task_id.strip()}",
                 error_code=ErrorCode.CONFLICT,
@@ -1094,7 +1094,7 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to save spec",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1121,7 +1121,7 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1189,7 +1189,7 @@ def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         ticket=ticket,
     )
     if not blocked:
-        return asdict(
+        return to_json(
             error_response(
                 f"Task not found: {task_id.strip()}",
                 error_code=ErrorCode.TASK_NOT_FOUND,
@@ -1211,7 +1211,7 @@ def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     sync_computed_fields(spec_data)
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to save spec",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1233,7 +1233,7 @@ def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1278,7 +1278,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     start = time.perf_counter()
     blocker = get_blocker_info(spec_data, task_id.strip())
     if blocker is None:
-        return asdict(
+        return to_json(
             error_response(
                 f"Task {task_id.strip()} is not blocked",
                 error_code=ErrorCode.CONFLICT,
@@ -1290,7 +1290,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     unblocked = unblock_task(spec_data, task_id.strip(), resolution)
     if not unblocked:
-        return asdict(
+        return to_json(
             error_response(
                 f"Failed to unblock task: {task_id.strip()}",
                 error_code=ErrorCode.CONFLICT,
@@ -1311,7 +1311,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     sync_computed_fields(spec_data)
 
     if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-        return asdict(
+        return to_json(
             error_response(
                 "Failed to save spec",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -1337,7 +1337,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_list_blocked(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1367,7 +1367,7 @@ def _handle_list_blocked(*, config: ServerConfig, payload: Dict[str, Any]) -> di
             cursor_data = decode_cursor(cursor)
             start_after_id = cursor_data.get("last_id")
         except CursorError as exc:
-            return asdict(
+            return to_json(
                 error_response(
                     f"Invalid cursor: {exc.reason or exc}",
                     error_code=ErrorCode.INVALID_FORMAT,
@@ -1530,7 +1530,7 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
         if not isinstance(parent_node, dict):
             elapsed_ms = (time.perf_counter() - start) * 1000
-            return asdict(
+            return to_json(
                 error_response(
                     f"Parent node '{parent.strip()}' not found",
                     error_code=ErrorCode.NOT_FOUND,
@@ -1559,7 +1559,7 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         _metrics.counter(
             _metric(action), labels={"status": "success", "dry_run": "true"}
         )
-        return asdict(response)
+        return to_json(response)
 
     result, error = add_task(
         spec_id=spec_id.strip(),
@@ -1583,7 +1583,7 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         err_type = (
             ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         )
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to add task",
                 error_code=code,
@@ -1601,7 +1601,7 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1660,7 +1660,7 @@ def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         node = hierarchy.get(task_id.strip()) if isinstance(hierarchy, dict) else None
         if not isinstance(node, dict):
             elapsed_ms = (time.perf_counter() - start) * 1000
-            return asdict(
+            return to_json(
                 error_response(
                     f"Task '{task_id.strip()}' not found",
                     error_code=ErrorCode.TASK_NOT_FOUND,
@@ -1686,7 +1686,7 @@ def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         _metrics.counter(
             _metric(action), labels={"status": "success", "dry_run": "true"}
         )
-        return asdict(response)
+        return to_json(response)
 
     result, error = remove_task(
         spec_id=spec_id.strip(),
@@ -1705,7 +1705,7 @@ def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         err_type = (
             ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         )
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to remove task",
                 error_code=code,
@@ -1722,7 +1722,7 @@ def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1803,7 +1803,7 @@ def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) ->
         hierarchy = (spec_data or {}).get("hierarchy", {})
         task = hierarchy.get(task_id.strip()) if isinstance(hierarchy, dict) else None
         if not isinstance(task, dict):
-            return asdict(
+            return to_json(
                 error_response(
                     f"Task '{task_id.strip()}' not found",
                     error_code=ErrorCode.TASK_NOT_FOUND,
@@ -1840,7 +1840,7 @@ def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) ->
         _metrics.counter(
             _metric(action), labels={"status": "success", "dry_run": "true"}
         )
-        return asdict(response)
+        return to_json(response)
 
     result, error = update_estimate(
         spec_id=spec_id.strip(),
@@ -1860,7 +1860,7 @@ def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) ->
         err_type = (
             ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         )
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to update estimate",
                 error_code=code,
@@ -1877,7 +1877,7 @@ def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) ->
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -1971,7 +1971,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         hierarchy = (spec_data or {}).get("hierarchy", {})
         task = hierarchy.get(task_id.strip()) if isinstance(hierarchy, dict) else None
         if not isinstance(task, dict):
-            return asdict(
+            return to_json(
                 error_response(
                     f"Task '{task_id.strip()}' not found",
                     error_code=ErrorCode.TASK_NOT_FOUND,
@@ -2018,7 +2018,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         _metrics.counter(
             _metric(action), labels={"status": "success", "dry_run": "true"}
         )
-        return asdict(response)
+        return to_json(response)
 
     result, error = update_task_metadata(
         spec_id=spec_id.strip(),
@@ -2047,7 +2047,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         err_type = (
             ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         )
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to update metadata",
                 error_code=code,
@@ -2064,7 +2064,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
     )
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -2177,7 +2177,7 @@ def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             err_type = ErrorType.VALIDATION
             remediation = "Check task ID, parent, and position parameters"
 
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to move task",
                 error_code=code,
@@ -2200,7 +2200,7 @@ def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         _metric(action),
         labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
     )
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -2310,7 +2310,7 @@ def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> 
             err_type = ErrorType.VALIDATION
             remediation = "Check task IDs and dependency type"
 
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to add dependency",
                 error_code=code,
@@ -2332,7 +2332,7 @@ def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> 
         _metric(action),
         labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
     )
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -2431,7 +2431,7 @@ def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) 
             err_type = ErrorType.VALIDATION
             remediation = "Check task IDs and dependency type"
 
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to remove dependency",
                 error_code=code,
@@ -2453,7 +2453,7 @@ def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) 
         _metric(action),
         labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
     )
-    return asdict(response)
+    return to_json(response)
 
 
 def _handle_add_requirement(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -2573,7 +2573,7 @@ def _handle_add_requirement(*, config: ServerConfig, payload: Dict[str, Any]) ->
             err_type = ErrorType.VALIDATION
             remediation = "Check task ID and requirement fields"
 
-        return asdict(
+        return to_json(
             error_response(
                 error or "Failed to add requirement",
                 error_code=code,
@@ -2595,7 +2595,7 @@ def _handle_add_requirement(*, config: ServerConfig, payload: Dict[str, Any]) ->
         _metric(action),
         labels={"status": "success", "dry_run": str(dry_run_bool).lower()},
     )
-    return asdict(response)
+    return to_json(response)
 
 
 _VALID_NODE_TYPES = {"task", "verify", "phase", "subtask"}
@@ -2884,7 +2884,7 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
         _metrics.counter(_metric(action), labels={"status": "error"})
         # Map helper errors to response-v2 format
         if "not found" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     error,
                     error_code=ErrorCode.NOT_FOUND,
@@ -2894,7 +2894,7 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
                 )
             )
         if "at least one" in error.lower() or "must be" in error.lower():
-            return asdict(
+            return to_json(
                 error_response(
                     error,
                     error_code=ErrorCode.VALIDATION_ERROR,
@@ -2903,7 +2903,7 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
                     request_id=request_id,
                 )
             )
-        return asdict(
+        return to_json(
             error_response(
                 error,
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -3048,7 +3048,7 @@ def _handle_fix_verification_types(
     # Save if not dry_run and there were fixes
     if not dry_run_bool and fixes:
         if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
-            return asdict(
+            return to_json(
                 error_response(
                     "Failed to save spec after fixing verification types",
                     error_code=ErrorCode.INTERNAL_ERROR,
@@ -3084,7 +3084,7 @@ def _handle_fix_verification_types(
 
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
-    return asdict(response)
+    return to_json(response)
 
 
 _ACTION_DEFINITIONS = [
@@ -3195,7 +3195,7 @@ def _dispatch_task_action(
     except ActionRouterError as exc:
         request_id = _request_id()
         allowed = ", ".join(exc.allowed_actions)
-        return asdict(
+        return to_json(
             error_response(
                 f"Unsupported task action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,
