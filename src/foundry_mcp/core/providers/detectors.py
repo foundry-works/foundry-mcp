@@ -31,10 +31,22 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, Optional, Sequence
+from typing import Dict, Iterable, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Cache for provider availability: {provider_id: (is_available, timestamp)}
+_AVAILABILITY_CACHE: Dict[str, Tuple[bool, float]] = {}
+
+def _get_cache_ttl() -> float:
+    """Get cache TTL from config or default to 3600s."""
+    try:
+        from foundry_mcp.config import get_config
+        return float(get_config().providers.get("availability_cache_ttl", 3600))
+    except Exception:
+        return 3600.0
 
 # Environment variable for test mode (bypasses real CLI probes)
 _TEST_MODE_ENV = "FOUNDRY_PROVIDER_TEST_MODE"
@@ -173,13 +185,14 @@ class ProviderDetector:
 
     def is_available(self, *, use_probe: bool = True) -> bool:
         """
-        Check whether this provider is available.
+        Check whether this provider is available (with caching).
 
         Resolution order:
-        1. Check override_env (if set, returns its boolean value)
-        2. In test mode, return False (no real CLI available)
-        3. Resolve binary via PATH
-        4. Optionally run health probe
+        1. Check cache (if valid)
+        2. Check override_env (if set, returns its boolean value)
+        3. In test mode, return False (no real CLI available)
+        4. Resolve binary via PATH
+        5. Optionally run health probe
 
         Args:
             use_probe: When True, run health probe after finding binary.
@@ -188,6 +201,14 @@ class ProviderDetector:
         Returns:
             True if provider is available, False otherwise
         """
+        # Check cache first
+        cache_key = f"{self.provider_id}:{use_probe}"
+        cached = _AVAILABILITY_CACHE.get(cache_key)
+        if cached is not None:
+            is_avail, cached_time = cached
+            if time.time() - cached_time < _get_cache_ttl():
+                return is_avail
+
         # Check environment override first
         if self.override_env:
             override = _coerce_bool(os.environ.get(self.override_env))
@@ -214,14 +235,18 @@ class ProviderDetector:
                 "Provider '%s' unavailable (binary not found in PATH)",
                 self.provider_id,
             )
+            _AVAILABILITY_CACHE[cache_key] = (False, time.time())
             return False
 
         # Skip probe if not requested
         if not use_probe:
+            _AVAILABILITY_CACHE[cache_key] = (True, time.time())
             return True
 
         # Run health probe
-        return self._run_probe(executable)
+        result = self._run_probe(executable)
+        _AVAILABILITY_CACHE[cache_key] = (result, time.time())
+        return result
 
     def get_unavailability_reason(self, *, use_probe: bool = True) -> Optional[str]:
         """

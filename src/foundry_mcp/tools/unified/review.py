@@ -27,7 +27,7 @@ from foundry_mcp.core.ai_consultation import (
 from foundry_mcp.core.prompts.fidelity_review import (
     FIDELITY_SYNTHESIZED_RESPONSE_SCHEMA,
 )
-from foundry_mcp.core.llm_config import get_consultation_config
+from foundry_mcp.core.llm_config import get_consultation_config, load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import get_provider_statuses
@@ -703,7 +703,10 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     preferred_providers = ai_tools if isinstance(ai_tools, list) else []
     first_provider = preferred_providers[0] if preferred_providers else None
 
-    orchestrator = ConsultationOrchestrator()
+    # Load consultation config from workspace path to get provider priority list
+    config_file = ws_path / "foundry-mcp.toml"
+    consultation_config = load_consultation_config(config_file=config_file)
+    orchestrator = ConsultationOrchestrator(config=consultation_config)
     if not orchestrator.is_available(provider_id=first_provider):
         return asdict(
             error_response(

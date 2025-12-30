@@ -19,6 +19,7 @@ from foundry_mcp.core.ai_consultation import (
     ConsultationWorkflow,
     ConsensusResult,
 )
+from foundry_mcp.core.llm_config import load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import available_providers
@@ -53,6 +54,20 @@ def _extract_plan_name(plan_path: str) -> str:
     """Extract plan name from file path."""
 
     return Path(plan_path).stem
+
+
+def _find_config_file(start_path: Path) -> Optional[Path]:
+    """Find foundry-mcp.toml by walking up from start_path."""
+    current = start_path if start_path.is_dir() else start_path.parent
+    for _ in range(10):  # Limit depth to prevent infinite loops
+        config_file = current / "foundry-mcp.toml"
+        if config_file.exists():
+            return config_file
+        parent = current.parent
+        if parent == current:  # Reached root
+            break
+        current = parent
+    return None
 
 
 def _parse_review_summary(content: str) -> dict:
@@ -323,7 +338,10 @@ def perform_plan_review(
     template_id = REVIEW_TYPE_TO_TEMPLATE[review_type]
 
     try:
-        orchestrator = ConsultationOrchestrator()
+        # Load consultation config from workspace to get provider priority list
+        config_file = _find_config_file(plan_file)
+        consultation_config = load_consultation_config(config_file=config_file)
+        orchestrator = ConsultationOrchestrator(config=consultation_config)
         request = ConsultationRequest(
             workflow=ConsultationWorkflow.MARKDOWN_PLAN_REVIEW,
             prompt_id=template_id,
