@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from foundry_mcp.config import ResearchConfig
+from foundry_mcp.core.llm_config import ProviderSpec
 from foundry_mcp.core.providers import (
     ProviderContext,
     ProviderHooks,
@@ -85,30 +86,48 @@ class ResearchWorkflowBase(ABC):
         """Resolve and cache a provider instance.
 
         Args:
-            provider_id: Provider ID to resolve (uses config default if None)
+            provider_id: Provider ID or full spec to resolve (uses config default if None)
+                         Supports both simple IDs ("codex") and full specs ("[cli]codex:gpt-5.2")
             hooks: Optional provider hooks
 
         Returns:
             ProviderContext instance or None if unavailable
         """
-        provider_id = provider_id or self.config.default_provider
+        provider_spec_str = provider_id or self.config.default_provider
 
-        # Check cache first
-        if provider_id in self._provider_cache:
-            return self._provider_cache[provider_id]
+        # Check cache first (using full spec string as key)
+        if provider_spec_str in self._provider_cache:
+            return self._provider_cache[provider_spec_str]
 
-        # Check availability
+        # Parse the provider spec to extract base provider ID
+        try:
+            spec = ProviderSpec.parse_flexible(provider_spec_str)
+        except ValueError as exc:
+            logger.warning("Invalid provider spec '%s': %s", provider_spec_str, exc)
+            return None
+
+        # Check availability using base provider ID
         available = available_providers()
-        if provider_id not in available:
-            logger.warning("Provider %s not available. Available: %s", provider_id, available)
+        if spec.provider not in available:
+            logger.warning(
+                "Provider %s (from spec '%s') not available. Available: %s",
+                spec.provider,
+                provider_spec_str,
+                available,
+            )
             return None
 
         try:
-            provider = resolve_provider(provider_id, hooks=hooks or ProviderHooks())
-            self._provider_cache[provider_id] = provider
+            # Resolve using base provider ID and pass model override if specified
+            provider = resolve_provider(
+                spec.provider,
+                hooks=hooks or ProviderHooks(),
+                model=spec.model,
+            )
+            self._provider_cache[provider_spec_str] = provider
             return provider
         except Exception as exc:
-            logger.error("Failed to resolve provider %s: %s", provider_id, exc)
+            logger.error("Failed to resolve provider %s: %s", spec.provider, exc)
             return None
 
     def _execute_provider(

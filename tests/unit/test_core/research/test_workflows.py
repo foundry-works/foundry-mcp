@@ -704,3 +704,96 @@ class TestResearchWorkflowBase:
             providers = workflow.get_available_providers()
 
         assert providers == ["gemini", "claude", "openai"]
+
+    def test_resolve_provider_with_full_spec(
+        self, research_config: ResearchConfig, mock_memory: ResearchMemory
+    ):
+        """Should correctly parse full provider specs like [cli]codex:gpt-5.2-codex.
+
+        This tests the fix for provider spec parsing where:
+        - Full specs need to be parsed to extract base provider ID for availability check
+        - The model component should be passed to resolve_provider
+        """
+        workflow = ChatWorkflow(research_config, mock_memory)
+
+        with patch(
+            "foundry_mcp.core.research.workflows.base.available_providers",
+            return_value=["codex", "gemini"],
+        ):
+            with patch(
+                "foundry_mcp.core.research.workflows.base.resolve_provider"
+            ) as mock_resolve:
+                mock_context = MagicMock()
+                mock_resolve.return_value = mock_context
+
+                # Test with full provider spec
+                result = workflow._resolve_provider("[cli]codex:gpt-5.2-codex")
+
+                assert result is mock_context
+                # Verify resolve_provider was called with base provider ID and model
+                mock_resolve.assert_called_once()
+                call_args = mock_resolve.call_args
+                assert call_args[0][0] == "codex"  # base provider ID
+                assert call_args[1]["model"] == "gpt-5.2-codex"  # model from spec
+
+    def test_resolve_provider_with_simple_id(
+        self, research_config: ResearchConfig, mock_memory: ResearchMemory
+    ):
+        """Should handle simple provider IDs without model."""
+        workflow = ChatWorkflow(research_config, mock_memory)
+
+        with patch(
+            "foundry_mcp.core.research.workflows.base.available_providers",
+            return_value=["gemini"],
+        ):
+            with patch(
+                "foundry_mcp.core.research.workflows.base.resolve_provider"
+            ) as mock_resolve:
+                mock_context = MagicMock()
+                mock_resolve.return_value = mock_context
+
+                result = workflow._resolve_provider("gemini")
+
+                assert result is mock_context
+                call_args = mock_resolve.call_args
+                assert call_args[0][0] == "gemini"
+                assert call_args[1]["model"] is None
+
+    def test_resolve_provider_caches_by_full_spec(
+        self, research_config: ResearchConfig, mock_memory: ResearchMemory
+    ):
+        """Should cache providers using full spec string as key."""
+        workflow = ChatWorkflow(research_config, mock_memory)
+
+        with patch(
+            "foundry_mcp.core.research.workflows.base.available_providers",
+            return_value=["codex"],
+        ):
+            with patch(
+                "foundry_mcp.core.research.workflows.base.resolve_provider"
+            ) as mock_resolve:
+                mock_context = MagicMock()
+                mock_resolve.return_value = mock_context
+
+                # Same full spec should be cached
+                result1 = workflow._resolve_provider("[cli]codex:gpt-5.2")
+                result2 = workflow._resolve_provider("[cli]codex:gpt-5.2")
+
+                assert result1 is result2
+                assert mock_resolve.call_count == 1
+
+                # Different model should create new provider
+                result3 = workflow._resolve_provider("[cli]codex:gpt-5.1")
+
+                assert mock_resolve.call_count == 2
+
+    def test_resolve_provider_invalid_spec(
+        self, research_config: ResearchConfig, mock_memory: ResearchMemory
+    ):
+        """Should return None for invalid provider spec."""
+        workflow = ChatWorkflow(research_config, mock_memory)
+
+        # Invalid spec format
+        result = workflow._resolve_provider("[invalid]malformed")
+
+        assert result is None
