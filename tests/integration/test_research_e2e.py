@@ -59,6 +59,7 @@ def mock_config(tmp_path: Path):
         mock_cfg.research.consensus_providers = ["gemini", "claude"]
         mock_cfg.research.thinkdeep_max_depth = 3
         mock_cfg.research.ideate_perspectives = ["technical", "creative"]
+        mock_cfg.research.max_messages_per_thread = 100
         mock_get_config.return_value = mock_cfg
         yield mock_cfg
 

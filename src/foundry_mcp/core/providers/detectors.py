@@ -493,7 +493,9 @@ def reset_detectors() -> None:
     Reset detectors to the default set.
 
     Primarily used by tests to restore a clean state.
+    Also clears the availability cache to ensure fresh detection.
     """
+    _AVAILABILITY_CACHE.clear()
     _reset_default_detectors()
 
 

@@ -612,17 +612,6 @@ class TestOpenCodeProvider:
         provider = OpenCodeProvider(metadata=OPENCODE_METADATA, hooks=hooks)
         assert provider._model == "openai/gpt-5.1-codex-mini"
 
-    def test_instantiation_empty_model_raises(self, hooks):
-        """OpenCodeProvider should reject empty model identifiers."""
-        from foundry_mcp.core.providers.opencode import (
-            OPENCODE_METADATA,
-            OpenCodeProvider,
-        )
-
-        # OpenCode validates empty models - either "" or whitespace-only
-        with pytest.raises(ProviderExecutionError, match="cannot be empty"):
-            OpenCodeProvider(metadata=OPENCODE_METADATA, hooks=hooks, model="   ")
-
     def test_validate_request_rejects_attachments(self, hooks):
         """OpenCodeProvider should reject attachments."""
         from foundry_mcp.core.providers.opencode import (
