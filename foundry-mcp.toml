@@ -22,6 +22,10 @@ journal_enabled = true
 [test]
 default_runner = "pytest"
 
+# Provider availability detection cache (seconds)
+[providers]
+availability_cache_ttl = 3600
+
 [consultation]
 # Provider priority list - first available provider wins
 # Format: "[api]provider/model" or "[cli]transport[:backend/model|:model]"
@@ -34,7 +38,7 @@ priority = [
 ]
 
 # Operational settings
-default_timeout = 300
+default_timeout = 60
 max_retries = 2
 retry_delay = 5.0
 fallback_enabled = true
@@ -46,17 +50,17 @@ cache_ttl = 3600
 # Fidelity review requires 2 models for consensus to catch implementation deviations
 [consultation.workflows.fidelity_review]
 min_models = 2
-timeout_override = 600.0
+timeout_override = 60.0
 
 # Plan review requires 2 models for consensus on architectural decisions
 [consultation.workflows.plan_review]
 min_models = 2
-timeout_override = 180.0
+timeout_override = 60.0
 
 # Markdown plan review (pre-spec) requires 2 models for consensus
 [consultation.workflows.markdown_plan_review]
 min_models = 2
-timeout_override = 180.0
+timeout_override = 60.0
 
 # Doc generation uses single model (default min_models=1)
 [consultation.workflows.doc_generation]

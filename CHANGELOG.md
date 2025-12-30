@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **AI Consultation Config Loading**: Fixed issue where AI consultation features returned `model_used: "none"` because config was loaded from CWD instead of workspace path
+  - `review.py`: Now loads `foundry-mcp.toml` from workspace path for fidelity reviews
+  - `plan.py`: Added `_find_config_file()` helper to walk up directories and find config
+
+### Added
+
+- **Provider Availability Caching**: Cache provider detection results to speed up MCP tool calls
+  - New `[providers] availability_cache_ttl` config option (default: 3600 seconds)
+  - Reduces repeated calls from ~5s to ~0s
+
 ### Changed
 
 - **Provider Model Validation Removed**: Model allowlists removed from all CLI providers
