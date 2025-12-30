@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
 logger = logging.getLogger(__name__)
 
 from .base import (
-    ModelDescriptor,
     ProviderCapability,
     ProviderContext,
     ProviderExecutionError,
@@ -188,33 +187,10 @@ def _default_runner(
     )
 
 
-CURSOR_MODELS: List[ModelDescriptor] = [
-    ModelDescriptor(
-        id="composer-1",
-        display_name="Composer-1",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.FUNCTION_CALLING,
-            ProviderCapability.STREAMING,
-        },
-        routing_hints={"tier": "default"},
-    ),
-    ModelDescriptor(
-        id="gpt-5.1-codex",
-        display_name="GPT-5.1 Codex",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.FUNCTION_CALLING,
-            ProviderCapability.STREAMING,
-        },
-        routing_hints={"tier": "codex"},
-    ),
-]
-
 CURSOR_METADATA = ProviderMetadata(
     provider_id="cursor-agent",
     display_name="Cursor Agent CLI",
-    models=CURSOR_MODELS,
+    models=[],  # Model validation delegated to CLI
     default_model="composer-1",
     capabilities={ProviderCapability.TEXT, ProviderCapability.FUNCTION_CALLING, ProviderCapability.STREAMING},
     security_flags={"writes_allowed": False, "read_only": True},
@@ -246,7 +222,7 @@ class CursorAgentProvider(ProviderContext):
         self._binary = binary or os.environ.get(CUSTOM_BINARY_ENV, DEFAULT_BINARY)
         self._env = env
         self._timeout = timeout or DEFAULT_TIMEOUT_SECONDS
-        self._model = self._ensure_model(model or metadata.default_model or self._first_model_id())
+        self._model = model or metadata.default_model or "composer-1"
         self._config_backup_path: Optional[Path] = None
         self._original_config_existed: bool = False
         self._cleanup_done: bool = False
@@ -254,23 +230,6 @@ class CursorAgentProvider(ProviderContext):
     def __del__(self) -> None:
         """Clean up temporary config directory on provider destruction."""
         self._cleanup_config_file()
-
-    def _first_model_id(self) -> str:
-        if not self.metadata.models:
-            raise ProviderUnavailableError(
-                "Cursor Agent metadata is missing model descriptors.",
-                provider=self.metadata.provider_id,
-            )
-        return self.metadata.models[0].id
-
-    def _ensure_model(self, candidate: str) -> str:
-        available = {descriptor.id for descriptor in self.metadata.models}
-        if candidate not in available:
-            raise ProviderExecutionError(
-                f"Unsupported Cursor Agent model '{candidate}'. Available: {', '.join(sorted(available))}",
-                provider=self.metadata.provider_id,
-            )
-        return candidate
 
     def _create_readonly_config(self) -> Path:
         """
@@ -533,7 +492,7 @@ class CursorAgentProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             )
 
-        model = self._ensure_model(
+        model = (
             str(request.metadata.get("model")) if request.metadata and "model" in request.metadata else self._model
         )
 

@@ -15,7 +15,6 @@ import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence
 
 from .base import (
-    ModelDescriptor,
     ProviderCapability,
     ProviderContext,
     ProviderExecutionError,
@@ -181,44 +180,10 @@ def _default_runner(
     )
 
 
-CLAUDE_MODELS: List[ModelDescriptor] = [
-    ModelDescriptor(
-        id="opus",
-        display_name="Opus 4.5",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.VISION,
-            ProviderCapability.THINKING,
-        },
-        routing_hints={"tier": "default", "description": "Smartest model for daily use"},
-    ),
-    ModelDescriptor(
-        id="sonnet",
-        display_name="Sonnet 4.5",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.VISION,
-            ProviderCapability.THINKING,
-        },
-        routing_hints={"tier": "default", "description": "Most capable for complex work"},
-    ),
-    ModelDescriptor(
-        id="haiku",
-        display_name="Haiku 4.5",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-        },
-        routing_hints={"tier": "fast", "description": "Fastest model for simple tasks"},
-    ),
-]
-
 CLAUDE_METADATA = ProviderMetadata(
     provider_id="claude",
     display_name="Anthropic Claude CLI",
-    models=CLAUDE_MODELS,
+    models=[],  # Model validation delegated to CLI
     default_model="opus",
     capabilities={
         ProviderCapability.TEXT,
@@ -250,24 +215,7 @@ class ClaudeProvider(ProviderContext):
         self._binary = binary or os.environ.get(CUSTOM_BINARY_ENV, DEFAULT_BINARY)
         self._env = env
         self._timeout = timeout or DEFAULT_TIMEOUT_SECONDS
-        self._model = self._ensure_model(model or metadata.default_model or self._first_model_id())
-
-    def _first_model_id(self) -> str:
-        if not self.metadata.models:
-            raise ProviderUnavailableError(
-                "Claude provider metadata is missing model descriptors.",
-                provider=self.metadata.provider_id,
-            )
-        return self.metadata.models[0].id
-
-    def _ensure_model(self, candidate: str) -> str:
-        available = {descriptor.id for descriptor in self.metadata.models}
-        if candidate not in available:
-            raise ProviderExecutionError(
-                f"Unsupported Claude model '{candidate}'. Available: {', '.join(sorted(available))}",
-                provider=self.metadata.provider_id,
-            )
-        return candidate
+        self._model = model or metadata.default_model or "opus"
 
     def _validate_request(self, request: ProviderRequest) -> None:
         """Validate and normalize request, ignoring unsupported parameters."""
@@ -368,7 +316,7 @@ class ClaudeProvider(ProviderContext):
     def _resolve_model(self, request: ProviderRequest) -> str:
         model_override = request.metadata.get("model") if request.metadata else None
         if model_override:
-            return self._ensure_model(str(model_override))
+            return str(model_override)
         return self._model
 
     def _emit_stream_if_requested(self, content: str, *, stream: bool) -> None:

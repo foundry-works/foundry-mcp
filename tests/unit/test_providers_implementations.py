@@ -100,13 +100,6 @@ class TestGeminiProvider:
         provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, model="pro")
         assert provider._model == "pro"
 
-    def test_instantiation_invalid_model_raises(self, hooks):
-        """GeminiProvider should reject unknown models."""
-        from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
-
-        with pytest.raises(ProviderExecutionError, match="Unsupported Gemini model"):
-            GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, model="invalid-model")
-
     def test_custom_binary(self, hooks):
         """GeminiProvider should accept custom binary path."""
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
@@ -283,13 +276,6 @@ class TestCodexProvider:
         provider = CodexProvider(metadata=CODEX_METADATA, hooks=hooks)
         assert provider._model == "gpt-5.2"
 
-    def test_instantiation_invalid_model_raises(self, hooks):
-        """CodexProvider should reject unknown models."""
-        from foundry_mcp.core.providers.codex import CODEX_METADATA, CodexProvider
-
-        with pytest.raises(ProviderExecutionError, match="Unsupported Codex model"):
-            CodexProvider(metadata=CODEX_METADATA, hooks=hooks, model="invalid")
-
     def test_build_command_includes_sandbox(self, hooks):
         """CodexProvider command should include sandbox flags."""
         from foundry_mcp.core.providers.codex import CODEX_METADATA, CodexProvider
@@ -413,16 +399,6 @@ class TestCursorAgentProvider:
         provider = CursorAgentProvider(metadata=CURSOR_METADATA, hooks=hooks)
         assert provider._model == "composer-1"
 
-    def test_instantiation_invalid_model_raises(self, hooks):
-        """CursorAgentProvider should reject unknown models."""
-        from foundry_mcp.core.providers.cursor_agent import (
-            CURSOR_METADATA,
-            CursorAgentProvider,
-        )
-
-        with pytest.raises(ProviderExecutionError, match="Unsupported Cursor Agent"):
-            CursorAgentProvider(metadata=CURSOR_METADATA, hooks=hooks, model="invalid")
-
     def test_build_command_includes_print_and_json(self, hooks):
         """CursorAgentProvider command should include --print and output format."""
         from foundry_mcp.core.providers.cursor_agent import (
@@ -535,13 +511,6 @@ class TestClaudeProvider:
 
         provider = ClaudeProvider(metadata=CLAUDE_METADATA, hooks=hooks)
         assert provider._model == "opus"
-
-    def test_instantiation_invalid_model_raises(self, hooks):
-        """ClaudeProvider should reject unknown models."""
-        from foundry_mcp.core.providers.claude import CLAUDE_METADATA, ClaudeProvider
-
-        with pytest.raises(ProviderExecutionError, match="Unsupported Claude model"):
-            ClaudeProvider(metadata=CLAUDE_METADATA, hooks=hooks, model="invalid")
 
     def test_build_command_includes_allowed_and_disallowed(self, hooks):
         """ClaudeProvider command should include tool restrictions."""

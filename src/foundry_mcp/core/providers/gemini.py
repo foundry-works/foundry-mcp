@@ -15,7 +15,6 @@ import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence
 
 from .base import (
-    ModelDescriptor,
     ProviderCapability,
     ProviderContext,
     ProviderExecutionError,
@@ -137,53 +136,10 @@ def _default_runner(
     )
 
 
-GEMINI_MODELS: List[ModelDescriptor] = [
-    ModelDescriptor(
-        id="auto",
-        display_name="Gemini 3.0 (Auto select Pro/Flash)",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.VISION,
-        },
-        routing_hints={"tier": "auto", "context_window": "1M"},
-    ),
-    ModelDescriptor(
-        id="pro",
-        display_name="Gemini 3.0 Pro",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.VISION,
-        },
-        routing_hints={"tier": "pro", "context_window": "1M"},
-    ),
-    ModelDescriptor(
-        id="gemini-2.5-pro",
-        display_name="Gemini 2.5 Pro",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.VISION,
-        },
-        routing_hints={"tier": "pro", "context_window": "1M"},
-    ),
-    ModelDescriptor(
-        id="gemini-2.5-flash",
-        display_name="Gemini 2.5 Flash",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.VISION,
-        },
-        routing_hints={"tier": "flash"},
-    ),
-]
-
 GEMINI_METADATA = ProviderMetadata(
     provider_id="gemini",
     display_name="Google Gemini CLI",
-    models=GEMINI_MODELS,
+    models=[],  # Model validation delegated to CLI
     default_model="pro",
     capabilities={ProviderCapability.TEXT, ProviderCapability.STREAMING, ProviderCapability.VISION},
     security_flags={"writes_allowed": False},
@@ -210,24 +166,7 @@ class GeminiProvider(ProviderContext):
         self._binary = binary or os.environ.get(CUSTOM_BINARY_ENV, DEFAULT_BINARY)
         self._env = env
         self._timeout = timeout or DEFAULT_TIMEOUT_SECONDS
-        self._model = self._ensure_model(model or metadata.default_model or self._first_model_id())
-
-    def _first_model_id(self) -> str:
-        if not self.metadata.models:
-            raise ProviderUnavailableError(
-                "Gemini provider metadata is missing model descriptors.",
-                provider=self.metadata.provider_id,
-            )
-        return self.metadata.models[0].id
-
-    def _ensure_model(self, candidate: str) -> str:
-        available = {descriptor.id for descriptor in self.metadata.models}
-        if candidate not in available:
-            raise ProviderExecutionError(
-                f"Unsupported Gemini model '{candidate}'. Available: {', '.join(sorted(available))}",
-                provider=self.metadata.provider_id,
-            )
-        return candidate
+        self._model = model or metadata.default_model or "pro"
 
     def _validate_request(self, request: ProviderRequest) -> None:
         """Validate and normalize request, ignoring unsupported parameters."""
@@ -315,7 +254,7 @@ class GeminiProvider(ProviderContext):
     def _resolve_model(self, request: ProviderRequest) -> str:
         model_override = request.metadata.get("model") if request.metadata else None
         if model_override:
-            return self._ensure_model(str(model_override))
+            return str(model_override)
         return self._model
 
     def _emit_stream_if_requested(self, content: str, *, stream: bool) -> None:

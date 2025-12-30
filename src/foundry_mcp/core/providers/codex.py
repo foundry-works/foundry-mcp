@@ -16,7 +16,6 @@ import subprocess
 from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
 
 from .base import (
-    ModelDescriptor,
     ProviderCapability,
     ProviderContext,
     ProviderExecutionError,
@@ -228,63 +227,10 @@ def _default_runner(
     )
 
 
-CODEX_MODELS: List[ModelDescriptor] = [
-    ModelDescriptor(
-        id="gpt-5.2",
-        display_name="GPT-5.2",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.FUNCTION_CALLING,
-        },
-        routing_hints={"tier": "primary"},
-    ),
-    ModelDescriptor(
-        id="gpt-5.2-codex",
-        display_name="GPT-5.2 Codex",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.FUNCTION_CALLING,
-        },
-        routing_hints={"tier": "primary", "optimized_for": "codex"},
-    ),
-    ModelDescriptor(
-        id="gpt-5.1-codex",
-        display_name="GPT-5.1 Codex",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.FUNCTION_CALLING,
-        },
-        routing_hints={"tier": "primary", "optimized_for": "codex"},
-    ),
-    ModelDescriptor(
-        id="gpt-5.1-codex-mini",
-        display_name="GPT-5.1 Codex Mini",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.FUNCTION_CALLING,
-        },
-        routing_hints={"tier": "fast", "optimized_for": "codex"},
-    ),
-    ModelDescriptor(
-        id="gpt-5.1",
-        display_name="GPT-5.1",
-        capabilities={
-            ProviderCapability.TEXT,
-            ProviderCapability.STREAMING,
-            ProviderCapability.FUNCTION_CALLING,
-        },
-        routing_hints={"tier": "general"},
-    ),
-]
-
 CODEX_METADATA = ProviderMetadata(
     provider_id="codex",
     display_name="OpenAI Codex CLI",
-    models=CODEX_MODELS,
+    models=[],  # Model validation delegated to CLI
     default_model="gpt-5.2",
     capabilities={ProviderCapability.TEXT, ProviderCapability.STREAMING, ProviderCapability.FUNCTION_CALLING},
     security_flags={"writes_allowed": False, "read_only": True, "sandbox": "read-only"},
@@ -321,7 +267,7 @@ class CodexProvider(ProviderContext):
         self._binary = binary or os.environ.get(CUSTOM_BINARY_ENV, DEFAULT_BINARY)
         self._env = self._prepare_subprocess_env(env)
         self._timeout = timeout or DEFAULT_TIMEOUT_SECONDS
-        self._model = self._ensure_model(model or metadata.default_model or self._first_model_id())
+        self._model = model or metadata.default_model or "gpt-5.2"
 
     def _prepare_subprocess_env(self, custom_env: Optional[Dict[str, str]]) -> Dict[str, str]:
         """
@@ -342,23 +288,6 @@ class CodexProvider(ProviderContext):
             subprocess_env.update(custom_env)
 
         return subprocess_env
-
-    def _first_model_id(self) -> str:
-        if not self.metadata.models:
-            raise ProviderUnavailableError(
-                "Codex provider metadata is missing model descriptors.",
-                provider=self.metadata.provider_id,
-            )
-        return self.metadata.models[0].id
-
-    def _ensure_model(self, candidate: str) -> str:
-        available = {descriptor.id for descriptor in self.metadata.models}
-        if candidate not in available:
-            raise ProviderExecutionError(
-                f"Unsupported Codex model '{candidate}'. Available: {', '.join(sorted(available))}",
-                provider=self.metadata.provider_id,
-            )
-        return candidate
 
     def _validate_request(self, request: ProviderRequest) -> None:
         """Validate and normalize request, ignoring unsupported parameters."""
@@ -551,7 +480,7 @@ class CodexProvider(ProviderContext):
 
     def _execute(self, request: ProviderRequest) -> ProviderResult:
         self._validate_request(request)
-        model = self._ensure_model(
+        model = (
             str(request.metadata.get("model")) if request.metadata and "model" in request.metadata else self._model
         )
         prompt = self._build_prompt(request)
