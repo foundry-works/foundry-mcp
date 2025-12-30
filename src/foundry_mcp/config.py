@@ -431,6 +431,81 @@ class TestConfig:
         return self.runners.get(runner_name)
 
 
+@dataclass
+class ResearchConfig:
+    """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE).
+
+    Attributes:
+        enabled: Master switch for research tools
+        storage_path: Directory for research state persistence (default: ~/.foundry-mcp/research)
+        storage_backend: Storage backend type (currently only 'file' supported)
+        ttl_hours: Time-to-live for stored states in hours
+        max_messages_per_thread: Maximum messages retained in a conversation thread
+        default_provider: Default LLM provider for single-model workflows
+        consensus_providers: List of provider IDs for CONSENSUS workflow
+        thinkdeep_max_depth: Maximum investigation depth for THINKDEEP workflow
+        ideate_perspectives: List of perspectives for IDEATE brainstorming
+    """
+
+    enabled: bool = True
+    storage_path: str = ""  # Empty = use default (~/.foundry-mcp/research)
+    storage_backend: str = "file"
+    ttl_hours: int = 24
+    max_messages_per_thread: int = 100
+    default_provider: str = "gemini"
+    consensus_providers: List[str] = field(
+        default_factory=lambda: ["gemini", "claude"]
+    )
+    thinkdeep_max_depth: int = 5
+    ideate_perspectives: List[str] = field(
+        default_factory=lambda: ["technical", "creative", "practical", "visionary"]
+    )
+
+    @classmethod
+    def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
+        """Create config from TOML dict (typically [research] section).
+
+        Args:
+            data: Dict from TOML parsing
+
+        Returns:
+            ResearchConfig instance
+        """
+        # Parse consensus_providers - handle both string and list
+        consensus_providers = data.get("consensus_providers", ["gemini", "claude"])
+        if isinstance(consensus_providers, str):
+            consensus_providers = [p.strip() for p in consensus_providers.split(",")]
+
+        # Parse ideate_perspectives - handle both string and list
+        ideate_perspectives = data.get(
+            "ideate_perspectives", ["technical", "creative", "practical", "visionary"]
+        )
+        if isinstance(ideate_perspectives, str):
+            ideate_perspectives = [p.strip() for p in ideate_perspectives.split(",")]
+
+        return cls(
+            enabled=_parse_bool(data.get("enabled", True)),
+            storage_path=str(data.get("storage_path", "")),
+            storage_backend=str(data.get("storage_backend", "file")),
+            ttl_hours=int(data.get("ttl_hours", 24)),
+            max_messages_per_thread=int(data.get("max_messages_per_thread", 100)),
+            default_provider=str(data.get("default_provider", "gemini")),
+            consensus_providers=consensus_providers,
+            thinkdeep_max_depth=int(data.get("thinkdeep_max_depth", 5)),
+            ideate_perspectives=ideate_perspectives,
+        )
+
+    def get_storage_path(self) -> Path:
+        """Get resolved storage path.
+
+        Returns:
+            Path to storage directory (creates if needed)
+        """
+        if self.storage_path:
+            return Path(self.storage_path).expanduser()
+        return Path.home() / ".foundry-mcp" / "research"
+
+
 _VALID_COMMIT_CADENCE = {"manual", "task", "phase"}
 
 
@@ -494,6 +569,9 @@ class ServerConfig:
 
     # Test runner configuration
     test: TestConfig = field(default_factory=TestConfig)
+
+    # Research workflows configuration
+    research: ResearchConfig = field(default_factory=ResearchConfig)
 
     @classmethod
     def from_env(cls, config_file: Optional[str] = None) -> "ServerConfig":
@@ -620,6 +698,10 @@ class ServerConfig:
             # Test runner settings
             if "test" in data:
                 self.test = TestConfig.from_toml_dict(data["test"])
+
+            # Research workflows settings
+            if "research" in data:
+                self.research = ResearchConfig.from_toml_dict(data["research"])
 
         except Exception as e:
             logger.error(f"Error loading config file {path}: {e}")

@@ -29,6 +29,45 @@ authoring(action="phase-template", template_action="apply", template_name="plann
 authoring(action="phase-template", template_action="apply", template_name="implementation", spec_id="...")
 ```
 
+## [0.7.0] - 2025-12-30
+
+### Added
+
+- **Research Router**: New unified research tool providing multi-model orchestration capabilities
+  - **chat**: Single-model conversation with thread persistence
+    - Thread creation with title and system prompt
+    - Conversation continuation via thread_id
+    - Token budgeting for context management
+    - Thread CRUD operations (list, get, delete)
+  - **consensus**: Multi-model parallel consultation with synthesis
+    - Parallel execution via asyncio.gather with semaphore limiting
+    - Four synthesis strategies: all_responses, synthesize, majority, first_valid
+    - Partial failure handling with min_responses and require_all options
+    - Configurable timeout per provider
+  - **thinkdeep**: Hypothesis-driven systematic investigation
+    - Investigation step execution with state persistence
+    - Hypothesis creation and tracking with evidence accumulation
+    - Confidence level progression (speculation -> confirmed)
+    - Convergence detection based on depth and confidence
+  - **ideate**: Creative brainstorming with idea clustering
+    - Four-phase workflow: divergent, convergent, selection, elaboration
+    - Multi-perspective idea generation
+    - Automatic clustering and scoring
+    - Detailed plan elaboration for selected clusters
+- **ResearchConfig**: New configuration section for research workflows
+  - Configurable storage path, TTL, max messages per thread
+  - Default provider and consensus provider list
+  - ThinkDeep max depth and Ideate perspectives
+- **Research Data Models**: Pydantic models for all workflow states
+  - Enums: WorkflowType, ConfidenceLevel, ConsensusStrategy, ThreadStatus, IdeationPhase
+  - Conversation, ThinkDeep, Ideate, and Consensus state models
+- **File-Based Memory Storage**: Persistent state management for research sessions
+  - FileStorageBackend with CRUD operations
+  - File locking via filelock for thread safety
+  - TTL-based cleanup for expired sessions
+- **Research Test Suite**: 149 tests covering models, memory, and router
+- **Feature Flag**: `research_tools` flag (experimental) gates research tool access
+
 ## [0.6.0] - 2025-12-29
 
 ### Added

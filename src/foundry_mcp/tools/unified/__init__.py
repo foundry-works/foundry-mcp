@@ -19,6 +19,7 @@ from .review import register_unified_review_tool
 from .spec import register_unified_spec_tool
 from .server import register_unified_server_tool
 from .test import register_unified_test_tool
+from .research import register_unified_research_tool
 
 
 if TYPE_CHECKING:  # pragma: no cover - import-time typing only
@@ -48,6 +49,7 @@ def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:
     register_unified_verification_tool(mcp, config)
     register_unified_server_tool(mcp, config)
     register_unified_test_tool(mcp, config)
+    register_unified_research_tool(mcp, config)
 
 
 __all__ = [
@@ -67,4 +69,5 @@ __all__ = [
     "register_unified_verification_tool",
     "register_unified_server_tool",
     "register_unified_test_tool",
+    "register_unified_research_tool",
 ]
