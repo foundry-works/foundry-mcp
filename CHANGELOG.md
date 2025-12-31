@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.11] - 2025-12-30
+
+### Fixed
+
+- **Consensus Workflow Provider Spec Parsing**: Extended provider spec parsing fix to consensus workflow
+  - Full specs like `[cli]codex:gpt-5.2` in `consensus_providers` config now work correctly
+  - Parses specs in `execute()`, `_query_provider_sync()`, and `_query_single_provider()`
+  - Filters providers by base ID availability while preserving model selection
+
 ## [0.7.10] - 2025-12-30
 
 ### Fixed
