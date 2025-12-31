@@ -12,6 +12,7 @@ import pytest
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.server import create_server
+from tests.conftest import extract_response_dict
 
 
 def test_get_llm_status_handles_import_error(monkeypatch):
@@ -53,7 +54,7 @@ def test_review_list_tools_returns_envelope(test_config: ServerConfig):
     server = create_server(test_config)
     tools = server._tool_manager._tools
 
-    result = tools["review"].fn(action="list-tools")
+    result = extract_response_dict(tools["review"].fn(action="list-tools"))
     assert result["success"] is True
     assert "tools" in result["data"]
     assert "review_types" in result["data"]

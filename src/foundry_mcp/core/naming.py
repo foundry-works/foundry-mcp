@@ -4,15 +4,32 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import logging
 import time
 from typing import Any, Callable
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import TextContent
 
 from foundry_mcp.core.observability import mcp_tool
 
 logger = logging.getLogger(__name__)
+
+
+def _minify_response(result: dict[str, Any]) -> TextContent:
+    """Convert dict to TextContent with minified JSON.
+
+    Args:
+        result: Dictionary to serialize
+
+    Returns:
+        TextContent with minified JSON string
+    """
+    return TextContent(
+        type="text",
+        text=json.dumps(result, separators=(",", ":"), default=str),
+    )
 
 
 def canonical_tool(
@@ -45,7 +62,10 @@ def canonical_tool(
                 """Async wrapper for async underlying functions."""
                 start_time = time.perf_counter()
                 try:
-                    return await func(*args, **kwargs)
+                    result = await func(*args, **kwargs)
+                    if isinstance(result, dict):
+                        return _minify_response(result)
+                    return result
                 except Exception as e:
                     duration_ms = (time.perf_counter() - start_time) * 1000
                     _collect_tool_error(
@@ -64,7 +84,10 @@ def canonical_tool(
                 """Sync wrapper for sync underlying functions."""
                 start_time = time.perf_counter()
                 try:
-                    return func(*args, **kwargs)
+                    result = func(*args, **kwargs)
+                    if isinstance(result, dict):
+                        return _minify_response(result)
+                    return result
                 except Exception as e:
                     duration_ms = (time.perf_counter() - start_time) * 1000
                     _collect_tool_error(

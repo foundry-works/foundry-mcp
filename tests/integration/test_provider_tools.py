@@ -9,6 +9,7 @@ import pytest
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.responses import error_response, success_response
 from foundry_mcp.server import create_server
+from tests.conftest import extract_response_dict
 
 
 @pytest.fixture
@@ -66,7 +67,7 @@ class TestProviderToolRegistration:
 class TestProviderListTool:
     def test_provider_list_returns_envelope(self, mcp_server):
         tools = mcp_server._tool_manager._tools
-        result = tools["provider"].fn(action="list")
+        result = extract_response_dict(tools["provider"].fn(action="list"))
         assert "success" in result
         assert "meta" in result
 
@@ -74,6 +75,6 @@ class TestProviderListTool:
 class TestProviderStatusTool:
     def test_provider_status_requires_provider_id(self, mcp_server):
         tools = mcp_server._tool_manager._tools
-        result = tools["provider"].fn(action="status")
+        result = extract_response_dict(tools["provider"].fn(action="status"))
         assert result["success"] is False
         assert result["data"]["error_type"] in {"validation", "not_found"}

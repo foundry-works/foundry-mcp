@@ -7,9 +7,10 @@ Provides fixture freshness validation and common test utilities.
 import json
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, Union
 
 import pytest
+from mcp.types import TextContent
 
 # Fixture schema version - increment when fixture format changes
 FIXTURE_SCHEMA_VERSION = "1.0.0"
@@ -19,6 +20,31 @@ RESPONSE_CONTRACT_VERSION = "response-v2"
 
 # Track validated fixtures to avoid repeated checks
 _validated_fixtures: Set[Path] = set()
+
+
+def extract_response_dict(result: Union[Dict[str, Any], TextContent]) -> Dict[str, Any]:
+    """Extract dict from tool result, handling both dict and TextContent.
+
+    Tools wrapped with canonical_tool decorator now return TextContent with
+    minified JSON. This helper extracts the dict for test assertions.
+
+    Args:
+        result: Tool result - either dict (legacy) or TextContent (minified)
+
+    Returns:
+        Parsed dictionary from the response
+
+    Raises:
+        TypeError: If result is neither dict nor TextContent
+        json.JSONDecodeError: If TextContent.text is not valid JSON
+    """
+    if isinstance(result, dict):
+        return result
+    if isinstance(result, TextContent):
+        return json.loads(result.text)
+    raise TypeError(
+        f"Expected dict or TextContent, got {type(result).__name__}"
+    )
 
 
 def get_fixture_version(fixture_path: Path) -> Optional[str]:

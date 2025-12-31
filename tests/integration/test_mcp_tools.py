@@ -16,6 +16,7 @@ import pytest
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.server import create_server
+from tests.conftest import extract_response_dict
 
 
 @pytest.fixture
@@ -140,7 +141,7 @@ def test_all_tools_have_callable(mcp_server):
 
 def test_spec_list_returns_envelope(mcp_server):
     tools = mcp_server._tool_manager._tools
-    result = tools["spec"].fn(action="list", status="all")
+    result = extract_response_dict(tools["spec"].fn(action="list", status="all"))
     assert result["success"] is True
     assert "specs" in result["data"]
     assert "count" in result["data"]
@@ -148,7 +149,7 @@ def test_spec_list_returns_envelope(mcp_server):
 
 def test_task_hierarchy_returns_hierarchy(mcp_server):
     tools = mcp_server._tool_manager._tools
-    result = tools["task"].fn(action="hierarchy", spec_id="test-spec-001")
+    result = extract_response_dict(tools["task"].fn(action="hierarchy", spec_id="test-spec-001"))
     assert result["success"] is True
     assert "hierarchy" in result["data"]
     assert "spec-root" in result["data"]["hierarchy"]

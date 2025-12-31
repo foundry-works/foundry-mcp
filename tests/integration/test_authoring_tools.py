@@ -12,6 +12,7 @@ import json
 import pytest
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
+from tests.conftest import extract_response_dict
 
 
 # =============================================================================
@@ -143,7 +144,10 @@ def mcp_server(test_config):
 
 
 def _call_tool(tools, tool_name: str, **kwargs):
-    """Call unified routers for authoring workflows."""
+    """Call unified routers for authoring workflows.
+
+    Returns extracted dict from TextContent response for test compatibility.
+    """
 
     if tool_name in {
         "spec-create",
@@ -154,23 +158,27 @@ def _call_tool(tools, tool_name: str, **kwargs):
         "revision-add",
         "spec-update-frontmatter",
     }:
-        return tools["authoring"].fn(action=tool_name, **kwargs)
+        result = tools["authoring"].fn(action=tool_name, **kwargs)
+        return extract_response_dict(result)
 
     if tool_name == "spec-template":
         template_action = kwargs.pop("action", None)
-        return tools["authoring"].fn(
+        result = tools["authoring"].fn(
             action="spec-template",
             template_action=template_action,
             **kwargs,
         )
+        return extract_response_dict(result)
 
     if tool_name == "task-add":
         if "hours" in kwargs and "estimated_hours" not in kwargs:
             kwargs["estimated_hours"] = kwargs.pop("hours")
-        return tools["task"].fn(action="add", **kwargs)
+        result = tools["task"].fn(action="add", **kwargs)
+        return extract_response_dict(result)
 
     if tool_name == "task-remove":
-        return tools["task"].fn(action="remove", **kwargs)
+        result = tools["task"].fn(action="remove", **kwargs)
+        return extract_response_dict(result)
 
     raise KeyError(f"Unsupported tool mapping for {tool_name}")
 

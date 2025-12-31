@@ -8,6 +8,7 @@ import json
 import pytest
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
+from tests.conftest import extract_response_dict
 
 
 # =============================================================================
@@ -30,7 +31,10 @@ def test_config(test_specs_dir):
 
 @pytest.fixture
 def task_tool(test_config):
-    return create_server(test_config)._tool_manager._tools["task"].fn
+    raw_fn = create_server(test_config)._tool_manager._tools["task"].fn
+    def wrapper(*args, **kwargs):
+        return extract_response_dict(raw_fn(*args, **kwargs))
+    return wrapper
 
 
 def write_spec(specs_dir, spec_id: str, hierarchy: dict, status: str = "active"):
