@@ -91,3 +91,46 @@ port = 8080
 host = "127.0.0.1"
 auto_open_browser = false
 refresh_interval_ms = 5000
+
+# Research workflow configuration
+[research]
+enabled = true
+# Default provider - supports ProviderSpec format: "[cli]gemini:pro" or simple: "gemini"
+default_provider = "[cli]gemini:pro"
+ttl_hours = 24
+max_messages_per_thread = 100
+
+# Deep research settings
+deep_research_max_iterations = 3
+deep_research_max_sub_queries = 5
+deep_research_max_sources = 5
+deep_research_follow_links = true
+deep_research_timeout = 120.0
+deep_research_max_concurrent = 3
+deep_research_audit_artifacts = true
+# Research mode: "general" | "academic" | "technical"
+deep_research_mode = "technical"
+deep_research_providers = ["tavily", "perplexity", "google", "semantic_scholar"]
+
+# Per-phase timeouts (seconds)
+deep_research_planning_timeout = 60.0
+deep_research_analysis_timeout = 90.0
+deep_research_synthesis_timeout = 180.0
+deep_research_refinement_timeout = 60.0
+
+# Per-phase providers (supports ProviderSpec format)
+# Use Claude for synthesis (report writing) for better prose
+deep_research_planning_provider = "[cli]gemini:gemini-3-flash-preview"
+deep_research_analysis_provider = "[cli]gemini:gemini-3-flash-preview"
+deep_research_synthesis_provider = "[cli]gemini:gemini-3-flash-preview"
+deep_research_refinement_provider = "[cli]gemini:gemini-3-flash-preview"
+
+# Search rate limiting
+search_rate_limit = 60
+max_concurrent_searches = 3
+
+[research.per_provider_rate_limits]
+tavily = 60
+perplexity = 60
+google = 100
+semantic_scholar = 100

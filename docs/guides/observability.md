@@ -134,6 +134,23 @@ foundry-mcp emits the following Prometheus metrics:
 
 For the full catalog with examples, see `src/foundry_mcp/core/metrics_registry.py`.
 
+## Deep Research Audit Artifacts
+
+Deep research workflows emit a per-run JSONL audit artifact when enabled.
+Each line is a structured event covering phase starts/completions, provider
+results, LLM prompts/responses, and summary stats.
+
+**Location (default)**:
+- `~/.foundry-mcp/research/deep_research/<research_id>.audit.jsonl`
+
+**Config toggle**:
+- `research.deep_research_audit_artifacts = true`
+
+**Example event**:
+```json
+{"timestamp":"2026-01-01T12:00:00Z","event_id":"...","event_type":"analysis_result","level":"info","research_id":"deepres-abc123","phase":"analysis","iteration":1,"data":{"provider_id":"gemini","tokens_used":1234,"parse_success":true,"finding_count":4}}
+```
+
 ## Grafana Dashboards
 
 Pre-built Grafana dashboards are available in `docs/dashboards/`:

@@ -93,13 +93,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **AI Consultation Config Loading**: Fixed issue where AI consultation features returned `model_used: "none"` because config was loaded from CWD instead of workspace path
-  - `review.py`: Now loads `foundry-mcp.toml` from workspace path for fidelity reviews
-  - `plan.py`: Added `_find_config_file()` helper to walk up directories and find config
+## [0.8.0] - 2026-01-01
 
 ### Added
+
+- **Deep Research Workflow**: Multi-phase iterative research with parallel source gathering
+  - Background async execution with immediate `research_id` return for non-blocking operation
+  - Five-phase pipeline: decomposition → search → analyze → synthesize → report
+  - Query decomposition with strategic sub-query generation based on research intent
+  - Gap detection and iterative refinement loops for comprehensive coverage
+  - Final synthesis with confidence scoring (low/medium/high/confirmed) and source citations
+  - Crash handler infrastructure for session recovery
+  - Research tool actions:
+    - `deep-research`: Start, continue, or resume research sessions
+    - `deep-research-status`: Poll running research status with phase progress
+    - `deep-research-report`: Get final markdown report with citations and audit trail
+    - `deep-research-list`: List sessions with cursor-based pagination
+    - `deep-research-delete`: Clean up research sessions
+
+- **Search Provider System**: Extensible multi-provider search architecture
+  - **Google Custom Search**: Web search via Google's Custom Search JSON API
+  - **Perplexity AI**: Sonar model integration for AI-powered search
+  - **Tavily AI**: Search and extract modes with content analysis
+  - **Semantic Scholar**: Academic paper search with citation metadata
+  - Domain quality tiers (authoritative → unreliable) for source credibility scoring
+  - Rate limiting and error handling per provider
+  - Pluggable provider interface for custom backends
+
+- **Research Configuration**: New `[research.deep]` config section
+  - Per-provider API key configuration (Google, Perplexity, Tavily, Semantic Scholar)
+  - Timeout, iteration, and concurrency controls
+  - Source quality and domain tier preferences
+  - Storage path and session TTL settings
+
+- **Deep Research Documentation**: Comprehensive workflow documentation
+  - `docs/concepts/deep_research_workflow.md`: Architecture and usage guide
+  - `docs/examples/deep-research/`: Example research sessions and reports
 
 - **Provider Availability Caching**: Cache provider detection results to speed up MCP tool calls
   - New `[providers] availability_cache_ttl` config option (default: 3600 seconds)
@@ -122,8 +151,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `_requires_rich_task_fields()` now checks explicit `complexity` metadata instead of template
   - Passing deprecated templates (simple, medium, complex, security) returns validation error
 
+### Fixed
+
+- **AI Consultation Config Loading**: Fixed issue where AI consultation features returned `model_used: "none"` because config was loaded from CWD instead of workspace path
+  - `review.py`: Now loads `foundry-mcp.toml` from workspace path for fidelity reviews
+  - `plan.py`: Added `_find_config_file()` helper to walk up directories and find config
+
 ### Migration
 
+**Spec Templates:**
 ```python
 # Old approach (no longer works)
 authoring(action="spec-create", name="my-feature", template="medium", mission="...")
@@ -132,6 +168,18 @@ authoring(action="spec-create", name="my-feature", template="medium", mission=".
 authoring(action="spec-create", name="my-feature")
 authoring(action="phase-template", template_action="apply", template_name="planning", spec_id="...")
 authoring(action="phase-template", template_action="apply", template_name="implementation", spec_id="...")
+```
+
+**Deep Research:**
+```python
+# Start a deep research session (returns immediately with research_id)
+research(action="deep-research", query="What are the best practices for LLM evaluation?")
+
+# Poll for status
+research(action="deep-research-status", research_id="...")
+
+# Get final report when complete
+research(action="deep-research-report", research_id="...")
 ```
 
 ## [0.7.0] - 2025-12-30

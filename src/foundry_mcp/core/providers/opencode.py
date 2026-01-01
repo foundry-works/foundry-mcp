@@ -163,7 +163,16 @@ class OpenCodeProvider(ProviderContext):
         self._env = self._prepare_subprocess_env(env)
 
         self._timeout = timeout or DEFAULT_TIMEOUT_SECONDS
-        self._model = model or metadata.default_model or "openai/gpt-5.1-codex-mini"
+
+        # Validate model - reject empty or whitespace-only strings
+        effective_model = model or metadata.default_model or "openai/gpt-5.1-codex-mini"
+        if not effective_model or not effective_model.strip():
+            raise ProviderExecutionError(
+                "Model identifier cannot be empty",
+                provider="opencode",
+            )
+        self._model = effective_model
+
         self._server_process: Optional[subprocess.Popen[bytes]] = None
         self._config_file_path: Optional[Path] = None
 
@@ -371,10 +380,15 @@ class OpenCodeProvider(ProviderContext):
         return request.prompt
 
     def _resolve_model(self, request: ProviderRequest) -> str:
-        """Resolve model from request metadata or use default."""
+        """Resolve model from request or use default."""
+        # 1. Check request.model first (from ProviderRequest constructor)
+        if request.model:
+            return str(request.model)
+        # 2. Fallback to metadata override (legacy/alternative path)
         model_override = request.metadata.get("model") if request.metadata else None
         if model_override:
             return str(model_override)
+        # 3. Fallback to instance default
         return self._model
 
     def _emit_stream_if_requested(self, content: str, *, stream: bool) -> None:

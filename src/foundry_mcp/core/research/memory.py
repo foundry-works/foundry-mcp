@@ -15,6 +15,7 @@ from filelock import FileLock
 from foundry_mcp.core.research.models import (
     ConsensusState,
     ConversationThread,
+    DeepResearchState,
     IdeationState,
     ThinkDeepState,
     ThreadStatus,
@@ -222,6 +223,11 @@ class ResearchMemory:
             model_class=ConsensusState,
             ttl_hours=ttl_hours,
         )
+        self._deep_research = FileStorageBackend(
+            storage_path=base_path / "deep_research",
+            model_class=DeepResearchState,
+            ttl_hours=ttl_hours,
+        )
 
     # =========================================================================
     # Thread operations (CHAT workflow)
@@ -395,6 +401,65 @@ class ResearchMemory:
         return states
 
     # =========================================================================
+    # Deep research operations (DEEP_RESEARCH workflow)
+    # =========================================================================
+
+    def save_deep_research(self, deep_research: DeepResearchState) -> None:
+        """Save a deep research state."""
+        self._deep_research.save(deep_research.id, deep_research)
+
+    def load_deep_research(self, deep_research_id: str) -> Optional[DeepResearchState]:
+        """Load a deep research state by ID."""
+        return self._deep_research.load(deep_research_id)
+
+    def delete_deep_research(self, deep_research_id: str) -> bool:
+        """Delete a deep research state."""
+        return self._deep_research.delete(deep_research_id)
+
+    def list_deep_research(
+        self,
+        limit: Optional[int] = None,
+        cursor: Optional[str] = None,
+        completed_only: bool = False,
+    ) -> list[DeepResearchState]:
+        """List deep research states.
+
+        Args:
+            limit: Maximum number of states to return
+            cursor: Pagination cursor (research_id to start after)
+            completed_only: Filter to only completed research
+
+        Returns:
+            List of deep research states
+        """
+        states = []
+        for dr_id in self._deep_research.list_ids():
+            dr = self._deep_research.load(dr_id)
+            if dr is not None:
+                if completed_only and dr.completed_at is None:
+                    continue
+                states.append(dr)
+
+        # Sort by updated_at descending
+        states.sort(key=lambda s: s.updated_at, reverse=True)
+
+        # Apply cursor-based pagination (skip until after cursor ID)
+        if cursor is not None:
+            cursor_found = False
+            filtered_states = []
+            for state in states:
+                if cursor_found:
+                    filtered_states.append(state)
+                elif state.id == cursor:
+                    cursor_found = True
+            states = filtered_states
+
+        if limit is not None:
+            states = states[:limit]
+
+        return states
+
+    # =========================================================================
     # Maintenance operations
     # =========================================================================
 
@@ -409,6 +474,7 @@ class ResearchMemory:
             "investigations": self._investigations.cleanup_expired(),
             "ideations": self._ideations.cleanup_expired(),
             "consensus": self._consensus.cleanup_expired(),
+            "deep_research": self._deep_research.cleanup_expired(),
         }
 
     def get_storage_stats(self) -> dict[str, int]:
@@ -422,4 +488,5 @@ class ResearchMemory:
             "investigations": len(self._investigations.list_ids()),
             "ideations": len(self._ideations.list_ids()),
             "consensus": len(self._consensus.list_ids()),
+            "deep_research": len(self._deep_research.list_ids()),
         }

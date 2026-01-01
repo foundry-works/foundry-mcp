@@ -93,19 +93,8 @@ def _validation_error(
 
 
 def _feature_flag_blocked(request_id: str) -> Optional[dict]:
-    if _flag_service.is_enabled("provider_tools"):
-        return None
-
-    return asdict(
-        error_response(
-            "Provider tools are disabled by feature flag",
-            error_code=ErrorCode.FEATURE_DISABLED,
-            error_type=ErrorType.FEATURE_FLAG,
-            data={"feature": "provider_tools"},
-            remediation="Enable the 'provider_tools' feature flag to call provider actions.",
-            request_id=request_id,
-        )
-    )
+    # Feature flags disabled - always allow
+    return None
 
 
 def _handle_list(

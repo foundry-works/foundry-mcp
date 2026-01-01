@@ -20,6 +20,7 @@ from foundry_mcp.core.research.models import ConsensusStrategy, ThreadStatus
 from foundry_mcp.core.research.workflows import (
     ChatWorkflow,
     ConsensusWorkflow,
+    DeepResearchWorkflow,
     IdeateWorkflow,
     ThinkDeepWorkflow,
 )
@@ -66,6 +67,11 @@ _ACTION_SUMMARY = {
     "consensus": "Multi-model parallel consultation with synthesis",
     "thinkdeep": "Hypothesis-driven systematic investigation",
     "ideate": "Creative brainstorming with idea clustering",
+    "deep-research": "Multi-phase iterative deep research with query decomposition",
+    "deep-research-status": "Get status of deep research session",
+    "deep-research-report": "Get final report from deep research",
+    "deep-research-list": "List deep research sessions",
+    "deep-research-delete": "Delete a deep research session",
     "thread-list": "List conversation threads",
     "thread-get": "Get full thread details including messages",
     "thread-delete": "Delete a conversation thread",
@@ -369,6 +375,235 @@ def _handle_ideate(
         )
 
 
+def _handle_deep_research(
+    *,
+    query: Optional[str] = None,
+    research_id: Optional[str] = None,
+    deep_research_action: str = "start",
+    provider_id: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    max_iterations: int = 3,
+    max_sub_queries: int = 5,
+    max_sources_per_query: int = 5,
+    follow_links: bool = True,
+    timeout_per_operation: float = 120.0,
+    max_concurrent: int = 3,
+    task_timeout: Optional[float] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research action with background execution.
+
+    CRITICAL: This handler uses asyncio.create_task() via the workflow's
+    background mode to start research and return immediately with the
+    research_id. The workflow runs in the background and can be polled
+    via deep-research-status.
+
+    Supports:
+    - start: Begin new research, returns immediately with research_id
+    - continue: Resume paused research in background
+    - resume: Alias for continue (for backward compatibility)
+    """
+    # Normalize 'resume' to 'continue' for workflow compatibility
+    if deep_research_action == "resume":
+        deep_research_action = "continue"
+
+    # Validate based on action
+    if deep_research_action == "start" and not query:
+        return _validation_error(
+            "query",
+            "deep-research",
+            "Query is required to start deep research",
+            remediation="Provide a research query to investigate",
+        )
+
+    if deep_research_action in ("continue",) and not research_id:
+        return _validation_error(
+            "research_id",
+            "deep-research",
+            f"research_id is required for '{deep_research_action}' action",
+            remediation="Use deep-research-list to find existing research sessions",
+        )
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    # Execute with background=True for non-blocking execution
+    # This uses asyncio.create_task() internally and returns immediately
+    result = workflow.execute(
+        query=query,
+        research_id=research_id,
+        action=deep_research_action,
+        provider_id=provider_id,
+        system_prompt=system_prompt,
+        max_iterations=max_iterations,
+        max_sub_queries=max_sub_queries,
+        max_sources_per_query=max_sources_per_query,
+        follow_links=follow_links,
+        timeout_per_operation=timeout_per_operation,
+        max_concurrent=max_concurrent,
+        background=True,  # CRITICAL: Run in background, return immediately
+        task_timeout=task_timeout,
+    )
+
+    if result.success:
+        # For background execution, return started status with research_id
+        response_data = {
+            "research_id": result.metadata.get("research_id"),
+            "status": "started",
+            "message": "Deep research started in background. Use deep-research-status to poll progress.",
+        }
+
+        # Include additional metadata if available (for continue/resume)
+        if result.metadata.get("phase"):
+            response_data["phase"] = result.metadata.get("phase")
+        if result.metadata.get("iteration") is not None:
+            response_data["iteration"] = result.metadata.get("iteration")
+
+        return asdict(success_response(data=response_data))
+    else:
+        return asdict(
+            error_response(
+                result.error or "Deep research failed to start",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check query or research_id validity and provider availability",
+                details={"action": deep_research_action},
+            )
+        )
+
+
+def _handle_deep_research_status(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-status action."""
+    if not research_id:
+        return _validation_error("research_id", "deep-research-status", "Required")
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    result = workflow.execute(
+        research_id=research_id,
+        action="status",
+    )
+
+    if result.success:
+        return asdict(success_response(data=result.metadata))
+    else:
+        return asdict(
+            error_response(
+                result.error or "Failed to get status",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+
+def _handle_deep_research_report(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-report action."""
+    if not research_id:
+        return _validation_error("research_id", "deep-research-report", "Required")
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    result = workflow.execute(
+        research_id=research_id,
+        action="report",
+    )
+
+    if result.success:
+        return asdict(
+            success_response(
+                data={
+                    "report": result.content,
+                    **result.metadata,
+                }
+            )
+        )
+    else:
+        return asdict(
+            error_response(
+                result.error or "Failed to get report",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure research is complete or use deep-research-status to check",
+            )
+        )
+
+
+def _handle_deep_research_list(
+    *,
+    limit: int = 50,
+    cursor: Optional[str] = None,
+    completed_only: bool = False,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-list action."""
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    sessions = workflow.list_sessions(
+        limit=limit,
+        cursor=cursor,
+        completed_only=completed_only,
+    )
+
+    # Build response with pagination support
+    response_data: dict[str, Any] = {
+        "sessions": sessions,
+        "count": len(sessions),
+    }
+
+    # Include next cursor if there are more results
+    if sessions and len(sessions) == limit:
+        # Use last session's ID as cursor for next page
+        response_data["next_cursor"] = sessions[-1].get("id")
+
+    return asdict(success_response(data=response_data))
+
+
+def _handle_deep_research_delete(
+    *,
+    research_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Handle deep-research-delete action."""
+    if not research_id:
+        return _validation_error("research_id", "deep-research-delete", "Required")
+
+    config = _get_config()
+    workflow = DeepResearchWorkflow(config.research, _get_memory())
+
+    deleted = workflow.delete_session(research_id)
+
+    if not deleted:
+        return asdict(
+            error_response(
+                f"Research session '{research_id}' not found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Use deep-research-list to find valid research IDs",
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "deleted": True,
+                "research_id": research_id,
+            }
+        )
+    )
+
+
 def _handle_thread_list(
     *,
     status: Optional[str] = None,
@@ -489,6 +724,31 @@ def _build_router() -> ActionRouter:
             summary=_ACTION_SUMMARY["ideate"],
         ),
         ActionDefinition(
+            name="deep-research",
+            handler=_handle_deep_research,
+            summary=_ACTION_SUMMARY["deep-research"],
+        ),
+        ActionDefinition(
+            name="deep-research-status",
+            handler=_handle_deep_research_status,
+            summary=_ACTION_SUMMARY["deep-research-status"],
+        ),
+        ActionDefinition(
+            name="deep-research-report",
+            handler=_handle_deep_research_report,
+            summary=_ACTION_SUMMARY["deep-research-report"],
+        ),
+        ActionDefinition(
+            name="deep-research-list",
+            handler=_handle_deep_research_list,
+            summary=_ACTION_SUMMARY["deep-research-list"],
+        ),
+        ActionDefinition(
+            name="deep-research-delete",
+            handler=_handle_deep_research_delete,
+            summary=_ACTION_SUMMARY["deep-research-delete"],
+        ),
+        ActionDefinition(
             name="thread-list",
             handler=_handle_thread_list,
             summary=_ACTION_SUMMARY["thread-list"],
@@ -554,6 +814,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         thread_id: Optional[str] = None,
         investigation_id: Optional[str] = None,
         ideation_id: Optional[str] = None,
+        research_id: Optional[str] = None,
         topic: Optional[str] = None,
         query: Optional[str] = None,
         system_prompt: Optional[str] = None,
@@ -563,10 +824,17 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         strategy: Optional[str] = None,
         synthesis_provider: Optional[str] = None,
         timeout_per_provider: float = 30.0,
+        timeout_per_operation: float = 120.0,
         max_concurrent: int = 3,
         require_all: bool = False,
         min_responses: int = 1,
         max_depth: Optional[int] = None,
+        max_iterations: int = 3,
+        max_sub_queries: int = 5,
+        max_sources_per_query: int = 5,
+        follow_links: bool = True,
+        deep_research_action: str = "start",
+        task_timeout: Optional[float] = None,
         ideate_action: str = "generate",
         perspective: Optional[str] = None,
         perspectives: Optional[list[str]] = None,
@@ -577,6 +845,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         title: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 50,
+        cursor: Optional[str] = None,
+        completed_only: bool = False,
     ) -> dict:
         """Execute research workflows via the action router.
 
@@ -585,30 +855,42 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         - consensus: Multi-model parallel consultation with synthesis
         - thinkdeep: Hypothesis-driven systematic investigation
         - ideate: Creative brainstorming with idea clustering
-        - route: Intelligent workflow selection based on prompt
+        - deep-research: Multi-phase iterative deep research with query decomposition
+        - deep-research-status: Get status of deep research session
+        - deep-research-report: Get final report from deep research
+        - deep-research-list: List deep research sessions
+        - deep-research-delete: Delete a deep research session
         - thread-list: List conversation threads
         - thread-get: Get thread details including messages
         - thread-delete: Delete a conversation thread
 
         Args:
             action: The research action to execute
-            prompt: User prompt/message (chat, consensus, route)
+            prompt: User prompt/message (chat, consensus)
             thread_id: Thread ID for continuing conversations (chat)
             investigation_id: Investigation ID to continue (thinkdeep)
             ideation_id: Ideation session ID to continue (ideate)
+            research_id: Deep research session ID (deep-research-*)
             topic: Topic for new investigation/ideation
-            query: Follow-up query (thinkdeep)
+            query: Research query (deep-research) or follow-up (thinkdeep)
             system_prompt: System prompt for workflows
             provider_id: Provider to use for single-model operations
             model: Model override
             providers: Provider list for consensus
             strategy: Consensus strategy (all_responses, synthesize, majority, first_valid)
             synthesis_provider: Provider for synthesis
-            timeout_per_provider: Timeout per provider in seconds
-            max_concurrent: Max concurrent provider calls
+            timeout_per_provider: Timeout per provider in seconds (consensus)
+            timeout_per_operation: Timeout per operation in seconds (deep-research)
+            max_concurrent: Max concurrent provider/operation calls
             require_all: Require all providers to succeed
             min_responses: Minimum successful responses needed
             max_depth: Maximum investigation depth (thinkdeep)
+            max_iterations: Maximum refinement iterations (deep-research)
+            max_sub_queries: Maximum sub-queries to generate (deep-research)
+            max_sources_per_query: Maximum sources per sub-query (deep-research)
+            follow_links: Whether to follow and extract links (deep-research)
+            deep_research_action: Sub-action for deep-research (start, continue, resume)
+            task_timeout: Overall timeout for background research task in seconds
             ideate_action: Ideation sub-action (generate, cluster, score, select, elaborate)
             perspective: Specific perspective for idea generation
             perspectives: Custom perspectives list
@@ -619,28 +901,19 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             title: Title for new threads
             status: Filter threads by status
             limit: Maximum items to return
+            cursor: Pagination cursor for deep-research-list
+            completed_only: Filter to completed sessions only (deep-research-list)
 
         Returns:
             Response envelope with action results
         """
-        # Check feature flag
-        flag_service = get_flag_service()
-        if not flag_service.is_enabled("research_tools"):
-            return asdict(
-                error_response(
-                    "Research tools are not enabled",
-                    error_code=ErrorCode.FEATURE_DISABLED,
-                    error_type=ErrorType.UNAVAILABLE,
-                    remediation="Enable 'research_tools' feature flag in configuration",
-                )
-            )
-
         return _dispatch_research_action(
             action=action,
             prompt=prompt,
             thread_id=thread_id,
             investigation_id=investigation_id,
             ideation_id=ideation_id,
+            research_id=research_id,
             topic=topic,
             query=query,
             system_prompt=system_prompt,
@@ -650,10 +923,17 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             strategy=strategy,
             synthesis_provider=synthesis_provider,
             timeout_per_provider=timeout_per_provider,
+            timeout_per_operation=timeout_per_operation,
             max_concurrent=max_concurrent,
             require_all=require_all,
             min_responses=min_responses,
             max_depth=max_depth,
+            max_iterations=max_iterations,
+            max_sub_queries=max_sub_queries,
+            max_sources_per_query=max_sources_per_query,
+            follow_links=follow_links,
+            deep_research_action=deep_research_action,
+            task_timeout=task_timeout,
             ideate_action=ideate_action,
             perspective=perspective,
             perspectives=perspectives,
@@ -664,6 +944,8 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
             title=title,
             status=status,
             limit=limit,
+            cursor=cursor,
+            completed_only=completed_only,
         )
 
     logger.debug("Registered unified research tool")

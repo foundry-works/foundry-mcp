@@ -74,19 +74,8 @@ except ValueError:
 
 def _intake_feature_flag_blocked(request_id: str) -> Optional[dict]:
     """Check if intake tools are blocked by feature flag."""
-    if _flag_service.is_enabled("intake_tools"):
-        return None
-
-    return asdict(
-        error_response(
-            "Intake tools are disabled by feature flag",
-            error_code=ErrorCode.FEATURE_DISABLED,
-            error_type=ErrorType.FEATURE_FLAG,
-            data={"feature": "intake_tools"},
-            remediation="Enable the 'intake_tools' feature flag to use intake actions.",
-            request_id=request_id,
-        )
-    )
+    # Feature flags disabled - always allow
+    return None
 
 
 _ACTION_SUMMARY = {

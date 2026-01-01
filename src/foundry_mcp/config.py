@@ -16,6 +16,13 @@ Environment variables:
 - FOUNDRY_MCP_REQUIRE_AUTH: Whether to require API key authentication (true/false)
 - FOUNDRY_MCP_CONFIG_FILE: Path to TOML config file
 
+Search Provider API Keys (for deep research workflow):
+- TAVILY_API_KEY: API key for Tavily web search (https://tavily.com/)
+- PERPLEXITY_API_KEY: API key for Perplexity Search (https://docs.perplexity.ai/)
+- GOOGLE_API_KEY: API key for Google Custom Search (https://console.cloud.google.com/)
+- GOOGLE_CSE_ID: Google Custom Search Engine ID (https://cse.google.com/)
+- SEMANTIC_SCHOLAR_API_KEY: API key for Semantic Scholar academic search (optional for basic tier)
+
 API Key Security:
 - Keys should be rotated regularly (recommended: every 90 days)
 - To revoke a key: remove it from FOUNDRY_MCP_API_KEYS and restart server
@@ -30,7 +37,7 @@ import time
 from dataclasses import dataclass, field
 from importlib.metadata import version as get_package_version, PackageNotFoundError
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable, TypeVar
+from typing import Optional, List, Dict, Any, Callable, TypeVar, Tuple
 
 try:
     import tomllib
@@ -433,7 +440,7 @@ class TestConfig:
 
 @dataclass
 class ResearchConfig:
-    """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE).
+    """Configuration for research workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
 
     Attributes:
         enabled: Master switch for research tools
@@ -446,6 +453,22 @@ class ResearchConfig:
         thinkdeep_max_depth: Maximum investigation depth for THINKDEEP workflow
         ideate_perspectives: List of perspectives for IDEATE brainstorming
         default_timeout: Default timeout in seconds for provider calls (thinkdeep uses 2x)
+        deep_research_max_iterations: Maximum refinement iterations for DEEP_RESEARCH
+        deep_research_max_sub_queries: Maximum sub-queries for query decomposition
+        deep_research_max_sources: Maximum sources per sub-query
+        deep_research_follow_links: Whether to follow and extract content from links
+        deep_research_timeout: Default timeout per operation in seconds
+        deep_research_max_concurrent: Maximum concurrent operations
+        deep_research_providers: Ordered list of search providers for deep research
+        deep_research_audit_artifacts: Whether to write per-run audit artifacts
+        search_rate_limit: Global rate limit for search APIs (requests per minute)
+        max_concurrent_searches: Maximum concurrent search requests (for asyncio.Semaphore)
+        per_provider_rate_limits: Per-provider rate limits in requests per minute
+        tavily_api_key: API key for Tavily search provider (optional, reads from TAVILY_API_KEY env var)
+        perplexity_api_key: API key for Perplexity Search (optional, reads from PERPLEXITY_API_KEY env var)
+        google_api_key: API key for Google Custom Search (optional, reads from GOOGLE_API_KEY env var)
+        google_cse_id: Google Custom Search Engine ID (optional, reads from GOOGLE_CSE_ID env var)
+        semantic_scholar_api_key: API key for Semantic Scholar (optional, reads from SEMANTIC_SCHOLAR_API_KEY env var)
     """
 
     enabled: bool = True
@@ -462,6 +485,46 @@ class ResearchConfig:
         default_factory=lambda: ["technical", "creative", "practical", "visionary"]
     )
     default_timeout: float = 60.0  # 60 seconds default, configurable
+    # Deep research configuration
+    deep_research_max_iterations: int = 3
+    deep_research_max_sub_queries: int = 5
+    deep_research_max_sources: int = 5
+    deep_research_follow_links: bool = True
+    deep_research_timeout: float = 120.0
+    deep_research_max_concurrent: int = 3
+    # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
+    deep_research_planning_timeout: float = 60.0
+    deep_research_analysis_timeout: float = 90.0
+    deep_research_synthesis_timeout: float = 180.0
+    deep_research_refinement_timeout: float = 60.0
+    # Per-phase provider overrides - uses default_provider if not set
+    deep_research_planning_provider: Optional[str] = None
+    deep_research_analysis_provider: Optional[str] = None
+    deep_research_synthesis_provider: Optional[str] = None
+    deep_research_refinement_provider: Optional[str] = None
+    deep_research_providers: List[str] = field(
+        default_factory=lambda: ["tavily", "google", "semantic_scholar"]
+    )
+    deep_research_audit_artifacts: bool = True
+    # Research mode: "general" | "academic" | "technical"
+    deep_research_mode: str = "general"
+    # Search rate limiting configuration
+    search_rate_limit: int = 60  # requests per minute (global default)
+    max_concurrent_searches: int = 3  # for asyncio.Semaphore in gathering phase
+    per_provider_rate_limits: Dict[str, int] = field(
+        default_factory=lambda: {
+            "tavily": 60,  # Tavily free tier: ~1 req/sec
+            "perplexity": 60,  # Perplexity: ~1 req/sec (pricing: $5/1k requests)
+            "google": 100,  # Google CSE: 100 queries/day free, ~100/min paid
+            "semantic_scholar": 100,  # Semantic Scholar: 100 req/5min unauthenticated
+        }
+    )
+    # Search provider API keys (all optional, read from env vars if not set)
+    tavily_api_key: Optional[str] = None
+    perplexity_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
+    google_cse_id: Optional[str] = None
+    semantic_scholar_api_key: Optional[str] = None
 
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
@@ -485,6 +548,28 @@ class ResearchConfig:
         if isinstance(ideate_perspectives, str):
             ideate_perspectives = [p.strip() for p in ideate_perspectives.split(",")]
 
+        # Parse deep_research_providers - handle both string and list
+        deep_research_providers = data.get(
+            "deep_research_providers", ["tavily", "google", "semantic_scholar"]
+        )
+        if isinstance(deep_research_providers, str):
+            deep_research_providers = [
+                p.strip() for p in deep_research_providers.split(",") if p.strip()
+            ]
+
+        # Parse per_provider_rate_limits - handle dict from TOML
+        per_provider_rate_limits = data.get("per_provider_rate_limits", {
+            "tavily": 60,
+            "perplexity": 60,
+            "google": 100,
+            "semantic_scholar": 100,
+        })
+        if isinstance(per_provider_rate_limits, dict):
+            # Convert values to int
+            per_provider_rate_limits = {
+                k: int(v) for k, v in per_provider_rate_limits.items()
+            }
+
         return cls(
             enabled=_parse_bool(data.get("enabled", True)),
             storage_path=str(data.get("storage_path", "")),
@@ -496,6 +581,39 @@ class ResearchConfig:
             thinkdeep_max_depth=int(data.get("thinkdeep_max_depth", 5)),
             ideate_perspectives=ideate_perspectives,
             default_timeout=float(data.get("default_timeout", 60.0)),
+            # Deep research configuration
+            deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
+            deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
+            deep_research_max_sources=int(data.get("deep_research_max_sources", 5)),
+            deep_research_follow_links=_parse_bool(data.get("deep_research_follow_links", True)),
+            deep_research_timeout=float(data.get("deep_research_timeout", 120.0)),
+            deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
+            # Per-phase timeout overrides
+            deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 60.0)),
+            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 90.0)),
+            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 180.0)),
+            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 60.0)),
+            # Per-phase provider overrides
+            deep_research_planning_provider=data.get("deep_research_planning_provider"),
+            deep_research_analysis_provider=data.get("deep_research_analysis_provider"),
+            deep_research_synthesis_provider=data.get("deep_research_synthesis_provider"),
+            deep_research_refinement_provider=data.get("deep_research_refinement_provider"),
+            deep_research_providers=deep_research_providers,
+            deep_research_audit_artifacts=_parse_bool(
+                data.get("deep_research_audit_artifacts", True)
+            ),
+            # Research mode
+            deep_research_mode=str(data.get("deep_research_mode", "general")),
+            # Search rate limiting configuration
+            search_rate_limit=int(data.get("search_rate_limit", 60)),
+            max_concurrent_searches=int(data.get("max_concurrent_searches", 3)),
+            per_provider_rate_limits=per_provider_rate_limits,
+            # Search provider API keys (None means not set in TOML, will check env vars)
+            tavily_api_key=data.get("tavily_api_key"),
+            perplexity_api_key=data.get("perplexity_api_key"),
+            google_api_key=data.get("google_api_key"),
+            google_cse_id=data.get("google_cse_id"),
+            semantic_scholar_api_key=data.get("semantic_scholar_api_key"),
         )
 
     def get_storage_path(self) -> Path:
@@ -507,6 +625,186 @@ class ResearchConfig:
         if self.storage_path:
             return Path(self.storage_path).expanduser()
         return Path.home() / ".foundry-mcp" / "research"
+
+    def get_provider_rate_limit(self, provider: str) -> int:
+        """Get rate limit for a specific provider.
+
+        Returns the provider-specific rate limit if configured,
+        otherwise falls back to the global search_rate_limit.
+
+        Args:
+            provider: Provider name (e.g., "tavily", "google", "semantic_scholar")
+
+        Returns:
+            Rate limit in requests per minute
+        """
+        return self.per_provider_rate_limits.get(provider, self.search_rate_limit)
+
+    def get_phase_timeout(self, phase: str) -> float:
+        """Get timeout for a specific deep research phase.
+
+        Returns the phase-specific timeout if configured, otherwise
+        falls back to deep_research_timeout.
+
+        Args:
+            phase: Phase name ("planning", "analysis", "synthesis", "refinement", "gathering")
+
+        Returns:
+            Timeout in seconds for the phase
+        """
+        phase_timeouts = {
+            "planning": self.deep_research_planning_timeout,
+            "analysis": self.deep_research_analysis_timeout,
+            "synthesis": self.deep_research_synthesis_timeout,
+            "refinement": self.deep_research_refinement_timeout,
+            "gathering": self.deep_research_timeout,  # Gathering uses default
+        }
+        return phase_timeouts.get(phase.lower(), self.deep_research_timeout)
+
+    def get_phase_provider(self, phase: str) -> str:
+        """Get LLM provider ID for a specific deep research phase.
+
+        Returns the phase-specific provider if configured, otherwise
+        falls back to default_provider. Supports both simple names ("gemini")
+        and ProviderSpec format ("[cli]gemini:pro").
+
+        Args:
+            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+
+        Returns:
+            Provider ID for the phase (e.g., "gemini", "opencode")
+        """
+        provider_id, _ = self.resolve_phase_provider(phase)
+        return provider_id
+
+    def resolve_phase_provider(self, phase: str) -> Tuple[str, Optional[str]]:
+        """Resolve provider ID and model for a deep research phase.
+
+        Parses ProviderSpec format ("[cli]gemini:pro") or simple names ("gemini").
+        Returns (provider_id, model) tuple for use with the provider registry.
+
+        Args:
+            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+
+        Returns:
+            Tuple of (provider_id, model) where model may be None
+        """
+        phase_providers = {
+            "planning": self.deep_research_planning_provider,
+            "analysis": self.deep_research_analysis_provider,
+            "synthesis": self.deep_research_synthesis_provider,
+            "refinement": self.deep_research_refinement_provider,
+        }
+        spec_str = phase_providers.get(phase.lower()) or self.default_provider
+        return _parse_provider_spec(spec_str)
+
+    def get_search_provider_api_key(
+        self,
+        provider: str,
+        required: bool = True,
+    ) -> Optional[str]:
+        """Get API key for a search provider with fallback to environment variables.
+
+        Checks config value first, then falls back to environment variable.
+        Raises ValueError with clear error message if required and not found.
+
+        Args:
+            provider: Provider name ("tavily", "google", "semantic_scholar")
+            required: If True, raises ValueError when key is missing (default: True)
+
+        Returns:
+            API key string, or None if not required and not found
+
+        Raises:
+            ValueError: If required=True and no API key is found
+
+        Example:
+            # Get Tavily API key (will raise if missing)
+            api_key = config.research.get_search_provider_api_key("tavily")
+
+            # Get Semantic Scholar API key (optional, returns None if missing)
+            api_key = config.research.get_search_provider_api_key(
+                "semantic_scholar", required=False
+            )
+        """
+        # Map provider names to config attributes and env vars
+        provider_config = {
+            "tavily": {
+                "config_key": "tavily_api_key",
+                "env_var": "TAVILY_API_KEY",
+                "setup_url": "https://tavily.com/",
+            },
+            "perplexity": {
+                "config_key": "perplexity_api_key",
+                "env_var": "PERPLEXITY_API_KEY",
+                "setup_url": "https://docs.perplexity.ai/",
+            },
+            "google": {
+                "config_key": "google_api_key",
+                "env_var": "GOOGLE_API_KEY",
+                "setup_url": "https://console.cloud.google.com/apis/credentials",
+            },
+            "google_cse": {
+                "config_key": "google_cse_id",
+                "env_var": "GOOGLE_CSE_ID",
+                "setup_url": "https://cse.google.com/",
+            },
+            "semantic_scholar": {
+                "config_key": "semantic_scholar_api_key",
+                "env_var": "SEMANTIC_SCHOLAR_API_KEY",
+                "setup_url": "https://www.semanticscholar.org/product/api",
+            },
+        }
+
+        provider_lower = provider.lower()
+        if provider_lower not in provider_config:
+            raise ValueError(
+                f"Unknown search provider: '{provider}'. "
+                f"Valid providers: {', '.join(provider_config.keys())}"
+            )
+
+        config_info = provider_config[provider_lower]
+        config_key = config_info["config_key"]
+        env_var = config_info["env_var"]
+
+        # Check config value first
+        api_key = getattr(self, config_key, None)
+
+        # Fall back to environment variable
+        if not api_key:
+            api_key = os.environ.get(env_var)
+
+        # Handle missing key
+        if not api_key:
+            if required:
+                raise ValueError(
+                    f"{provider.title()} API key not configured. "
+                    f"Set via {env_var} environment variable or "
+                    f"'research.{config_key}' in foundry-mcp.toml. "
+                    f"Get an API key at: {config_info['setup_url']}"
+                )
+            return None
+
+        return api_key
+
+    def get_google_credentials(self, required: bool = True) -> tuple[Optional[str], Optional[str]]:
+        """Get both Google API key and CSE ID for Google Custom Search.
+
+        Convenience method that retrieves both required credentials for
+        Google Custom Search API.
+
+        Args:
+            required: If True, raises ValueError when either credential is missing
+
+        Returns:
+            Tuple of (api_key, cse_id)
+
+        Raises:
+            ValueError: If required=True and either credential is missing
+        """
+        api_key = self.get_search_provider_api_key("google", required=required)
+        cse_id = self.get_search_provider_api_key("google_cse", required=required)
+        return api_key, cse_id
 
     def get_default_provider_spec(self) -> "ProviderSpec":
         """Parse default_provider into a ProviderSpec."""
@@ -532,6 +830,45 @@ def _normalize_commit_cadence(value: str) -> str:
         )
         return "manual"
     return normalized
+
+
+def _parse_provider_spec(spec: str) -> Tuple[str, Optional[str]]:
+    """Parse a provider specification into (provider_id, model).
+
+    Supports both simple names and ProviderSpec bracket notation:
+    - "gemini" -> ("gemini", None)
+    - "[cli]gemini:pro" -> ("gemini", "pro")
+    - "[cli]opencode:openai/gpt-5.2" -> ("opencode", "openai/gpt-5.2")
+    - "[api]openai/gpt-4.1" -> ("openai", "gpt-4.1")
+
+    Args:
+        spec: Provider specification string
+
+    Returns:
+        Tuple of (provider_id, model) where model may be None
+    """
+    spec = spec.strip()
+
+    # Simple name (no brackets) - backward compatible
+    if not spec.startswith("["):
+        return (spec, None)
+
+    # Try to parse with ProviderSpec
+    try:
+        from foundry_mcp.core.llm_config import ProviderSpec
+
+        parsed = ProviderSpec.parse(spec)
+        # Build model string with backend routing if present
+        model = None
+        if parsed.backend and parsed.model:
+            model = f"{parsed.backend}/{parsed.model}"
+        elif parsed.model:
+            model = parsed.model
+        return (parsed.provider, model)
+    except (ValueError, ImportError) as e:
+        logger.warning("Failed to parse provider spec '%s': %s", spec, e)
+        # Fall back to treating as simple name (strip brackets)
+        return (spec.split("]")[-1].split(":")[0], None)
 
 
 def _parse_bool(value: Any) -> bool:
@@ -895,6 +1232,19 @@ class ServerConfig:
                 self.dashboard.refresh_interval_ms = int(dash_refresh)
             except ValueError:
                 pass
+
+        # Search provider API keys (direct env vars, no FOUNDRY_MCP_ prefix)
+        # These use standard env var names that match provider documentation
+        if tavily_key := os.environ.get("TAVILY_API_KEY"):
+            self.research.tavily_api_key = tavily_key
+        if perplexity_key := os.environ.get("PERPLEXITY_API_KEY"):
+            self.research.perplexity_api_key = perplexity_key
+        if google_key := os.environ.get("GOOGLE_API_KEY"):
+            self.research.google_api_key = google_key
+        if google_cse := os.environ.get("GOOGLE_CSE_ID"):
+            self.research.google_cse_id = google_cse
+        if semantic_scholar_key := os.environ.get("SEMANTIC_SCHOLAR_API_KEY"):
+            self.research.semantic_scholar_api_key = semantic_scholar_key
 
         # Feature flag overrides from environment
         if feature_flags := os.environ.get("FOUNDRY_MCP_FEATURES"):

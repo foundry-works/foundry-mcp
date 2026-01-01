@@ -188,9 +188,9 @@ class ProviderDetector:
         Check whether this provider is available (with caching).
 
         Resolution order:
-        1. Check cache (if valid)
-        2. Check override_env (if set, returns its boolean value)
-        3. In test mode, return False (no real CLI available)
+        1. Check override_env (if set, returns its boolean value - takes precedence)
+        2. In test mode, return False (no real CLI available)
+        3. Check cache (if valid)
         4. Resolve binary via PATH
         5. Optionally run health probe
 
@@ -201,15 +201,7 @@ class ProviderDetector:
         Returns:
             True if provider is available, False otherwise
         """
-        # Check cache first
-        cache_key = f"{self.provider_id}:{use_probe}"
-        cached = _AVAILABILITY_CACHE.get(cache_key)
-        if cached is not None:
-            is_avail, cached_time = cached
-            if time.time() - cached_time < _get_cache_ttl():
-                return is_avail
-
-        # Check environment override first
+        # Check environment override first (takes precedence over cache)
         if self.override_env:
             override = _coerce_bool(os.environ.get(self.override_env))
             if override is not None:
@@ -227,6 +219,14 @@ class ProviderDetector:
                 self.provider_id,
             )
             return False
+
+        # Check cache (only for non-overridden, non-test-mode cases)
+        cache_key = f"{self.provider_id}:{use_probe}"
+        cached = _AVAILABILITY_CACHE.get(cache_key)
+        if cached is not None:
+            is_avail, cached_time = cached
+            if time.time() - cached_time < _get_cache_ttl():
+                return is_avail
 
         # Resolve binary path
         executable = self.resolve_binary()

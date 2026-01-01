@@ -193,6 +193,7 @@ def _run_ai_review(
             ConsultationRequest,
             ConsultationWorkflow,
         )
+        from foundry_mcp.core.llm_config import load_consultation_config
     except ImportError:
         return asdict(
             error_response(
@@ -203,7 +204,21 @@ def _run_ai_review(
             )
         )
 
-    orchestrator = ConsultationOrchestrator(default_timeout=ai_timeout)
+    # Load consultation config from workspace (fixes config discovery issue)
+    # Derive workspace from specs_dir - check parent directories for config
+    config_file = None
+    if specs_dir:
+        ws_path = specs_dir.parent if specs_dir.name == "specs" else specs_dir
+        for _ in range(5):  # Search up to 5 levels for foundry-mcp.toml
+            candidate = ws_path / "foundry-mcp.toml"
+            if candidate.exists():
+                config_file = candidate
+                break
+            if ws_path.parent == ws_path:  # Reached root
+                break
+            ws_path = ws_path.parent
+    consultation_config = load_consultation_config(config_file=config_file)
+    orchestrator = ConsultationOrchestrator(config=consultation_config, default_timeout=ai_timeout)
 
     if not orchestrator.is_available(provider_id=ai_provider):
         return asdict(

@@ -12,16 +12,39 @@ from typing import Any, Optional
 from foundry_mcp.config import ResearchConfig
 from foundry_mcp.core.llm_config import ProviderSpec
 from foundry_mcp.core.providers import (
+    ContextWindowError,
     ProviderContext,
     ProviderHooks,
     ProviderRequest,
     ProviderResult,
     ProviderStatus,
+    is_context_window_error,
+    extract_token_counts,
+    create_context_window_guidance,
 )
 from foundry_mcp.core.providers.registry import available_providers, resolve_provider
 from foundry_mcp.core.research.memory import ResearchMemory
 
 logger = logging.getLogger(__name__)
+
+
+def _estimate_prompt_tokens(prompt: str, system_prompt: str | None = None) -> int:
+    """Estimate token count for a prompt using simple heuristic.
+
+    Uses ~4 characters per token as a rough estimate. This is conservative
+    and works reasonably well for English text.
+
+    Args:
+        prompt: User prompt
+        system_prompt: Optional system prompt
+
+    Returns:
+        Estimated token count
+    """
+    total_chars = len(prompt)
+    if system_prompt:
+        total_chars += len(system_prompt)
+    return total_chars // 4
 
 
 @dataclass
@@ -34,6 +57,9 @@ class WorkflowResult:
         provider_id: Provider that generated the response
         model_used: Model that generated the response
         tokens_used: Total tokens consumed
+        input_tokens: Tokens consumed by the prompt
+        output_tokens: Tokens generated in the response
+        cached_tokens: Tokens served from cache
         duration_ms: Execution duration in milliseconds
         metadata: Additional workflow-specific data
         error: Error message if success is False
@@ -44,6 +70,9 @@ class WorkflowResult:
     provider_id: Optional[str] = None
     model_used: Optional[str] = None
     tokens_used: Optional[int] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    cached_tokens: Optional[int] = None
     duration_ms: Optional[float] = None
     metadata: dict[str, Any] = None
     error: Optional[str] = None
@@ -173,6 +202,9 @@ class ResearchWorkflowBase(ABC):
             max_tokens=max_tokens,
         )
 
+        # Estimate prompt tokens for error reporting
+        estimated_tokens = _estimate_prompt_tokens(prompt, system_prompt)
+
         try:
             result: ProviderResult = provider.generate(request)
 
@@ -191,10 +223,53 @@ class ResearchWorkflowBase(ABC):
                 provider_id=result.provider_id,
                 model_used=result.model_used,
                 tokens_used=result.tokens.total_tokens if result.tokens else None,
+                input_tokens=result.tokens.input_tokens if result.tokens else None,
+                output_tokens=result.tokens.output_tokens if result.tokens else None,
+                cached_tokens=result.tokens.cached_input_tokens if result.tokens else None,
                 duration_ms=result.duration_ms,
             )
 
+        except ContextWindowError:
+            # Re-raise context window errors directly
+            raise
+
         except Exception as exc:
+            # Check if this is a context window error
+            if is_context_window_error(exc):
+                # Extract token counts from error message if available
+                prompt_tokens, max_context = extract_token_counts(str(exc))
+
+                # Use estimated tokens if not extracted
+                if prompt_tokens is None:
+                    prompt_tokens = estimated_tokens
+
+                # Log detailed context window error
+                logger.error(
+                    "Context window exceeded: prompt_tokens=%s, max_tokens=%s, "
+                    "estimated_tokens=%d, provider=%s, error=%s",
+                    prompt_tokens,
+                    max_context,
+                    estimated_tokens,
+                    provider_id,
+                    str(exc),
+                )
+
+                # Generate actionable guidance
+                guidance = create_context_window_guidance(
+                    prompt_tokens=prompt_tokens,
+                    max_tokens=max_context,
+                    provider_id=provider_id,
+                )
+
+                # Raise specific context window error with details
+                raise ContextWindowError(
+                    guidance,
+                    provider=provider_id,
+                    prompt_tokens=prompt_tokens,
+                    max_tokens=max_context,
+                ) from exc
+
+            # Non-context-window error - log and return error result
             logger.error("Provider execution failed: %s", exc)
             return WorkflowResult(
                 success=False,

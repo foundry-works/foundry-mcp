@@ -498,8 +498,11 @@ class CursorAgentProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             )
 
+        # Resolve model: request.model takes precedence, then metadata, then instance default
         model = (
-            str(request.metadata.get("model")) if request.metadata and "model" in request.metadata else self._model
+            request.model
+            or (str(request.metadata.get("model")) if request.metadata and "model" in request.metadata else None)
+            or self._model
         )
 
         # Backup and replace HOME config with read-only version

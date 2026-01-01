@@ -696,6 +696,129 @@ def with_validation_and_resilience(
     return decorator
 
 
+# ---------------------------------------------------------------------------
+# Context Window Error Detection
+# ---------------------------------------------------------------------------
+
+# Common error patterns indicating context window/token limit exceeded
+CONTEXT_WINDOW_ERROR_PATTERNS: Set[str] = {
+    # OpenAI patterns
+    "context_length_exceeded",
+    "maximum context length",
+    "max_tokens",
+    "token limit",
+    "tokens exceeds",
+    "prompt is too long",
+    "input too long",
+    # Anthropic patterns
+    "prompt is too large",
+    "context window",
+    "exceeds the maximum",
+    "too many tokens",
+    # Google/Gemini patterns
+    "max input tokens",
+    "input token limit",
+    "content is too long",
+    "request payload size exceeds",
+    # Generic patterns
+    "length exceeded",
+    "limit exceeded",
+    "too long for model",
+    "input exceeds",
+    "context limit",
+}
+
+
+def is_context_window_error(error: Exception) -> bool:
+    """Check if an exception indicates a context window/token limit error.
+
+    Examines the error message for common patterns indicating the prompt
+    exceeded the model's context window or token limit.
+
+    Args:
+        error: Exception to check
+
+    Returns:
+        True if the error appears to be a context window error
+    """
+    error_str = str(error).lower()
+
+    for pattern in CONTEXT_WINDOW_ERROR_PATTERNS:
+        if pattern in error_str:
+            return True
+
+    return False
+
+
+def extract_token_counts(error_str: str) -> tuple[Optional[int], Optional[int]]:
+    """Extract token counts from error message if present.
+
+    Attempts to parse prompt_tokens and max_tokens from common error formats.
+
+    Args:
+        error_str: Error message string
+
+    Returns:
+        Tuple of (prompt_tokens, max_tokens), either may be None if not found
+    """
+    import re
+
+    prompt_tokens = None
+    max_tokens = None
+
+    # Pattern: "X tokens exceeds Y limit" or "X exceeds Y"
+    match = re.search(r"(\d{1,7})\s*tokens?\s*exceeds?\s*(?:the\s*)?(\d{1,7})", error_str.lower())
+    if match:
+        prompt_tokens = int(match.group(1))
+        max_tokens = int(match.group(2))
+        return prompt_tokens, max_tokens
+
+    # Pattern: "maximum context length is X tokens" with "Y tokens" input
+    max_match = re.search(r"maximum\s+(?:context\s+)?length\s+(?:is\s+)?(\d{1,7})", error_str.lower())
+    if max_match:
+        max_tokens = int(max_match.group(1))
+
+    # Pattern: "requested X tokens" or "contains X tokens"
+    prompt_match = re.search(r"(?:requested|contains|have|with)\s+(\d{1,7})\s*tokens?", error_str.lower())
+    if prompt_match:
+        prompt_tokens = int(prompt_match.group(1))
+
+    return prompt_tokens, max_tokens
+
+
+def create_context_window_guidance(
+    prompt_tokens: Optional[int] = None,
+    max_tokens: Optional[int] = None,
+    provider_id: Optional[str] = None,
+) -> str:
+    """Generate actionable guidance for resolving context window errors.
+
+    Args:
+        prompt_tokens: Number of tokens in the prompt (if known)
+        max_tokens: Maximum tokens allowed (if known)
+        provider_id: Provider that raised the error
+
+    Returns:
+        Human-readable guidance string
+    """
+    parts = ["Context window limit exceeded."]
+
+    if prompt_tokens and max_tokens:
+        overflow = prompt_tokens - max_tokens
+        parts.append(f"Prompt ({prompt_tokens:,} tokens) exceeds limit ({max_tokens:,} tokens) by {overflow:,} tokens.")
+    elif prompt_tokens:
+        parts.append(f"Prompt contains approximately {prompt_tokens:,} tokens.")
+    elif max_tokens:
+        parts.append(f"Maximum context window is {max_tokens:,} tokens.")
+
+    parts.append("To resolve: (1) Reduce input size by excluding large content, "
+                 "(2) Summarize or truncate long sections, "
+                 "(3) Use a model with larger context window, "
+                 "(4) Process content in smaller batches.")
+
+    return " ".join(parts)
+
+
 __all__ = [
     # Validation
     "ValidationError",
@@ -726,4 +849,9 @@ __all__ = [
     "reset_rate_limiters",
     # Execution wrapper
     "with_validation_and_resilience",
+    # Context window detection
+    "CONTEXT_WINDOW_ERROR_PATTERNS",
+    "is_context_window_error",
+    "extract_token_counts",
+    "create_context_window_guidance",
 ]
