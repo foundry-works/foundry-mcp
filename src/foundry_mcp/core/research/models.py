@@ -25,6 +25,7 @@ class WorkflowType(str, Enum):
     CONSENSUS = "consensus"
     THINKDEEP = "thinkdeep"
     IDEATE = "ideate"
+    DEEP_RESEARCH = "deep_research"
 
 
 class ConfidenceLevel(str, Enum):
@@ -435,3 +436,785 @@ class ConsensusState(BaseModel):
         self.completed_at = datetime.utcnow()
         if synthesis:
             self.synthesis = synthesis
+
+
+class DeepResearchConfig(BaseModel):
+    """Configuration for DEEP_RESEARCH workflow execution.
+
+    Groups deep research parameters into a single config object to reduce
+    parameter sprawl in the MCP tool interface. All fields have sensible
+    defaults that can be overridden at the tool level.
+
+    Note: Provider configuration is handled via ResearchConfig TOML settings,
+    not through this config object. This is intentional - providers should be
+    configured at the server level, not per-request.
+    """
+
+    max_iterations: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum refinement iterations before forced completion",
+    )
+    max_sub_queries: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Maximum sub-queries for query decomposition",
+    )
+    max_sources_per_query: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Maximum sources to gather per sub-query",
+    )
+    follow_links: bool = Field(
+        default=True,
+        description="Whether to follow URLs and extract full content",
+    )
+    timeout_per_operation: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="Timeout in seconds for each search/fetch operation",
+    )
+    max_concurrent: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum concurrent operations (search, fetch)",
+    )
+
+    @classmethod
+    def from_defaults(cls) -> "DeepResearchConfig":
+        """Create config with all default values.
+
+        Returns:
+            DeepResearchConfig with sensible defaults
+        """
+        return cls()
+
+    def merge_overrides(self, **overrides: Any) -> "DeepResearchConfig":
+        """Create a new config with specified overrides applied.
+
+        Args:
+            **overrides: Field values to override (None values are ignored)
+
+        Returns:
+            New DeepResearchConfig with overrides applied
+        """
+        current = self.model_dump()
+        for key, value in overrides.items():
+            if value is not None and key in current:
+                current[key] = value
+        return DeepResearchConfig(**current)
+
+
+# =============================================================================
+# DEEP RESEARCH Models (Multi-phase iterative research)
+# =============================================================================
+
+
+class DeepResearchPhase(str, Enum):
+    """Phases of the DEEP_RESEARCH workflow.
+
+    The deep research workflow progresses through five sequential phases:
+    1. PLANNING - Analyze the query and decompose into focused sub-queries
+    2. GATHERING - Execute sub-queries in parallel and collect sources
+    3. ANALYSIS - Extract findings and assess source quality
+    4. SYNTHESIS - Combine findings into a comprehensive report
+    5. REFINEMENT - Identify gaps and potentially loop back for more research
+
+    The ordering of these enum values is significant - it defines the
+    progression through advance_phase() method.
+    """
+
+    PLANNING = "planning"
+    GATHERING = "gathering"
+    ANALYSIS = "analysis"
+    SYNTHESIS = "synthesis"
+    REFINEMENT = "refinement"
+
+
+class PhaseMetrics(BaseModel):
+    """Metrics for a single phase execution.
+
+    Tracks timing, token usage, and provider information for each phase
+    of the deep research workflow. Used for audit and cost tracking.
+    """
+
+    phase: str = Field(..., description="Phase name (planning, analysis, etc.)")
+    duration_ms: float = Field(default=0.0, description="Phase duration in milliseconds")
+    input_tokens: int = Field(default=0, description="Tokens consumed by the prompt")
+    output_tokens: int = Field(default=0, description="Tokens generated in the response")
+    cached_tokens: int = Field(default=0, description="Tokens served from cache")
+    provider_id: Optional[str] = Field(default=None, description="Provider used for this phase")
+    model_used: Optional[str] = Field(default=None, description="Model used for this phase")
+
+
+class SourceType(str, Enum):
+    """Types of research sources that can be discovered.
+
+    V1 Implementation:
+    - WEB: General web search results (via Tavily/Google)
+    - ACADEMIC: Academic papers and journals (via Semantic Scholar)
+
+    Future Extensions (placeholders):
+    - EXPERT: Expert profiles and interviews (reserved)
+    - CODE: Code repositories and examples (reserved for GitHub search)
+    - NEWS: News articles and press releases
+    - DOCUMENTATION: Technical documentation
+    """
+
+    WEB = "web"
+    ACADEMIC = "academic"
+    EXPERT = "expert"  # Future: expert profiles, interviews
+    CODE = "code"  # Future: GitHub, code search
+
+
+class SourceQuality(str, Enum):
+    """Quality assessment for research sources.
+
+    Quality levels are assigned during the ANALYSIS phase based on:
+    - Source authority and credibility
+    - Content recency and relevance
+    - Citation count and peer review status (for academic)
+    - Domain reputation (for web sources)
+    """
+
+    UNKNOWN = "unknown"  # Not yet assessed
+    LOW = "low"  # Questionable reliability
+    MEDIUM = "medium"  # Generally reliable
+    HIGH = "high"  # Authoritative source
+
+
+class ResearchMode(str, Enum):
+    """Research modes that control source prioritization.
+
+    Each mode applies different domain-based quality heuristics:
+    - GENERAL: No domain preferences, balanced approach (default)
+    - ACADEMIC: Prioritizes journals, publishers, preprints
+    - TECHNICAL: Prioritizes official docs, arxiv, code repositories
+    """
+
+    GENERAL = "general"
+    ACADEMIC = "academic"
+    TECHNICAL = "technical"
+
+
+# Domain tier lists for source quality assessment by research mode
+# Patterns support wildcards: "*.edu" matches any .edu domain
+DOMAIN_TIERS: dict[str, dict[str, list[str]]] = {
+    "academic": {
+        "high": [
+            # Aggregators & indexes
+            "scholar.google.com",
+            "semanticscholar.org",
+            "pubmed.gov",
+            "ncbi.nlm.nih.gov",
+            "jstor.org",
+            # Major publishers
+            "springer.com",
+            "link.springer.com",
+            "sciencedirect.com",
+            "elsevier.com",
+            "wiley.com",
+            "onlinelibrary.wiley.com",
+            "tandfonline.com",  # Taylor & Francis
+            "sagepub.com",
+            "nature.com",
+            "science.org",  # AAAS/Science
+            "frontiersin.org",
+            "plos.org",
+            "journals.plos.org",
+            "mdpi.com",
+            "oup.com",
+            "academic.oup.com",  # Oxford
+            "cambridge.org",
+            # Preprints & open access
+            "arxiv.org",
+            "biorxiv.org",
+            "medrxiv.org",
+            "psyarxiv.com",
+            "ssrn.com",
+            # Field-specific
+            "apa.org",
+            "psycnet.apa.org",  # Psychology
+            "aclanthology.org",  # Computational linguistics
+            # CS/Tech academic
+            "acm.org",
+            "dl.acm.org",
+            "ieee.org",
+            "ieeexplore.ieee.org",
+            # Institutional patterns
+            "*.edu",
+            "*.ac.uk",
+            "*.edu.au",
+        ],
+        "low": [
+            "reddit.com",
+            "quora.com",
+            "medium.com",
+            "linkedin.com",
+            "twitter.com",
+            "x.com",
+            "facebook.com",
+            "pinterest.com",
+            "instagram.com",
+            "tiktok.com",
+            "youtube.com",  # Can have good content but inconsistent
+        ],
+    },
+    "technical": {
+        "high": [
+            # Preprints (technical papers)
+            "arxiv.org",
+            # Official documentation patterns
+            "docs.*",
+            "developer.*",
+            "*.dev",
+            "devdocs.io",
+            # Code & technical resources
+            "github.com",
+            "stackoverflow.com",
+            "stackexchange.com",
+            # Language/framework official sites
+            "python.org",
+            "docs.python.org",
+            "nodejs.org",
+            "rust-lang.org",
+            "doc.rust-lang.org",
+            "go.dev",
+            "typescriptlang.org",
+            "react.dev",
+            "vuejs.org",
+            "angular.io",
+            # Cloud providers
+            "aws.amazon.com",
+            "cloud.google.com",
+            "docs.microsoft.com",
+            "learn.microsoft.com",
+            "azure.microsoft.com",
+            # Tech company engineering blogs
+            "engineering.fb.com",
+            "netflixtechblog.com",
+            "uber.com/blog/engineering",
+            "blog.google",
+            # Academic (relevant for technical research)
+            "acm.org",
+            "dl.acm.org",
+            "ieee.org",
+            "ieeexplore.ieee.org",
+        ],
+        "low": [
+            "reddit.com",
+            "quora.com",
+            "linkedin.com",
+            "twitter.com",
+            "x.com",
+            "facebook.com",
+            "pinterest.com",
+        ],
+    },
+    "general": {
+        "high": [],  # No domain preferences
+        "low": [
+            # Still deprioritize social media
+            "pinterest.com",
+            "facebook.com",
+            "instagram.com",
+            "tiktok.com",
+        ],
+    },
+}
+
+
+class SubQuery(BaseModel):
+    """A decomposed sub-query for focused research.
+
+    During the PLANNING phase, the original research query is decomposed
+    into multiple focused sub-queries. Each sub-query targets a specific
+    aspect of the research question and can be executed independently
+    during the GATHERING phase.
+
+    Status transitions:
+    - pending -> executing -> completed (success path)
+    - pending -> executing -> failed (error path)
+    """
+
+    id: str = Field(default_factory=lambda: f"subq-{uuid4().hex[:8]}")
+    query: str = Field(..., description="The focused sub-query text")
+    rationale: Optional[str] = Field(
+        default=None,
+        description="Why this sub-query was generated and what aspect it covers",
+    )
+    priority: int = Field(
+        default=1,
+        description="Execution priority (1=highest, larger=lower priority)",
+    )
+    status: str = Field(
+        default="pending",
+        description="Current status: pending, executing, completed, failed",
+    )
+    source_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs of ResearchSource objects found for this query",
+    )
+    findings_summary: Optional[str] = Field(
+        default=None,
+        description="Brief summary of what was found from this sub-query",
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = Field(default=None)
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if status is 'failed'",
+    )
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def mark_completed(self, findings: Optional[str] = None) -> None:
+        """Mark this sub-query as successfully completed.
+
+        Args:
+            findings: Optional summary of findings from this sub-query
+        """
+        self.status = "completed"
+        self.completed_at = datetime.utcnow()
+        if findings:
+            self.findings_summary = findings
+
+    def mark_failed(self, error: str) -> None:
+        """Mark this sub-query as failed with an error message.
+
+        Args:
+            error: Description of why the sub-query failed
+        """
+        self.status = "failed"
+        self.completed_at = datetime.utcnow()
+        self.error = error
+
+
+class ResearchSource(BaseModel):
+    """A source discovered during research.
+
+    Sources are collected during the GATHERING phase when sub-queries
+    are executed against search providers. Each source represents a
+    piece of external content (web page, paper, etc.) that may contain
+    relevant information for the research query.
+
+    Quality is assessed during the ANALYSIS phase based on source
+    authority, content relevance, and other factors.
+    """
+
+    id: str = Field(default_factory=lambda: f"src-{uuid4().hex[:8]}")
+    url: Optional[str] = Field(
+        default=None,
+        description="URL of the source (may be None for non-web sources)",
+    )
+    title: str = Field(..., description="Title or headline of the source")
+    source_type: SourceType = Field(
+        default=SourceType.WEB,
+        description="Type of source (web, academic, etc.)",
+    )
+    quality: SourceQuality = Field(
+        default=SourceQuality.UNKNOWN,
+        description="Assessed quality level of this source",
+    )
+    snippet: Optional[str] = Field(
+        default=None,
+        description="Brief excerpt or description from the source",
+    )
+    content: Optional[str] = Field(
+        default=None,
+        description="Full extracted content (if follow_links enabled)",
+    )
+    sub_query_id: Optional[str] = Field(
+        default=None,
+        description="ID of the SubQuery that discovered this source",
+    )
+    discovered_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResearchFinding(BaseModel):
+    """A key finding extracted from research sources.
+
+    Findings are extracted during the ANALYSIS phase by examining
+    source content and identifying key insights. Each finding has
+    an associated confidence level and links back to supporting sources.
+
+    Findings are organized by category/theme during synthesis to
+    create a structured report.
+    """
+
+    id: str = Field(default_factory=lambda: f"find-{uuid4().hex[:8]}")
+    content: str = Field(..., description="The key finding or insight")
+    confidence: ConfidenceLevel = Field(
+        default=ConfidenceLevel.MEDIUM,
+        description="Confidence level in this finding",
+    )
+    source_ids: list[str] = Field(
+        default_factory=list,
+        description="IDs of ResearchSource objects supporting this finding",
+    )
+    sub_query_id: Optional[str] = Field(
+        default=None,
+        description="ID of SubQuery that produced this finding",
+    )
+    category: Optional[str] = Field(
+        default=None,
+        description="Theme or category for organizing findings",
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResearchGap(BaseModel):
+    """An identified gap in the research requiring follow-up.
+
+    Gaps are identified during the ANALYSIS and SYNTHESIS phases when
+    the research reveals missing information or unanswered questions.
+    Each gap includes suggested follow-up queries that can be used
+    in subsequent refinement iterations.
+
+    Gaps drive the REFINEMENT phase: if unresolved gaps exist and
+    max_iterations hasn't been reached, the workflow loops back
+    to GATHERING with new sub-queries derived from gap suggestions.
+    """
+
+    id: str = Field(default_factory=lambda: f"gap-{uuid4().hex[:8]}")
+    description: str = Field(
+        ...,
+        description="Description of the knowledge gap or missing information",
+    )
+    suggested_queries: list[str] = Field(
+        default_factory=list,
+        description="Follow-up queries that could fill this gap",
+    )
+    priority: int = Field(
+        default=1,
+        description="Priority for follow-up (1=highest, larger=lower priority)",
+    )
+    resolved: bool = Field(
+        default=False,
+        description="Whether this gap has been addressed in a refinement iteration",
+    )
+    resolution_notes: Optional[str] = Field(
+        default=None,
+        description="Notes on how the gap was resolved",
+    )
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class DeepResearchState(BaseModel):
+    """Main state model for a deep research session.
+
+    Manages the entire lifecycle of a multi-phase research workflow:
+    - Tracks the current phase and iteration
+    - Contains all sub-queries, sources, findings, and gaps
+    - Provides helper methods for state manipulation
+    - Handles phase advancement and refinement iteration logic
+
+    The state is persisted to enable session resume capability.
+    """
+
+    id: str = Field(default_factory=lambda: f"deepres-{uuid4().hex[:12]}")
+    original_query: str = Field(..., description="The original research query")
+    research_brief: Optional[str] = Field(
+        default=None,
+        description="Expanded research plan generated in PLANNING phase",
+    )
+    phase: DeepResearchPhase = Field(
+        default=DeepResearchPhase.PLANNING,
+        description="Current workflow phase",
+    )
+    iteration: int = Field(
+        default=1,
+        description="Current refinement iteration (1-based)",
+    )
+    max_iterations: int = Field(
+        default=3,
+        description="Maximum refinement iterations before forced completion",
+    )
+
+    # Collections
+    sub_queries: list[SubQuery] = Field(default_factory=list)
+    sources: list[ResearchSource] = Field(default_factory=list)
+    findings: list[ResearchFinding] = Field(default_factory=list)
+    gaps: list[ResearchGap] = Field(default_factory=list)
+
+    # Final output
+    report: Optional[str] = Field(
+        default=None,
+        description="Final synthesized research report",
+    )
+    report_sections: dict[str, str] = Field(
+        default_factory=dict,
+        description="Named sections of the report for structured access",
+    )
+
+    # Execution tracking
+    total_sources_examined: int = Field(default=0)
+    total_tokens_used: int = Field(default=0)
+    total_duration_ms: float = Field(default=0.0)
+
+    # Per-phase metrics for audit
+    phase_metrics: list[PhaseMetrics] = Field(
+        default_factory=list,
+        description="Metrics for each executed phase (timing, tokens, provider)",
+    )
+    # Search provider query counts (provider_name -> query_count)
+    search_provider_stats: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of queries executed per search provider",
+    )
+
+    # Configuration
+    source_types: list[SourceType] = Field(
+        default_factory=lambda: [SourceType.WEB, SourceType.ACADEMIC],
+    )
+    max_sources_per_query: int = Field(default=5)
+    max_sub_queries: int = Field(default=5)
+    follow_links: bool = Field(
+        default=True,
+        description="Whether to follow URLs and extract full content",
+    )
+    research_mode: ResearchMode = Field(
+        default=ResearchMode.GENERAL,
+        description="Research mode for source prioritization",
+    )
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = Field(default=None)
+
+    # Provider tracking (per-phase LLM provider configuration)
+    # Supports ProviderSpec format: "[cli]gemini:pro" or simple names: "gemini"
+    planning_provider: Optional[str] = Field(default=None)
+    analysis_provider: Optional[str] = Field(default=None)
+    synthesis_provider: Optional[str] = Field(default=None)
+    refinement_provider: Optional[str] = Field(default=None)
+    # Per-phase model overrides (from ProviderSpec parsing)
+    planning_model: Optional[str] = Field(default=None)
+    analysis_model: Optional[str] = Field(default=None)
+    synthesis_model: Optional[str] = Field(default=None)
+    refinement_model: Optional[str] = Field(default=None)
+
+    system_prompt: Optional[str] = Field(default=None)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    # =========================================================================
+    # Collection Management Methods
+    # =========================================================================
+
+    def add_sub_query(
+        self,
+        query: str,
+        rationale: Optional[str] = None,
+        priority: int = 1,
+    ) -> SubQuery:
+        """Add a new sub-query for research.
+
+        Args:
+            query: The focused sub-query text
+            rationale: Why this sub-query was generated
+            priority: Execution priority (1=highest)
+
+        Returns:
+            The created SubQuery instance
+        """
+        sub_query = SubQuery(query=query, rationale=rationale, priority=priority)
+        self.sub_queries.append(sub_query)
+        self.updated_at = datetime.utcnow()
+        return sub_query
+
+    def get_sub_query(self, sub_query_id: str) -> Optional[SubQuery]:
+        """Get a sub-query by ID."""
+        for sq in self.sub_queries:
+            if sq.id == sub_query_id:
+                return sq
+        return None
+
+    def get_source(self, source_id: str) -> Optional[ResearchSource]:
+        """Get a source by ID."""
+        for source in self.sources:
+            if source.id == source_id:
+                return source
+        return None
+
+    def get_gap(self, gap_id: str) -> Optional[ResearchGap]:
+        """Get a gap by ID."""
+        for gap in self.gaps:
+            if gap.id == gap_id:
+                return gap
+        return None
+
+    def add_source(
+        self,
+        title: str,
+        url: Optional[str] = None,
+        source_type: SourceType = SourceType.WEB,
+        snippet: Optional[str] = None,
+        sub_query_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> ResearchSource:
+        """Add a discovered source.
+
+        Args:
+            title: Source title
+            url: Source URL (optional)
+            source_type: Type of source
+            snippet: Brief excerpt
+            sub_query_id: ID of sub-query that found this
+            **kwargs: Additional fields
+
+        Returns:
+            The created ResearchSource instance
+        """
+        source = ResearchSource(
+            title=title,
+            url=url,
+            source_type=source_type,
+            snippet=snippet,
+            sub_query_id=sub_query_id,
+            **kwargs,
+        )
+        self.sources.append(source)
+        self.total_sources_examined += 1
+        self.updated_at = datetime.utcnow()
+        return source
+
+    def add_finding(
+        self,
+        content: str,
+        confidence: ConfidenceLevel = ConfidenceLevel.MEDIUM,
+        source_ids: Optional[list[str]] = None,
+        sub_query_id: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> ResearchFinding:
+        """Add a research finding.
+
+        Args:
+            content: The finding content
+            confidence: Confidence level
+            source_ids: Supporting source IDs
+            sub_query_id: Originating sub-query ID
+            category: Theme/category
+
+        Returns:
+            The created ResearchFinding instance
+        """
+        finding = ResearchFinding(
+            content=content,
+            confidence=confidence,
+            source_ids=source_ids or [],
+            sub_query_id=sub_query_id,
+            category=category,
+        )
+        self.findings.append(finding)
+        self.updated_at = datetime.utcnow()
+        return finding
+
+    def add_gap(
+        self,
+        description: str,
+        suggested_queries: Optional[list[str]] = None,
+        priority: int = 1,
+    ) -> ResearchGap:
+        """Add an identified research gap.
+
+        Args:
+            description: What information is missing
+            suggested_queries: Follow-up queries to fill the gap
+            priority: Priority for follow-up (1=highest)
+
+        Returns:
+            The created ResearchGap instance
+        """
+        gap = ResearchGap(
+            description=description,
+            suggested_queries=suggested_queries or [],
+            priority=priority,
+        )
+        self.gaps.append(gap)
+        self.updated_at = datetime.utcnow()
+        return gap
+
+    # =========================================================================
+    # Query Helpers
+    # =========================================================================
+
+    def pending_sub_queries(self) -> list[SubQuery]:
+        """Get sub-queries that haven't been executed yet."""
+        return [sq for sq in self.sub_queries if sq.status == "pending"]
+
+    def completed_sub_queries(self) -> list[SubQuery]:
+        """Get successfully completed sub-queries."""
+        return [sq for sq in self.sub_queries if sq.status == "completed"]
+
+    def unresolved_gaps(self) -> list[ResearchGap]:
+        """Get gaps that haven't been resolved yet."""
+        return [g for g in self.gaps if not g.resolved]
+
+    # =========================================================================
+    # Phase Management
+    # =========================================================================
+
+    def advance_phase(self) -> DeepResearchPhase:
+        """Advance to the next research phase.
+
+        Phases advance in order: PLANNING -> GATHERING -> ANALYSIS ->
+        SYNTHESIS -> REFINEMENT. Does nothing if already at REFINEMENT.
+
+        Returns:
+            The new phase after advancement
+        """
+        phase_order = list(DeepResearchPhase)
+        current_index = phase_order.index(self.phase)
+        if current_index < len(phase_order) - 1:
+            self.phase = phase_order[current_index + 1]
+        self.updated_at = datetime.utcnow()
+        return self.phase
+
+    def should_continue_refinement(self) -> bool:
+        """Check if another refinement iteration should occur.
+
+        Returns True if:
+        - Current iteration < max_iterations AND
+        - There are unresolved gaps
+
+        Returns:
+            True if refinement should continue, False otherwise
+        """
+        if self.iteration >= self.max_iterations:
+            return False
+        if not self.unresolved_gaps():
+            return False
+        return True
+
+    def start_new_iteration(self) -> int:
+        """Start a new refinement iteration.
+
+        Increments iteration counter and resets phase to GATHERING
+        to begin collecting sources for the new sub-queries.
+
+        Returns:
+            The new iteration number
+        """
+        self.iteration += 1
+        self.phase = DeepResearchPhase.GATHERING
+        self.updated_at = datetime.utcnow()
+        return self.iteration
+
+    def mark_completed(self, report: Optional[str] = None) -> None:
+        """Mark the research session as completed.
+
+        Args:
+            report: Optional final report content
+        """
+        self.phase = DeepResearchPhase.SYNTHESIS
+        self.completed_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        if report:
+            self.report = report

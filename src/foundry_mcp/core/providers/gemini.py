@@ -252,9 +252,14 @@ class GeminiProvider(ProviderContext):
         )
 
     def _resolve_model(self, request: ProviderRequest) -> str:
+        # 1. Check request.model first (from ProviderRequest constructor)
+        if request.model:
+            return str(request.model)
+        # 2. Fallback to metadata override (legacy/alternative path)
         model_override = request.metadata.get("model") if request.metadata else None
         if model_override:
             return str(model_override)
+        # 3. Fallback to instance default
         return self._model
 
     def _emit_stream_if_requested(self, content: str, *, stream: bool) -> None:

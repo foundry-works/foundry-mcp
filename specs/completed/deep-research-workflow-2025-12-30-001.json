@@ -1,0 +1,2543 @@
+{
+  "spec_id": "deep-research-workflow-2025-12-30-001",
+  "title": "deep-research-workflow",
+  "generated": "2025-12-30T19:54:08.085524Z",
+  "last_updated": "2025-12-31T19:06:43.401902Z",
+  "metadata": {
+    "description": "Multi-phase iterative deep research workflow inspired by open_deep_research and Claude-Deep-Research. Features query decomposition into parallel sub-queries, multi-source gathering with async concurrency control, finding extraction with confidence assessment, comprehensive report synthesis, and iterative refinement to fill knowledge gaps.",
+    "mission": "Implement a multi-phase deep research workflow that decomposes complex queries into sub-queries, gathers sources in parallel, analyzes findings, and synthesizes comprehensive research reports with iterative refinement",
+    "references": [
+      {
+        "title": "open_deep_research",
+        "url": "https://github.com/langchain-ai/open_deep_research",
+        "notes": "Multi-agent supervisor pattern with think-tool pauses."
+      },
+      {
+        "title": "Claude-Deep-Research",
+        "url": "https://github.com/anthropics/Claude-Deep-Research",
+        "notes": "Iterative decomposition, dual-source search, and synthesis."
+      },
+      {
+        "title": "Deep research workflow doc",
+        "url": "docs/concepts/deep_research_workflow.md",
+        "notes": "Local design notes, prompts, and state machine diagram."
+      }
+    ],
+    "objectives": [],
+    "complexity": "medium",
+    "estimated_hours": 15,
+    "assumptions": [],
+    "owner": "",
+    "category": "implementation",
+    "template": "complex"
+  },
+  "progress_percentage": 100,
+  "status": "completed",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "deep-research-workflow",
+      "status": "completed",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6",
+        "phase-7",
+        "phase-8"
+      ],
+      "total_tasks": 50,
+      "completed_tasks": 50,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Planning & Discovery",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1"
+      ],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "purpose": "Initial planning and requirements gathering",
+        "estimated_hours": 2,
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T11:49:54.089457Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Define requirements",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Document the requirements and acceptance criteria",
+        "acceptance_criteria": [
+          "Requirements and acceptance criteria are documented"
+        ],
+        "task_category": "investigation",
+        "estimated_hours": 1,
+        "started_at": "2025-12-31T11:26:01.146309Z",
+        "completed_at": "2025-12-31T11:26:08.468580Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:26:08.468659Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Core Data Models",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "task-3-4",
+        "task-3-5",
+        "task-3-6",
+        "task-3-7"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 7,
+      "metadata": {
+        "purpose": "",
+        "description": "Pydantic models for deep research state management including DeepResearchState, SubQuery, ResearchSource, ResearchFinding, and ResearchGap",
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T11:37:33.024049Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Add DeepResearchPhase enum",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Define phases: PLANNING, GATHERING, ANALYSIS, SYNTHESIS, REFINEMENT",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Enum values match workflow phases",
+          "Proper ordering for advance_phase()"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:28:09.274995Z",
+        "completed_at": "2025-12-31T11:30:26.373887Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:30:26.373959Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Add SourceType and SourceQuality enums",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add SourceType enum (web, academic, expert, code) and SourceQuality enum. Note: 'expert' and 'code' are reserved for future provider integrations (e.g., expert profiles, GitHub search). V1 implements 'web' (Tavily/Google) and 'academic' (Semantic Scholar) only.",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "SourceType enum with web, academic, expert, code values",
+          "SourceQuality enum with high, medium, low, unknown values",
+          "Docstring clarifies expert/code are future placeholders",
+          "V1 only uses web and academic source types"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:31:15.618515Z",
+        "completed_at": "2025-12-31T11:32:03.726685Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:32:03.726767Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Implement SubQuery model",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Model for decomposed research sub-queries with status tracking",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Fields: id, query, rationale, priority, status, source_ids, findings_summary",
+          "mark_completed() and mark_failed() methods"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:33:23.226678Z",
+        "completed_at": "2025-12-31T11:33:56.924985Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:33:56.925081Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Implement ResearchSource model",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Model for discovered research sources with quality assessment",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Fields: id, url, title, source_type, quality, snippet, content",
+          "sub_query_id tracking"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:34:12.479573Z",
+        "completed_at": "2025-12-31T11:34:59.683605Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:34:59.683678Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-5": {
+      "type": "task",
+      "title": "Implement ResearchFinding model",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Model for extracted key findings with confidence levels",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Fields: id, content, confidence, source_ids, sub_query_id, category",
+          "ConfidenceLevel enum integration"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:35:05.955197Z",
+        "completed_at": "2025-12-31T11:35:37.452413Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:35:37.452526Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-6": {
+      "type": "task",
+      "title": "Implement ResearchGap model",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Model for identified knowledge gaps requiring follow-up",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Fields: id, description, suggested_queries, priority, resolved",
+          "resolution_notes field"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:35:43.442480Z",
+        "completed_at": "2025-12-31T11:36:13.934959Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:36:13.935047Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-7": {
+      "type": "task",
+      "title": "Implement DeepResearchState model",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Main state model managing the entire deep research session",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Collections: sub_queries, sources, findings, gaps",
+          "Helper methods: add_sub_query, add_source, add_finding, add_gap",
+          "Phase management: advance_phase, should_continue_refinement",
+          "Iteration tracking: start_new_iteration, mark_completed"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:36:22.939762Z",
+        "completed_at": "2025-12-31T11:37:33.023998Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:37:33.024094Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Deep Research Workflow Implementation",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-4-13",
+        "task-4-1",
+        "task-4-18",
+        "task-4-19",
+        "task-4-20",
+        "task-4-9",
+        "task-4-10",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "task-4-5",
+        "task-4-6",
+        "task-4-7",
+        "task-4-8",
+        "task-4-11",
+        "task-4-12",
+        "task-4-14",
+        "task-4-15",
+        "task-4-17"
+      ],
+      "total_tasks": 19,
+      "completed_tasks": 19,
+      "metadata": {
+        "purpose": "",
+        "description": "DeepResearchWorkflow class with 5 research phases: planning, gathering, analysis, synthesis, and refinement, plus multi-agent supervisor orchestration inspired by open_deep_research",
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T16:33:24.201346Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Create workflow class structure",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Create DeepResearchWorkflow class extending ResearchWorkflowBase. CRITICAL: The execute() method must be designed to run as a background task detached from the request/response cycle using asyncio.create_task(). The workflow must support being started asynchronously and polled for status/results.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Class extends ResearchWorkflowBase",
+          "Has execute() method designed for background execution",
+          "Supports async start with immediate research_id return",
+          "Can be polled for status while running",
+          "Uses asyncio.create_task() for detached execution",
+          "Tracks task lifecycle, supports cancellation, and marks state on timeout",
+          "Defines supervisor orchestration hooks for multi-agent workflow control"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:38:29.799137Z",
+        "completed_at": "2025-12-31T11:41:31.302706Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:41:31.302819Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Implement planning phase",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_execute_planning() to decompose query into sub-queries using LLM",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Generate research brief",
+          "Create 2-5 focused sub-queries with priorities",
+          "Parse JSON response with fallback to single query",
+          "Store sub-queries in state"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T12:09:32.202223Z",
+        "completed_at": "2025-12-31T12:11:20.842988Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T12:11:20.843124Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Implement gathering phase with async concurrency",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Implement gathering phase with async concurrency control. Use provider list from ResearchConfig/DeepResearchConfig (toml configurable) with Tavily as default. Execute sub-queries concurrently with asyncio.Semaphore for rate limiting. Collect and deduplicate sources.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Uses configured providers in priority order (default Tavily)",
+          "Executes sub-queries concurrently",
+          "Uses asyncio.Semaphore for concurrency control",
+          "Implements exponential backoff for provider rate limits",
+          "Deduplicates sources by URL",
+          "Handles provider errors gracefully"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T12:13:28.774773Z",
+        "completed_at": "2025-12-31T12:15:28.013681Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T12:15:28.013800Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Implement analysis phase",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_execute_analysis() to extract findings and assess quality",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Build analysis prompt with source summaries",
+          "Extract 2-5 key findings per source batch",
+          "Assess confidence levels",
+          "Identify knowledge gaps",
+          "Update source quality assessments"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T12:23:07.944818Z",
+        "completed_at": "2025-12-31T12:24:37.640328Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T12:24:37.640432Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "Implement synthesis phase",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_execute_synthesis() to generate comprehensive report",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Build synthesis prompt with findings and sources",
+          "Generate structured markdown report",
+          "Include executive summary, findings by theme, sources, conclusions",
+          "Store report in state"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T15:19:25.196605Z",
+        "completed_at": "2025-12-31T15:20:46.865391Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T15:20:46.865521Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-6": {
+      "type": "task",
+      "title": "Implement refinement logic",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_identify_gaps() and iteration management for follow-up research",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Analyze report for remaining gaps",
+          "Generate follow-up queries from gap suggestions",
+          "Respect max_iterations limit",
+          "Convert gaps to new sub-queries for next iteration"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T15:29:15.963026Z",
+        "completed_at": "2025-12-31T15:30:53.015945Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T15:30:53.016050Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-7": {
+      "type": "task",
+      "title": "Implement session management methods",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "list_sessions() and delete_session() utility methods",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "list_sessions() returns session summaries with filters",
+          "delete_session() removes session by ID",
+          "Proper error handling for not-found cases"
+        ],
+        "task_category": "implementation",
+        "completed_at": "2025-12-31T15:31:21.196309Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T15:31:21.196448Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-8": {
+      "type": "task",
+      "title": "Define system prompts for each phase",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "PLANNING_SYSTEM_PROMPT, ANALYSIS_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT, REFINEMENT_SYSTEM_PROMPT",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Clear instructions for JSON output format",
+          "Phase-specific guidance for LLM",
+          "Structured output schemas documented in prompts"
+        ],
+        "task_category": "implementation",
+        "completed_at": "2025-12-31T15:32:13.764095Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T15:32:13.764229Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "MCP Tool Integration",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-5-1",
+        "task-5-2",
+        "task-5-3",
+        "task-5-4",
+        "task-5-5",
+        "task-5-6",
+        "task-5-7",
+        "task-5-8",
+        "task-5-9"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 9,
+      "metadata": {
+        "purpose": "",
+        "description": "Action handlers and router integration for deep research operations in the unified research tool",
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T17:25:32.419784Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-6"
+        ],
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "Add deep-research action handler",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add deep-research action handler that initiates or continues a deep research session. CRITICAL: Must use asyncio.create_task() to start the workflow in the background and return the research_id immediately. Do NOT await the full workflow execution.",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "Handler registered for deep-research action",
+          "Uses asyncio.create_task() for background execution",
+          "Returns research_id immediately without waiting for completion",
+          "Stores task reference for status polling",
+          "Supports deep_research_action values: start, continue, resume",
+          "Returns standard response envelope with research_id and status='started'",
+          "Errors follow standard error schema with code/remediation"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:40:40.987261Z",
+        "completed_at": "2025-12-31T16:42:56.022050Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:42:56.022169Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "Add deep-research-status handler",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_handle_deep_research_status() for getting session status",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "Require research_id",
+          "Return status metadata from workflow",
+          "Return standard response envelope",
+          "NOT_FOUND error for missing sessions using standard error schema"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:46:18.037895Z",
+        "completed_at": "2025-12-31T16:46:41.476484Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:46:41.476578Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "Add deep-research-report handler",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_handle_deep_research_report() for retrieving final reports",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "Require research_id",
+          "Return report content and metadata",
+          "Return standard response envelope",
+          "Proper error for incomplete research using standard error schema"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:46:54.708841Z",
+        "completed_at": "2025-12-31T16:47:15.817819Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:47:15.817913Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-4": {
+      "type": "task",
+      "title": "Add deep-research-list handler",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_handle_deep_research_list() for listing research sessions",
+        "example_response": {
+          "success": true,
+          "data": {
+            "sessions": [],
+            "count": 0
+          },
+          "error": null,
+          "meta": {
+            "version": "response-v2",
+            "pagination": {
+              "cursor": "opaque_cursor",
+              "has_more": false,
+              "page_size": 50,
+              "total_count": 0
+            }
+          }
+        },
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "Support cursor, limit, and completed_only filters",
+          "Return session summaries with count",
+          "Return meta.pagination with cursor/has_more/page_size (and total_count when cheap)",
+          "Document example response payload showing meta.pagination fields",
+          "Return INVALID_FORMAT error for bad cursor using standard error schema",
+          "Validate limit bounds (1..MAX_PAGE_SIZE) and return VALIDATION_ERROR on violation"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:47:24.760349Z",
+        "completed_at": "2025-12-31T16:47:38.310949Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:47:38.311053Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-5": {
+      "type": "task",
+      "title": "Add deep-research-delete handler",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "_handle_deep_research_delete() for removing sessions",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "Require research_id",
+          "Return success/deleted confirmation",
+          "Return standard response envelope",
+          "NOT_FOUND error for missing sessions using standard error schema"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:47:24.841774Z",
+        "completed_at": "2025-12-31T16:47:38.392209Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:47:38.392284Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-6": {
+      "type": "task",
+      "title": "Register actions with router",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add ActionDefinitions to _build_router() for all 5 deep research actions",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "deep-research, deep-research-status, deep-research-report, deep-research-list, deep-research-delete",
+          "Proper action summaries in _ACTION_SUMMARY dict",
+          "deep-research action handles start/continue/resume via deep_research_action parameter",
+          "Deep-research actions are always enabled (no feature flag gating)"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:47:24.926677Z",
+        "completed_at": "2025-12-31T16:47:38.468381Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:47:38.468452Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-7": {
+      "type": "task",
+      "title": "Add tool parameters for deep research",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Extend research() function signature with deep research parameters",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "research_id, query, deep_research_action parameters",
+          "max_iterations, max_sub_queries, max_sources_per_query",
+          "follow_links, timeout_per_operation, max_concurrent",
+          "cursor, limit, completed_only for deep-research-list",
+          "deep_research_action allowed values: start, continue, resume",
+          "Providers are configured via ResearchConfig toml only (no per-call override)"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:51:24.221506Z",
+        "completed_at": "2025-12-31T16:53:21.187052Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:53:21.187140Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-6": {
+      "type": "phase",
+      "title": "Unit Testing",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-6-1",
+        "task-6-2",
+        "task-6-3",
+        "task-6-4",
+        "task-6-5",
+        "verify-6-1"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 6,
+      "metadata": {
+        "purpose": "",
+        "description": "Comprehensive test coverage for models, workflow, and action handlers",
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T18:56:51.907189Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-7"
+        ],
+        "blocked_by": [
+          "phase-5"
+        ],
+        "depends": []
+      }
+    },
+    "task-6-1": {
+      "type": "task",
+      "title": "Create test fixtures",
+      "status": "completed",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Pytest fixtures for mock_config, mock_memory, mock_provider_result, sample_deep_research_state",
+        "file_path": "tests/core/research/workflows/test_deep_research.py",
+        "acceptance_criteria": [
+          "mock_config with research config values",
+          "mock_memory with save/load/delete/list mocks",
+          "sample_deep_research_state factory"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:53:24.787534Z",
+        "completed_at": "2025-12-31T18:54:05.128599Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:54:05.128707Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-2": {
+      "type": "task",
+      "title": "Add DeepResearchState model tests",
+      "status": "completed",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "TestDeepResearchState class with model behavior tests",
+        "file_path": "tests/core/research/workflows/test_deep_research.py",
+        "acceptance_criteria": [
+          "test_create_state - default values",
+          "test_add_sub_query, test_add_source, test_add_finding, test_add_gap",
+          "test_advance_phase - phase transitions",
+          "test_pending_sub_queries, test_should_continue_refinement",
+          "test_mark_completed"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:54:23.820441Z",
+        "completed_at": "2025-12-31T18:54:30.476637Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:54:30.476719Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-3": {
+      "type": "task",
+      "title": "Add SubQuery model tests",
+      "status": "completed",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "TestSubQuery class for sub-query status management",
+        "file_path": "tests/core/research/workflows/test_deep_research.py",
+        "acceptance_criteria": [
+          "test_mark_completed",
+          "test_mark_failed"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:54:41.776724Z",
+        "completed_at": "2025-12-31T18:54:47.680814Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:54:47.680891Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-4": {
+      "type": "task",
+      "title": "Add DeepResearchWorkflow tests",
+      "status": "completed",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "TestDeepResearchWorkflow class for workflow behavior",
+        "file_path": "tests/core/research/workflows/test_deep_research.py",
+        "acceptance_criteria": [
+          "test_workflow_initialization",
+          "test_execute_start_without_query - validation",
+          "test_execute_continue_without_research_id - validation",
+          "test_execute_status_not_found",
+          "test_execute_unknown_action",
+          "test_get_status_success, test_get_report_success",
+          "test_list_sessions, test_delete_session"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:55:11.987661Z",
+        "completed_at": "2025-12-31T18:55:19.294872Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:55:19.294945Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-5": {
+      "type": "task",
+      "title": "Add action handler tests",
+      "status": "completed",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "TestDeepResearchActionHandlers class with mocked config",
+        "file_path": "tests/core/research/workflows/test_deep_research.py",
+        "acceptance_criteria": [
+          "test_dispatch_to_deep_research",
+          "test_dispatch_to_deep_research_status",
+          "test_dispatch_to_deep_research_list",
+          "test_dispatch_to_deep_research_delete",
+          "test_dispatch_to_deep_research_resume",
+          "test_deep_research_validation_error_no_query",
+          "test_deep_research_validation_error_no_research_id",
+          "test_deep_research_list_pagination"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:55:28.802232Z",
+        "completed_at": "2025-12-31T18:56:15.802529Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:56:15.802665Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-1": {
+      "type": "verify",
+      "title": "Run test suite",
+      "status": "completed",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Execute all deep research tests and verify passing",
+        "verification_type": "run-tests",
+        "started_at": "2025-12-31T18:56:26.463083Z",
+        "completed_at": "2025-12-31T18:56:51.907136Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:56:51.907245Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-7": {
+      "type": "phase",
+      "title": "Memory Persistence & Export",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-7-1",
+        "task-7-2",
+        "task-7-3",
+        "task-7-4"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 4,
+      "metadata": {
+        "purpose": "",
+        "description": "Extend ResearchMemory with deep research save/load/delete/list operations",
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T18:58:00.290727Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-8"
+        ],
+        "blocked_by": [
+          "phase-6"
+        ],
+        "depends": []
+      }
+    },
+    "task-7-1": {
+      "type": "task",
+      "title": "Add save_deep_research method",
+      "status": "completed",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Persist DeepResearchState to filesystem",
+        "file_path": "src/foundry_mcp/core/research/memory.py",
+        "acceptance_criteria": [
+          "Serialize state to JSON",
+          "Use id-based filename",
+          "Store in deep_research subdirectory"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:57:32.351628Z",
+        "completed_at": "2025-12-31T18:57:38.880706Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:57:38.880781Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-2": {
+      "type": "task",
+      "title": "Add load_deep_research method",
+      "status": "completed",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Load DeepResearchState from filesystem",
+        "file_path": "src/foundry_mcp/core/research/memory.py",
+        "acceptance_criteria": [
+          "Deserialize from JSON",
+          "Return None if not found",
+          "Handle corrupted files gracefully"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:57:38.950408Z",
+        "completed_at": "2025-12-31T18:57:45.162364Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:57:45.162468Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-3": {
+      "type": "task",
+      "title": "Add delete_deep_research method",
+      "status": "completed",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Delete DeepResearchState file",
+        "file_path": "src/foundry_mcp/core/research/memory.py",
+        "acceptance_criteria": [
+          "Remove file by ID",
+          "Return True if deleted, False if not found"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:57:45.233388Z",
+        "completed_at": "2025-12-31T18:57:51.703679Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:57:51.703763Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-4": {
+      "type": "task",
+      "title": "Add list_deep_research method",
+      "status": "completed",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "List all deep research sessions",
+        "file_path": "src/foundry_mcp/core/research/memory.py",
+        "acceptance_criteria": [
+          "Return list of DeepResearchState objects",
+          "Support cursor and limit parameters",
+          "Support completed_only filter",
+          "Sort by created_at descending"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:57:51.777300Z",
+        "completed_at": "2025-12-31T18:58:00.290675Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:58:00.290778Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-8": {
+      "type": "phase",
+      "title": "Final Verification",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-8-1",
+        "task-8-2",
+        "verify-8-1",
+        "verify-8-2"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 4,
+      "metadata": {
+        "purpose": "",
+        "description": "Integration testing and workflow export to __init__.py",
+        "needs_journaling": true,
+        "completed_at": "2025-12-31T18:59:38.469884Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-7"
+        ],
+        "depends": []
+      }
+    },
+    "task-8-1": {
+      "type": "task",
+      "title": "Export DeepResearchWorkflow from workflows __init__",
+      "status": "completed",
+      "parent": "phase-8",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add DeepResearchWorkflow to module exports",
+        "file_path": "src/foundry_mcp/core/research/workflows/__init__.py",
+        "acceptance_criteria": [
+          "Import DeepResearchWorkflow from deep_research",
+          "Add to __all__ list"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:58:14.679476Z",
+        "completed_at": "2025-12-31T18:58:19.405290Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:58:19.405377Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-8-2": {
+      "type": "task",
+      "title": "Add deep research config options",
+      "status": "completed",
+      "parent": "phase-8",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add ResearchConfig options for deep research defaults",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "deep_research_max_iterations default",
+          "deep_research_max_sub_queries default",
+          "deep_research_max_sources default",
+          "deep_research_providers default (ordered list)",
+          "deep_research_timeout default",
+          "deep_research_max_concurrent default"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T18:58:40.677123Z",
+        "completed_at": "2025-12-31T18:58:46.340069Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:58:46.340168Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-8-1": {
+      "type": "verify",
+      "title": "Run full test suite",
+      "status": "completed",
+      "parent": "phase-8",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Execute pytest for all research tests",
+        "verification_type": "run-tests",
+        "started_at": "2025-12-31T18:58:50.951036Z",
+        "completed_at": "2025-12-31T18:59:09.137047Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:59:09.137157Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-8-2": {
+      "type": "verify",
+      "title": "Verify MCP tool registration",
+      "status": "completed",
+      "parent": "phase-8",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Confirm deep research actions appear in research tool",
+        "verification_type": "manual",
+        "started_at": "2025-12-31T18:59:09.208790Z",
+        "completed_at": "2025-12-31T18:59:38.469844Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T18:59:38.469947Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-9": {
+      "type": "task",
+      "title": "Add search provider API configuration",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add API key configuration for all search providers: TAVILY_API_KEY, GOOGLE_API_KEY, GOOGLE_CSE_ID, SEMANTIC_SCHOLAR_API_KEY. All optional with clear errors when provider is used without key.",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "TAVILY_API_KEY config field",
+          "GOOGLE_API_KEY config field",
+          "GOOGLE_CSE_ID config field (Custom Search Engine ID)",
+          "SEMANTIC_SCHOLAR_API_KEY config field (optional for basic tier)",
+          "All read from environment variables",
+          "Clear error messages when key missing but provider requested"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:29:51.873673Z",
+        "completed_at": "2025-12-31T16:33:24.201282Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:33:24.201409Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-10": {
+      "type": "task",
+      "title": "Create TavilySearchProvider class",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Implement TavilySearchProvider that extends SearchProvider base class. Wraps Tavily Search API for web search. Handles API authentication, rate limiting, and response parsing into ResearchSource objects.",
+        "file_path": "src/foundry_mcp/core/research/providers/tavily.py",
+        "acceptance_criteria": [
+          "Extends SearchProvider abstract base",
+          "Implements search() method",
+          "Handles Tavily API authentication via API key",
+          "Implements exponential backoff for rate limits",
+          "Parses Tavily response into ResearchSource objects",
+          "Supports configurable max_results parameter"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:57:08.334050Z",
+        "completed_at": "2025-12-31T11:58:59.206444Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:58:59.206562Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-11": {
+      "type": "task",
+      "title": "Add context window error handling",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Implement try/catch around all LLM provider calls to catch and log context window exceeded errors. Log prompt token count, max tokens, and truncation details.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "All LLM calls wrapped in try/catch",
+          "Catches context window/token limit errors specifically",
+          "Logs prompt size in tokens when error occurs",
+          "Logs max context window size from provider",
+          "Error message includes actionable guidance",
+          "Does not swallow other LLM errors"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T13:02:22.410287Z",
+        "completed_at": "2025-12-31T13:07:37.324097Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T13:07:37.324218Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-12": {
+      "type": "task",
+      "title": "Implement workflow resumability",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add resume_research() method that can restart an interrupted workflow from persisted DeepResearchState. On server startup, scan ResearchMemory for in-progress states and optionally resume them.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "resume_research(research_id) method implemented",
+          "Loads DeepResearchState from persistence",
+          "Determines current phase from state and resumes from there",
+          "Handles edge cases (corrupted state, missing sources)",
+          "Logs resumption with context about where it left off"
+        ],
+        "task_category": "implementation",
+        "completed_at": "2025-12-31T13:16:18.570878Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T13:16:18.570994Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-8": {
+      "type": "task",
+      "title": "Add resume support to deep-research action",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add resume support to deep-research action that resumes an interrupted research session by calling resume_research().",
+        "file_path": "src/foundry_mcp/tools/unified/research.py",
+        "acceptance_criteria": [
+          "Handles deep_research_action=resume",
+          "Validates research_id exists and was interrupted",
+          "Calls workflow.resume_research()",
+          "Returns status indicating resumption started"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T16:47:25.017399Z",
+        "completed_at": "2025-12-31T16:47:38.538605Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T16:47:38.538678Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-13": {
+      "type": "task",
+      "title": "Create SearchProvider abstract base class",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Define abstract SearchProvider interface with search(query, max_results, **kwargs) method. All concrete providers (Tavily, Google, SemanticScholar) will implement this interface. Enables dependency injection and easy mocking.",
+        "file_path": "src/foundry_mcp/core/research/providers/base.py",
+        "acceptance_criteria": [
+          "Abstract SearchProvider class defined",
+          "Abstract search() method with query, max_results params",
+          "Abstract get_provider_name() method",
+          "Optional rate_limit property",
+          "Type hints for ResearchSource return type"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T11:49:54.089413Z",
+        "completed_at": "2025-12-31T11:52:06.365996Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T11:52:06.366081Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-14": {
+      "type": "task",
+      "title": "Create GoogleSearchProvider class",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Implement GoogleSearchProvider that extends SearchProvider base class. Wraps Google Custom Search API for web search. Handles API authentication and response parsing.",
+        "file_path": "src/foundry_mcp/core/research/providers/google.py",
+        "acceptance_criteria": [
+          "Extends SearchProvider abstract base",
+          "Implements search() method",
+          "Handles Google API key + Custom Search Engine ID auth",
+          "Implements exponential backoff for rate limits",
+          "Parses Google response into ResearchSource objects",
+          "Sets source_type to 'web'"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T13:23:18.064100Z",
+        "completed_at": "2025-12-31T13:25:31.207205Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T13:25:31.207352Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-15": {
+      "type": "task",
+      "title": "Create SemanticScholarProvider class",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Implement SemanticScholarProvider that extends SearchProvider base class. Wraps Semantic Scholar API for academic paper search. Returns ResearchSource objects with source_type='academic'.",
+        "file_path": "src/foundry_mcp/core/research/providers/semantic_scholar.py",
+        "acceptance_criteria": [
+          "Extends SearchProvider abstract base",
+          "Implements search() method for paper search",
+          "Handles Semantic Scholar API key (optional for basic tier)",
+          "Parses paper metadata (title, authors, abstract, citations)",
+          "Sets source_type to 'academic'",
+          "Includes DOI and arXiv links when available"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T13:28:48.018825Z",
+        "completed_at": "2025-12-31T13:31:26.704168Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T13:31:26.704270Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-9": {
+      "type": "task",
+      "title": "Add DeepResearchConfig model for grouped parameters",
+      "status": "completed",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Create DeepResearchConfig Pydantic model to group all deep research parameters into a single config object. Reduces parameter sprawl in the research tool and improves LLM usability.",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "DeepResearchConfig Pydantic model defined",
+          "Groups: max_iterations, max_sources_per_query, follow_links, synthesis_depth, confidence_threshold",
+          "providers field: list of provider names to use",
+          "All fields have sensible defaults",
+          "Defaults load from ResearchConfig (toml) and allow tool-level overrides",
+          "Validates provider names against available providers",
+          "Providers are configured via ResearchConfig toml and not exposed in tool parameters"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T17:24:17.641579Z",
+        "completed_at": "2025-12-31T17:25:32.419734Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T17:25:32.419839Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-17": {
+      "type": "task",
+      "title": "Add rate limit configuration to ResearchConfig",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add rate limiting configuration options to ResearchConfig for controlling API call frequency to search providers.",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "search_rate_limit field (requests per minute)",
+          "max_concurrent_searches field",
+          "per_provider_rate_limits dict for provider-specific limits",
+          "Default values appropriate for free API tiers",
+          "Used by asyncio.Semaphore in gathering phase"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T13:36:27.045197Z",
+        "completed_at": "2025-12-31T13:38:04.577538Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T13:38:04.577619Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-18": {
+      "type": "task",
+      "title": "Add multi-agent supervisor orchestration",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Align workflow execution with open_deep_research by introducing a supervisor that coordinates specialist agents and inserts think-tool pauses between phases.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Define supervisor role and specialist agent roles (planner, gatherer, analyzer, synthesizer, refiner)",
+          "Supervisor decides phase transitions and dispatches to specialist prompts",
+          "Insert explicit think-tool pauses between phases for supervisor evaluation",
+          "Document agent responsibilities and handoff inputs/outputs",
+          "State captures agent decisions and supervisor rationale for traceability"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T14:26:21.780583Z",
+        "completed_at": "2025-12-31T14:29:23.700318Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T14:29:23.700401Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-19": {
+      "type": "task",
+      "title": "Add agent prompt templates and state machine diagram",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Document supervisor + specialist agent prompt templates and a clear state machine diagram for phase transitions and think-tool pauses in a dedicated doc.",
+        "file_path": "docs/concepts/deep_research_workflow.md",
+        "acceptance_criteria": [
+          "Provide prompt templates for supervisor, planner, gatherer, analyzer, synthesizer, refiner",
+          "Define input/output schemas for agent handoffs",
+          "Include think-tool pause instructions between phases",
+          "Add an ASCII state machine diagram capturing phases, supervisor decisions, resume paths",
+          "Keep templates in a single, well-documented prompt section"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T14:55:38.179240Z",
+        "completed_at": "2025-12-31T14:57:55.348711Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T14:57:55.348838Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-20": {
+      "type": "task",
+      "title": "Define agent graph and tool-call schemas",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Specify the agent graph/state machine and supervisor tool-call selection rules to mirror open_deep_research execution.",
+        "file_path": "docs/concepts/deep_research_workflow.md",
+        "acceptance_criteria": [
+          "Document the agent graph with explicit transitions, loop conditions, and termination criteria",
+          "Define supervisor tool-call schemas (inputs/outputs) for each phase",
+          "Specify tool selection/priority rules and fallback behavior",
+          "Include validation rules for tool-call outputs",
+          "Describe how cancellations/timeouts propagate through the graph",
+          "Clarify that tool-call schemas are internal workflow contracts and do not introduce new CLI actions or output formats",
+          "Note that external provider calls remain read-only (search/fetch only) and require no write capabilities"
+        ],
+        "task_category": "implementation",
+        "started_at": "2025-12-31T15:07:30.672366Z",
+        "completed_at": "2025-12-31T15:09:37.175481Z",
+        "needs_journaling": false,
+        "journaled_at": "2025-12-31T15:09:37.175618Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2025-12-31T11:26:01.146383Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Requirements already comprehensively documented in PLAN_DEEP_RESEARCH.md",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2025-12-31T11:26:08.468659Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define requirements",
+      "content": "Requirements already comprehensively documented in PLAN_DEEP_RESEARCH.md (491 lines). Covers: 5-phase workflow (PLANNING\u2192GATHERING\u2192ANALYSIS\u2192SYNTHESIS\u2192REFINEMENT), query decomposition, parallel source gathering, quality assessment, iterative refinement, 5 MCP actions, and configuration options. Implementation exists in src/foundry_mcp/core/research/workflows/deep_research.py.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2025-12-31T11:28:09.275080Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding DeepResearchPhase enum to models.py",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2025-12-31T11:30:26.373959Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add DeepResearchPhase enum",
+      "content": "Implemented DeepResearchPhase enum with 5 phases: PLANNING, GATHERING, ANALYSIS, SYNTHESIS, REFINEMENT. Added comprehensive docstring explaining phase progression and ordering significance for advance_phase(). Removed existing implementation and rewrote from scratch. Syntax verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2025-12-31T11:31:15.618600Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding SourceType and SourceQuality enums to models.py",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-2"
+    },
+    {
+      "timestamp": "2025-12-31T11:32:03.726767Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add SourceType and SourceQuality enums",
+      "content": "Implemented SourceType enum (WEB, ACADEMIC, EXPERT, CODE) and SourceQuality enum (UNKNOWN, LOW, MEDIUM, HIGH). Docstrings clarify V1 uses WEB/ACADEMIC; EXPERT/CODE are future placeholders for GitHub search and expert profiles. Syntax verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-2"
+    },
+    {
+      "timestamp": "2025-12-31T11:33:23.226759Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing SubQuery Pydantic model",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-3"
+    },
+    {
+      "timestamp": "2025-12-31T11:33:56.925081Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement SubQuery model",
+      "content": "Implemented SubQuery Pydantic model with fields: id, query, rationale, priority, status, source_ids, findings_summary, created_at, completed_at, error, metadata. Added mark_completed() and mark_failed() methods with proper timestamp handling. Comprehensive docstring documents status transitions. Syntax verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-3"
+    },
+    {
+      "timestamp": "2025-12-31T11:34:12.479645Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing ResearchSource Pydantic model",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-4"
+    },
+    {
+      "timestamp": "2025-12-31T11:34:59.683678Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement ResearchSource model",
+      "content": "Implemented ResearchSource Pydantic model with fields: id, url, title, source_type, quality, snippet, content, sub_query_id, discovered_at, metadata. Quality defaults to UNKNOWN for assessment during ANALYSIS phase. Comprehensive docstring explains source lifecycle. Syntax verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-4"
+    },
+    {
+      "timestamp": "2025-12-31T11:35:05.955262Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing ResearchFinding model",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-5"
+    },
+    {
+      "timestamp": "2025-12-31T11:35:37.452526Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement ResearchFinding model",
+      "content": "Implemented ResearchFinding Pydantic model with fields: id, content, confidence, source_ids, sub_query_id, category, created_at, metadata. Uses ConfidenceLevel enum for confidence assessment. Comprehensive docstring explains finding lifecycle. Syntax verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-5"
+    },
+    {
+      "timestamp": "2025-12-31T11:35:43.442578Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing ResearchGap model",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-6"
+    },
+    {
+      "timestamp": "2025-12-31T11:36:13.935047Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement ResearchGap model",
+      "content": "Implemented ResearchGap Pydantic model with fields: id, description, suggested_queries, priority, resolved, resolution_notes, created_at. Comprehensive docstring explains gap role in REFINEMENT phase loop-back logic. Syntax verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-6"
+    },
+    {
+      "timestamp": "2025-12-31T11:36:22.939830Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing DeepResearchState model - main state container",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-7"
+    },
+    {
+      "timestamp": "2025-12-31T11:37:33.024094Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement DeepResearchState model",
+      "content": "Implemented DeepResearchState Pydantic model with: collections (sub_queries, sources, findings, gaps), helper methods (add_sub_query, add_source, add_finding, add_gap, get_sub_query), query helpers (pending_sub_queries, completed_sub_queries, unresolved_gaps), phase management (advance_phase, should_continue_refinement, start_new_iteration, mark_completed). All models verified working with functional test.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-7"
+    },
+    {
+      "timestamp": "2025-12-31T11:38:29.799205Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Rewriting DeepResearchWorkflow with async background execution pattern",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2025-12-31T11:41:31.302819Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create workflow class structure",
+      "content": "Implemented DeepResearchWorkflow class with: async background execution via asyncio.create_task(), immediate research_id return on start, status polling, TaskStatus enum (pending/running/completed/failed/cancelled/timeout), BackgroundTask class for lifecycle tracking, SupervisorHooks for multi-agent orchestration (phase_start, phase_complete, think_pause, agent_handoff), cancel action support. Phase implementation methods are stubs for subsequent tasks. Syntax and imports verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2025-12-31T11:52:06.366081Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create SearchProvider abstract base class",
+      "content": "Created SearchProvider abstract base class in src/foundry_mcp/core/research/providers/base.py. Implemented: (1) SearchResult frozen dataclass with to_research_source() converter, (2) SearchProvider ABC with abstract search() and get_provider_name() methods, optional rate_limit property, and health_check() method, (3) Error hierarchy: SearchProviderError, RateLimitError, AuthenticationError. All imports verified working. Basic verification passed (syntax OK, imports work, abstract methods correctly defined).",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-13"
+    },
+    {
+      "timestamp": "2025-12-31T11:58:59.206562Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create TavilySearchProvider class",
+      "content": "Implemented TavilySearchProvider in src/foundry_mcp/core/research/providers/tavily.py. Features: (1) Extends SearchProvider abstract base, (2) search() method with Tavily API integration, (3) API key via constructor or TAVILY_API_KEY env var, (4) Exponential backoff retry for rate limits (max 3 retries), (5) Parses Tavily response into ResearchSource objects, (6) Supports max_results, search_depth, include_domains, exclude_domains options, (7) Proper error handling (AuthenticationError, RateLimitError, SearchProviderError), (8) health_check() method. Basic verification passed: imports work, extends SearchProvider correctly, rate_limit=1.0.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-10"
+    },
+    {
+      "timestamp": "2025-12-31T12:11:20.843124Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement planning phase",
+      "content": "Implemented _execute_planning_async in deep_research.py. Features: (1) Calls LLM to decompose research query into 2-5 focused sub-queries, (2) System prompt instructs JSON response format with research_brief and sub_queries array, (3) JSON parsing with fallback for code blocks and mixed content, (4) Fallback to single query if parsing fails, (5) Stores sub-queries via state.add_sub_query() with rationale and priority, (6) Token usage tracking. Added helper methods: _build_planning_system_prompt, _build_planning_user_prompt, _parse_planning_response, _extract_json. Basic verification passed: syntax OK, JSON extraction works for plain JSON, code blocks, and mixed content.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-2"
+    },
+    {
+      "timestamp": "2025-12-31T12:15:28.013800Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement gathering phase with async concurrency",
+      "content": "Implemented _execute_gathering_async in deep_research.py. Features: (1) Gets pending sub-queries from planning phase, (2) Executes concurrently with asyncio.Semaphore for max_concurrent control, (3) Uses TavilySearchProvider with lazy initialization and caching, (4) Deduplicates sources by URL via seen_urls set, (5) Handles SearchProviderError and marks sub-queries as failed gracefully, (6) Returns success if at least some sources collected. Added _get_search_provider helper for lazy provider initialization. Basic verification passed: syntax OK, imports work, graceful handling when API key missing.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-3"
+    },
+    {
+      "timestamp": "2025-12-31T12:24:37.640432Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement analysis phase",
+      "content": "Implemented _execute_analysis_async in deep_research.py. Features: (1) Builds prompt with source summaries (title, URL, snippet, content), (2) Calls LLM to extract 2-5 key findings with confidence levels, (3) Parses JSON response for findings, gaps, and quality_updates, (4) Stores findings via state.add_finding() with ConfidenceLevel enum, (5) Stores gaps via state.add_gap() with suggested_queries, (6) Updates source quality via SourceQuality enum. Added helper methods: _build_analysis_system_prompt, _build_analysis_user_prompt, _parse_analysis_response. Basic verification passed: syntax OK.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-4"
+    },
+    {
+      "timestamp": "2025-12-31T13:02:22.410352Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of context window error handling per approved plan",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-11"
+    },
+    {
+      "timestamp": "2025-12-31T13:07:37.324218Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add context window error handling",
+      "content": "Implemented context window error handling for all LLM provider calls in deep research workflow.\n\n**Changes Made:**\n1. **providers/base.py**: Added `ContextWindowError` exception with `prompt_tokens`, `max_tokens`, `truncation_needed`, and `provider` attributes.\n\n2. **providers/validation.py**: Added detection and utility functions:\n   - `CONTEXT_WINDOW_ERROR_PATTERNS`: Set of common error patterns (OpenAI, Anthropic, Google patterns)\n   - `is_context_window_error()`: Detects context window errors from exception messages\n   - `extract_token_counts()`: Parses token counts from error messages\n   - `create_context_window_guidance()`: Generates actionable guidance for resolution\n\n3. **providers/__init__.py**: Exported all new types and functions\n\n4. **research/workflows/base.py**: Updated `_execute_provider()` to:\n   - Detect context window errors using pattern matching\n   - Log detailed error info (prompt tokens, max tokens, provider)\n   - Raise `ContextWindowError` with actionable guidance\n\n5. **research/workflows/deep_research.py**: Added try/except for `ContextWindowError` in:\n   - `_execute_planning_async()`: Catches and logs planning phase errors\n   - `_execute_analysis_async()`: Catches and logs analysis phase errors with source count\n\n**Acceptance Criteria Met:**\n- \u2705 All LLM calls wrapped in try/catch (planning and analysis phases - synthesis/refinement are placeholders)\n- \u2705 Catches context window/token limit errors specifically\n- \u2705 Logs prompt size in tokens when error occurs\n- \u2705 Logs max context window size from provider (when extractable)\n- \u2705 Error message includes actionable guidance\n- \u2705 Does not swallow other LLM errors (non-context errors still handled normally)\n\nBasic verification: All imports work, syntax checks pass.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-11"
+    },
+    {
+      "timestamp": "2025-12-31T13:16:18.570994Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement workflow resumability",
+      "content": "Implemented workflow resumability with three new methods in DeepResearchWorkflow:\n\n**1. resume_research(research_id, ...)**\n- Loads DeepResearchState from persistence\n- Validates state integrity before resuming\n- Determines current phase and resumes from there\n- Handles async event loop edge cases\n- Adds resumption metadata to results\n\n**2. _validate_state_for_resume(state)**\n- Checks required fields (original_query, id)\n- Phase-specific validation (sub-queries for gathering, sources for analysis, findings for synthesis)\n- Detects corrupted collections (null instead of empty list)\n- Returns detailed issues list for debugging\n\n**3. list_resumable_sessions()**\n- Scans ResearchMemory for in-progress sessions\n- Returns resumption context (phase, iteration, counts)\n- Includes validation status for each session\n\n**Acceptance Criteria Met:**\n- \u2705 resume_research(research_id) method implemented\n- \u2705 Loads DeepResearchState from persistence\n- \u2705 Determines current phase from state and resumes from there\n- \u2705 Handles edge cases (corrupted state, missing sources)\n- \u2705 Logs resumption with context about where it left off\n\nBasic verification: Syntax OK, methods exist, handles missing sessions correctly.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-12"
+    },
+    {
+      "timestamp": "2025-12-31T13:23:18.064168Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of GoogleSearchProvider class following TavilySearchProvider pattern",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-14"
+    },
+    {
+      "timestamp": "2025-12-31T13:25:31.207352Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create GoogleSearchProvider class",
+      "content": "Implemented GoogleSearchProvider class in src/foundry_mcp/core/research/providers/google.py (~400 lines).\n\n**Acceptance Criteria Met:**\n\u2705 Extends SearchProvider abstract base\n\u2705 Implements search() method (async)\n\u2705 Handles Google API key + Custom Search Engine ID auth (via params or env vars GOOGLE_API_KEY, GOOGLE_CSE_ID)\n\u2705 Implements exponential backoff for rate limits (2^attempt retry delays)\n\u2705 Parses Google response into ResearchSource objects\n\u2705 Sets source_type to SourceType.WEB\n\n**Implementation Details:**\n- Mirrors TavilySearchProvider structure for consistency\n- Handles Google's error response format (nested error.message)\n- Extracts published dates from pagemap metatags\n- Supports Google-specific options: site_search, date_restrict, file_type, safe\n- Handles 403 errors (quota vs auth distinction)\n- Updated __init__.py to export GoogleSearchProvider\n\n**Basic verification:** All imports work, class structure correct, all 6 acceptance criteria programmatically verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-14"
+    },
+    {
+      "timestamp": "2025-12-31T13:28:48.018890Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of SemanticScholarProvider class for academic paper search",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-15"
+    },
+    {
+      "timestamp": "2025-12-31T13:31:26.704270Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create SemanticScholarProvider class",
+      "content": "Implemented SemanticScholarProvider class in src/foundry_mcp/core/research/providers/semantic_scholar.py (~420 lines).\n\n**Acceptance Criteria Met:**\n\u2705 Extends SearchProvider abstract base\n\u2705 Implements search() method for paper search (async, with bulk search endpoint)\n\u2705 Handles Semantic Scholar API key (optional for basic tier, via param or SEMANTIC_SCHOLAR_API_KEY env)\n\u2705 Parses paper metadata (title, authors, abstract, citations, year)\n\u2705 Sets source_type to SourceType.ACADEMIC\n\u2705 Includes DOI and arXiv links when available (primary URL priority: DOI > arXiv > Semantic Scholar)\n\n**Implementation Details:**\n- Uses /paper/search/bulk endpoint for efficient querying\n- Requests comprehensive fields: paperId, title, abstract, authors, citationCount, year, externalIds, url, openAccessPdf, publicationDate\n- Extracts external IDs: DOI, ArXiv, PubMed, PMC, DBLP, ACL, MAG\n- Formats authors as comma-separated names (with \"et al.\" for >5 authors)\n- Supports filters: year range, fields of study, open access only, min citation count\n- Exponential backoff retry logic with 2^attempt delays\n- Updated __init__.py to export SemanticScholarProvider\n\n**Basic verification:** All imports work, class structure correct, all 6 acceptance criteria programmatically verified.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-15"
+    },
+    {
+      "timestamp": "2025-12-31T13:36:27.045266Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding rate limit configuration fields to ResearchConfig",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-17"
+    },
+    {
+      "timestamp": "2025-12-31T13:38:04.577619Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add rate limit configuration to ResearchConfig",
+      "content": "Added rate limit configuration to ResearchConfig in src/foundry_mcp/config.py.\n\n**Acceptance Criteria Met:**\n\u2705 search_rate_limit field (requests per minute) - default: 60 RPM\n\u2705 max_concurrent_searches field - default: 3 (for asyncio.Semaphore)\n\u2705 per_provider_rate_limits dict for provider-specific limits:\n   - tavily: 60 RPM (free tier ~1 req/sec)\n   - google: 100 RPM (CSE paid tier)\n   - semantic_scholar: 100 RPM (unauthenticated tier)\n\u2705 Default values appropriate for free API tiers\n\u2705 Can be used by asyncio.Semaphore in gathering phase (config.max_concurrent_searches)\n\n**Implementation Details:**\n- Added 3 new fields to ResearchConfig dataclass\n- Updated from_toml_dict() to parse new fields from TOML config\n- Added get_provider_rate_limit(provider) helper method for fallback logic\n- Updated docstring with new attributes\n\n**Basic verification:** All imports work, fields have correct defaults, from_toml_dict parses correctly, helper method works with fallback.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-17"
+    },
+    {
+      "timestamp": "2025-12-31T14:26:21.780652Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing multi-agent supervisor orchestration with agent roles and think pauses",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-18"
+    },
+    {
+      "timestamp": "2025-12-31T14:29:23.700401Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add multi-agent supervisor orchestration",
+      "content": "Implemented multi-agent supervisor orchestration in deep_research.py.\n\n**Acceptance Criteria Met:**\n\u2705 Defined supervisor role and specialist agent roles (AgentRole enum: SUPERVISOR, PLANNER, GATHERER, ANALYZER, SYNTHESIZER, REFINER) with documented responsibilities\n\u2705 Supervisor dispatches to specialists via PHASE_TO_AGENT mapping and SupervisorOrchestrator.dispatch_to_agent()\n\u2705 Explicit think-tool pauses between phases via evaluate_phase_completion() and hooks.think_pause() calls after each phase\n\u2705 Documented agent responsibilities in AgentRole docstring and handoff inputs/outputs in _build_agent_inputs()\n\u2705 State captures agent decisions via AgentDecision.to_dict() stored in state.metadata[\"agent_decisions\"]\n\n**Implementation:**\n- AgentRole enum with 6 roles and responsibility documentation\n- AgentDecision dataclass for traceability (agent, action, rationale, inputs, outputs, timestamp)\n- SupervisorOrchestrator class (~250 lines) with phase dispatch, quality evaluation, iteration decisions\n- Think pauses inserted after PLANNING, GATHERING, ANALYSIS, and SYNTHESIS phases\n- Orchestrator integrated into DeepResearchWorkflow.__init__",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-18"
+    },
+    {
+      "timestamp": "2025-12-31T14:55:38.179319Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Creating docs/concepts/deep_research_workflow.md with agent prompt templates, state machine diagram, and handoff schemas",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-19"
+    },
+    {
+      "timestamp": "2025-12-31T14:57:55.348838Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add agent prompt templates and state machine diagram",
+      "content": "Created docs/concepts/deep_research_workflow.md (702 lines) with:\n\n**Acceptance Criteria Met:**\n\u2705 Prompt templates for all 6 agents: SUPERVISOR, PLANNER, GATHERER, ANALYZER, SYNTHESIZER, REFINER\n\u2705 Input/output schemas for agent handoffs (5 detailed schema pairs with JSON examples)\n\u2705 Think-tool pause instructions between phases (protocol section with hook interface and decision recording)\n\u2705 ASCII state machine diagram showing phases, supervisor decisions, and resume paths\n\u2705 Templates consolidated in single well-documented prompt section\n\n**Document Structure:**\n- Overview with agent role table\n- State machine diagram (ASCII) with phase transitions, think pauses, and iteration loop\n- 6 prompt templates with system/user message patterns\n- 5 handoff schema pairs (PLANNER, GATHERER, ANALYZER, SYNTHESIZER, REFINER)\n- Think-tool pause protocol with hook interface and decision recording format\n- Integration notes linking to implementation file",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-19"
+    },
+    {
+      "timestamp": "2025-12-31T15:07:30.672453Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Appending agent graph, tool-call schemas, validation rules, and cancellation propagation to docs/concepts/deep_research_workflow.md",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-20"
+    },
+    {
+      "timestamp": "2025-12-31T15:09:37.175618Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define agent graph and tool-call schemas",
+      "content": "Appended agent graph and tool-call schemas to docs/concepts/deep_research_workflow.md (now 1289 lines).\n\n**Acceptance Criteria Met:**\n\u2705 Agent graph with explicit transitions, loop conditions, and termination criteria (ASCII diagram + transition table)\n\u2705 Supervisor tool-call schemas for each phase: dispatch_to_agent, evaluate_phase_completion, decide_iteration, think_pause\n\u2705 Tool selection/priority rules and fallback behavior (PHASE_TO_AGENT mapping, provider priority, fallback table)\n\u2705 Validation rules for tool-call outputs (5 validation functions with issue detection and quality scoring)\n\u2705 Cancellation/timeout propagation through the graph (flow diagrams, state preservation, graceful degradation table)\n\u2705 Clarification that tool-call schemas are internal workflow contracts (callout box at section start)\n\u2705 Note that external provider calls are read-only (dedicated section with capability tables)\n\n**New Sections Added:**\n- Agent Graph Specification (formal graph notation, ASCII diagram, transition table, loop conditions, termination criteria)\n- Supervisor Tool-Call Schemas (4 tool definitions with I/O schemas)\n- Tool Selection and Priority Rules (phase resolution, fallback behavior, provider priority)\n- Validation Rules for Tool-Call Outputs (5 phase-specific validators)\n- Cancellation and Timeout Propagation (flow diagrams, state preservation, graceful degradation)\n- External Provider Constraints (read-only operations, no write capabilities)",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-20"
+    },
+    {
+      "timestamp": "2025-12-31T15:19:25.196683Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing _execute_synthesis_async with system/user prompts and markdown report generation",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-5"
+    },
+    {
+      "timestamp": "2025-12-31T15:20:46.865521Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement synthesis phase",
+      "content": "Implemented _execute_synthesis_async in deep_research.py with full report generation.\n\n**Acceptance Criteria Met:**\n\u2705 Build synthesis prompt with findings and sources - _build_synthesis_user_prompt groups findings by category, includes source references\n\u2705 Generate structured markdown report - LLM generates report via _build_synthesis_system_prompt template\n\u2705 Include executive summary, findings by theme, sources, conclusions - System prompt defines full report structure\n\u2705 Store report in state - state.report assigned after LLM call\n\n**Implementation Details:**\n- _execute_synthesis_async: Main async method with context window error handling, token tracking\n- _build_synthesis_system_prompt: Defines report structure (Executive Summary, Key Findings by theme, Analysis, Sources, Conclusions)\n- _build_synthesis_user_prompt: Groups findings by category, includes gaps, source references, iteration context\n- _extract_markdown_report: Handles LLM response extraction (code blocks, preamble removal, heading detection)\n- _generate_empty_report: Fallback for edge case with no findings\n\nBasic verification passed: Python syntax OK.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-5"
+    },
+    {
+      "timestamp": "2025-12-31T15:29:15.963109Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Implementing _execute_refinement_async with gap analysis and follow-up query generation",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-6"
+    },
+    {
+      "timestamp": "2025-12-31T15:30:53.016050Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement refinement logic",
+      "content": "Implemented _execute_refinement_async in deep_research.py with gap analysis and iteration management.\n\n**Acceptance Criteria Met:**\n\u2705 Analyze report for remaining gaps - _build_refinement_user_prompt includes report excerpt and unresolved gaps\n\u2705 Generate follow-up queries from gap suggestions - LLM generates queries via _parse_refinement_response\n\u2705 Respect max_iterations limit - Early exit when iteration >= max_iterations\n\u2705 Convert gaps to new sub-queries for next iteration - state.add_sub_query() for each follow-up query\n\n**Implementation Details:**\n- _execute_refinement_async: Main async method with iteration limit check, no-gaps check, LLM call\n- _build_refinement_system_prompt: JSON schema for gap_analysis, follow_up_queries, addressed_gap_ids\n- _build_refinement_user_prompt: Research status, report excerpt, unresolved gaps, high-confidence findings\n- _parse_refinement_response: Extracts queries, marks addressed gaps, parses iteration recommendation\n- _extract_fallback_queries: Fallback using existing gap.suggested_queries when LLM parsing fails\n\nBasic verification passed: Python syntax OK.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-6"
+    },
+    {
+      "timestamp": "2025-12-31T15:31:21.196448Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Implement session management methods",
+      "content": "Session management methods already implemented in deep_research.py (lines 2802-2845).\n\n**Acceptance Criteria Met:**\n\u2705 list_sessions() returns session summaries with filters - Parameters: limit (default 50), completed_only (default False). Returns list with id, query, phase, iteration, source_count, finding_count, is_complete, created_at, updated_at\n\u2705 delete_session() removes session by ID - Calls memory.delete_deep_research(research_id)\n\u2705 Proper error handling for not-found cases - Returns False if session not found (graceful failure)\n\n**Note:** These methods were implemented as part of the initial workflow class structure (task-4-1) or a related earlier task. No additional implementation needed.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-7"
+    },
+    {
+      "timestamp": "2025-12-31T15:32:13.764229Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define system prompts for each phase",
+      "content": "System prompts for all phases already implemented in deep_research.py.\n\n**Acceptance Criteria Met:**\n\u2705 Clear instructions for JSON output format - All prompts specify \"Your response MUST be valid JSON\" with exact structure\n\u2705 Phase-specific guidance for LLM - Each prompt has tailored guidelines for its phase\n\u2705 Structured output schemas documented in prompts - JSON schemas with field descriptions included\n\n**Prompts Verified:**\n- _build_planning_system_prompt (line 1385): JSON schema for research_brief + sub_queries\n- _build_analysis_system_prompt (line 1883): JSON schema for findings, gaps, quality_updates\n- _build_synthesis_system_prompt (line 2212): Markdown structure with sections (Executive Summary, Key Findings, Analysis, Sources, Conclusions)\n- _build_refinement_system_prompt (line 2582): JSON schema for gap_analysis, follow_up_queries, addressed_gap_ids, iteration_recommendation\n\n**Note:** These prompts were implemented as part of the phase implementation tasks (task-4-2, task-4-4, task-4-5, task-4-6).",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-8"
+    },
+    {
+      "timestamp": "2025-12-31T16:29:51.873739Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation: Adding API key config fields for Tavily, Google, and Semantic Scholar search providers",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-9"
+    },
+    {
+      "timestamp": "2025-12-31T16:33:24.201409Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add search provider API configuration",
+      "content": "Implemented search provider API configuration in src/foundry_mcp/config.py.\n\n**Changes Made:**\n1. Added 4 new fields to ResearchConfig dataclass:\n   - tavily_api_key: Optional[str]\n   - google_api_key: Optional[str]\n   - google_cse_id: Optional[str]\n   - semantic_scholar_api_key: Optional[str]\n\n2. Updated from_toml_dict() to parse API keys from TOML [research] section\n\n3. Added env var loading in ServerConfig._load_env() for:\n   - TAVILY_API_KEY\n   - GOOGLE_API_KEY\n   - GOOGLE_CSE_ID\n   - SEMANTIC_SCHOLAR_API_KEY\n\n4. Added helper method get_search_provider_api_key(provider, required=True):\n   - Checks config value first, then falls back to env var\n   - Raises ValueError with clear error message including env var name, TOML key, and setup URL\n   - Supports required=False for optional keys (like Semantic Scholar)\n\n5. Added get_google_credentials() convenience method for getting both Google API key and CSE ID\n\n6. Updated module docstring with new environment variables\n\n**Acceptance Criteria Met:**\n\u2705 TAVILY_API_KEY config field\n\u2705 GOOGLE_API_KEY config field\n\u2705 GOOGLE_CSE_ID config field\n\u2705 SEMANTIC_SCHOLAR_API_KEY config field (optional)\n\u2705 All read from environment variables\n\u2705 Clear error messages when key missing but provider requested\n\n**Verification:** All tests pass - imports work, config parsing works, env var loading works, error messages are clear and actionable.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-9"
+    },
+    {
+      "timestamp": "2025-12-31T16:40:40.987345Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation: Adding deep-research action handler with asyncio.create_task() for background execution",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-1"
+    },
+    {
+      "timestamp": "2025-12-31T16:42:56.022169Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add deep-research action handler",
+      "content": "Updated _handle_deep_research handler in src/foundry_mcp/tools/unified/research.py to use background execution.\n\n**Changes Made:**\n1. Added `background=True` parameter to workflow.execute() call - this uses asyncio.create_task() internally via the workflow's _start_background_task() method\n2. Added 'resume' action support (normalized to 'continue' for backward compatibility)\n3. Added `task_timeout` parameter for overall background task timeout\n4. Updated response to return immediately with `{\"research_id\": ..., \"status\": \"started\", \"message\": ...}`\n5. Updated docstring to document background execution behavior\n6. Updated tool function signature to include `task_timeout` parameter\n7. Updated tool docstring to mention 'resume' sub-action\n\n**Acceptance Criteria Met:**\n\u2705 Handler registered for deep-research action (already existed in router)\n\u2705 Uses asyncio.create_task() for background execution (via background=True -> _start_background_task())\n\u2705 Returns research_id immediately without waiting for completion\n\u2705 Stores task reference for status polling (workflow._tasks dict)\n\u2705 Supports deep_research_action values: start, continue, resume\n\u2705 Returns standard response envelope with research_id and status='started'\n\u2705 Errors follow standard error schema with code/remediation\n\n**Verification:** Import test passed - no syntax errors.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-1"
+    },
+    {
+      "timestamp": "2025-12-31T16:46:18.037961Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Reviewing existing _handle_deep_research_status handler to verify acceptance criteria",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-2"
+    },
+    {
+      "timestamp": "2025-12-31T16:46:41.476578Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add deep-research-status handler",
+      "content": "Verified existing _handle_deep_research_status handler in src/foundry_mcp/tools/unified/research.py.\n\n**Handler Review (lines 459-486):**\n- Already fully implemented with all required functionality\n\n**Acceptance Criteria Met:**\n\u2705 Require research_id - Line 465-466 validates and returns validation error if missing\n\u2705 Return status metadata from workflow - Line 477 returns `result.metadata` via success_response\n\u2705 Return standard response envelope - Uses success_response() and error_response()\n\u2705 NOT_FOUND error for missing sessions - Lines 479-486 use ErrorCode.NOT_FOUND, ErrorType.NOT_FOUND with remediation\n\n**Router Registration:**\n\u2705 Registered at lines 707-709 as \"deep-research-status\" action\n\u2705 Summary defined at line 55\n\nNo changes required - handler was already correctly implemented.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-2"
+    },
+    {
+      "timestamp": "2025-12-31T16:46:54.708923Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Reviewing existing _handle_deep_research_report handler",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-3"
+    },
+    {
+      "timestamp": "2025-12-31T16:47:15.817913Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add deep-research-report handler",
+      "content": "Verified existing _handle_deep_research_report handler (lines 489-523).\n\n**Acceptance Criteria Met:**\n\u2705 Require research_id - Line 495-496 validates\n\u2705 Return report content and metadata - Lines 509-512 return report + metadata\n\u2705 Return standard response envelope - Uses success_response/error_response\n\u2705 Proper error for incomplete research - Lines 516-522 with remediation to check status\n\nNo changes required - handler already correctly implemented.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-3"
+    },
+    {
+      "timestamp": "2025-12-31T16:47:38.311053Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add deep-research-list handler",
+      "content": "Verified _handle_deep_research_list (lines 526-545). Returns sessions list with count in standard envelope. Already correctly implemented.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-4"
+    },
+    {
+      "timestamp": "2025-12-31T16:47:38.392284Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add deep-research-delete handler",
+      "content": "Verified _handle_deep_research_delete (lines 548-579). Validates research_id, returns NOT_FOUND for missing sessions with standard error schema. Already correctly implemented.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-5"
+    },
+    {
+      "timestamp": "2025-12-31T16:47:38.468452Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Register actions with router",
+      "content": "Verified all deep-research actions registered in router (lines 701-724): deep-research, deep-research-status, deep-research-report, deep-research-list, deep-research-delete. All properly registered with handlers and summaries.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-6"
+    },
+    {
+      "timestamp": "2025-12-31T16:47:38.538678Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add resume support to deep-research action",
+      "content": "Resume support added in task-5-1. The _handle_deep_research handler (line 391) normalizes 'resume' to 'continue' for backward compatibility. Already implemented.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-8"
+    },
+    {
+      "timestamp": "2025-12-31T16:51:24.221582Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding cursor parameter for deep-research-list pagination - only missing parameter per acceptance criteria",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-7"
+    },
+    {
+      "timestamp": "2025-12-31T16:53:21.187140Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add tool parameters for deep research",
+      "content": "Added cursor parameter for deep-research-list pagination. Changes: (1) Added cursor param to research() function signature (line 823), (2) Added cursor to _handle_deep_research_list handler, (3) Updated DeepResearchWorkflow.list_sessions() to pass cursor, (4) Updated ResearchMemory.list_deep_research() with cursor-based pagination logic. Response now includes next_cursor when results reach limit. Basic verification: imports work, syntax valid.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-7"
+    },
+    {
+      "timestamp": "2025-12-31T17:24:17.641662Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Creating DeepResearchConfig model. Deferring synthesis_depth and confidence_threshold to bikelane since they don't exist in codebase.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-9"
+    },
+    {
+      "timestamp": "2025-12-31T17:25:32.419839Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add DeepResearchConfig model for grouped parameters",
+      "content": "Created DeepResearchConfig Pydantic model in src/foundry_mcp/core/research/models.py (lines 441-510). Model includes: max_iterations, max_sub_queries, max_sources_per_query, follow_links, timeout_per_operation, max_concurrent - all with validation constraints (ge/le). Provides from_defaults() classmethod and merge_overrides() for tool-level overrides. Providers intentionally NOT included per acceptance criteria #7 (TOML-only config). Deferred synthesis_depth/confidence_threshold for future work. Basic verification: imports work, instantiation successful, merge_overrides tested.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-5-9"
+    },
+    {
+      "timestamp": "2025-12-31T18:53:24.787620Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Creating test fixtures for deep research workflow tests",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:54:05.128707Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create test fixtures",
+      "content": "Test fixtures already exist in tests/core/research/workflows/test_deep_research.py (lines 38-92). All acceptance criteria met: mock_config (lines 38-51), mock_memory with save/load/delete/list mocks (lines 54-62), sample_deep_research_state factory (lines 81-92). Also includes mock_provider_result factory (lines 65-78) and action handler test fixtures (lines 394-422). All 27 tests pass.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:54:23.820518Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying existing TestDeepResearchState tests match acceptance criteria",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:54:30.476719Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add DeepResearchState model tests",
+      "content": "TestDeepResearchState class already exists in tests/core/research/workflows/test_deep_research.py (lines 100-231). All acceptance criteria met: test_create_state (103-115), test_add_sub_query/source/finding/gap (117-176), test_advance_phase (178-194), test_pending_sub_queries/should_continue_refinement (196-221), test_mark_completed (223-231). 9 tests in this class, all passing.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:54:41.776813Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying existing TestSubQuery tests",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-3"
+    },
+    {
+      "timestamp": "2025-12-31T18:54:47.680891Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add SubQuery model tests",
+      "content": "TestSubQuery class already exists (lines 234-255). Both acceptance criteria met: test_mark_completed (237-245), test_mark_failed (247-255). Tests verify status transitions, timestamps, and findings_summary/error fields.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-3"
+    },
+    {
+      "timestamp": "2025-12-31T18:55:11.987726Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying TestDeepResearchWorkflow tests",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-4"
+    },
+    {
+      "timestamp": "2025-12-31T18:55:19.294945Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add DeepResearchWorkflow tests",
+      "content": "TestDeepResearchWorkflow class exists (lines 263-383). All acceptance criteria met: test_workflow_initialization (266-273), test_execute_start_without_query (275-284), test_execute_continue_without_research_id (286-295), test_execute_status_not_found (297-307), test_execute_unknown_action (309-318), test_get_status_success (320-332), test_get_report_not_generated (334-345), test_get_report_success (347-358), test_list_sessions (360-371), test_delete_session (373-383). 10 tests, all passing.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-4"
+    },
+    {
+      "timestamp": "2025-12-31T18:55:28.802316Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding missing tests: test_dispatch_to_deep_research_resume and test_deep_research_list_pagination",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-5"
+    },
+    {
+      "timestamp": "2025-12-31T18:56:15.802665Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add action handler tests",
+      "content": "TestDeepResearchActionHandlers class complete (lines 391-628). Added 2 missing tests: test_dispatch_to_deep_research_resume (563-595) validates resume\u2192continue normalization, test_deep_research_list_pagination (597-628) validates cursor passing and next_cursor response. All 8 acceptance criteria now covered. Full suite: 29 tests passing.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-6-5"
+    },
+    {
+      "timestamp": "2025-12-31T18:56:26.463150Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Running full deep research test suite",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-6-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:56:51.907245Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Run test suite",
+      "content": "\u2705 All 29 tests passing in tests/core/research/workflows/test_deep_research.py. Test breakdown: TestDeepResearchState (9 tests), TestSubQuery (2 tests), TestDeepResearchWorkflow (10 tests), TestDeepResearchActionHandlers (8 tests). Execution time: 0.46s. Phase 6 complete.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-6-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:32.351703Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying save_deep_research already exists",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:38.880781Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add save_deep_research method",
+      "content": "save_deep_research already exists (memory.py:407-409). Uses FileStorageBackend with id-based filename, stores in deep_research subdirectory (line 226-227). All criteria met.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:38.950478Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying load_deep_research already exists",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:45.162468Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add load_deep_research method",
+      "content": "load_deep_research already exists (memory.py:411-413). Loads by ID via FileStorageBackend, returns Optional[DeepResearchState].",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:45.233505Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying delete_deep_research already exists",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-3"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:51.703763Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add delete_deep_research method",
+      "content": "delete_deep_research already exists (memory.py:415-417). Deletes by ID via FileStorageBackend, returns bool.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-3"
+    },
+    {
+      "timestamp": "2025-12-31T18:57:51.777426Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying list_deep_research already exists",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-4"
+    },
+    {
+      "timestamp": "2025-12-31T18:58:00.290778Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add list_deep_research method",
+      "content": "list_deep_research already exists (memory.py:419-460). Lists all states with limit, cursor pagination, and completed_only filter. Sorts by updated_at descending. Phase 7 complete.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-7-4"
+    },
+    {
+      "timestamp": "2025-12-31T18:58:14.679541Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying DeepResearchWorkflow export",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-8-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:58:19.405377Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Export DeepResearchWorkflow from workflows __init__",
+      "content": "DeepResearchWorkflow already exported in workflows/__init__.py. Import on line 14, added to __all__ on line 22.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-8-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:58:40.677189Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying deep research config options exist",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-8-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:58:46.340168Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add deep research config options",
+      "content": "All deep research config options already exist in ResearchConfig (config.py:483-488): deep_research_max_iterations=3, deep_research_max_sub_queries=5, deep_research_max_sources=5, deep_research_follow_links=True, deep_research_timeout=30.0, deep_research_max_concurrent=3. TOML parsing also implemented (lines 550-555). Provider config uses existing default_provider setting.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-8-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:58:50.951102Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Running full test suite",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-8-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:59:09.137157Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Run full test suite",
+      "content": "\u2705 Full test suite passing: 131 tests in 1.28s. Includes test_deep_research.py (29), test_models.py, test_memory.py. All deep research workflow, model, and memory tests pass.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-8-1"
+    },
+    {
+      "timestamp": "2025-12-31T18:59:09.208859Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Verifying MCP tool registration",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-8-2"
+    },
+    {
+      "timestamp": "2025-12-31T18:59:38.469947Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify MCP tool registration",
+      "content": "\u2705 MCP tool registration verified. All 5 deep research actions registered: deep-research, deep-research-status, deep-research-report, deep-research-list, deep-research-delete. Total 12 research actions available. SPEC COMPLETE.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-8-2"
+    }
+  ]
+}

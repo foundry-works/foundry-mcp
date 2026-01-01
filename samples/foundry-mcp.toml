@@ -462,6 +462,98 @@ flush_interval_seconds = 30
 # # No API key required for local providers
 
 # =============================================================================
+# Research Workflow Configuration
+# =============================================================================
+
+[research]
+# Enable research tools (chat, consensus, thinkdeep, ideate, deep-research)
+enabled = true
+
+# Default LLM provider for research workflows
+# Supports ProviderSpec format: "[cli]gemini:pro", "[api]openai/gpt-4.1", or simple: "gemini"
+default_provider = "[cli]gemini:pro"
+
+# Storage path for research state (default: ~/.foundry-mcp/research)
+# storage_path = "~/.foundry-mcp/research"
+
+# State TTL in hours before cleanup
+ttl_hours = 24
+
+# Maximum messages per conversation thread
+max_messages_per_thread = 100
+
+# -----------------------------------------------------------------------------
+# Deep Research Settings
+# -----------------------------------------------------------------------------
+
+# Maximum refinement iterations
+deep_research_max_iterations = 3
+
+# Maximum sub-queries per decomposition
+deep_research_max_sub_queries = 5
+
+# Maximum sources per sub-query
+deep_research_max_sources = 5
+
+# Follow and extract content from URLs
+deep_research_follow_links = true
+
+# Default timeout per operation (seconds)
+deep_research_timeout = 120.0
+
+# Maximum parallel operations
+deep_research_max_concurrent = 3
+
+# Write audit artifacts for debugging
+deep_research_audit_artifacts = true
+
+# Research mode: controls source prioritization
+# - "general"   : No domain preferences (default)
+# - "academic"  : Prioritizes journals, publishers, preprints
+# - "technical" : Prioritizes official docs, arxiv, Stack Overflow
+deep_research_mode = "technical"
+
+# Search providers (in priority order)
+# Available: tavily, perplexity, google, semantic_scholar
+deep_research_providers = ["tavily", "perplexity", "google", "semantic_scholar"]
+
+# -----------------------------------------------------------------------------
+# Per-Phase Timeouts (override deep_research_timeout)
+# -----------------------------------------------------------------------------
+
+deep_research_planning_timeout = 60.0    # Query decomposition
+deep_research_analysis_timeout = 90.0    # Finding extraction
+deep_research_synthesis_timeout = 180.0  # Report generation
+deep_research_refinement_timeout = 60.0  # Gap identification
+
+# -----------------------------------------------------------------------------
+# Per-Phase Providers (override default_provider)
+# -----------------------------------------------------------------------------
+# Supports ProviderSpec format for model selection:
+#   "[cli]gemini:pro"           - Gemini CLI with pro model
+#   "[cli]claude:opus"          - Claude CLI with opus model
+#   "[cli]opencode:openai/gpt-5.2" - opencode routing to OpenAI
+#   "[api]openai/gpt-4.1"       - Direct OpenAI API
+
+# deep_research_planning_provider = "[cli]gemini:pro"
+# deep_research_analysis_provider = "[cli]gemini:pro"
+# deep_research_synthesis_provider = "[cli]claude:opus"  # Claude for report writing
+# deep_research_refinement_provider = "[cli]gemini:pro"
+
+# -----------------------------------------------------------------------------
+# Search Rate Limiting
+# -----------------------------------------------------------------------------
+
+search_rate_limit = 60              # Requests per minute (global)
+max_concurrent_searches = 3         # Concurrent search requests
+
+[research.per_provider_rate_limits]
+tavily = 60
+perplexity = 60
+google = 100
+semantic_scholar = 100
+
+# =============================================================================
 # Test Runner Configuration
 # =============================================================================
 #

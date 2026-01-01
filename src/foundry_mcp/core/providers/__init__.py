@@ -56,6 +56,7 @@ from foundry_mcp.core.providers.base import (
     ProviderUnavailableError,
     ProviderExecutionError,
     ProviderTimeoutError,
+    ContextWindowError,
     # ABC
     ProviderContext,
 )
@@ -124,6 +125,11 @@ from foundry_mcp.core.providers.validation import (
     reset_rate_limiters,
     # Execution wrapper
     with_validation_and_resilience,
+    # Context window detection
+    CONTEXT_WINDOW_ERROR_PATTERNS,
+    is_context_window_error,
+    extract_token_counts,
+    create_context_window_guidance,
 )
 
 # ---------------------------------------------------------------------------
@@ -160,6 +166,7 @@ __all__ = [
     "ProviderUnavailableError",
     "ProviderExecutionError",
     "ProviderTimeoutError",
+    "ContextWindowError",
     # ABC
     "ProviderContext",
     # === Detection (detectors.py) ===
@@ -222,4 +229,9 @@ __all__ = [
     "reset_rate_limiters",
     # Execution wrapper
     "with_validation_and_resilience",
+    # Context window detection
+    "CONTEXT_WINDOW_ERROR_PATTERNS",
+    "is_context_window_error",
+    "extract_token_counts",
+    "create_context_window_guidance",
 ]

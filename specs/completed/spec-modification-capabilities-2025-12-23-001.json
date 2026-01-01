@@ -2,7 +2,7 @@
   "spec_id": "spec-modification-capabilities-2025-12-23-001",
   "title": "spec-modification-capabilities",
   "generated": "2025-12-23T14:54:29.088964Z",
-  "last_updated": "2025-12-27T17:31:29.838537Z",
+  "last_updated": "2025-12-31T00:08:58.860067Z",
   "metadata": {
     "description": "Add validated spec modification capabilities across tasks, phases, bulk edits, and history while aligning with MCP contracts.",
     "objectives": [

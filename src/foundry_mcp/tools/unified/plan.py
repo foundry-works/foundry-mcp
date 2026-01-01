@@ -30,6 +30,7 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.llm_config import load_consultation_config
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.tools.unified.router import (

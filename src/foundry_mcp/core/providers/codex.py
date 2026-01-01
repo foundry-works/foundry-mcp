@@ -481,8 +481,11 @@ class CodexProvider(ProviderContext):
 
     def _execute(self, request: ProviderRequest) -> ProviderResult:
         self._validate_request(request)
+        # Resolve model: request.model takes precedence, then metadata, then instance default
         model = (
-            str(request.metadata.get("model")) if request.metadata and "model" in request.metadata else self._model
+            request.model
+            or (str(request.metadata.get("model")) if request.metadata and "model" in request.metadata else None)
+            or self._model
         )
         prompt = self._build_prompt(request)
         attachments = self._normalize_attachment_paths(request)
