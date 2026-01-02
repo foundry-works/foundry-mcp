@@ -29,27 +29,46 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
 
 def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:
     """Register all unified tool routers."""
-    register_unified_health_tool(mcp, config)
-    register_unified_plan_tool(mcp, config)
-    register_unified_pr_tool(mcp, config)
-    register_unified_error_tool(mcp, config)
-    register_unified_metrics_tool(mcp, config)
-    register_unified_journal_tool(mcp, config)
-    register_unified_authoring_tool(mcp, config)
-    register_unified_review_tool(mcp, config)
-    register_unified_spec_tool(mcp, config)
+    disabled = set(config.disabled_tools)
+
+    if "health" not in disabled:
+        register_unified_health_tool(mcp, config)
+    if "plan" not in disabled:
+        register_unified_plan_tool(mcp, config)
+    if "pr" not in disabled:
+        register_unified_pr_tool(mcp, config)
+    if "error" not in disabled:
+        register_unified_error_tool(mcp, config)
+    if "metrics" not in disabled:
+        register_unified_metrics_tool(mcp, config)
+    if "journal" not in disabled:
+        register_unified_journal_tool(mcp, config)
+    if "authoring" not in disabled:
+        register_unified_authoring_tool(mcp, config)
+    if "review" not in disabled:
+        register_unified_review_tool(mcp, config)
+    if "spec" not in disabled:
+        register_unified_spec_tool(mcp, config)
 
     from importlib import import_module
 
-    _task_router = import_module("foundry_mcp.tools.unified.task")
-    _task_router.register_unified_task_tool(mcp, config)
-    register_unified_provider_tool(mcp, config)
-    register_unified_environment_tool(mcp, config)
-    register_unified_lifecycle_tool(mcp, config)
-    register_unified_verification_tool(mcp, config)
-    register_unified_server_tool(mcp, config)
-    register_unified_test_tool(mcp, config)
-    register_unified_research_tool(mcp, config)
+    if "task" not in disabled:
+        _task_router = import_module("foundry_mcp.tools.unified.task")
+        _task_router.register_unified_task_tool(mcp, config)
+    if "provider" not in disabled:
+        register_unified_provider_tool(mcp, config)
+    if "environment" not in disabled:
+        register_unified_environment_tool(mcp, config)
+    if "lifecycle" not in disabled:
+        register_unified_lifecycle_tool(mcp, config)
+    if "verification" not in disabled:
+        register_unified_verification_tool(mcp, config)
+    if "server" not in disabled:
+        register_unified_server_tool(mcp, config)
+    if "test" not in disabled:
+        register_unified_test_tool(mcp, config)
+    if "research" not in disabled:
+        register_unified_research_tool(mcp, config)
 
 
 __all__ = [

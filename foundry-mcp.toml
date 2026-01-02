@@ -13,6 +13,7 @@ structured = true
 [server]
 name = "foundry-mcp"
 version = "0.5.0"
+disabled_tools = ["error", "health", "metrics", "test"]
 
 [workflow]
 mode = "autonomous"

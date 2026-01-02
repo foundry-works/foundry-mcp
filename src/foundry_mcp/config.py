@@ -923,6 +923,9 @@ class ServerConfig:
     # Research workflows configuration
     research: ResearchConfig = field(default_factory=ResearchConfig)
 
+    # Tool registration control
+    disabled_tools: List[str] = field(default_factory=list)
+
     @classmethod
     def from_env(cls, config_file: Optional[str] = None) -> "ServerConfig":
         """
@@ -996,6 +999,8 @@ class ServerConfig:
                     self.server_name = srv["name"]
                 if "version" in srv:
                     self.server_version = srv["version"]
+                if "disabled_tools" in srv:
+                    self.disabled_tools = srv["disabled_tools"]
 
             # Git workflow settings
             if "git" in data:
@@ -1245,6 +1250,10 @@ class ServerConfig:
             self.research.google_cse_id = google_cse
         if semantic_scholar_key := os.environ.get("SEMANTIC_SCHOLAR_API_KEY"):
             self.research.semantic_scholar_api_key = semantic_scholar_key
+
+        # Disabled tools (comma-separated list)
+        if disabled := os.environ.get("FOUNDRY_MCP_DISABLED_TOOLS"):
+            self.disabled_tools = [t.strip() for t in disabled.split(",") if t.strip()]
 
         # Feature flag overrides from environment
         if feature_flags := os.environ.get("FOUNDRY_MCP_FEATURES"):
