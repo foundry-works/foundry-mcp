@@ -437,9 +437,14 @@ class CursorAgentProvider(ProviderContext):
                 return retry_process, False
 
             stderr_text = (retry_process.stderr or stderr_text).strip()
+            # Cursor Agent outputs errors to stdout as plain text, not stderr
+            stdout_text = (retry_process.stdout or "").strip()
             logger.debug(f"Cursor Agent CLI stderr (retry): {stderr_text or 'no stderr'}")
             error_msg = f"Cursor Agent CLI exited with code {retry_process.returncode}"
-            if stderr_text:
+            if stdout_text and not stdout_text.startswith("{"):
+                # Plain text error in stdout (not JSON response)
+                error_msg += f": {stdout_text[:500]}"
+            elif stderr_text:
                 error_msg += f": {stderr_text[:500]}"
             raise ProviderExecutionError(
                 error_msg,
@@ -447,9 +452,14 @@ class CursorAgentProvider(ProviderContext):
             )
 
         stderr_text = (completed.stderr or "").strip()
+        # Cursor Agent outputs errors to stdout as plain text, not stderr
+        stdout_text = (completed.stdout or "").strip()
         logger.debug(f"Cursor Agent CLI stderr: {stderr_text or 'no stderr'}")
         error_msg = f"Cursor Agent CLI exited with code {completed.returncode}"
-        if stderr_text:
+        if stdout_text and not stdout_text.startswith("{"):
+            # Plain text error in stdout (not JSON response)
+            error_msg += f": {stdout_text[:500]}"
+        elif stderr_text:
             error_msg += f": {stderr_text[:500]}"
         raise ProviderExecutionError(
             error_msg,

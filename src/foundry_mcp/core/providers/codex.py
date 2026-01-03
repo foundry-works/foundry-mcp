@@ -479,6 +479,54 @@ class CodexProvider(ProviderContext):
 
         return final_content, usage, metadata, reported_model
 
+    def _extract_error_from_jsonl(self, stdout: str) -> Optional[str]:
+        """
+        Extract error message from Codex JSONL output.
+
+        Codex CLI outputs errors as JSONL events to stdout, not stderr.
+        Look for {"type":"error"} or {"type":"turn.failed"} events.
+        """
+        if not stdout:
+            return None
+
+        errors: List[str] = []
+        for line in stdout.strip().splitlines():
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            event_type = str(event.get("type", "")).lower()
+
+            # Extract from {"type":"error","message":"..."}
+            if event_type == "error":
+                msg = event.get("message", "")
+                # Skip reconnection messages, get the final error
+                if msg and not msg.startswith("Reconnecting"):
+                    errors.append(msg)
+
+            # Extract from {"type":"turn.failed","error":{"message":"..."}}
+            elif event_type == "turn.failed":
+                error_obj = event.get("error", {})
+                if isinstance(error_obj, dict):
+                    msg = error_obj.get("message", "")
+                    if msg:
+                        errors.append(msg)
+
+        # Return the last (most specific) error, or join if multiple
+        if errors:
+            # Deduplicate while preserving order
+            seen = set()
+            unique_errors = []
+            for e in errors:
+                if e not in seen:
+                    seen.add(e)
+                    unique_errors.append(e)
+            return "; ".join(unique_errors)
+        return None
+
     def _execute(self, request: ProviderRequest) -> ProviderResult:
         self._validate_request(request)
         # Resolve model: request.model takes precedence, then metadata, then instance default
@@ -496,8 +544,14 @@ class CodexProvider(ProviderContext):
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
             logger.debug(f"Codex CLI stderr: {stderr or 'no stderr'}")
+
+            # Extract error message from JSONL stdout (Codex outputs errors there, not stderr)
+            jsonl_error = self._extract_error_from_jsonl(completed.stdout)
+
             error_msg = f"Codex CLI exited with code {completed.returncode}"
-            if stderr:
+            if jsonl_error:
+                error_msg += f": {jsonl_error[:500]}"
+            elif stderr:
                 error_msg += f": {stderr[:500]}"
             raise ProviderExecutionError(
                 error_msg,

@@ -267,6 +267,54 @@ class GeminiProvider(ProviderContext):
             return
         self._emit_stream_chunk(StreamChunk(content=content, index=0))
 
+    def _extract_error_from_output(self, stdout: str) -> Optional[str]:
+        """
+        Extract error message from Gemini CLI output.
+
+        Gemini CLI outputs errors as text lines followed by JSON. Example:
+        'Error when talking to Gemini API Full report available at: /tmp/...
+        {"error": {"type": "Error", "message": "[object Object]", "code": 1}}'
+
+        The JSON message field is often unhelpful ("[object Object]"), so we
+        prefer the text prefix which contains the actual error description.
+        """
+        if not stdout:
+            return None
+
+        lines = stdout.strip().split("\n")
+        error_parts: List[str] = []
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Skip "Loaded cached credentials" info line
+            if line.startswith("Loaded cached"):
+                continue
+
+            # Try to parse as JSON
+            if line.startswith("{"):
+                try:
+                    payload = json.loads(line)
+                    error = payload.get("error", {})
+                    if isinstance(error, dict):
+                        msg = error.get("message", "")
+                        # Skip unhelpful "[object Object]" message
+                        if msg and msg != "[object Object]":
+                            error_parts.append(msg)
+                except json.JSONDecodeError:
+                    pass
+            else:
+                # Text line - likely contains the actual error message
+                # Extract the part before "Full report available at:"
+                if "Full report available at:" in line:
+                    line = line.split("Full report available at:")[0].strip()
+                if line:
+                    error_parts.append(line)
+
+        return "; ".join(error_parts) if error_parts else None
+
     def _execute(self, request: ProviderRequest) -> ProviderResult:
         self._validate_request(request)
         model = self._resolve_model(request)
@@ -278,8 +326,14 @@ class GeminiProvider(ProviderContext):
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
             logger.debug(f"Gemini CLI stderr: {stderr or 'no stderr'}")
+
+            # Extract error from stdout (Gemini outputs errors as text + JSON)
+            stdout_error = self._extract_error_from_output(completed.stdout)
+
             error_msg = f"Gemini CLI exited with code {completed.returncode}"
-            if stderr:
+            if stdout_error:
+                error_msg += f": {stdout_error[:500]}"
+            elif stderr:
                 error_msg += f": {stderr[:500]}"
             raise ProviderExecutionError(
                 error_msg,

@@ -220,7 +220,50 @@ class OpenCodeProvider(ProviderContext):
         # Note: OPENCODE_API_KEY should be provided via environment or custom_env
         # We don't set a default value for security reasons
 
+        # Add global npm modules to NODE_PATH so wrapper can find @opencode-ai/sdk
+        # This allows the SDK to be installed globally rather than bundled
+        self._ensure_node_path(subprocess_env)
+
         return subprocess_env
+
+    def _ensure_node_path(self, env: Dict[str, str]) -> None:
+        """
+        Ensure NODE_PATH includes global npm modules and local node_modules.
+
+        This allows the wrapper script to import @opencode-ai/sdk whether it's
+        installed globally (npm install -g @opencode-ai/sdk) or locally in the
+        providers directory.
+        """
+        node_paths: List[str] = []
+
+        # Add existing NODE_PATH entries
+        if env.get("NODE_PATH"):
+            node_paths.extend(env["NODE_PATH"].split(os.pathsep))
+
+        # Add local node_modules (alongside wrapper script)
+        local_node_modules = self._wrapper_path.parent / "node_modules"
+        if local_node_modules.exists():
+            node_paths.append(str(local_node_modules))
+
+        # Detect and add global npm root
+        try:
+            result = subprocess.run(
+                ["npm", "root", "-g"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                global_root = result.stdout.strip()
+                if global_root not in node_paths:
+                    node_paths.append(global_root)
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            # npm not available or timed out - skip global path
+            pass
+
+        if node_paths:
+            env["NODE_PATH"] = os.pathsep.join(node_paths)
 
     def _create_readonly_config(self) -> Path:
         """
@@ -397,6 +440,30 @@ class OpenCodeProvider(ProviderContext):
             return
         self._emit_stream_chunk(StreamChunk(content=content, index=0))
 
+    def _extract_error_from_jsonl(self, stdout: str) -> Optional[str]:
+        """
+        Extract error message from OpenCode wrapper JSONL output.
+
+        The wrapper outputs errors as {"type":"error","code":"...","message":"..."}.
+        """
+        if not stdout:
+            return None
+
+        for line in stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            if event.get("type") == "error":
+                msg = event.get("message", "")
+                if msg:
+                    return msg
+
+        return None
+
     def _execute(self, request: ProviderRequest) -> ProviderResult:
         """Execute generation request via OpenCode wrapper."""
         self._validate_request(request)
@@ -445,8 +512,14 @@ class OpenCodeProvider(ProviderContext):
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
             logger.debug(f"OpenCode wrapper stderr: {stderr or 'no stderr'}")
+
+            # Extract error from JSONL stdout (wrapper outputs {"type":"error","message":"..."})
+            jsonl_error = self._extract_error_from_jsonl(completed.stdout)
+
             error_msg = f"OpenCode wrapper exited with code {completed.returncode}"
-            if stderr:
+            if jsonl_error:
+                error_msg += f": {jsonl_error[:500]}"
+            elif stderr:
                 error_msg += f": {stderr[:500]}"
             raise ProviderExecutionError(
                 error_msg,

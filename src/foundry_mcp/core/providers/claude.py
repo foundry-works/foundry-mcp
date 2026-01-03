@@ -329,6 +329,36 @@ class ClaudeProvider(ProviderContext):
             return
         self._emit_stream_chunk(StreamChunk(content=content, index=0))
 
+    def _extract_error_from_json(self, stdout: str) -> Optional[str]:
+        """
+        Extract error message from Claude CLI JSON output.
+
+        Claude CLI outputs errors as JSON with is_error: true and error in 'result' field.
+        Example: {"type":"result","is_error":true,"result":"API Error: 404 {...}"}
+        """
+        if not stdout:
+            return None
+
+        try:
+            payload = json.loads(stdout.strip())
+        except json.JSONDecodeError:
+            return None
+
+        # Check for error indicator
+        if payload.get("is_error"):
+            result = payload.get("result", "")
+            if result:
+                return str(result)
+
+        # Also check for explicit error field
+        error = payload.get("error")
+        if error:
+            if isinstance(error, dict):
+                return error.get("message") or str(error)
+            return str(error)
+
+        return None
+
     def _execute(self, request: ProviderRequest) -> ProviderResult:
         self._validate_request(request)
         model = self._resolve_model(request)
@@ -339,8 +369,14 @@ class ClaudeProvider(ProviderContext):
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
             logger.debug(f"Claude CLI stderr: {stderr or 'no stderr'}")
+
+            # Extract error from JSON stdout (Claude outputs errors there with is_error: true)
+            json_error = self._extract_error_from_json(completed.stdout)
+
             error_msg = f"Claude CLI exited with code {completed.returncode}"
-            if stderr:
+            if json_error:
+                error_msg += f": {json_error[:500]}"
+            elif stderr:
                 error_msg += f": {stderr[:500]}"
             raise ProviderExecutionError(
                 error_msg,

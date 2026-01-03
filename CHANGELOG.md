@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-01-03
+
+### Fixed
+
+- **CLI Provider Error Extraction**: Improved error message extraction from CLI tool outputs
+  - `ClaudeProvider`: Extract errors from JSON output with `is_error: true` field
+  - `CodexProvider`: Extract errors from JSONL events (`type: error`, `type: turn.failed`)
+  - `CursorAgentProvider`: Check stdout for plain text errors (not just stderr)
+  - `GeminiProvider`: Parse text + JSON error format, skip unhelpful `[object Object]` messages
+  - `OpenCodeProvider`: Extract errors from wrapper JSONL output
+
+- **OpenCode NODE_PATH Configuration**: Added `_ensure_node_path()` to include global npm modules
+  - Allows `@opencode-ai/sdk` to be installed globally rather than bundled
+  - Detects global npm root via `npm root -g` and adds to NODE_PATH
+
 ## [0.8.1] - 2026-01-03
 
 ### Added
