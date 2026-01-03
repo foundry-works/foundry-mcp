@@ -66,7 +66,6 @@ class GitSettings:
     """Git workflow preferences for CLI + MCP surfaces."""
 
     enabled: bool = False
-    auto_branch: bool = False
     auto_commit: bool = False
     auto_push: bool = False
     auto_pr: bool = False
@@ -1014,8 +1013,6 @@ class ServerConfig:
                 git_cfg = data["git"]
                 if "enabled" in git_cfg:
                     self.git.enabled = _parse_bool(git_cfg["enabled"])
-                if "auto_branch" in git_cfg:
-                    self.git.auto_branch = _parse_bool(git_cfg["auto_branch"])
                 if "auto_commit" in git_cfg:
                     self.git.auto_commit = _parse_bool(git_cfg["auto_commit"])
                 if "auto_push" in git_cfg:
@@ -1101,8 +1098,6 @@ class ServerConfig:
         # Git settings
         if git_enabled := os.environ.get("FOUNDRY_MCP_GIT_ENABLED"):
             self.git.enabled = _parse_bool(git_enabled)
-        if git_auto_branch := os.environ.get("FOUNDRY_MCP_GIT_AUTO_BRANCH"):
-            self.git.auto_branch = _parse_bool(git_auto_branch)
         if git_auto_commit := os.environ.get("FOUNDRY_MCP_GIT_AUTO_COMMIT"):
             self.git.auto_commit = _parse_bool(git_auto_commit)
         if git_auto_push := os.environ.get("FOUNDRY_MCP_GIT_AUTO_PUSH"):

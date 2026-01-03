@@ -318,7 +318,6 @@ enabled = false
 commit_cadence = "manual"
 
 # Control automated behaviors (all default to false for safety)
-auto_branch = false
 auto_commit = false
 auto_push = false
 auto_pr = false

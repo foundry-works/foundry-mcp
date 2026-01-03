@@ -490,3 +490,39 @@ class ResearchMemory:
             "consensus": len(self._consensus.list_ids()),
             "deep_research": len(self._deep_research.list_ids()),
         }
+
+    # =========================================================================
+    # Universal session lookup
+    # =========================================================================
+
+    def load_session_by_id(
+        self, session_id: str
+    ) -> Optional[
+        ConversationThread
+        | ThinkDeepState
+        | IdeationState
+        | ConsensusState
+        | DeepResearchState
+    ]:
+        """Load any research session by its ID prefix.
+
+        Determines the session type from the ID prefix and loads from
+        the appropriate storage backend.
+
+        Args:
+            session_id: Session ID with type prefix (e.g., "thread-xxx", "consensus-xxx")
+
+        Returns:
+            The session state object, or None if not found
+        """
+        if session_id.startswith("thread-"):
+            return self.load_thread(session_id)
+        elif session_id.startswith("investigation-"):
+            return self.load_investigation(session_id)
+        elif session_id.startswith("ideation-"):
+            return self.load_ideation(session_id)
+        elif session_id.startswith("consensus-"):
+            return self.load_consensus(session_id)
+        elif session_id.startswith("deepres-"):
+            return self.load_deep_research(session_id)
+        return None

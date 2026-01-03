@@ -44,7 +44,7 @@ structured = true
 # Available: health, plan, pr, error, metrics, journal, authoring, review,
 #            spec, task, provider, environment, lifecycle, verification,
 #            server, test, research
-disabled_tools = ["error", "metrics", "health", "environment"]
+disabled_tools = ["error", "metrics", "health"]
 
 [workflow]
 mode = "single"
@@ -230,6 +230,7 @@ _ACTION_SUMMARY = {
     "detect": "Detect repository topology (project type, specs/docs)",
     "detect-test-runner": "Detect appropriate test runner for the project",
     "setup": "Complete SDD setup with permissions + config",
+    "get-config": "Read configuration sections from foundry-mcp.toml",
 }
 
 
@@ -1055,6 +1056,169 @@ def _handle_setup(
         )
 
 
+def _handle_get_config(
+    *,
+    config: ServerConfig,  # noqa: ARG001 - config object available but we read TOML directly
+    sections: Optional[List[str]] = None,
+    key: Optional[str] = None,
+    **_: Any,
+) -> dict:
+    """Read configuration sections from foundry-mcp.toml.
+
+    Returns the requested sections from the TOML config file.
+    Supported sections: implement, git.
+
+    Args:
+        sections: List of section names to return (default: all supported sections)
+        key: Specific key within section (only valid when requesting single section)
+    """
+    import tomllib
+
+    request_id = _request_id()
+    blocked = _feature_flag_blocked(request_id)
+    if blocked:
+        return blocked
+
+    # Validate sections parameter
+    supported_sections = {"implement", "git"}
+    if sections is not None:
+        if not isinstance(sections, list):
+            return _validation_error(
+                action="get-config",
+                field="sections",
+                message="Expected a list of section names",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+        invalid = set(sections) - supported_sections
+        if invalid:
+            return _validation_error(
+                action="get-config",
+                field="sections",
+                message=f"Unsupported sections: {', '.join(sorted(invalid))}. Supported: {', '.join(sorted(supported_sections))}",
+                request_id=request_id,
+            )
+
+    # Validate key parameter
+    if key is not None:
+        if not isinstance(key, str):
+            return _validation_error(
+                action="get-config",
+                field="key",
+                message="Expected a string",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+        if sections is None or len(sections) != 1:
+            return _validation_error(
+                action="get-config",
+                field="key",
+                message="The 'key' parameter is only valid when requesting exactly one section",
+                request_id=request_id,
+            )
+
+    metric_key = _metric_name("get-config")
+    try:
+        # Find the TOML config file
+        toml_path = None
+        for candidate in ["foundry-mcp.toml", ".foundry-mcp.toml"]:
+            if Path(candidate).exists():
+                toml_path = Path(candidate)
+                break
+
+        if not toml_path:
+            _metrics.counter(metric_key, labels={"status": "not_found"})
+            return asdict(
+                error_response(
+                    "No foundry-mcp.toml config file found",
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    remediation="Run environment(action=setup) to create the config file",
+                    request_id=request_id,
+                )
+            )
+
+        # Read and parse TOML
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+
+        # Determine which sections to return
+        requested = set(sections) if sections else supported_sections
+
+        # Build result with only supported sections
+        result: Dict[str, Any] = {}
+
+        if "implement" in requested and "implement" in data:
+            impl_data = data["implement"]
+            result["implement"] = {
+                "auto": impl_data.get("auto", False),
+                "delegate": impl_data.get("delegate", False),
+                "parallel": impl_data.get("parallel", False),
+            }
+
+        if "git" in requested and "git" in data:
+            git_data = data["git"]
+            result["git"] = {
+                "enabled": git_data.get("enabled", True),
+                "auto_commit": git_data.get("auto_commit", False),
+                "auto_push": git_data.get("auto_push", False),
+                "auto_pr": git_data.get("auto_pr", False),
+                "commit_cadence": git_data.get("commit_cadence", "task"),
+            }
+
+        # If sections were requested but not found, include them as empty/defaults
+        for section in requested:
+            if section not in result:
+                if section == "implement":
+                    result["implement"] = {
+                        "auto": False,
+                        "delegate": False,
+                        "parallel": False,
+                    }
+                elif section == "git":
+                    result["git"] = {
+                        "enabled": True,
+                        "auto_commit": False,
+                        "auto_push": False,
+                        "auto_pr": False,
+                        "commit_cadence": "task",
+                    }
+
+        # If a specific key was requested, extract just that value
+        if key is not None:
+            section_name = sections[0]  # Already validated to be exactly one section
+            section_data = result.get(section_name, {})
+            if key not in section_data:
+                return _validation_error(
+                    action="get-config",
+                    field="key",
+                    message=f"Key '{key}' not found in section '{section_name}'",
+                    request_id=request_id,
+                    code=ErrorCode.NOT_FOUND,
+                )
+            result = {section_name: {key: section_data[key]}}
+
+        _metrics.counter(metric_key, labels={"status": "success"})
+        return asdict(
+            success_response(
+                data={"sections": result, "config_file": str(toml_path)},
+                request_id=request_id,
+            )
+        )
+    except Exception as exc:
+        logger.exception("Error reading config")
+        _metrics.counter(metric_key, labels={"status": "error"})
+        return asdict(
+            error_response(
+                f"Failed to read config: {exc}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check foundry-mcp.toml syntax and retry",
+                request_id=request_id,
+            )
+        )
+
+
 _ENVIRONMENT_ROUTER = ActionRouter(
     tool_name="environment",
     actions=[
@@ -1102,6 +1266,12 @@ _ENVIRONMENT_ROUTER = ActionRouter(
             summary=_ACTION_SUMMARY["setup"],
             aliases=("sdd-setup", "sdd_setup"),
         ),
+        ActionDefinition(
+            name="get-config",
+            handler=_handle_get_config,
+            summary=_ACTION_SUMMARY["get-config"],
+            aliases=("config", "read-config", "get_config"),
+        ),
     ],
 )
 
@@ -1142,6 +1312,8 @@ def register_unified_environment_tool(mcp: FastMCP, config: ServerConfig) -> Non
         permissions_preset: str = "full",
         create_toml: bool = True,
         dry_run: bool = False,
+        sections: Optional[List[str]] = None,
+        key: Optional[str] = None,
     ) -> dict:
         payload = {
             "path": path,
@@ -1154,6 +1326,8 @@ def register_unified_environment_tool(mcp: FastMCP, config: ServerConfig) -> Non
             "permissions_preset": permissions_preset,
             "create_toml": create_toml,
             "dry_run": dry_run,
+            "sections": sections,
+            "key": key,
         }
         return _dispatch_environment_action(
             action=action, payload=payload, config=config

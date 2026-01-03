@@ -1394,6 +1394,35 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     sync_computed_fields(spec_data)
 
     task_data = spec_data.get("hierarchy", {}).get(task_id.strip(), {})
+
+    # Determine if commit is suggested based on git cadence config
+    suggest_commit = False
+    commit_scope: Optional[str] = None
+    commit_message_hint: Optional[str] = None
+
+    if config.git.enabled:
+        cadence = config.git.commit_cadence
+        hierarchy = spec_data.get("hierarchy", {})
+
+        if cadence == "task":
+            suggest_commit = True
+            commit_scope = "task"
+            commit_message_hint = f"task: {task_data.get('title', task_id.strip())}"
+        elif cadence == "phase":
+            # Check if parent phase just completed
+            parent_id = task_data.get("parent")
+            if parent_id:
+                parent_data = hierarchy.get(parent_id, {})
+                # Only suggest commit if parent is a phase and is now completed
+                if (
+                    parent_data.get("type") == "phase"
+                    and parent_data.get("status") == "completed"
+                ):
+                    suggest_commit = True
+                    commit_scope = "phase"
+                    commit_message_hint = (
+                        f"phase: {parent_data.get('title', parent_id)}"
+                    )
     add_journal_entry(
         spec_data,
         title=f"Task Completed: {task_data.get('title', task_id.strip())}",
@@ -1426,6 +1455,9 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             "total_tasks": progress.get("total_tasks", 0),
             "percentage": progress.get("percentage", 0),
         },
+        suggest_commit=suggest_commit,
+        commit_scope=commit_scope,
+        commit_message_hint=commit_message_hint,
         request_id=request_id,
         telemetry={"duration_ms": round(elapsed_ms, 2)},
     )
@@ -1756,6 +1788,11 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     position = payload.get("position")
     file_path = payload.get("file_path")
 
+    # Research-specific parameters
+    research_type = payload.get("research_type")
+    blocking_mode = payload.get("blocking_mode")
+    query = payload.get("query")
+
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
             field="spec_id",
@@ -1818,6 +1855,49 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             code=ErrorCode.INVALID_FORMAT,
         )
 
+    # Validate research-specific parameters when task_type is "research"
+    if task_type == "research":
+        from foundry_mcp.core.validation import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
+
+        if research_type is not None and not isinstance(research_type, str):
+            return _validation_error(
+                field="research_type",
+                action=action,
+                message="research_type must be a string",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+        if research_type and research_type not in VALID_RESEARCH_TYPES:
+            return _validation_error(
+                field="research_type",
+                action=action,
+                message=f"Must be one of: {', '.join(sorted(VALID_RESEARCH_TYPES))}",
+                request_id=request_id,
+            )
+        if blocking_mode is not None and not isinstance(blocking_mode, str):
+            return _validation_error(
+                field="blocking_mode",
+                action=action,
+                message="blocking_mode must be a string",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+        if blocking_mode and blocking_mode not in RESEARCH_BLOCKING_MODES:
+            return _validation_error(
+                field="blocking_mode",
+                action=action,
+                message=f"Must be one of: {', '.join(sorted(RESEARCH_BLOCKING_MODES))}",
+                request_id=request_id,
+            )
+        if query is not None and not isinstance(query, str):
+            return _validation_error(
+                field="query",
+                action=action,
+                message="query must be a string",
+                request_id=request_id,
+                code=ErrorCode.INVALID_FORMAT,
+            )
+
     dry_run = payload.get("dry_run", False)
     if dry_run is not None and not isinstance(dry_run, bool):
         return _validation_error(
@@ -1858,16 +1938,22 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
 
         elapsed_ms = (time.perf_counter() - start) * 1000
+        dry_run_data: Dict[str, Any] = {
+            "spec_id": spec_id.strip(),
+            "parent": parent.strip(),
+            "title": title.strip(),
+            "task_type": task_type,
+            "position": position,
+            "file_path": file_path.strip() if file_path else None,
+            "dry_run": True,
+        }
+        # Include research parameters in dry_run response
+        if task_type == "research":
+            dry_run_data["research_type"] = research_type
+            dry_run_data["blocking_mode"] = blocking_mode
+            dry_run_data["query"] = query
         response = success_response(
-            data={
-                "spec_id": spec_id.strip(),
-                "parent": parent.strip(),
-                "title": title.strip(),
-                "task_type": task_type,
-                "position": position,
-                "file_path": file_path.strip() if file_path else None,
-                "dry_run": True,
-            },
+            data=dry_run_data,
             request_id=request_id,
             telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
@@ -1887,6 +1973,10 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         position=position,
         file_path=file_path,
         specs_dir=specs_dir,
+        # Research-specific parameters
+        research_type=research_type,
+        blocking_mode=blocking_mode,
+        query=query,
     )
     elapsed_ms = (time.perf_counter() - start) * 1000
 

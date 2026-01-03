@@ -19,7 +19,7 @@ from foundry_mcp.core.spec import (
 from foundry_mcp.core.responses import success_response, error_response
 
 # Valid task types for add_task
-TASK_TYPES = ("task", "subtask", "verify")
+TASK_TYPES = ("task", "subtask", "verify", "research")
 
 
 def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, Any]) -> bool:
@@ -30,6 +30,11 @@ def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, A
     A task is blocked if:
     1. Any of its direct task dependencies are not completed, OR
     2. Its parent phase is blocked by an incomplete phase
+
+    Research nodes have special blocking behavior based on blocking_mode:
+    - "none": Research doesn't block dependents
+    - "soft": Research is informational, doesn't block (default)
+    - "hard": Research must complete before dependents can start
 
     Args:
         spec_data: JSON spec file data
@@ -45,7 +50,18 @@ def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, A
     blocked_by = task_data.get("dependencies", {}).get("blocked_by", [])
     for blocker_id in blocked_by:
         blocker = hierarchy.get(blocker_id)
-        if not blocker or blocker.get("status") != "completed":
+        if not blocker:
+            continue
+
+        # Special handling for research nodes based on blocking_mode
+        if blocker.get("type") == "research":
+            blocking_mode = blocker.get("metadata", {}).get("blocking_mode", "soft")
+            if blocking_mode in ("none", "soft"):
+                # Research with "none" or "soft" blocking mode doesn't block
+                continue
+            # "hard" mode falls through to standard completion check
+
+        if blocker.get("status") != "completed":
             return False
 
     # Check phase-level dependencies
@@ -699,28 +715,35 @@ def _generate_task_id(parent_id: str, existing_children: List[str], task_type: s
     For verify IDs:
     - Same pattern but with "verify-" prefix
 
+    For research IDs:
+    - Same pattern but with "research-" prefix
+
     Args:
         parent_id: Parent node ID
         existing_children: List of existing child IDs
-        task_type: Type of task (task, subtask, verify)
+        task_type: Type of task (task, subtask, verify, research)
 
     Returns:
         New task ID string
     """
-    prefix = "verify" if task_type == "verify" else "task"
+    # Map task_type to ID prefix
+    prefix_map = {"verify": "verify", "research": "research"}
+    prefix = prefix_map.get(task_type, "task")
 
     # Extract numeric parts from parent
     if parent_id.startswith("phase-"):
         # Parent is phase-N, new task is task-N-1, task-N-2, etc.
         phase_num = parent_id.replace("phase-", "")
         base = f"{prefix}-{phase_num}"
-    elif parent_id.startswith("task-") or parent_id.startswith("verify-"):
-        # Parent is task-N-M or verify-N-M, new task appends next number
-        # Remove the prefix (task- or verify-) to get the numeric path
+    elif parent_id.startswith(("task-", "verify-", "research-")):
+        # Parent is task-N-M, verify-N-M, or research-N-M; new task appends next number
+        # Remove the prefix to get the numeric path
         if parent_id.startswith("task-"):
             base = f"{prefix}-{parent_id[5:]}"  # len("task-") = 5
-        else:
+        elif parent_id.startswith("verify-"):
             base = f"{prefix}-{parent_id[7:]}"  # len("verify-") = 7
+        else:  # research-
+            base = f"{prefix}-{parent_id[9:]}"  # len("research-") = 9
     else:
         # Unknown parent type, generate based on existing children count
         base = f"{prefix}-1"
@@ -776,11 +799,15 @@ def add_task(
     position: Optional[int] = None,
     file_path: Optional[str] = None,
     specs_dir: Optional[Path] = None,
+    # Research-specific parameters
+    research_type: Optional[str] = None,
+    blocking_mode: Optional[str] = None,
+    query: Optional[str] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Add a new task to a specification's hierarchy.
 
-    Creates a new task, subtask, or verify node under the specified parent.
+    Creates a new task, subtask, verify, or research node under the specified parent.
     Automatically generates the task ID and updates ancestor task counts.
 
     Args:
@@ -788,11 +815,14 @@ def add_task(
         parent_id: Parent node ID (phase or task).
         title: Task title.
         description: Optional task description.
-        task_type: Type of task (task, subtask, verify). Default: task.
+        task_type: Type of task (task, subtask, verify, research). Default: task.
         estimated_hours: Optional estimated hours.
         position: Optional position in parent's children list (0-based).
         file_path: Optional file path associated with this task.
         specs_dir: Path to specs directory (auto-detected if not provided).
+        research_type: For research nodes - workflow type (chat, consensus, etc).
+        blocking_mode: For research nodes - blocking behavior (none, soft, hard).
+        query: For research nodes - the research question/topic.
 
     Returns:
         Tuple of (result_dict, error_message).
@@ -802,6 +832,15 @@ def add_task(
     # Validate task_type
     if task_type not in TASK_TYPES:
         return None, f"Invalid task_type '{task_type}'. Must be one of: {', '.join(TASK_TYPES)}"
+
+    # Validate research-specific parameters
+    if task_type == "research":
+        from foundry_mcp.core.validation import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
+
+        if research_type and research_type not in VALID_RESEARCH_TYPES:
+            return None, f"Invalid research_type '{research_type}'. Must be one of: {', '.join(sorted(VALID_RESEARCH_TYPES))}"
+        if blocking_mode and blocking_mode not in RESEARCH_BLOCKING_MODES:
+            return None, f"Invalid blocking_mode '{blocking_mode}'. Must be one of: {', '.join(sorted(RESEARCH_BLOCKING_MODES))}"
 
     # Validate title
     if not title or not title.strip():
@@ -853,6 +892,15 @@ def add_task(
         metadata["estimated_hours"] = estimated_hours
     if file_path:
         metadata["file_path"] = file_path.strip()
+
+    # Add research-specific metadata
+    if task_type == "research":
+        metadata["research_type"] = research_type or "consensus"  # Default to consensus
+        metadata["blocking_mode"] = blocking_mode or "soft"  # Default to soft blocking
+        if query:
+            metadata["query"] = query.strip()
+        metadata["research_history"] = []  # Empty history initially
+        metadata["findings"] = {}  # Empty findings initially
 
     # Create the task node
     task_node = {

@@ -57,6 +57,11 @@ _ACTION_SUMMARY = {
     "thread-list": "List conversation threads",
     "thread-get": "Get full thread details including messages",
     "thread-delete": "Delete a conversation thread",
+    # Spec-integrated research actions
+    "node-execute": "Execute research workflow linked to spec node",
+    "node-record": "Record research findings to spec node",
+    "node-status": "Get research node status and linked session info",
+    "node-findings": "Retrieve recorded findings from spec node",
 }
 
 
@@ -679,6 +684,325 @@ def _handle_thread_delete(
 
 
 # =============================================================================
+# Spec-Integrated Research Actions
+# =============================================================================
+
+
+def _load_research_node(
+    spec_id: str,
+    research_node_id: str,
+    workspace: Optional[str] = None,
+) -> tuple[Optional[dict], Optional[dict], Optional[str]]:
+    """Load spec and validate research node exists.
+
+    Returns:
+        (spec_data, node_data, error_message)
+    """
+    from foundry_mcp.core.spec import load_spec, find_specs_directory
+
+    specs_dir = find_specs_directory(workspace)
+    if specs_dir is None:
+        return None, None, "No specs directory found"
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, None, f"Specification '{spec_id}' not found"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    node = hierarchy.get(research_node_id)
+    if node is None:
+        return None, None, f"Node '{research_node_id}' not found"
+
+    if node.get("type") != "research":
+        return None, None, f"Node '{research_node_id}' is not a research node (type: {node.get('type')})"
+
+    return spec_data, node, None
+
+
+def _handle_node_execute(
+    *,
+    spec_id: Optional[str] = None,
+    research_node_id: Optional[str] = None,
+    workspace: Optional[str] = None,
+    prompt: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Execute research workflow linked to spec node.
+
+    Starts the research workflow configured in the node's metadata,
+    and stores the session_id back in the node for tracking.
+    """
+    from datetime import datetime, timezone
+    from foundry_mcp.core.spec import save_spec, find_specs_directory
+
+    if not spec_id:
+        return _validation_error("spec_id", "node-execute", "Required")
+    if not research_node_id:
+        return _validation_error("research_node_id", "node-execute", "Required")
+
+    spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.NOT_FOUND if "not found" in error.lower() else ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
+            )
+        )
+
+    metadata = node.get("metadata", {})
+    research_type = metadata.get("research_type", "consensus")
+    query = prompt or metadata.get("query", "")
+
+    if not query:
+        return _validation_error("query", "node-execute", "No query found in node or prompt parameter")
+
+    # Execute the appropriate research workflow
+    config = _get_config()
+    session_id = None
+    result_data: dict[str, Any] = {
+        "spec_id": spec_id,
+        "research_node_id": research_node_id,
+        "research_type": research_type,
+    }
+
+    if research_type == "chat":
+        workflow = ChatWorkflow(config.research, _get_memory())
+        result = workflow.chat(prompt=query)
+        session_id = result.thread_id
+        result_data["thread_id"] = session_id
+    elif research_type == "consensus":
+        workflow = ConsensusWorkflow(config.research, _get_memory())
+        result = workflow.run(prompt=query)
+        session_id = result.session_id
+        result_data["consensus_id"] = session_id
+        result_data["strategy"] = result.strategy.value if result.strategy else None
+    elif research_type == "thinkdeep":
+        workflow = ThinkDeepWorkflow(config.research, _get_memory())
+        result = workflow.run(topic=query)
+        session_id = result.investigation_id
+        result_data["investigation_id"] = session_id
+    elif research_type == "ideate":
+        workflow = IdeateWorkflow(config.research, _get_memory())
+        result = workflow.run(topic=query)
+        session_id = result.ideation_id
+        result_data["ideation_id"] = session_id
+    elif research_type == "deep-research":
+        workflow = DeepResearchWorkflow(config.research, _get_memory())
+        result = workflow.start(query=query)
+        session_id = result.research_id
+        result_data["research_id"] = session_id
+    else:
+        return _validation_error("research_type", "node-execute", f"Unsupported: {research_type}")
+
+    # Update node metadata with session info
+    metadata["session_id"] = session_id
+    history = metadata.setdefault("research_history", [])
+    history.append({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "started",
+        "workflow": research_type,
+        "session_id": session_id,
+    })
+    node["metadata"] = metadata
+    node["status"] = "in_progress"
+
+    # Save spec
+    specs_dir = find_specs_directory(workspace)
+    if specs_dir and not save_spec(spec_id, spec_data, specs_dir):
+        return asdict(
+            error_response(
+                "Failed to save specification",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+            )
+        )
+
+    result_data["session_id"] = session_id
+    result_data["status"] = "started"
+    return asdict(success_response(data=result_data))
+
+
+def _handle_node_record(
+    *,
+    spec_id: Optional[str] = None,
+    research_node_id: Optional[str] = None,
+    workspace: Optional[str] = None,
+    result: Optional[str] = None,
+    summary: Optional[str] = None,
+    key_insights: Optional[list[str]] = None,
+    recommendations: Optional[list[str]] = None,
+    sources: Optional[list[str]] = None,
+    confidence: Optional[str] = None,
+    session_id: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Record research findings to spec node."""
+    from datetime import datetime, timezone
+    from foundry_mcp.core.spec import save_spec, find_specs_directory
+    from foundry_mcp.core.validation import VALID_RESEARCH_RESULTS
+
+    if not spec_id:
+        return _validation_error("spec_id", "node-record", "Required")
+    if not research_node_id:
+        return _validation_error("research_node_id", "node-record", "Required")
+    if not result:
+        return _validation_error("result", "node-record", "Required (completed, inconclusive, blocked, cancelled)")
+    if result not in VALID_RESEARCH_RESULTS:
+        return _validation_error("result", "node-record", f"Must be one of: {', '.join(sorted(VALID_RESEARCH_RESULTS))}")
+
+    spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.NOT_FOUND if "not found" in error.lower() else ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
+            )
+        )
+
+    metadata = node.get("metadata", {})
+
+    # Store findings
+    metadata["findings"] = {
+        "summary": summary or "",
+        "key_insights": key_insights or [],
+        "recommendations": recommendations or [],
+        "sources": sources or [],
+        "confidence": confidence or "medium",
+    }
+
+    # Update session link if provided
+    if session_id:
+        metadata["session_id"] = session_id
+
+    # Add to history
+    history = metadata.setdefault("research_history", [])
+    history.append({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": "completed",
+        "result": result,
+        "session_id": session_id or metadata.get("session_id"),
+    })
+
+    node["metadata"] = metadata
+
+    # Update node status based on result
+    if result == "completed":
+        node["status"] = "completed"
+    elif result == "blocked":
+        node["status"] = "blocked"
+    else:
+        node["status"] = "pending"  # inconclusive or cancelled
+
+    # Save spec
+    specs_dir = find_specs_directory(workspace)
+    if specs_dir and not save_spec(spec_id, spec_data, specs_dir):
+        return asdict(
+            error_response(
+                "Failed to save specification",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+            )
+        )
+
+    return asdict(
+        success_response(
+            data={
+                "spec_id": spec_id,
+                "research_node_id": research_node_id,
+                "result": result,
+                "status": node["status"],
+                "findings_recorded": True,
+            }
+        )
+    )
+
+
+def _handle_node_status(
+    *,
+    spec_id: Optional[str] = None,
+    research_node_id: Optional[str] = None,
+    workspace: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Get research node status and linked session info."""
+    if not spec_id:
+        return _validation_error("spec_id", "node-status", "Required")
+    if not research_node_id:
+        return _validation_error("research_node_id", "node-status", "Required")
+
+    spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.NOT_FOUND if "not found" in error.lower() else ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
+            )
+        )
+
+    metadata = node.get("metadata", {})
+
+    return asdict(
+        success_response(
+            data={
+                "spec_id": spec_id,
+                "research_node_id": research_node_id,
+                "title": node.get("title"),
+                "status": node.get("status"),
+                "research_type": metadata.get("research_type"),
+                "blocking_mode": metadata.get("blocking_mode"),
+                "session_id": metadata.get("session_id"),
+                "query": metadata.get("query"),
+                "has_findings": bool(metadata.get("findings", {}).get("summary")),
+                "history_count": len(metadata.get("research_history", [])),
+            }
+        )
+    )
+
+
+def _handle_node_findings(
+    *,
+    spec_id: Optional[str] = None,
+    research_node_id: Optional[str] = None,
+    workspace: Optional[str] = None,
+    **kwargs: Any,
+) -> dict:
+    """Retrieve recorded findings from spec node."""
+    if not spec_id:
+        return _validation_error("spec_id", "node-findings", "Required")
+    if not research_node_id:
+        return _validation_error("research_node_id", "node-findings", "Required")
+
+    spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.NOT_FOUND if "not found" in error.lower() else ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
+            )
+        )
+
+    metadata = node.get("metadata", {})
+    findings = metadata.get("findings", {})
+
+    return asdict(
+        success_response(
+            data={
+                "spec_id": spec_id,
+                "research_node_id": research_node_id,
+                "title": node.get("title"),
+                "status": node.get("status"),
+                "findings": findings,
+                "research_history": metadata.get("research_history", []),
+            }
+        )
+    )
+
+
+# =============================================================================
 # Router Setup
 # =============================================================================
 
@@ -744,6 +1068,27 @@ def _build_router() -> ActionRouter:
             name="thread-delete",
             handler=_handle_thread_delete,
             summary=_ACTION_SUMMARY["thread-delete"],
+        ),
+        # Spec-integrated research actions
+        ActionDefinition(
+            name="node-execute",
+            handler=_handle_node_execute,
+            summary=_ACTION_SUMMARY["node-execute"],
+        ),
+        ActionDefinition(
+            name="node-record",
+            handler=_handle_node_record,
+            summary=_ACTION_SUMMARY["node-record"],
+        ),
+        ActionDefinition(
+            name="node-status",
+            handler=_handle_node_status,
+            summary=_ACTION_SUMMARY["node-status"],
+        ),
+        ActionDefinition(
+            name="node-findings",
+            handler=_handle_node_findings,
+            summary=_ACTION_SUMMARY["node-findings"],
         ),
     ]
     return ActionRouter(tool_name="research", actions=definitions)
