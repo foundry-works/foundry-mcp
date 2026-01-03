@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-01-03
+
+### Changed
+
+- **Tools Configuration Section**: Added dedicated `[tools]` config section for tool settings
+  - `disabled_tools` now preferred under `[tools]` (backward compatible with `[server]`)
+  - Comprehensive documentation of all available tools and their purposes
+  - Updated sample config and setup template with `[tools]` section
+  - Default recommendation: disable `error`, `metrics`, `health` to save context tokens
+
 ## [0.8.3] - 2026-01-03
 
 ### Removed

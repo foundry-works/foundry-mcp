@@ -39,6 +39,13 @@ specs_dir = "./specs"
 level = "INFO"
 structured = true
 
+[tools]
+# Disable tools to reduce context window usage
+# Available: health, plan, pr, error, metrics, journal, authoring, review,
+#            spec, task, provider, environment, lifecycle, verification,
+#            server, test, research
+disabled_tools = ["error", "metrics", "health"]
+
 [workflow]
 mode = "single"
 auto_validate = true

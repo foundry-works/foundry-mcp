@@ -999,8 +999,15 @@ class ServerConfig:
                     self.server_name = srv["name"]
                 if "version" in srv:
                     self.server_version = srv["version"]
+                # Legacy: disabled_tools under [server] (deprecated)
                 if "disabled_tools" in srv:
                     self.disabled_tools = srv["disabled_tools"]
+
+            # Tools configuration (preferred location for disabled_tools)
+            if "tools" in data:
+                tools_cfg = data["tools"]
+                if "disabled_tools" in tools_cfg:
+                    self.disabled_tools = tools_cfg["disabled_tools"]
 
             # Git workflow settings
             if "git" in data:

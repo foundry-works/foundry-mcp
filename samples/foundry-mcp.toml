@@ -38,6 +38,41 @@ level = "INFO"
 structured = true
 
 # =============================================================================
+# Tools Configuration
+# =============================================================================
+
+[tools]
+# Disable specific tools to reduce context window usage
+# Tool descriptions are loaded into Claude's context on each message,
+# so disabling unused tools can significantly reduce token consumption.
+#
+# Available tools:
+#   health      - Liveness/readiness checks (used by setup)
+#   plan        - Plan creation and review workflows
+#   pr          - Pull request creation
+#   error       - Error collection and querying
+#   metrics     - Metrics persistence and querying
+#   journal     - Implementation journals
+#   authoring   - Spec authoring operations
+#   review      - Fidelity and code reviews
+#   spec        - Spec management
+#   task        - Task management
+#   provider    - AI provider status
+#   environment - Environment setup and detection
+#   lifecycle   - Spec lifecycle transitions
+#   verification - Verification workflows
+#   server      - Server introspection
+#   test        - Test runner integration
+#   research    - Research workflows (chat, consensus, thinkdeep, ideate, deep)
+#
+# Default: disable error, metrics, and health to save context tokens
+# (health is only used during initial setup)
+disabled_tools = ["error", "metrics", "health"]
+
+# Environment variable alternative: FOUNDRY_MCP_DISABLED_TOOLS (comma-separated)
+# Example: FOUNDRY_MCP_DISABLED_TOOLS=error,metrics,research
+
+# =============================================================================
 # Authentication Configuration
 # =============================================================================
 
