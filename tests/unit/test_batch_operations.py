@@ -523,7 +523,7 @@ class TestGetActivePhases:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1", "phase-2"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1", "phase-2"]},
                 "phase-1": {"type": "phase", "status": "completed", "parent": "spec-root", "children": []},
                 "phase-2": {"type": "phase", "status": "pending", "parent": "spec-root", "children": []},
             },
@@ -569,7 +569,7 @@ class TestGetIndependentTasksBasic:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {"type": "phase", "status": "completed", "parent": "spec-root", "children": []},
             },
             "journal": [],
@@ -672,7 +672,7 @@ class TestGetIndependentTasksLeafPreference:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -723,7 +723,7 @@ class TestSecurityValidation:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -778,7 +778,7 @@ class TestEdgeCases:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -877,7 +877,7 @@ class TestStartBatchAtomic:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -994,7 +994,7 @@ class TestCompleteBatchPartialFailures:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -1033,7 +1033,7 @@ class TestCompleteBatchPartialFailures:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -1120,7 +1120,7 @@ class TestResetBatch:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -1184,7 +1184,7 @@ class TestResetBatch:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "in_progress",
@@ -1283,7 +1283,7 @@ class TestPrepareBatchContext:
             "title": "Test",
             "metadata": {},
             "hierarchy": {
-                "spec-root": {"type": "spec", "children": ["phase-1"]},
+                "spec-root": {"type": "spec", "status": "in_progress", "children": ["phase-1"]},
                 "phase-1": {
                     "type": "phase",
                     "status": "completed",

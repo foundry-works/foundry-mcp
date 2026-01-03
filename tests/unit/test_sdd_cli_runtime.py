@@ -377,20 +377,3 @@ class TestIntegration:
         assert results[0]["request_id"].startswith("cli_")
         assert isinstance(results[0]["logger"], CLILogger)
 
-    def test_flags_with_context(self, tmp_path):
-        """Feature flags work with CLI context."""
-        specs_dir = tmp_path / "specs"
-        specs_dir.mkdir()
-
-        ctx = create_context(specs_dir=str(specs_dir))
-        set_context(ctx)
-
-        registry = get_cli_flags()
-        registry.register_cli_flag(
-            name="context_integrated",
-            description="Works with context",
-            default_enabled=True,
-        )
-
-        manifest = flags_for_discovery()
-        assert "context_integrated" in manifest

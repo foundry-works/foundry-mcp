@@ -931,6 +931,7 @@ def _validate_spec_structure(spec_data: Dict[str, Any]) -> bool:
             "in_progress",
             "completed",
             "blocked",
+            "failed",
         ]:
             return False
 

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.6] - 2026-01-03
+
+### Fixed
+
+- **Spec Validation**: Added `failed` to allowed task statuses in `_validate_spec_structure()`
+  - Batch operations set `status: "failed"` on task failure, but validation rejected it
+  - Now allows: `pending`, `in_progress`, `completed`, `blocked`, `failed`
+
+- **Test Fixtures**: Fixed inline spec fixtures missing required `status` field on `spec-root` nodes
+  - Updated 8 test specs in `test_batch_operations.py` to include `status: "in_progress"`
+
+### Removed
+
+- **Obsolete Test**: Removed `test_flags_with_context` from `test_sdd_cli_runtime.py`
+  - Test referenced `get_cli_flags()` and `flags_for_discovery()` from removed feature flags system
+
 ## [0.8.5] - 2026-01-03
 
 ### Changed
