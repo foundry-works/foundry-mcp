@@ -1743,6 +1743,12 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     action = "add"
     spec_id = payload.get("spec_id")
     parent = payload.get("parent")
+    phase_id = payload.get("phase_id")  # Alias for parent
+
+    # Use phase_id as parent if parent not provided
+    if parent is None and phase_id is not None:
+        parent = phase_id
+
     title = payload.get("title")
     description = payload.get("description")
     task_type = payload.get("task_type", "task")

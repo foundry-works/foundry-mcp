@@ -290,7 +290,6 @@ class TestSessionCommands:
         assert "capabilities" in data["data"]
         assert data["data"]["capabilities"]["json_output"] is True
         assert "command_groups" in data["data"]
-        assert "feature_flags" in data["data"]
 
     def test_session_record(self, cli_runner, temp_specs_dir):
         """session record logs consultation usage."""

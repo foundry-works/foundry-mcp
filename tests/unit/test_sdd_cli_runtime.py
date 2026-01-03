@@ -5,7 +5,6 @@ Tests cover:
 - JSON-only output helpers
 - Resilience wrappers (timeout, retry, interrupt handling)
 - Structured logging hooks
-- Feature flag bootstrap
 """
 
 import json
@@ -17,12 +16,6 @@ import pytest
 
 from foundry_mcp.cli.config import CLIContext, create_context
 from foundry_mcp.core.spec import find_specs_directory
-from foundry_mcp.cli.flags import (
-    CLIFlagRegistry,
-    apply_cli_flag_overrides,
-    flags_for_discovery,
-    get_cli_flags,
-)
 from foundry_mcp.cli.logging import (
     CLILogContext,
     CLILogger,
@@ -43,7 +36,6 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.core.feature_flags import FlagState
 
 
 class TestCLIOutput:
@@ -345,105 +337,6 @@ class TestCLILogging:
 
         with pytest.raises(ValueError):
             failing_cmd()
-
-
-class TestCLIFlags:
-    """Tests for feature flag bootstrap."""
-
-    def test_cli_flag_registry_creation(self):
-        """CLIFlagRegistry can be created."""
-        registry = CLIFlagRegistry()
-        assert registry is not None
-
-    def test_register_cli_flag(self):
-        """Can register CLI-specific flags."""
-        registry = CLIFlagRegistry()
-        registry.register_cli_flag(
-            name="test_flag_unique",
-            description="Test flag",
-            default_enabled=True,
-            state=FlagState.STABLE,
-        )
-        assert registry.is_enabled("test_flag_unique")
-
-    def test_cli_flag_disabled_by_default(self):
-        """Flags default to disabled."""
-        registry = CLIFlagRegistry()
-        registry.register_cli_flag(
-            name="test_disabled_flag",
-            description="Disabled by default",
-            default_enabled=False,
-            state=FlagState.BETA,
-        )
-        assert not registry.is_enabled("test_disabled_flag")
-
-    def test_apply_overrides(self):
-        """apply_overrides enables/disables flags."""
-        registry = CLIFlagRegistry()
-        registry.register_cli_flag(
-            name="override_test",
-            description="Test override",
-            default_enabled=False,
-        )
-
-        assert not registry.is_enabled("override_test")
-
-        registry.apply_overrides({"override_test": True})
-        assert registry.is_enabled("override_test")
-
-        registry.clear_overrides()
-        assert not registry.is_enabled("override_test")
-
-    def test_get_discovery_manifest(self):
-        """get_discovery_manifest returns flag info."""
-        registry = CLIFlagRegistry()
-        registry.register_cli_flag(
-            name="discoverable_flag",
-            description="For discovery",
-            default_enabled=True,
-            state=FlagState.STABLE,
-        )
-
-        manifest = registry.get_discovery_manifest()
-        assert "discoverable_flag" in manifest
-        assert manifest["discoverable_flag"]["enabled"] is True
-        assert manifest["discoverable_flag"]["state"] == "stable"
-        assert manifest["discoverable_flag"]["description"] == "For discovery"
-
-    def test_list_flags(self):
-        """list_flags returns all registered flag names."""
-        registry = CLIFlagRegistry()
-        registry.register_cli_flag(name="flag_a", description="A")
-        registry.register_cli_flag(name="flag_b", description="B")
-
-        flags = registry.list_flags()
-        assert "flag_a" in flags
-        assert "flag_b" in flags
-
-    def test_get_cli_flags_singleton(self):
-        """get_cli_flags returns the same instance."""
-        reg1 = get_cli_flags()
-        reg2 = get_cli_flags()
-        assert reg1 is reg2
-
-    def test_apply_cli_flag_overrides_function(self):
-        """apply_cli_flag_overrides helper works."""
-        registry = get_cli_flags()
-        registry.register_cli_flag(
-            name="cli_override_test",
-            description="Test",
-            default_enabled=False,
-        )
-
-        apply_cli_flag_overrides(enable=["cli_override_test"])
-        assert registry.is_enabled("cli_override_test")
-
-        registry.clear_overrides()
-
-    def test_flags_for_discovery_function(self):
-        """flags_for_discovery returns manifest."""
-        manifest = flags_for_discovery()
-        assert isinstance(manifest, dict)
 
 
 class TestIntegration:

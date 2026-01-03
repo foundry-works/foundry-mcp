@@ -17,7 +17,6 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig, get_config
 from foundry_mcp.core.observability import audit_log, get_observability_manager
-from foundry_mcp.core.feature_flags import get_flag_service
 from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
 from foundry_mcp.tools.unified import register_unified_tools
@@ -99,18 +98,6 @@ def _init_metrics_persistence(config: ServerConfig) -> None:
         logger.warning("Failed to initialize metrics persistence: %s", exc)
 
 
-def _apply_feature_flag_overrides_from_env() -> None:
-    """Apply comma-separated feature flag overrides from `FEATURE_FLAGS`."""
-
-    raw = os.environ.get("FEATURE_FLAGS")
-    if not raw:
-        return
-
-    flag_service = get_flag_service()
-    for name in [part.strip() for part in raw.split(",") if part.strip()]:
-        flag_service.set_override("anonymous", name, True)
-
-
 def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     """Create and configure the FastMCP server instance."""
 
@@ -119,7 +106,6 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
 
     config.setup_logging()
 
-    _apply_feature_flag_overrides_from_env()
     _init_observability(config)
     _init_error_collection(config)
     _init_metrics_persistence(config)

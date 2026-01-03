@@ -225,9 +225,7 @@ class TestResearchRouterSmoke:
         mock_server_cfg.research = research_cfg
 
         with patch("foundry_mcp.tools.unified.research._get_config", return_value=mock_server_cfg):
-            with patch("foundry_mcp.tools.unified.research.get_flag_service") as mock_flag:
-                mock_flag.return_value.is_enabled.return_value = True
-                yield
+            yield
 
     def test_chat_action(self):
         """Chat action through research router."""
@@ -304,9 +302,7 @@ class TestResearchRouterConsensusSmoke:
         mock_server_cfg.research = research_cfg
 
         with patch("foundry_mcp.tools.unified.research._get_config", return_value=mock_server_cfg):
-            with patch("foundry_mcp.tools.unified.research.get_flag_service") as mock_flag:
-                mock_flag.return_value.is_enabled.return_value = True
-                yield
+            yield
 
     def test_consensus_action(self):
         """Consensus action queries multiple providers."""

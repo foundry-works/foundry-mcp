@@ -18,7 +18,7 @@ This documentation follows [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2
 | **Security** | [Trust Boundaries](./08-security-trust-boundaries.md) | Security patterns |
 | **Process** | [Spec-Driven Dev](./09-spec-driven-development.md), [Testing](./10-testing-fixtures.md) | Development workflow |
 | **Integration** | [AI Integration](./11-ai-llm-integration.md), [Resilience](./12-timeout-resilience.md), [Discovery](./13-tool-discovery.md) | LLM patterns & resilience |
-| **Advanced** | [Feature Flags](./14-feature-flags.md), [Concurrency](./15-concurrency-patterns.md) | Rollouts & async patterns |
+| **Advanced** | [Concurrency](./15-concurrency-patterns.md) | Async patterns |
 | **CLI** | [CLI Best Practices](../cli_best_practices/README.md) | Runtime ergonomics & command design |
 
 ## Document Index

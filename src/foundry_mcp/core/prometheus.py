@@ -159,7 +159,6 @@ class PrometheusExporter:
         # Manifest/discovery metrics
         self._manifest_tokens: Any = None
         self._manifest_tool_count: Any = None
-        self._feature_flag_state: Any = None
 
         # Health check metrics
         self._health_status: Any = None
@@ -235,11 +234,6 @@ class PrometheusExporter:
                 f"{ns}_manifest_tool_count",
                 "Tool count for the advertised tool manifest",
                 ["manifest"],  # unified|legacy
-            )
-            self._feature_flag_state = Gauge(
-                f"{ns}_feature_flag_state",
-                "Feature flag state (1=enabled, 0=disabled)",
-                ["flag"],
             )
 
             # Health check metrics
@@ -395,13 +389,6 @@ class PrometheusExporter:
         manifest_label = manifest or "unknown"
         self._manifest_tokens.labels(manifest=manifest_label).set(int(tokens))
         self._manifest_tool_count.labels(manifest=manifest_label).set(int(tool_count))
-
-    def record_feature_flag_state(self, flag: str, enabled: bool) -> None:
-        """Record feature flag enabled/disabled state."""
-        if not self.is_enabled():
-            return
-
-        self._feature_flag_state.labels(flag=flag).set(1 if enabled else 0)
 
     # -------------------------------------------------------------------------
     # Health Check Metrics

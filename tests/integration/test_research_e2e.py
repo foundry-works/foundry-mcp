@@ -5,7 +5,6 @@ Tests the full flow through the research router, including:
 - Dispatch to workflow classes
 - Response envelope formatting
 - Thread persistence
-- Feature flag gating
 - Error handling
 """
 
@@ -21,30 +20,6 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 # =============================================================================
 # Test Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-def mock_feature_flag():
-    """Mock feature flag service to enable research tools."""
-    with patch(
-        "foundry_mcp.tools.unified.research.get_flag_service"
-    ) as mock_get_flag:
-        mock_service = MagicMock()
-        mock_service.is_enabled.return_value = True
-        mock_get_flag.return_value = mock_service
-        yield mock_service
-
-
-@pytest.fixture
-def mock_feature_flag_disabled():
-    """Mock feature flag service with research tools disabled."""
-    with patch(
-        "foundry_mcp.tools.unified.research.get_flag_service"
-    ) as mock_get_flag:
-        mock_service = MagicMock()
-        mock_service.is_enabled.return_value = False
-        mock_get_flag.return_value = mock_service
-        yield mock_service
 
 
 @pytest.fixture
@@ -112,7 +87,7 @@ class TestChatWorkflowE2E:
     """End-to-end tests for chat workflow through router."""
 
     def test_chat_new_thread_full_flow(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Chat creates new thread and returns response envelope."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -148,7 +123,7 @@ class TestChatWorkflowE2E:
         assert result["meta"]["version"] == "response-v2"
 
     def test_chat_continue_thread(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Chat continues existing thread with context."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -180,7 +155,7 @@ class TestChatWorkflowE2E:
         assert result["data"]["message_count"] == 5
 
     def test_chat_provider_failure(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Chat handles provider failure gracefully."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -214,7 +189,7 @@ class TestConsensusWorkflowE2E:
     """End-to-end tests for consensus workflow through router."""
 
     def test_consensus_synthesize_strategy(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Consensus workflow synthesizes multiple provider responses."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -252,7 +227,7 @@ class TestConsensusWorkflowE2E:
         assert result["meta"]["version"] == "response-v2"
 
     def test_consensus_all_responses_strategy(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Consensus workflow returns all individual responses."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -293,7 +268,7 @@ class TestThinkDeepWorkflowE2E:
     """End-to-end tests for thinkdeep workflow through router."""
 
     def test_thinkdeep_new_investigation(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """ThinkDeep starts new investigation with topic."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -332,7 +307,7 @@ class TestThinkDeepWorkflowE2E:
         assert result["meta"]["version"] == "response-v2"
 
     def test_thinkdeep_continue_investigation(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """ThinkDeep continues existing investigation."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -366,7 +341,7 @@ class TestThinkDeepWorkflowE2E:
         assert result["data"]["current_depth"] == 2
 
     def test_thinkdeep_converged(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """ThinkDeep indicates when investigation has converged."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -407,7 +382,7 @@ class TestIdeateWorkflowE2E:
     """End-to-end tests for ideate workflow through router."""
 
     def test_ideate_generate_ideas(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Ideate generates ideas for a topic."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -445,7 +420,7 @@ class TestIdeateWorkflowE2E:
         assert result["meta"]["version"] == "response-v2"
 
     def test_ideate_cluster_ideas(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Ideate clusters existing ideas."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -478,32 +453,6 @@ class TestIdeateWorkflowE2E:
 
 
 # =============================================================================
-# Feature Flag E2E Tests
-# =============================================================================
-
-
-class TestFeatureFlagE2E:
-    """End-to-end tests for feature flag gating."""
-
-    def test_research_disabled_by_flag(
-        self, mock_feature_flag_disabled, mock_config, mock_memory
-    ):
-        """Research returns error when feature flag disabled."""
-        from foundry_mcp.tools.unified.research import _dispatch_research_action
-
-        # When feature flag is disabled, the dispatch should handle this
-        # The exact behavior depends on implementation - check for either error or the flag check
-        result = _dispatch_research_action(
-            action="chat",
-            prompt="Hello",
-        )
-
-        # The feature flag check may be at different levels
-        # Check that either it fails or succeeds based on implementation
-        assert "success" in result
-
-
-# =============================================================================
 # Thread Operations E2E Tests
 # =============================================================================
 
@@ -511,7 +460,7 @@ class TestFeatureFlagE2E:
 class TestThreadOperationsE2E:
     """End-to-end tests for thread management operations."""
 
-    def test_thread_list(self, mock_feature_flag, mock_config, mock_memory):
+    def test_thread_list(self, mock_config, mock_memory):
         """Thread-list returns all threads."""
         from foundry_mcp.core.research.models import ThreadStatus
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -542,7 +491,7 @@ class TestThreadOperationsE2E:
         assert len(result["data"]["threads"]) == 2
         assert result["data"]["count"] == 2
 
-    def test_thread_get(self, mock_feature_flag, mock_config, mock_memory):
+    def test_thread_get(self, mock_config, mock_memory):
         """Thread-get returns specific thread details."""
         from foundry_mcp.core.research.models import ThreadStatus
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -571,7 +520,7 @@ class TestThreadOperationsE2E:
             "thread" in result["data"] and result["data"]["thread"]["id"] == "t-target"
         )
 
-    def test_thread_delete(self, mock_feature_flag, mock_config, mock_memory):
+    def test_thread_delete(self, mock_config, mock_memory):
         """Thread-delete removes thread."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -599,7 +548,7 @@ class TestResponseEnvelopeE2E:
     """End-to-end tests verifying response envelope structure."""
 
     def test_success_envelope_structure(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Successful response has correct envelope structure."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -628,7 +577,7 @@ class TestResponseEnvelopeE2E:
         assert result["meta"]["version"] == "response-v2"
 
     def test_error_envelope_structure(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Error response has correct envelope structure."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -652,7 +601,7 @@ class TestErrorHandlingE2E:
     """End-to-end tests for error handling."""
 
     def test_invalid_action_error(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Invalid action returns appropriate error."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -665,7 +614,7 @@ class TestErrorHandlingE2E:
         assert result["data"]["error_code"] == "VALIDATION_ERROR"
 
     def test_missing_required_param_error(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Missing required parameter returns validation error."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -678,7 +627,7 @@ class TestErrorHandlingE2E:
         assert result["data"]["error_type"] == "validation"
 
     def test_workflow_exception_error(
-        self, mock_feature_flag, mock_config, mock_memory
+        self, mock_config, mock_memory
     ):
         """Workflow exception is propagated when not handled."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action

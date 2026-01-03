@@ -5,13 +5,6 @@ All commands emit structured JSON to stdout for reliable parsing.
 """
 
 from foundry_mcp.cli.config import CLIContext, create_context
-from foundry_mcp.cli.flags import (
-    CLIFlagRegistry,
-    apply_cli_flag_overrides,
-    flags_for_discovery,
-    get_cli_flags,
-    with_flag_options,
-)
 from foundry_mcp.cli.logging import (
     CLILogContext,
     cli_command,
@@ -51,12 +44,6 @@ __all__ = [
     "emit",
     "emit_error",
     "emit_success",
-    # Feature flags
-    "CLIFlagRegistry",
-    "apply_cli_flag_overrides",
-    "flags_for_discovery",
-    "get_cli_flags",
-    "with_flag_options",
     # Logging
     "CLILogContext",
     "cli_command",

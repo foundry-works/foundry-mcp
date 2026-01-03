@@ -385,7 +385,7 @@ class ServerCapabilities:
     max_batch_size: int = 100
     rate_limit_headers: bool = True
     supported_formats: List[str] = field(default_factory=lambda: ["json"])
-    feature_flags_enabled: bool = True
+    feature_flags_enabled: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """

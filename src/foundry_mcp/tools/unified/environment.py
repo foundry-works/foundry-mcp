@@ -15,7 +15,6 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig, _PACKAGE_VERSION
 from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
-from foundry_mcp.core.feature_flags import FeatureFlag, FlagState, get_flag_service
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
 from foundry_mcp.core.responses import (
@@ -32,18 +31,6 @@ from foundry_mcp.tools.unified.router import (
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
-_flag_service = get_flag_service()
-try:
-    _flag_service.register(
-        FeatureFlag(
-            name="environment_tools",
-            description="Environment readiness and workspace tooling",
-            state=FlagState.BETA,
-            default_enabled=True,
-        )
-    )
-except ValueError:
-    pass
 
 _DEFAULT_TOML_TEMPLATE = """[workspace]
 specs_dir = "./specs"
@@ -52,22 +39,38 @@ specs_dir = "./specs"
 level = "INFO"
 structured = true
 
-[server]
-name = "foundry-mcp"
-version = "{version}"
-
 [workflow]
 mode = "single"
 auto_validate = true
 journal_enabled = true
 
+[implement]
+# Default flags for /implement command (can be overridden via CLI flags)
+auto = false      # --auto: skip prompts between tasks
+delegate = false  # --delegate: use subagent(s) for implementation
+parallel = false  # --parallel: run subagents concurrently (implies delegate)
+
 [consultation]
 # priority = []  # Appended by setup based on detected providers
 default_timeout = 300
+
+[research]
+# Research tool configuration (chat, consensus, thinkdeep, ideate, deep)
+# default_provider = "[cli]provider:model"  # Appended by setup
+# consensus_providers = []  # Appended by setup (same as consultation.priority)
 max_retries = 2
 retry_delay = 5.0
 fallback_enabled = true
 cache_ttl = 3600
+
+[research.deep]
+# Deep research workflow settings
+max_iterations = 3
+max_sub_queries = 5
+max_sources_per_query = 5
+follow_links = true
+max_concurrent = 3
+timeout_per_operation = 120
 
 [consultation.workflows.fidelity_review]
 min_models = 2

@@ -18,7 +18,6 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.discovery import get_capabilities, get_tool_registry
-from foundry_mcp.core.feature_flags import get_flag_service
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (
     get_metrics,
@@ -256,26 +255,15 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     start_time = time.perf_counter()
 
-    categories_list: list[str]
-    flag_service = get_flag_service()
-    if flag_service.is_enabled("unified_manifest"):
-        all_tools = _build_unified_manifest_tools()
-        if category:
-            all_tools = [tool for tool in all_tools if tool.get("category") == category]
-        if tag:
-            all_tools = [tool for tool in all_tools if tag in (tool.get("tags") or [])]
-        categories_list = sorted(
-            {tool.get("category", "general") for tool in all_tools}
-        )
-    else:
-        registry = get_tool_registry()
-        all_tools = registry.list_tools(
-            category=category,
-            tag=tag,
-            include_deprecated=include_deprecated,
-        )
-        categories = registry.list_categories()
-        categories_list = [c["name"] for c in categories]
+    # Always use unified manifest (feature flags removed)
+    all_tools = _build_unified_manifest_tools()
+    if category:
+        all_tools = [tool for tool in all_tools if tool.get("category") == category]
+    if tag:
+        all_tools = [tool for tool in all_tools if tag in (tool.get("tags") or [])]
+    categories_list = sorted(
+        {tool.get("category", "general") for tool in all_tools}
+    )
 
     start_idx = 0
     if cursor:
@@ -359,9 +347,6 @@ def _handle_tools(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             manifest=manifest_label,
             tokens=manifest_tokens,
             tool_count=len(all_tools),
-        )
-        exporter.record_feature_flag_state(
-            "unified_manifest", flag_service.is_enabled("unified_manifest")
         )
 
     response["meta"]["request_id"] = request_id

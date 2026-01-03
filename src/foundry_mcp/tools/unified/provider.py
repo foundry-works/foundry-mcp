@@ -11,7 +11,6 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
-from foundry_mcp.core.feature_flags import FeatureFlag, FlagState, get_flag_service
 from foundry_mcp.core.llm_provider import RateLimitError
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
@@ -42,19 +41,6 @@ from foundry_mcp.tools.unified.router import (
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
-_flag_service = get_flag_service()
-try:
-    _flag_service.register(
-        FeatureFlag(
-            name="provider_tools",
-            description="LLM provider management and execution tools",
-            state=FlagState.BETA,
-            default_enabled=True,
-        )
-    )
-except ValueError:
-    # Flag already registered
-    pass
 
 _ACTION_SUMMARY = {
     "list": "List registered providers with optional unavailable entries",
@@ -92,11 +78,6 @@ def _validation_error(
     )
 
 
-def _feature_flag_blocked(request_id: str) -> Optional[dict]:
-    # Feature flags disabled - always allow
-    return None
-
-
 def _handle_list(
     *,
     config: ServerConfig,  # noqa: ARG001 - reserved for future hooks
@@ -104,9 +85,6 @@ def _handle_list(
     **_: Any,
 ) -> dict:
     request_id = _request_id()
-    blocked = _feature_flag_blocked(request_id)
-    if blocked:
-        return blocked
 
     include = include_unavailable if isinstance(include_unavailable, bool) else False
     if include_unavailable is not None and not isinstance(include_unavailable, bool):
@@ -171,9 +149,6 @@ def _handle_status(
     **_: Any,
 ) -> dict:
     request_id = _request_id()
-    blocked = _feature_flag_blocked(request_id)
-    if blocked:
-        return blocked
 
     if not isinstance(provider_id, str) or not provider_id.strip():
         return _validation_error(
@@ -277,10 +252,6 @@ def _handle_execute(
     **_: Any,
 ) -> dict:
     request_id = _request_id()
-    blocked = _feature_flag_blocked(request_id)
-    if blocked:
-        return blocked
-
     action = "execute"
 
     if not isinstance(provider_id, str) or not provider_id.strip():

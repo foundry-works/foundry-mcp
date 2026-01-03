@@ -183,12 +183,11 @@ def show_limits_cmd(ctx: click.Context) -> None:
 @handle_keyboard_interrupt()
 @with_sync_timeout(FAST_TIMEOUT, "Capabilities lookup timed out")
 def session_capabilities_cmd(ctx: click.Context) -> None:
-    """Show CLI capabilities and feature flags.
+    """Show CLI capabilities.
 
     Returns a manifest of available features, commands, and their status
     for AI coding assistants to understand available functionality.
     """
-    from foundry_mcp.cli.flags import flags_for_discovery, get_cli_flags
     from foundry_mcp.cli.main import cli
 
     cli_ctx = get_context(ctx)
@@ -204,15 +203,10 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
         else:
             command_groups[name] = {"type": "command"}
 
-    # Get feature flags
-    get_cli_flags()
-    flags = flags_for_discovery()
-
     # Known CLI capabilities
     capabilities = {
         "json_output": True,  # All output is JSON
         "spec_driven": True,  # SDD methodology supported
-        "feature_flags": True,  # Feature flag system available
         "session_tracking": True,  # Session/context tracking
         "rate_limiting": True,  # Rate limiting built-in
     }
@@ -222,7 +216,6 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
             "version": "0.1.0",
             "name": "foundry-cli",
             "capabilities": capabilities,
-            "feature_flags": flags,
             "command_groups": list(command_groups.keys()),
             "command_count": len(cli.commands),
             "specs_dir": str(cli_ctx.specs_dir) if cli_ctx.specs_dir else None,

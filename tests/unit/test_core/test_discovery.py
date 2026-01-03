@@ -336,7 +336,7 @@ class TestServerCapabilities:
         assert caps.max_batch_size == 100
         assert caps.rate_limit_headers is True
         assert caps.supported_formats == ["json"]
-        assert caps.feature_flags_enabled is True
+        assert caps.feature_flags_enabled is False
 
     def test_to_dict(self):
         """Should convert to dict."""
@@ -350,7 +350,7 @@ class TestServerCapabilities:
         assert d["max_batch_size"] == 100
         assert d["rate_limit_headers"] is True
         assert d["formats"] == ["json"]
-        assert d["feature_flags"] is True
+        assert d["feature_flags"] is False
 
 
 class TestGetCapabilities:

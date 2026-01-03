@@ -1014,17 +1014,6 @@ class TestDeepResearchActionHandlers:
     """Tests for deep research action handlers in the research router."""
 
     @pytest.fixture
-    def mock_feature_flag(self):
-        """Mock feature flag service."""
-        with patch(
-            "foundry_mcp.tools.unified.research.get_flag_service"
-        ) as mock_get_flag:
-            mock_service = MagicMock()
-            mock_service.is_enabled.return_value = True
-            mock_get_flag.return_value = mock_service
-            yield mock_service
-
-    @pytest.fixture
     def mock_tool_config(self, tmp_path: Path):
         """Mock server config for testing."""
         with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
@@ -1044,7 +1033,7 @@ class TestDeepResearchActionHandlers:
             yield memory
 
     def test_dispatch_to_deep_research(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should dispatch 'deep-research' action to handler."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1082,7 +1071,7 @@ class TestDeepResearchActionHandlers:
             assert result["data"]["research_id"] == "dr-1"
 
     def test_dispatch_to_deep_research_status(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should dispatch 'deep-research-status' action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1110,7 +1099,7 @@ class TestDeepResearchActionHandlers:
             assert result["success"] is True
 
     def test_dispatch_to_deep_research_list(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should dispatch 'deep-research-list' action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1133,7 +1122,7 @@ class TestDeepResearchActionHandlers:
             assert result["data"]["count"] == 1
 
     def test_dispatch_to_deep_research_delete(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should dispatch 'deep-research-delete' action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1154,7 +1143,7 @@ class TestDeepResearchActionHandlers:
             assert result["data"]["deleted"] is True
 
     def test_deep_research_validation_error_no_query(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should return validation error when query missing for start."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1169,7 +1158,7 @@ class TestDeepResearchActionHandlers:
         assert "query" in result["error"].lower()
 
     def test_deep_research_validation_error_no_research_id(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should return validation error when research_id missing for status."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1183,7 +1172,7 @@ class TestDeepResearchActionHandlers:
         assert "research_id" in result["error"].lower()
 
     def test_dispatch_to_deep_research_resume(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should dispatch 'deep-research' action with resume sub-action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -1217,7 +1206,7 @@ class TestDeepResearchActionHandlers:
             assert call_kwargs["action"] == "continue"
 
     def test_deep_research_list_pagination(
-        self, mock_feature_flag, mock_tool_config, mock_tool_memory
+        self, mock_tool_config, mock_tool_memory
     ):
         """Should support cursor-based pagination for deep-research-list."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action

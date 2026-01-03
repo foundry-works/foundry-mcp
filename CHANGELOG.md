@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-01-03
+
+### Removed
+
+- **Feature Flags System**: Removed the entire feature flags subsystem to simplify codebase
+  - Deleted `src/foundry_mcp/core/feature_flags.py` and `src/foundry_mcp/cli/flags.py`
+  - Removed `docs/mcp_best_practices/14-feature-flags.md` documentation
+  - Server tools now always use unified manifest (previously feature-flag controlled)
+  - Removed all feature flag imports and usage across tools
+
+### Added
+
+- **Task Add `phase_id` Alias**: Added `phase_id` as alias for `parent` parameter in task `add` action
+  - Provides more intuitive parameter name when adding tasks to phases
+  - Falls back to `parent` if `phase_id` not provided
+
 ## [0.8.2] - 2026-01-03
 
 ### Fixed

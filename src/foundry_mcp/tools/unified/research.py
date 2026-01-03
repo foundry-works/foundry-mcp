@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.feature_flags import FeatureFlag, FlagState, get_flag_service
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models import ConsensusStrategy, ThreadStatus
@@ -40,23 +39,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-# Register feature flag for research tools
-_flag_service = get_flag_service()
-try:
-    _flag_service.register(
-        FeatureFlag(
-            name="research_tools",
-            description="Multi-model research workflows (chat, consensus, thinkdeep, ideate)",
-            state=FlagState.BETA,
-            default_enabled=False,
-            owner="foundry-mcp core",
-        )
-    )
-except ValueError:
-    # Flag already registered (e.g., via config reload)
-    pass
-
 
 # =============================================================================
 # Action Summaries

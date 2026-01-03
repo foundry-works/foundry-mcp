@@ -13,7 +13,6 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
-from foundry_mcp.core.feature_flags import FeatureFlag, FlagState, get_flag_service
 from foundry_mcp.core.intake import IntakeStore, LockAcquisitionError, INTAKE_ID_PATTERN
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
@@ -56,27 +55,6 @@ from foundry_mcp.tools.unified.router import (
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
-
-# Register intake_tools feature flag
-_flag_service = get_flag_service()
-try:
-    _flag_service.register(
-        FeatureFlag(
-            name="intake_tools",
-            description="Bikelane intake queue tools (add, list, dismiss)",
-            state=FlagState.EXPERIMENTAL,
-            default_enabled=False,
-        )
-    )
-except ValueError:
-    pass  # Flag already registered
-
-
-def _intake_feature_flag_blocked(request_id: str) -> Optional[dict]:
-    """Check if intake tools are blocked by feature flag."""
-    # Feature flags disabled - always allow
-    return None
-
 
 _ACTION_SUMMARY = {
     "spec-create": "Scaffold a new SDD specification",
