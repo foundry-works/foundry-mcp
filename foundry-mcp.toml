@@ -67,6 +67,13 @@ timeout_override = 300.0
 [consultation.workflows.doc_generation]
 min_models = 1
 
+[implement]
+# Default flags for /implement command (can be overridden via CLI flags)
+auto = false      # --auto: skip prompts between tasks
+delegate = true   # --delegate: use subagent(s) for implementation
+parallel = false  # --parallel: run subagents concurrently (implies delegate)
+model = "haiku"   # --model: model for delegated tasks (haiku, sonnet, opus)
+
 [git]
 enabled = true
 commit_cadence = "task"

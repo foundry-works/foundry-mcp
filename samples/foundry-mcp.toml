@@ -307,6 +307,26 @@ prometheus_namespace = "foundry_mcp" # Metric name prefix
 # prometheus_port = 9090
 
 # =============================================================================
+# Implement Command Configuration
+# =============================================================================
+#
+# Default flags for the /implement command. These can be overridden via CLI flags.
+# The implement skill uses these settings when determining execution mode.
+
+[implement]
+# Skip user prompts between tasks (autonomous execution)
+auto = false
+
+# Use subagent(s) for implementation (recommended for better focus)
+delegate = true
+
+# Run subagents concurrently for independent tasks (implies delegate=true)
+parallel = false
+
+# Model for delegated tasks: "haiku" (fast), "sonnet" (balanced), "opus" (complex)
+model = "haiku"
+
+# =============================================================================
 # Git Workflow Configuration
 # =============================================================================
 
