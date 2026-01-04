@@ -277,17 +277,18 @@ class TestCodexProvider:
         assert provider._model == "gpt-5.2"
 
     def test_build_command_includes_sandbox(self, hooks):
-        """CodexProvider command should include sandbox flags."""
+        """CodexProvider command should include sandbox flags and stdin marker."""
         from foundry_mcp.core.providers.codex import CODEX_METADATA, CodexProvider
 
         provider = CodexProvider(metadata=CODEX_METADATA, hooks=hooks)
-        command = provider._build_command("gpt-5.1-codex", "test", [])
+        command = provider._build_command("gpt-5.1-codex", [])
 
         assert "codex" in command[0]
         assert "exec" in command
         assert "--sandbox" in command
         assert "read-only" in command
         assert "--json" in command
+        assert "-" in command  # stdin marker for prompt
 
     def test_successful_execution_jsonl(self, hooks):
         """CodexProvider should parse JSONL output correctly."""
@@ -351,11 +352,12 @@ class TestCodexProvider:
 
         provider = CodexProvider(metadata=CODEX_METADATA, hooks=hooks)
         command = provider._build_command(
-            "gpt-5.1-codex", "test", ["/path/to/image.png"]
+            "gpt-5.1-codex", ["/path/to/image.png"]
         )
 
         assert "--image" in command
         assert "/path/to/image.png" in command
+        assert "-" in command  # stdin marker (prompt passed separately)
 
     def test_streaming_emits_deltas(self, hooks, stream_chunks):
         """CodexProvider should emit stream chunks for item.delta events."""

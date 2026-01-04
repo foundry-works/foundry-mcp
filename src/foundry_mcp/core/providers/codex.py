@@ -206,6 +206,7 @@ class RunnerProtocol(Protocol):
         *,
         timeout: Optional[int] = None,
         env: Optional[Dict[str, str]] = None,
+        input_data: Optional[str] = None,
     ) -> subprocess.CompletedProcess[str]:
         raise NotImplementedError
 
@@ -215,12 +216,14 @@ def _default_runner(
     *,
     timeout: Optional[int] = None,
     env: Optional[Dict[str, str]] = None,
+    input_data: Optional[str] = None,
 ) -> subprocess.CompletedProcess[str]:
     """Invoke the Codex CLI via subprocess."""
     return subprocess.run(  # noqa: S603,S607 - intentional CLI invocation
         list(command),
         capture_output=True,
         text=True,
+        input=input_data,
         timeout=timeout,
         env=env,
         check=False,
@@ -330,20 +333,25 @@ class CodexProvider(ProviderContext):
                 attachments.append(entry.strip())
         return attachments
 
-    def _build_command(self, model: str, prompt: str, attachments: List[str]) -> List[str]:
+    def _build_command(self, model: str, attachments: List[str]) -> List[str]:
         # Note: codex CLI requires --json flag for JSONL output (non-interactive mode)
         # --skip-git-repo-check allows running outside trusted git directories
+        # Using "-" to read prompt from stdin (avoids CLI arg length limits for long prompts)
         command = [self._binary, "exec", "--sandbox", "read-only", "--skip-git-repo-check", "--json"]
         if model:
             command.extend(["-m", model])
         for path in attachments:
             command.extend(["--image", path])
-        command.append(prompt)
+        command.append("-")  # Read prompt from stdin
         return command
 
-    def _run(self, command: Sequence[str], timeout: Optional[float]) -> subprocess.CompletedProcess[str]:
+    def _run(
+        self, command: Sequence[str], timeout: Optional[float], input_data: Optional[str] = None
+    ) -> subprocess.CompletedProcess[str]:
         try:
-            return self._runner(command, timeout=int(timeout) if timeout else None, env=self._env)
+            return self._runner(
+                command, timeout=int(timeout) if timeout else None, env=self._env, input_data=input_data
+            )
         except FileNotFoundError as exc:
             raise ProviderUnavailableError(
                 f"Codex CLI '{self._binary}' is not available on PATH.",
@@ -537,9 +545,9 @@ class CodexProvider(ProviderContext):
         )
         prompt = self._build_prompt(request)
         attachments = self._normalize_attachment_paths(request)
-        command = self._build_command(model, prompt, attachments)
+        command = self._build_command(model, attachments)
         timeout = request.timeout or self._timeout
-        completed = self._run(command, timeout=timeout)
+        completed = self._run(command, timeout=timeout, input_data=prompt)
 
         if completed.returncode != 0:
             stderr = (completed.stderr or "").strip()
