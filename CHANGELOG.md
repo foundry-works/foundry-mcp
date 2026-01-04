@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.8] - 2026-01-04
+
+### Added
+
+- **ErrorCode.OPERATION_FAILED**: Added missing error code to `ErrorCode` enum
+  - Fixes AttributeError when batch operations fail (e.g., `prepare-batch` on completed spec)
+
+### Fixed
+
+- **Graceful `prepare-batch` on Complete Specs**: No longer throws error when spec is complete
+  - Returns `{tasks: [], spec_complete: true}` instead of erroring
+  - Enables clean detection of spec completion in parallel workflows
+
+### Changed
+
+- **Test Updates**: Updated batch operation tests to verify graceful completion handling
+  - `test_no_active_phases` now expects `None` error (not error string)
+  - `test_prepare_batch_context_detects_spec_complete` verifies `spec_complete: true` response
+
 ## [0.8.7] - 2026-01-03
 
 ### Added

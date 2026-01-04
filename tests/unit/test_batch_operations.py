@@ -577,7 +577,8 @@ class TestGetIndependentTasksBasic:
         (test_specs_dir / "active" / "no-active-001.json").write_text(json.dumps(spec))
         tasks, error = get_independent_tasks("no-active-001", specs_dir=test_specs_dir)
         assert tasks == []
-        assert "no active phases" in error.lower()
+        # No error - caller should check spec_complete via prepare_batch_context
+        assert error is None
 
 
 class TestGetIndependentTasksDependencies:
@@ -1307,8 +1308,11 @@ class TestPrepareBatchContext:
 
         result, error = prepare_batch_context("done-spec-001", specs_dir=test_specs_dir)
 
-        # No error, but spec_complete should be True
-        assert error == "No active phases (in_progress or pending)"
+        # Graceful handling: no error, but spec_complete should be True
+        assert error is None
+        assert result["spec_complete"] is True
+        assert result["tasks"] == []
+        assert result["task_count"] == 0
 
 
 # =============================================================================

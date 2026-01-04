@@ -304,7 +304,9 @@ def get_independent_tasks(
     # Get active phases
     active_phases = _get_active_phases(spec_data)
     if not active_phases:
-        return [], "No active phases (in_progress or pending)"
+        # No error - spec may be complete or all phases blocked
+        # Caller should check spec_complete flag
+        return [], None
 
     # Collect candidate tasks
     candidates: List[Tuple[str, Dict[str, Any]]] = []
