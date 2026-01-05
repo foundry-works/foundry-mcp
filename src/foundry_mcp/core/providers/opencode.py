@@ -330,9 +330,11 @@ class OpenCodeProvider(ProviderContext):
 
         # Check if server is already running
         if self._is_port_open(port):
+            logger.debug(f"OpenCode server already running on port {port}")
             return
 
         # Server not running - need to start it
+        logger.info(f"OpenCode server not running on port {port}, attempting to start...")
         # Look for opencode binary in node_modules/.bin first
         opencode_binary = None
         node_modules_bin = Path("node_modules/.bin/opencode")
@@ -387,6 +389,7 @@ class OpenCodeProvider(ProviderContext):
         start_time = time.time()
         while time.time() - start_time < SERVER_STARTUP_TIMEOUT:
             if self._is_port_open(port):
+                logger.info(f"OpenCode server started successfully on port {port}")
                 return
             time.sleep(0.5)
 
@@ -585,6 +588,15 @@ class OpenCodeProvider(ProviderContext):
 
         # Combine all content parts
         final_content = "".join(content_parts)
+
+        # Validate we got actual content (defense in depth)
+        if not final_content.strip():
+            stderr_info = (completed.stderr or "").strip() or "none"
+            raise ProviderExecutionError(
+                f"OpenCode wrapper returned empty response. "
+                f"Server may not be running on port 4096. Stderr: {stderr_info}",
+                provider=self.metadata.provider_id,
+            )
 
         # Emit final content if streaming was requested
         self._emit_stream_if_requested(final_content, stream=request.stream)

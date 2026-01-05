@@ -257,9 +257,15 @@ async function main() {
       .map(part => part.text)
       .join('');
 
-    // Validate we got actual content
+    // Validate we got actual content - fail if empty
     if (!textParts) {
-      console.error('Warning: Empty response from OpenCode API. Response:', JSON.stringify(response.data));
+      const errorResponse = {
+        type: 'error',
+        code: 'EMPTY_RESPONSE',
+        message: `OpenCode server returned empty response. Is the server running on port ${serverUrl.split(':').pop()}? Raw response: ${JSON.stringify(response.data)}`
+      };
+      console.log(JSON.stringify(errorResponse));
+      process.exit(1);
     }
 
     // Emit response as line-delimited JSON

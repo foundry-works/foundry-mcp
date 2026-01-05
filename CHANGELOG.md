@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.14] - 2026-01-05
+
+### Fixed
+
+- **OpenCodeProvider silent server failure**: Empty responses no longer masked as SUCCESS
+  - `opencode_wrapper.js` now exits with error (code 1) when server returns empty response
+  - `opencode.py` validates non-empty content before returning SUCCESS status
+  - Added logging to `_ensure_server_running()` for better visibility into server startup
+
 ## [0.8.13] - 2026-01-05
 
 ### Fixed
