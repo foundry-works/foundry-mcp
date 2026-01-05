@@ -629,8 +629,9 @@ class TestOpenCodeProvider:
         with pytest.raises(ProviderExecutionError, match="does not support"):
             provider._validate_request(request)
 
+    @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_opencode_server_healthy")
     @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_port_open")
-    def test_successful_execution(self, mock_port, hooks, tmp_path):
+    def test_successful_execution(self, mock_port, mock_healthy, hooks, tmp_path):
         """OpenCodeProvider should parse line-delimited JSON output."""
         from foundry_mcp.core.providers.opencode import (
             OPENCODE_METADATA,
@@ -638,6 +639,7 @@ class TestOpenCodeProvider:
         )
 
         mock_port.return_value = True  # Server already running
+        mock_healthy.return_value = True  # Server is healthy
 
         # Note: done response text takes precedence when content_parts is empty
         output_lines = [
@@ -671,8 +673,9 @@ class TestOpenCodeProvider:
         assert result.tokens.input_tokens == 8
         assert result.tokens.output_tokens == 4
 
+    @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_opencode_server_healthy")
     @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_port_open")
-    def test_wrapper_error_raises_execution_error(self, mock_port, hooks, tmp_path):
+    def test_wrapper_error_raises_execution_error(self, mock_port, mock_healthy, hooks, tmp_path):
         """OpenCodeProvider should raise when wrapper returns error event."""
         from foundry_mcp.core.providers.opencode import (
             OPENCODE_METADATA,
@@ -680,6 +683,7 @@ class TestOpenCodeProvider:
         )
 
         mock_port.return_value = True
+        mock_healthy.return_value = True
 
         output_lines = [{"type": "error", "message": "API key invalid"}]
         mock_output = "\n".join(json.dumps(line) for line in output_lines)
@@ -695,8 +699,9 @@ class TestOpenCodeProvider:
         with pytest.raises(ProviderExecutionError, match="API key invalid"):
             provider.generate(ProviderRequest(prompt="test"))
 
+    @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_opencode_server_healthy")
     @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_port_open")
-    def test_nonzero_exit_raises_execution_error(self, mock_port, hooks, tmp_path):
+    def test_nonzero_exit_raises_execution_error(self, mock_port, mock_healthy, hooks, tmp_path):
         """OpenCodeProvider should raise on non-zero exit code."""
         from foundry_mcp.core.providers.opencode import (
             OPENCODE_METADATA,
@@ -704,6 +709,7 @@ class TestOpenCodeProvider:
         )
 
         mock_port.return_value = True
+        mock_healthy.return_value = True
 
         runner = make_mock_runner(returncode=1, stderr="Node error")
         provider = OpenCodeProvider(
@@ -716,8 +722,9 @@ class TestOpenCodeProvider:
         with pytest.raises(ProviderExecutionError, match="exited with code 1"):
             provider.generate(ProviderRequest(prompt="test"))
 
+    @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_opencode_server_healthy")
     @patch("foundry_mcp.core.providers.opencode.OpenCodeProvider._is_port_open")
-    def test_streaming_emits_chunks(self, mock_port, hooks, stream_chunks, tmp_path):
+    def test_streaming_emits_chunks(self, mock_port, mock_healthy, hooks, stream_chunks, tmp_path):
         """OpenCodeProvider should emit stream chunks."""
         from foundry_mcp.core.providers.opencode import (
             OPENCODE_METADATA,
@@ -725,6 +732,7 @@ class TestOpenCodeProvider:
         )
 
         mock_port.return_value = True
+        mock_healthy.return_value = True
         chunks, on_chunk = stream_chunks
         hooks = ProviderHooks(on_stream_chunk=on_chunk)
 

@@ -314,6 +314,29 @@ class OpenCodeProvider(ProviderContext):
         except (socket.error, OSError):
             return False
 
+    def _is_opencode_server_healthy(self, server_url: str) -> bool:
+        """Verify the opencode server is actually responding (not just port open)."""
+        import urllib.request
+        import urllib.error
+
+        try:
+            # Try to hit the opencode server - it should respond to HTTP
+            req = urllib.request.Request(
+                f"{server_url}/session",
+                method="POST",
+                headers={"Content-Type": "application/json"},
+                data=b"{}",
+            )
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                # Any response (even error) means server is alive
+                return resp.status < 500
+        except urllib.error.HTTPError as e:
+            # 4xx errors mean server is alive but rejected request - that's OK
+            return e.code < 500
+        except Exception:
+            # Connection refused, timeout, etc. - server not healthy
+            return False
+
     def _ensure_server_running(self) -> None:
         """Ensure OpenCode server is running, start if necessary."""
         # Extract port from server URL (default: 4096)
@@ -328,10 +351,23 @@ class OpenCodeProvider(ProviderContext):
         except (ValueError, IndexError):
             port = 4096
 
-        # Check if server is already running
+        # Check if server is already running and healthy
         if self._is_port_open(port):
-            logger.debug(f"OpenCode server already running on port {port}")
-            return
+            if self._is_opencode_server_healthy(server_url):
+                logger.debug(f"OpenCode server already running on port {port}")
+                return
+            else:
+                # Port is open but server not responding properly
+                logger.warning(
+                    f"Port {port} is open but OpenCode server not responding. "
+                    "Another process may be using this port."
+                )
+                raise ProviderExecutionError(
+                    f"Port {port} is in use but OpenCode server is not responding. "
+                    "Another process may be using this port. "
+                    "Try: lsof -i :{port} to identify the process.",
+                    provider=self.metadata.provider_id,
+                )
 
         # Server not running - need to start it
         logger.info(f"OpenCode server not running on port {port}, attempting to start...")
@@ -385,10 +421,10 @@ class OpenCodeProvider(ProviderContext):
                 provider=self.metadata.provider_id,
             ) from e
 
-        # Wait for server to become available
+        # Wait for server to become available and healthy
         start_time = time.time()
         while time.time() - start_time < SERVER_STARTUP_TIMEOUT:
-            if self._is_port_open(port):
+            if self._is_port_open(port) and self._is_opencode_server_healthy(server_url):
                 logger.info(f"OpenCode server started successfully on port {port}")
                 return
             time.sleep(0.5)

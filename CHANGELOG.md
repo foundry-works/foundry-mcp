@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.15] - 2026-01-05
+
+### Fixed
+
+- **OpenCodeProvider server health check**: Now verifies server is actually responding, not just port open
+  - Added `_is_opencode_server_healthy()` to verify HTTP response from `/session` endpoint
+  - Prevents using stale processes or other services on port 4096
+  - Clear error message when port is in use by another process
+
+- **Missing `_intake_feature_flag_blocked` function**: Added missing function to authoring.py
+  - Caused `NameError` when using intake-add, intake-list, intake-dismiss actions
+
 ## [0.8.14] - 2026-01-05
 
 ### Fixed

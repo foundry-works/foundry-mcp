@@ -2775,6 +2775,12 @@ _INTAKE_TAG_PATTERN = "^[a-z0-9_-]+$"
 _TAG_REGEX = re.compile(_INTAKE_TAG_PATTERN)
 
 
+def _intake_feature_flag_blocked(request_id: str) -> Optional[dict]:
+    """Check if intake tools are blocked by feature flag. Returns None to allow."""
+    # Feature flags disabled - always allow
+    return None
+
+
 def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     """Add a new intake item to the bikelane queue."""
     request_id = _request_id()
