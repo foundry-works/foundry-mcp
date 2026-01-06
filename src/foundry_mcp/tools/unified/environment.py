@@ -59,7 +59,7 @@ parallel = false  # --parallel: run subagents concurrently (implies delegate)
 
 [consultation]
 # priority = []  # Appended by setup based on detected providers
-default_timeout = 300
+default_timeout = 360
 
 [research]
 # Research tool configuration (chat, consensus, thinkdeep, ideate, deep)
@@ -77,7 +77,7 @@ max_sub_queries = 5
 max_sources_per_query = 5
 follow_links = true
 max_concurrent = 3
-timeout_per_operation = 120
+timeout_per_operation = 360
 
 [consultation.workflows.fidelity_review]
 min_models = 2
@@ -86,12 +86,12 @@ default_review_type = "full"
 
 [consultation.workflows.plan_review]
 min_models = 2
-timeout_override = 180.0
+timeout_override = 600.0
 default_review_type = "full"
 
 [consultation.workflows.markdown_plan_review]
 min_models = 2
-timeout_override = 180.0
+timeout_override = 600.0
 default_review_type = "full"
 """
 

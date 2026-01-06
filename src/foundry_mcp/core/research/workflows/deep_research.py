@@ -412,6 +412,20 @@ class BackgroundTask:
         """Check if cancellation has been requested."""
         return self._cancel_event.is_set()
 
+    @property
+    def is_done(self) -> bool:
+        """Check if the task is done (for both thread and asyncio modes).
+
+        Returns:
+            True if the task has completed, False if still running.
+        """
+        if self.thread is not None:
+            return not self.thread.is_alive()
+        elif self.task is not None:
+            return self.task.done()
+        # Neither thread nor task - consider done (shouldn't happen)
+        return True
+
     def cancel(self) -> bool:
         """Cancel the task.
 
@@ -1108,6 +1122,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 provider_id=provider_id,
                 timeout_per_operation=timeout_per_operation,
                 max_concurrent=max_concurrent,
+                background=background,
+                task_timeout=task_timeout,
             )
         elif action == "status":
             return self._get_status(research_id=research_id)
@@ -1421,8 +1437,22 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         provider_id: Optional[str],
         timeout_per_operation: float,
         max_concurrent: int,
+        background: bool = False,
+        task_timeout: Optional[float] = None,
     ) -> WorkflowResult:
-        """Continue an existing research session."""
+        """Continue an existing research session.
+
+        Args:
+            research_id: ID of the research session to continue
+            provider_id: Optional provider ID for LLM calls
+            timeout_per_operation: Timeout per operation in seconds
+            max_concurrent: Maximum concurrent operations
+            background: If True, run in background thread (default: False)
+            task_timeout: Overall timeout for background task (optional)
+
+        Returns:
+            WorkflowResult with research state or error
+        """
         if not research_id:
             return WorkflowResult(
                 success=False,
@@ -1450,7 +1480,17 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 },
             )
 
-        # Continue from current phase
+        # Run in background if requested
+        if background:
+            return self._start_background_task(
+                state=state,
+                provider_id=provider_id,
+                timeout_per_operation=timeout_per_operation,
+                max_concurrent=max_concurrent,
+                task_timeout=task_timeout,
+            )
+
+        # Continue from current phase synchronously
         try:
             return asyncio.run(
                 self._execute_workflow_async(
@@ -1493,7 +1533,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 "research_id": research_id,
                 "task_status": bg_task.status.value,
                 "elapsed_ms": bg_task.elapsed_ms,
-                "is_complete": bg_task.task.done(),
+                "is_complete": bg_task.is_done,
             }
             # Include progress from persisted state if available
             if state:

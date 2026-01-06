@@ -483,19 +483,19 @@ class ResearchConfig:
     ideate_perspectives: List[str] = field(
         default_factory=lambda: ["technical", "creative", "practical", "visionary"]
     )
-    default_timeout: float = 60.0  # 60 seconds default, configurable
+    default_timeout: float = 360.0  # 360 seconds default for AI CLI providers
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
     deep_research_max_sources: int = 5
     deep_research_follow_links: bool = True
-    deep_research_timeout: float = 120.0
+    deep_research_timeout: float = 600.0  # Whole workflow timeout
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
-    deep_research_planning_timeout: float = 60.0
-    deep_research_analysis_timeout: float = 90.0
-    deep_research_synthesis_timeout: float = 180.0
-    deep_research_refinement_timeout: float = 60.0
+    deep_research_planning_timeout: float = 360.0
+    deep_research_analysis_timeout: float = 360.0
+    deep_research_synthesis_timeout: float = 600.0  # Synthesis may take longer
+    deep_research_refinement_timeout: float = 360.0
     # Per-phase provider overrides - uses default_provider if not set
     deep_research_planning_provider: Optional[str] = None
     deep_research_analysis_provider: Optional[str] = None

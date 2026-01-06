@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.16] - 2026-01-06
+
+### Changed
+
+- **Timeout standardization for AI CLI providers**: Increased default timeouts across all workflows
+  - Per-provider/per-operation minimum: 360s (6 minutes) for Claude, Codex, Gemini, CursorAgent, OpenCode
+  - Whole workflow timeouts: 600s (10 minutes) for plan_review, markdown_plan_review, deep_research
+  - Deep research phase timeouts increased: planning/analysis/refinement 360s, synthesis 600s
+  - Updated defaults in: `config.py`, `research.py`, `consensus.py`, `plan.py`, `review_helpers.py`
+  - Updated sample and default TOML configs with new timeout standards and documentation
+
+### Fixed
+
+- **Deep research `continue` action background execution**: Now properly supports `background=True` parameter
+  - Previously, continuing a research session ignored the `background` flag
+  - Added `background` and `task_timeout` parameters to `_continue_research()` method
+  - Continued research can now run in background thread like initial `start` action
+
+- **Deep research status check crash**: Fixed `'NoneType' object has no attribute 'done'` error
+  - `BackgroundTask.is_done` property now correctly handles thread-based execution
+  - Previously used `task.done()` which only works for asyncio tasks
+  - Now checks `thread.is_alive()` for thread-based execution (daemon threads with `asyncio.run()`)
+  - Added comprehensive tests for background task state checking
+
 ## [0.8.15] - 2026-01-05
 
 ### Fixed

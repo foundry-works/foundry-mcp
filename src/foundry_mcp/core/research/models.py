@@ -385,7 +385,7 @@ class ConsensusConfig(BaseModel):
         default=None, description="Provider to use for synthesis (if strategy=synthesize)"
     )
     timeout_per_provider: float = Field(
-        default=30.0, description="Timeout in seconds per provider"
+        default=360.0, description="Timeout in seconds per provider"
     )
     max_concurrent: int = Field(
         default=3, description="Maximum concurrent provider calls"
@@ -473,9 +473,9 @@ class DeepResearchConfig(BaseModel):
         description="Whether to follow URLs and extract full content",
     )
     timeout_per_operation: float = Field(
-        default=30.0,
+        default=360.0,
         ge=1.0,
-        le=300.0,
+        le=1800.0,
         description="Timeout in seconds for each search/fetch operation",
     )
     max_concurrent: int = Field(

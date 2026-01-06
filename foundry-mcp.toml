@@ -39,7 +39,8 @@ priority = [
 ]
 
 # Operational settings
-default_timeout = 60
+# Per-provider timeout minimum: 360s for AI CLI providers
+default_timeout = 360
 max_retries = 2
 retry_delay = 5.0
 fallback_enabled = true
@@ -56,12 +57,12 @@ timeout_override = 600.0
 # Plan review requires 2 models for consensus on architectural decisions
 [consultation.workflows.plan_review]
 min_models = 2
-timeout_override = 300.0
+timeout_override = 600.0  # Whole workflow timeout
 
 # Markdown plan review (pre-spec) requires 2 models for consensus
 [consultation.workflows.markdown_plan_review]
 min_models = 2
-timeout_override = 300.0
+timeout_override = 600.0  # Whole workflow timeout
 
 # Doc generation uses single model (default min_models=1)
 [consultation.workflows.doc_generation]
@@ -113,18 +114,18 @@ deep_research_max_iterations = 3
 deep_research_max_sub_queries = 5
 deep_research_max_sources = 5
 deep_research_follow_links = true
-deep_research_timeout = 120.0
+deep_research_timeout = 600.0  # Whole workflow timeout
 deep_research_max_concurrent = 3
 deep_research_audit_artifacts = true
 # Research mode: "general" | "academic" | "technical"
 deep_research_mode = "technical"
 deep_research_providers = ["tavily", "perplexity", "google", "semantic_scholar"]
 
-# Per-phase timeouts (seconds)
-deep_research_planning_timeout = 60.0
-deep_research_analysis_timeout = 90.0
-deep_research_synthesis_timeout = 180.0
-deep_research_refinement_timeout = 60.0
+# Per-phase timeouts (seconds) - minimum 360s for AI CLI providers
+deep_research_planning_timeout = 360.0
+deep_research_analysis_timeout = 360.0
+deep_research_synthesis_timeout = 600.0  # Synthesis may take longer
+deep_research_refinement_timeout = 360.0
 
 # Per-phase providers (supports ProviderSpec format)
 # Use Claude for synthesis (report writing) for better prose
