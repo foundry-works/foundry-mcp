@@ -1492,18 +1492,22 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
 
         # Continue from current phase synchronously
         try:
-            return asyncio.run(
-                self._execute_workflow_async(
-                    state=state,
-                    provider_id=provider_id,
-                    timeout_per_operation=timeout_per_operation,
-                    max_concurrent=max_concurrent,
-                )
-            )
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context, run in thread pool
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        self._execute_workflow_async(
+                            state=state,
+                            provider_id=provider_id,
+                            timeout_per_operation=timeout_per_operation,
+                            max_concurrent=max_concurrent,
+                        ),
+                    )
+                    return future.result()
+            else:
                 return loop.run_until_complete(
                     self._execute_workflow_async(
                         state=state,
@@ -1512,8 +1516,15 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         max_concurrent=max_concurrent,
                     )
                 )
-            finally:
-                loop.close()
+        except RuntimeError:
+            return asyncio.run(
+                self._execute_workflow_async(
+                    state=state,
+                    provider_id=provider_id,
+                    timeout_per_operation=timeout_per_operation,
+                    max_concurrent=max_concurrent,
+                )
+            )
 
     def _get_status(self, research_id: Optional[str]) -> WorkflowResult:
         """Get the current status of a research session."""

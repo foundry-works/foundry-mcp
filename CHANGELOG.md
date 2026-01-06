@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.18] - 2026-01-06
+
+### Fixed
+
+- **Deep research `continue`/`resume` event loop conflict**: Fixed `RuntimeError: Cannot run the event loop while another loop is running`
+  - `_continue_research()` now uses same event loop handling pattern as `_start_research()`
+  - Detects running event loop with `asyncio.get_event_loop().is_running()`
+  - Uses `ThreadPoolExecutor` to run async code in separate thread when already in async context
+  - Fixes issue when MCP server calls deep research continue/resume actions
+
 ## [0.8.17] - 2026-01-06
 
 ### Fixed
