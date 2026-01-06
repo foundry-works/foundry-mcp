@@ -1559,6 +1559,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                     "finding_count": len(state.findings),
                     "gap_count": len(state.unresolved_gaps()),
                     "total_tokens_used": state.total_tokens_used,
+                    "is_failed": bool(state.metadata.get("failed")),
+                    "failure_error": state.metadata.get("failure_error"),
                 })
             return WorkflowResult(
                 success=True,
@@ -1575,6 +1577,15 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 error=f"Research session '{research_id}' not found",
             )
 
+        # Determine status string
+        is_failed = bool(state.metadata.get("failed"))
+        if is_failed:
+            status_str = "Failed"
+        elif state.completed_at:
+            status_str = "Completed"
+        else:
+            status_str = "In Progress"
+
         status_lines = [
             f"Research ID: {state.id}",
             f"Query: {state.original_query}",
@@ -1584,12 +1595,15 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             f"Sources: {len(state.sources)} examined",
             f"Findings: {len(state.findings)}",
             f"Gaps: {len(state.unresolved_gaps())} unresolved",
-            f"Status: {'Completed' if state.completed_at else 'In Progress'}",
+            f"Status: {status_str}",
         ]
         if state.metadata.get("timeout"):
             status_lines.append("Timeout: True")
         if state.metadata.get("cancelled"):
             status_lines.append("Cancelled: True")
+        if is_failed:
+            failure_error = state.metadata.get("failure_error", "Unknown error")
+            status_lines.append(f"Error: {failure_error}")
 
         return WorkflowResult(
             success=True,
@@ -1606,6 +1620,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 "finding_count": len(state.findings),
                 "gap_count": len(state.unresolved_gaps()),
                 "is_complete": state.completed_at is not None,
+                "is_failed": is_failed,
+                "failure_error": state.metadata.get("failure_error"),
                 "total_tokens_used": state.total_tokens_used,
                 "total_duration_ms": state.total_duration_ms,
                 "timed_out": bool(state.metadata.get("timeout")),
@@ -1727,6 +1743,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         data={"phase": state.phase.value, "error": result.error},
                         level="error",
                     )
+                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
                     self.memory.save_deep_research(state)
                     return result
                 self.hooks.emit_phase_complete(state)
@@ -1762,6 +1779,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         data={"phase": state.phase.value, "error": result.error},
                         level="error",
                     )
+                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
                     self.memory.save_deep_research(state)
                     return result
                 self.hooks.emit_phase_complete(state)
@@ -1796,6 +1814,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         data={"phase": state.phase.value, "error": result.error},
                         level="error",
                     )
+                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
                     self.memory.save_deep_research(state)
                     return result
                 self.hooks.emit_phase_complete(state)
@@ -1830,6 +1849,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         data={"phase": state.phase.value, "error": result.error},
                         level="error",
                     )
+                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
                     self.memory.save_deep_research(state)
                     return result
                 self.hooks.emit_phase_complete(state)
@@ -2562,6 +2582,17 @@ Generate the research plan as JSON."""
         # Determine success
         success = total_sources_added > 0 or failed_queries < len(pending_queries)
 
+        # Build error message if all queries failed
+        error_msg = None
+        if not success:
+            providers_used = [p.get_provider_name() for p in available_providers]
+            if failed_queries == len(pending_queries):
+                error_msg = (
+                    f"All {failed_queries} sub-queries failed to find sources. "
+                    f"Providers used: {providers_used}. "
+                    f"Unavailable providers: {unavailable_providers}"
+                )
+
         logger.info(
             "Gathering phase complete: %d sources from %d queries (%d failed)",
             total_sources_added,
@@ -2572,6 +2603,7 @@ Generate the research plan as JSON."""
         return WorkflowResult(
             success=success,
             content=f"Gathered {total_sources_added} sources from {len(pending_queries)} sub-queries",
+            error=error_msg,
             metadata={
                 "research_id": state.id,
                 "source_count": total_sources_added,

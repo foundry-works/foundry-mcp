@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.19] - 2026-01-06
+
+### Fixed
+
+- **Deep research workflow failure state handling**: Fixed issue where failed research sessions appeared "stalled" instead of properly marked as failed
+  - Added `mark_failed(error: str)` method to `DeepResearchState` to explicitly mark sessions as failed
+  - `_execute_gathering_async` now returns descriptive error message when all sub-queries fail to find sources
+  - All phase failure blocks (planning, gathering, analysis, synthesis) now call `state.mark_failed()` before returning
+  - Status reporting now includes `is_failed` and `failure_error` fields
+  - Status display shows "Failed" instead of "In Progress" for failed sessions with error details
+
 ## [0.8.18] - 2026-01-06
 
 ### Fixed

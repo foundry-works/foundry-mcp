@@ -1218,3 +1218,17 @@ class DeepResearchState(BaseModel):
         self.updated_at = datetime.utcnow()
         if report:
             self.report = report
+
+    def mark_failed(self, error: str) -> None:
+        """Mark the research session as failed with an error message.
+
+        This sets completed_at to indicate the session has ended, and stores
+        the failure information in metadata for status reporting.
+
+        Args:
+            error: Description of why the research failed
+        """
+        self.completed_at = datetime.utcnow()
+        self.updated_at = datetime.utcnow()
+        self.metadata["failed"] = True
+        self.metadata["failure_error"] = error
