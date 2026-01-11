@@ -1402,14 +1402,15 @@ def add_phase_bulk(
             return None, "metadata_defaults.acceptance_criteria must be a list of strings"
 
     # Validate each task definition
-    valid_task_types = {"task", "verify"}
+    # Valid task types match TASK_TYPES from task.py (avoiding circular import)
+    valid_task_types = {"task", "subtask", "verify", "research"}
     for idx, task_def in enumerate(tasks):
         if not isinstance(task_def, dict):
             return None, f"Task at index {idx} must be a dictionary"
 
         task_type = task_def.get("type")
         if not task_type or task_type not in valid_task_types:
-            return None, f"Task at index {idx} must have type 'task' or 'verify'"
+            return None, f"Task at index {idx} must have type: {', '.join(sorted(valid_task_types))}"
 
         task_title = task_def.get("title")
         if not task_title or not isinstance(task_title, str) or not task_title.strip():

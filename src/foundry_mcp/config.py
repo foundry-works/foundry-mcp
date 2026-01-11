@@ -585,13 +585,13 @@ class ResearchConfig:
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
             deep_research_max_sources=int(data.get("deep_research_max_sources", 5)),
             deep_research_follow_links=_parse_bool(data.get("deep_research_follow_links", True)),
-            deep_research_timeout=float(data.get("deep_research_timeout", 120.0)),
+            deep_research_timeout=float(data.get("deep_research_timeout", 600.0)),
             deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
-            # Per-phase timeout overrides
-            deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 60.0)),
-            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 90.0)),
-            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 180.0)),
-            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 60.0)),
+            # Per-phase timeout overrides (match class defaults)
+            deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 360.0)),
+            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 360.0)),
+            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 600.0)),
+            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 360.0)),
             # Per-phase provider overrides
             deep_research_planning_provider=data.get("deep_research_planning_provider"),
             deep_research_analysis_provider=data.get("deep_research_analysis_provider"),

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.23] - 2026-01-11
+
+### Fixed
+
+- **Deep research per-phase timeout config parsing**: Fixed config parsing to use correct timeout defaults
+  - Main timeout: 120s → 600s
+  - Planning timeout: 60s → 360s
+  - Analysis timeout: 90s → 360s
+  - Synthesis timeout: 180s → 600s
+  - Refinement timeout: 60s → 360s
+  - Config parsing now matches the class default values
+
+### Enhanced
+
+- **Bulk phase task validation for all task types**: Extended `authoring(action="phase-add-bulk")` validation
+  - Now supports all task types: task, subtask, verify, research (previously only task/verify)
+  - Uses `TASK_TYPES` constant from task module for consistency
+  - Added validation for research-specific parameters: `blocking_mode`, `research_type`, `query`
+  - Improved error messages to show all valid task types
+
 ## [0.8.22] - 2026-01-07
 
 ### Changed
