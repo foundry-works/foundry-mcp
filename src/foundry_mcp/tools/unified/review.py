@@ -939,7 +939,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
 
 _ACTIONS = [
-    ActionDefinition(name="spec", handler=_handle_spec_review, summary="Review a spec"),
+    ActionDefinition(name="spec", handler=_handle_spec_review, summary="Review a spec", aliases=("spec-review",)),
     ActionDefinition(
         name="fidelity",
         handler=_handle_fidelity,

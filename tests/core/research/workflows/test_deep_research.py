@@ -658,6 +658,119 @@ class TestDeepResearchWorkflow:
         assert bg_task.status == TaskStatus.TIMEOUT
         assert bg_task.result.metadata["timeout"] is True
 
+    def test_background_task_is_done_property(self, mock_config, mock_memory):
+        """Should correctly report is_done for thread-based execution."""
+        from foundry_mcp.core.research.workflows.deep_research import (
+            DeepResearchWorkflow,
+            BackgroundTask,
+        )
+
+        workflow = DeepResearchWorkflow(mock_config, mock_memory)
+        state = DeepResearchState(original_query="is_done test")
+
+        async def slow_execute(*args, **kwargs):
+            await asyncio.sleep(0.1)
+            return WorkflowResult(success=True, content="done")
+
+        with patch.object(
+            workflow, "_execute_workflow_async", side_effect=slow_execute
+        ):
+            result = workflow._start_background_task(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=1.0,
+                max_concurrent=1,
+                task_timeout=10.0,
+            )
+            bg_task = workflow.get_background_task(state.id)
+
+            # Task should not be None (but it will be for thread-based execution)
+            # The is_done property should handle both cases
+            assert bg_task.thread is not None
+            assert bg_task.task is None  # No asyncio task for thread-based
+
+            # is_done should work via thread.is_alive()
+            assert bg_task.is_done is False  # Still running
+
+            # Wait for completion
+            bg_task.thread.join(timeout=5.0)
+            assert bg_task.is_done is True  # Now done
+
+    def test_get_status_during_background_task(self, mock_config, mock_memory):
+        """Should get status while background task is running (bug fix test)."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        workflow = DeepResearchWorkflow(mock_config, mock_memory)
+        state = DeepResearchState(original_query="Status check test")
+
+        async def slow_execute(*args, **kwargs):
+            await asyncio.sleep(0.2)
+            return WorkflowResult(success=True, content="done")
+
+        with patch.object(
+            workflow, "_execute_workflow_async", side_effect=slow_execute
+        ):
+            # Start background task
+            workflow._start_background_task(
+                state=state,
+                provider_id=None,
+                timeout_per_operation=1.0,
+                max_concurrent=1,
+                task_timeout=10.0,
+            )
+
+            # Check status while running - this should NOT crash
+            # (Previously crashed with "'NoneType' object has no attribute 'done'")
+            status_result = workflow.execute(action="status", research_id=state.id)
+
+            assert status_result.success is True
+            assert status_result.metadata["research_id"] == state.id
+            assert status_result.metadata["is_complete"] is False  # Still running
+
+            # Wait for completion
+            bg_task = workflow.get_background_task(state.id)
+            bg_task.thread.join(timeout=5.0)
+
+    def test_continue_research_with_background(
+        self, mock_config, mock_memory, sample_deep_research_state
+    ):
+        """Should continue research in background mode."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        # Set up state as not completed
+        sample_deep_research_state.completed_at = None
+        mock_memory.load_deep_research.return_value = sample_deep_research_state
+        mock_memory.save_deep_research.return_value = None
+
+        workflow = DeepResearchWorkflow(mock_config, mock_memory)
+
+        async def mock_execute(*args, **kwargs):
+            await asyncio.sleep(0.1)
+            return WorkflowResult(success=True, content="Continued research")
+
+        with patch.object(
+            workflow, "_execute_workflow_async", side_effect=mock_execute
+        ):
+            # Continue with background=True
+            result = workflow.execute(
+                action="continue",
+                research_id=sample_deep_research_state.id,
+                background=True,
+                task_timeout=10.0,
+            )
+
+            # Should return immediately with research_id
+            assert result.success is True
+            assert result.metadata["research_id"] == sample_deep_research_state.id
+
+            # Background task should be running
+            bg_task = workflow.get_background_task(sample_deep_research_state.id)
+            assert bg_task is not None
+            assert bg_task.thread is not None
+
+            # Wait for completion
+            bg_task.thread.join(timeout=5.0)
+
     def test_execute_start_without_query(self, mock_config, mock_memory):
         """Should return error when starting without query."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow

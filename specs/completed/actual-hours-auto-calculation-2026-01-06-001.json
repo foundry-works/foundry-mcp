@@ -1,0 +1,481 @@
+{
+  "spec_id": "actual-hours-auto-calculation-2026-01-06-001",
+  "title": "actual-hours-auto-calculation",
+  "generated": "2026-01-06T16:28:17.090527Z",
+  "last_updated": "2026-01-06T17:00:45.176364Z",
+  "metadata": {
+    "description": "",
+    "mission": "Auto-calculate actual_hours from timestamps on task completion and add rollup aggregation to phases and spec",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 3.0,
+    "assumptions": [],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 100,
+  "status": "completed",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "actual-hours-auto-calculation",
+      "status": "completed",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3"
+      ],
+      "total_tasks": 8,
+      "completed_tasks": 8,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Auto-Calculate on Completion",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "verify-1-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 3,
+      "metadata": {
+        "purpose": "Calculate duration from started_at to completed_at timestamps",
+        "description": "Add automatic actual_hours calculation when tasks are marked complete",
+        "estimated_hours": 1.0,
+        "needs_journaling": true,
+        "completed_at": "2026-01-06T16:42:36.291392Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add auto-calculation in journal.py",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "In update_task_status(), when status changes to 'completed' and started_at exists, calculate actual_hours = (completed_at - started_at).total_seconds() / 3600. Only set if actual_hours not already manually provided.",
+        "file_path": "src/foundry_mcp/core/journal.py",
+        "estimated_hours": 0.5,
+        "acceptance_criteria": [
+          "Calculate duration when status \u2192 completed",
+          "Only if started_at exists in metadata",
+          "Preserve manual entries (don't overwrite if already set)"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-06T16:34:16.634771Z",
+        "completed_at": "2026-01-06T16:34:56.363482Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:34:56.363618Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Add auto-calculation in batch_operations.py",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Apply same logic to batch completion handlers for consistency",
+        "file_path": "src/foundry_mcp/core/batch_operations.py",
+        "estimated_hours": 0.5,
+        "acceptance_criteria": [
+          "Batch completion calculates actual_hours",
+          "Same logic as journal.py"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-06T16:37:36.289229Z",
+        "completed_at": "2026-01-06T16:38:28.929239Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:38:28.929326Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Verify auto-calculation works",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "verification_type": "manual",
+        "started_at": "2026-01-06T16:41:33.745231Z",
+        "completed_at": "2026-01-06T16:42:36.291345Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:42:36.291418Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Rollup Function",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "verify-2-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 3,
+      "metadata": {
+        "purpose": "Aggregate actual_hours from tasks to phases to spec",
+        "description": "Add recalculate_actual_hours() function mirroring estimated_hours pattern",
+        "estimated_hours": 1.0,
+        "needs_journaling": true,
+        "completed_at": "2026-01-06T16:54:30.919880Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Add recalculate_actual_hours() function",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Mirror recalculate_estimated_hours() pattern: walk hierarchy, sum actual_hours from tasks, update phases, sum phases to spec. Support dry_run mode.",
+        "file_path": "src/foundry_mcp/core/spec.py",
+        "estimated_hours": 0.75,
+        "acceptance_criteria": [
+          "Sums actual_hours from task/subtask/verify nodes",
+          "Updates phase metadata with calculated sum",
+          "Updates spec metadata with sum of phases",
+          "dry_run returns report without saving",
+          "Returns before/after report with deltas"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-06T16:44:51.583462Z",
+        "completed_at": "2026-01-06T16:46:13.561463Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:46:13.561623Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Add recalculate-actual-hours MCP action",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add action handler to spec.py unified tool, wire to core function",
+        "file_path": "src/foundry_mcp/tools/unified/spec.py",
+        "estimated_hours": 0.25,
+        "acceptance_criteria": [
+          "Action registered in spec tool",
+          "Parameters: spec_id (required), dry_run (optional)"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-06T16:48:45.246611Z",
+        "completed_at": "2026-01-06T16:49:47.582607Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:49:47.582675Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Verify rollup function",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "verification_type": "manual",
+        "started_at": "2026-01-06T16:53:18.287672Z",
+        "completed_at": "2026-01-06T16:54:30.919828Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:54:30.919906Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Testing",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "verify-3-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 2,
+      "metadata": {
+        "purpose": "Ensure correctness and edge case handling",
+        "description": "Add unit tests for auto-calculation and rollup",
+        "estimated_hours": 1.0,
+        "needs_journaling": true,
+        "completed_at": "2026-01-06T17:00:45.176300Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Add unit tests",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Test cases: auto-calc from timestamps, manual entry preserved, rollup aggregation, dry_run mode, tasks without started_at",
+        "file_path": "tests/unit/test_core/test_spec.py",
+        "estimated_hours": 1.0,
+        "acceptance_criteria": [
+          "Test auto-calc sets actual_hours correctly",
+          "Test manual entry is not overwritten",
+          "Test rollup sums correctly",
+          "Test dry_run mode"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-06T16:56:50.461264Z",
+        "completed_at": "2026-01-06T16:58:59.265212Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:58:59.265279Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "verification_type": "run-tests",
+        "started_at": "2026-01-06T17:00:33.403178Z",
+        "completed_at": "2026-01-06T17:00:45.176270Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T17:00:45.176325Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2026-01-06T16:34:16.634841Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of auto-calculation in journal.py update_task_status()",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:34:56.363618Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add auto-calculation in journal.py",
+      "content": "Implemented auto-calculation of actual_hours in update_task_status() at lines 537-541. When status changes to 'completed' and started_at exists, calculates duration in hours (rounded to 2 decimals). Preserves manual entries by checking if actual_hours already set. Basic verification: imports work, no syntax errors. Full test run deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:37:36.289315Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of auto-calculation in batch_operations.py complete_batch()",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2026-01-06T16:38:28.929326Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add auto-calculation in batch_operations.py",
+      "content": "Implemented auto-calculation of actual_hours in complete_batch() at lines 1010-1014. Same logic as journal.py: when task completes successfully and started_at exists, calculates duration in hours (rounded to 2 decimals). Preserves manual entries. Basic verification: imports work, no syntax errors. Full test run deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2026-01-06T16:41:33.745297Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting verification of auto-calculation implementations",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:42:36.291418Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify auto-calculation works",
+      "content": "Verification passed. Tests: 59/59 journal tests pass. Functional validation: (1) journal.py auto-calculates actual_hours correctly (1.7 hours for ~1.7hr elapsed), (2) batch_operations.py logic calculates correctly (1.71 hours), (3) Both preserve manual entries (5.0 and 10.0 not overwritten). All acceptance criteria met.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:44:51.583512Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of recalculate_actual_hours() function",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:46:13.561623Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add recalculate_actual_hours() function",
+      "content": "Added recalculate_actual_hours() function at lines 2605-2743 in spec.py. Mirrors recalculate_estimated_hours() pattern: walks hierarchy phases, sums actual_hours from task/subtask/verify nodes, updates phase and spec metadata, supports dry_run mode, returns before/after report with deltas. Import verified successful. Full tests deferred to verify-2-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:48:45.246667Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of recalculate-actual-hours MCP action",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-2"
+    },
+    {
+      "timestamp": "2026-01-06T16:49:47.582675Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add recalculate-actual-hours MCP action",
+      "content": "Added recalculate-actual-hours MCP action: (1) Import added at line 43, (2) Handler _handle_recalculate_actual_hours at lines 1115-1160, (3) ActionDefinition registered at lines 1215-1219. Parameters: spec_id (required), dry_run (optional). Handler import verified successful. Full tests deferred to verify-2-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-2"
+    },
+    {
+      "timestamp": "2026-01-06T16:53:18.287857Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting verification of rollup function",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-2-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:54:30.919906Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify rollup function",
+      "content": "Verification passed. Tests: 86/86 spec unit tests pass. Functional validation: recalculate_actual_hours() correctly sums actual_hours from tasks (1.5+2.0+0.75=4.25 total), dry_run returns report without saving, MCP handler imports successfully, action registered as recalculate-actual-hours.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-2-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:56:50.461315Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Starting implementation of unit tests",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:58:59.265279Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add unit tests",
+      "content": "Added 7 unit tests: (1) test_journal.py - 3 tests for auto-calc, manual preservation, and no-started_at cases; (2) test_spec.py - 4 tests for recalculate_actual_hours basic, dry_run, no_actuals, and spec_not_found. All 7 new tests pass. Full test run deferred to verify-3-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2026-01-06T17:00:33.403229Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Running full test suite",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-3-1"
+    },
+    {
+      "timestamp": "2026-01-06T17:00:45.176325Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Run tests",
+      "content": "Full test suite passed: 152/152 tests (62 journal + 90 spec). All new actual_hours tests pass: 3 auto-calc tests in test_journal.py, 4 recalculate_actual_hours tests in test_spec.py. No regressions detected.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-3-1"
+    }
+  ]
+}

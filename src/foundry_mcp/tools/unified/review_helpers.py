@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 # Default AI consultation timeout
-DEFAULT_AI_TIMEOUT = 120.0
+DEFAULT_AI_TIMEOUT = 360.0
 
 # Review types supported by the unified `review(action="spec")` entrypoint.
 REVIEW_TYPES = ["quick", "full", "security", "feasibility"]

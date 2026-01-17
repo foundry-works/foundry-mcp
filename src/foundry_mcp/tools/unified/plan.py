@@ -219,7 +219,7 @@ def perform_plan_review(
     plan_path: str,
     review_type: str = "full",
     ai_provider: Optional[str] = None,
-    ai_timeout: float = 120.0,
+    ai_timeout: float = 360.0,
     consultation_cache: bool = True,
     dry_run: bool = False,
 ) -> dict:

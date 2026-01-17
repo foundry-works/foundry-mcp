@@ -483,19 +483,19 @@ class ResearchConfig:
     ideate_perspectives: List[str] = field(
         default_factory=lambda: ["technical", "creative", "practical", "visionary"]
     )
-    default_timeout: float = 60.0  # 60 seconds default, configurable
+    default_timeout: float = 360.0  # 360 seconds default for AI CLI providers
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
     deep_research_max_sources: int = 5
     deep_research_follow_links: bool = True
-    deep_research_timeout: float = 120.0
+    deep_research_timeout: float = 600.0  # Whole workflow timeout
     deep_research_max_concurrent: int = 3
     # Per-phase timeout overrides (seconds) - uses deep_research_timeout if not set
-    deep_research_planning_timeout: float = 60.0
-    deep_research_analysis_timeout: float = 90.0
-    deep_research_synthesis_timeout: float = 180.0
-    deep_research_refinement_timeout: float = 60.0
+    deep_research_planning_timeout: float = 360.0
+    deep_research_analysis_timeout: float = 360.0
+    deep_research_synthesis_timeout: float = 600.0  # Synthesis may take longer
+    deep_research_refinement_timeout: float = 360.0
     # Per-phase provider overrides - uses default_provider if not set
     deep_research_planning_provider: Optional[str] = None
     deep_research_analysis_provider: Optional[str] = None
@@ -579,19 +579,19 @@ class ResearchConfig:
             consensus_providers=consensus_providers,
             thinkdeep_max_depth=int(data.get("thinkdeep_max_depth", 5)),
             ideate_perspectives=ideate_perspectives,
-            default_timeout=float(data.get("default_timeout", 60.0)),
+            default_timeout=float(data.get("default_timeout", 360.0)),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
             deep_research_max_sources=int(data.get("deep_research_max_sources", 5)),
             deep_research_follow_links=_parse_bool(data.get("deep_research_follow_links", True)),
-            deep_research_timeout=float(data.get("deep_research_timeout", 120.0)),
+            deep_research_timeout=float(data.get("deep_research_timeout", 600.0)),
             deep_research_max_concurrent=int(data.get("deep_research_max_concurrent", 3)),
-            # Per-phase timeout overrides
-            deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 60.0)),
-            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 90.0)),
-            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 180.0)),
-            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 60.0)),
+            # Per-phase timeout overrides (match class defaults)
+            deep_research_planning_timeout=float(data.get("deep_research_planning_timeout", 360.0)),
+            deep_research_analysis_timeout=float(data.get("deep_research_analysis_timeout", 360.0)),
+            deep_research_synthesis_timeout=float(data.get("deep_research_synthesis_timeout", 600.0)),
+            deep_research_refinement_timeout=float(data.get("deep_research_refinement_timeout", 360.0)),
             # Per-phase provider overrides
             deep_research_planning_provider=data.get("deep_research_planning_provider"),
             deep_research_analysis_provider=data.get("deep_research_analysis_provider"),

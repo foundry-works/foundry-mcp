@@ -5,6 +5,120 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.23] - 2026-01-11
+
+### Fixed
+
+- **Deep research per-phase timeout config parsing**: Fixed config parsing to use correct timeout defaults
+  - Main timeout: 120s → 600s
+  - Planning timeout: 60s → 360s
+  - Analysis timeout: 90s → 360s
+  - Synthesis timeout: 180s → 600s
+  - Refinement timeout: 60s → 360s
+  - Config parsing now matches the class default values
+
+### Enhanced
+
+- **Bulk phase task validation for all task types**: Extended `authoring(action="phase-add-bulk")` validation
+  - Now supports all task types: task, subtask, verify, research (previously only task/verify)
+  - Uses `TASK_TYPES` constant from task module for consistency
+  - Added validation for research-specific parameters: `blocking_mode`, `research_type`, `query`
+  - Improved error messages to show all valid task types
+
+## [0.8.22] - 2026-01-07
+
+### Changed
+
+- **Research default timeout increased**: Changed `default_timeout` from 60s to 360s in research config
+  - Provides more time for complex research operations that involve multiple LLM calls and web fetches
+
+### Fixed
+
+- **Flexible assumption types**: Removed strict validation on `assumption_type` parameter in assumption operations
+  - Previously only accepted "constraint" or "requirement"
+  - Now accepts any string value (e.g., "architectural", "security", "performance")
+  - Affects `authoring(action="assumption-add")` and `authoring(action="assumption-list")`
+
+## [0.8.21] - 2026-01-07
+
+### Added
+
+- **Review tool "spec-review" alias**: Added `"spec-review"` as an alias for the `"spec"` action in the review tool
+  - Users can now call `review(action="spec-review", ...)` or `review(action="spec", ...)` interchangeably
+
+- **MCP task tool batch parameters**: Added missing parameters to task tool MCP schema
+  - `completions: List[Dict]` for `complete-batch` action with per-task completion notes
+  - `threshold_hours: float` for `reset-batch` action to filter tasks by estimated hours
+
+## [0.8.20] - 2026-01-06
+
+### Added
+
+- **Hours hierarchy recalculation actions**: New spec actions to aggregate hours from tasks up through hierarchy
+  - `spec(action="recalculate-hours")`: Sums `estimated_hours` from task/subtask/verify nodes to phases, then to spec total
+  - `spec(action="recalculate-actual-hours")`: Sums `actual_hours` from task/subtask/verify nodes to phases, then to spec total
+  - Both support `dry_run` mode to preview changes without saving
+  - Returns detailed breakdown per phase with previous/calculated/delta values
+
+- **Auto-calculate actual_hours on task completion**: When completing tasks with `started_at` but no manual `actual_hours`
+  - Calculates elapsed time from `started_at` to `completed_at` in hours
+  - Applies to both single task completion via `update_task_status()` and batch completion via `complete_batch()`
+  - Preserves manually set values - only auto-calculates if `actual_hours` not already present
+
+## [0.8.19] - 2026-01-06
+
+### Fixed
+
+- **Deep research workflow failure state handling**: Fixed issue where failed research sessions appeared "stalled" instead of properly marked as failed
+  - Added `mark_failed(error: str)` method to `DeepResearchState` to explicitly mark sessions as failed
+  - `_execute_gathering_async` now returns descriptive error message when all sub-queries fail to find sources
+  - All phase failure blocks (planning, gathering, analysis, synthesis) now call `state.mark_failed()` before returning
+  - Status reporting now includes `is_failed` and `failure_error` fields
+  - Status display shows "Failed" instead of "In Progress" for failed sessions with error details
+
+## [0.8.18] - 2026-01-06
+
+### Fixed
+
+- **Deep research `continue`/`resume` event loop conflict**: Fixed `RuntimeError: Cannot run the event loop while another loop is running`
+  - `_continue_research()` now uses same event loop handling pattern as `_start_research()`
+  - Detects running event loop with `asyncio.get_event_loop().is_running()`
+  - Uses `ThreadPoolExecutor` to run async code in separate thread when already in async context
+  - Fixes issue when MCP server calls deep research continue/resume actions
+
+## [0.8.17] - 2026-01-06
+
+### Fixed
+
+- **MCP task tool missing `task_ids` parameter**: Added `task_ids: Optional[List[str]]` parameter to the task tool schema
+  - The `start-batch`, `complete-batch`, and `reset-batch` actions require a list of task IDs
+  - Previously, only `task_id` (singular string) was exposed in the MCP schema
+  - Now both `task_id` and `task_ids` are available for single vs batch operations
+
+## [0.8.16] - 2026-01-06
+
+### Changed
+
+- **Timeout standardization for AI CLI providers**: Increased default timeouts across all workflows
+  - Per-provider/per-operation minimum: 360s (6 minutes) for Claude, Codex, Gemini, CursorAgent, OpenCode
+  - Whole workflow timeouts: 600s (10 minutes) for plan_review, markdown_plan_review, deep_research
+  - Deep research phase timeouts increased: planning/analysis/refinement 360s, synthesis 600s
+  - Updated defaults in: `config.py`, `research.py`, `consensus.py`, `plan.py`, `review_helpers.py`
+  - Updated sample and default TOML configs with new timeout standards and documentation
+
+### Fixed
+
+- **Deep research `continue` action background execution**: Now properly supports `background=True` parameter
+  - Previously, continuing a research session ignored the `background` flag
+  - Added `background` and `task_timeout` parameters to `_continue_research()` method
+  - Continued research can now run in background thread like initial `start` action
+
+- **Deep research status check crash**: Fixed `'NoneType' object has no attribute 'done'` error
+  - `BackgroundTask.is_done` property now correctly handles thread-based execution
+  - Previously used `task.done()` which only works for asyncio tasks
+  - Now checks `thread.is_alive()` for thread-based execution (daemon threads with `asyncio.run()`)
+  - Added comprehensive tests for background task state checking
+
 ## [0.8.15] - 2026-01-05
 
 ### Fixed

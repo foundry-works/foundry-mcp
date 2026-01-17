@@ -25,7 +25,7 @@ from foundry_mcp.core.llm_config import get_consultation_config
 logger = get_cli_logger()
 
 # Default AI consultation timeout
-DEFAULT_AI_TIMEOUT = 120.0
+DEFAULT_AI_TIMEOUT = 360.0
 
 # Review types supported
 REVIEW_TYPES = ["quick", "full", "security", "feasibility"]

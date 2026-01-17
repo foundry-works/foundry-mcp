@@ -1,0 +1,330 @@
+{
+  "spec_id": "estimated-hours-recalculation-2026-01-06-001",
+  "title": "estimated-hours-recalculation",
+  "generated": "2026-01-06T16:15:49.311719Z",
+  "last_updated": "2026-01-06T16:23:35.015710Z",
+  "metadata": {
+    "description": "",
+    "mission": "Add recalculate_estimated_hours function to aggregate task estimates up through phases to spec-level total",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 3.0,
+    "assumptions": [],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 100,
+  "status": "completed",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "estimated-hours-recalculation",
+      "status": "completed",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 6,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Core Function Implementation",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "verify-1-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 2,
+      "metadata": {
+        "purpose": "Create the core logic for hierarchy traversal and estimate aggregation",
+        "description": "Add recalculate_estimated_hours() to spec.py",
+        "needs_journaling": true,
+        "completed_at": "2026-01-06T16:23:14.559224Z",
+        "estimated_hours": 1.5
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add recalculate_estimated_hours function",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Implement function that walks hierarchy, sums task estimates to phases, sums phase estimates to spec. Follow _count_tasks_in_subtree() pattern.",
+        "file_path": "src/foundry_mcp/core/spec.py",
+        "estimated_hours": 1.5,
+        "acceptance_criteria": [
+          "Function walks all phases and their task descendants",
+          "Sums estimated_hours from task/subtask nodes",
+          "Updates phase metadata with calculated sum",
+          "Updates spec metadata with sum of phases",
+          "dry_run=True returns report without saving",
+          "Handles missing/invalid estimates as 0"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-06T16:19:41.205854Z",
+        "completed_at": "2026-01-06T16:23:14.138518Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:23:14.138630Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Verify core function implementation",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "verification_type": "manual",
+        "completed_at": "2026-01-06T16:23:14.559197Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:23:14.559242Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "MCP Tool Exposure",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "verify-2-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 2,
+      "metadata": {
+        "purpose": "Expose the recalculation function via MCP for agent use",
+        "description": "Add recalculate-hours action to spec tool",
+        "needs_journaling": true,
+        "completed_at": "2026-01-06T16:23:15.094512Z",
+        "estimated_hours": 0.5
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Add recalculate-hours action handler",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add action=recalculate-hours to spec.py unified tool. Wire spec_id and dry_run parameters to core function.",
+        "file_path": "src/foundry_mcp/tools/unified/spec.py",
+        "estimated_hours": 0.5,
+        "acceptance_criteria": [
+          "Action registered in spec tool",
+          "Parameters validated (spec_id required, dry_run optional)",
+          "Response follows standard envelope format"
+        ],
+        "task_category": "implementation",
+        "completed_at": "2026-01-06T16:23:14.869797Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:23:14.869834Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Verify MCP tool action",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "verification_type": "manual",
+        "completed_at": "2026-01-06T16:23:15.094490Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:23:15.094528Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Testing",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "verify-3-1"
+      ],
+      "total_tasks": 2,
+      "completed_tasks": 2,
+      "metadata": {
+        "purpose": "Ensure correctness and edge case handling",
+        "description": "Add unit tests for recalculation functionality",
+        "needs_journaling": true,
+        "completed_at": "2026-01-06T16:23:25.716661Z",
+        "estimated_hours": 1.0
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Add unit tests for recalculate_estimated_hours",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Test cases: spec with no estimates, spec with task estimates only, stale estimates with deltas, dry_run mode, empty spec handling",
+        "file_path": "tests/unit/test_core/test_spec.py",
+        "estimated_hours": 1.0,
+        "acceptance_criteria": [
+          "Test spec with no estimates returns 0 at all levels",
+          "Test task estimates roll up to phases correctly",
+          "Test phase estimates roll up to spec correctly",
+          "Test dry_run returns report without saving",
+          "Test empty spec handles gracefully"
+        ],
+        "task_category": "implementation",
+        "completed_at": "2026-01-06T16:23:25.580176Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:23:25.580292Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Run tests",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "verification_type": "run-tests",
+        "completed_at": "2026-01-06T16:23:25.716640Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-06T16:23:25.716678Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2026-01-06T16:23:14.138630Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add recalculate_estimated_hours function",
+      "content": "Added recalculate_estimated_hours() function to spec.py with full hierarchy rollup",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:23:14.559242Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify core function implementation",
+      "content": "Verified via direct Python test - dry run shows correct calculation",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:23:14.869834Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add recalculate-hours action handler",
+      "content": "Added recalculate-hours action to spec.py unified tool with handler",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:23:15.094528Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify MCP tool action",
+      "content": "Verified handler works via direct Python call - MCP server needs restart for live test",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-2-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:23:25.580292Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add unit tests for recalculate_estimated_hours",
+      "content": "Added 6 unit tests covering basic, dry_run, empty spec, no estimates, not found, and missing spec_id cases",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2026-01-06T16:23:25.716678Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Run tests",
+      "content": "All 6 tests pass",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-3-1"
+    }
+  ]
+}

@@ -40,6 +40,8 @@ from foundry_mcp.core.spec import (
     list_spec_backups,
     list_specs,
     load_spec,
+    recalculate_actual_hours,
+    recalculate_estimated_hours,
 )
 from foundry_mcp.core.validation import (
     VALID_NODE_TYPES,
@@ -1062,6 +1064,102 @@ def _handle_duplicate_detection(
     return asdict(success_response(**result))
 
 
+def _handle_recalculate_hours(
+    *, config: ServerConfig, payload: Dict[str, Any]
+) -> dict:
+    """Recalculate estimated_hours by aggregating from tasks up through hierarchy."""
+    spec_id = payload.get("spec_id")
+    if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
+        return asdict(
+            error_response(
+                "spec_id is required for recalculate-hours action",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide the spec_id to recalculate hours for",
+            )
+        )
+
+    workspace = payload.get("workspace")
+    dry_run = payload.get("dry_run", False)
+
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory",
+            )
+        )
+
+    result, error = recalculate_estimated_hours(
+        spec_id,
+        dry_run=dry_run,
+        specs_dir=specs_dir,
+    )
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.SPEC_NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation='Verify the spec ID exists using spec(action="list").',
+                details={"spec_id": spec_id},
+            )
+        )
+
+    return asdict(success_response(**result))
+
+
+def _handle_recalculate_actual_hours(
+    *, config: ServerConfig, payload: Dict[str, Any]
+) -> dict:
+    """Recalculate actual_hours by aggregating from tasks up through hierarchy."""
+    spec_id = payload.get("spec_id")
+    if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
+        return asdict(
+            error_response(
+                "spec_id is required for recalculate-actual-hours action",
+                error_code=ErrorCode.MISSING_REQUIRED,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide the spec_id to recalculate actual hours for",
+            )
+        )
+
+    workspace = payload.get("workspace")
+    dry_run = payload.get("dry_run", False)
+
+    specs_dir = _resolve_specs_dir(config, workspace)
+    if not specs_dir:
+        return asdict(
+            error_response(
+                "No specs directory found",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Ensure you're in a project with a specs/ directory",
+            )
+        )
+
+    result, error = recalculate_actual_hours(
+        spec_id,
+        dry_run=dry_run,
+        specs_dir=specs_dir,
+    )
+    if error:
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.SPEC_NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation='Verify the spec ID exists using spec(action="list").',
+                details={"spec_id": spec_id},
+            )
+        )
+
+    return asdict(success_response(**result))
+
+
 _ACTIONS = [
     ActionDefinition(name="find", handler=_handle_find, summary="Find a spec by ID"),
     ActionDefinition(name="get", handler=_handle_get, summary="Get raw spec JSON (minified)"),
@@ -1108,6 +1206,16 @@ _ACTIONS = [
         name="duplicate-detection",
         handler=_handle_duplicate_detection,
         summary="Detect duplicate or near-duplicate tasks",
+    ),
+    ActionDefinition(
+        name="recalculate-hours",
+        handler=_handle_recalculate_hours,
+        summary="Recalculate estimated_hours from task/phase hierarchy",
+    ),
+    ActionDefinition(
+        name="recalculate-actual-hours",
+        handler=_handle_recalculate_actual_hours,
+        summary="Recalculate actual_hours from task/phase hierarchy",
     ),
 ]
 

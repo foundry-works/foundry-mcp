@@ -56,7 +56,7 @@ class ConsensusWorkflow(ResearchWorkflowBase):
         strategy: ConsensusStrategy = ConsensusStrategy.SYNTHESIZE,
         synthesis_provider: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        timeout_per_provider: float = 30.0,
+        timeout_per_provider: float = 360.0,
         max_concurrent: int = 3,
         require_all: bool = False,
         min_responses: int = 1,

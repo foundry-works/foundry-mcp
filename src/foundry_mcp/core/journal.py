@@ -534,6 +534,12 @@ def update_task_status(
         metadata["completed_at"] = timestamp
         metadata["needs_journaling"] = True
 
+        # Auto-calculate actual_hours if started_at exists and not manually set
+        if "started_at" in metadata and "actual_hours" not in metadata:
+            started_at = datetime.fromisoformat(metadata["started_at"].replace("Z", "+00:00"))
+            completed_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            metadata["actual_hours"] = round((completed_at - started_at).total_seconds() / 3600, 2)
+
     if note:
         metadata["status_note"] = note
 

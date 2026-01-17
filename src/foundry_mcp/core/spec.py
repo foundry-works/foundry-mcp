@@ -1402,14 +1402,15 @@ def add_phase_bulk(
             return None, "metadata_defaults.acceptance_criteria must be a list of strings"
 
     # Validate each task definition
-    valid_task_types = {"task", "verify"}
+    # Valid task types match TASK_TYPES from task.py (avoiding circular import)
+    valid_task_types = {"task", "subtask", "verify", "research"}
     for idx, task_def in enumerate(tasks):
         if not isinstance(task_def, dict):
             return None, f"Task at index {idx} must be a dictionary"
 
         task_type = task_def.get("type")
         if not task_type or task_type not in valid_task_types:
-            return None, f"Task at index {idx} must have type 'task' or 'verify'"
+            return None, f"Task at index {idx} must have type: {', '.join(sorted(valid_task_types))}"
 
         task_title = task_def.get("title")
         if not task_title or not isinstance(task_title, str) or not task_title.strip():
@@ -2461,6 +2462,288 @@ def update_phase_metadata(
     return result, None
 
 
+def recalculate_estimated_hours(
+    spec_id: str,
+    dry_run: bool = False,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Recalculate estimated_hours by aggregating from tasks up through the hierarchy.
+
+    Performs full hierarchy rollup:
+    1. For each phase: sums estimated_hours from all task/subtask/verify descendants
+    2. Updates each phase's metadata.estimated_hours with the calculated sum
+    3. Sums all phase estimates to get the spec total
+    4. Updates spec metadata.estimated_hours with the calculated sum
+
+    Args:
+        spec_id: Specification ID to recalculate.
+        dry_run: If True, return report without saving changes.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "phases": [...], "spec_level": {...}, ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate spec_id
+    if not spec_id or not spec_id.strip():
+        return None, "Specification ID is required"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "Could not find specs directory"
+
+    # Load spec
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    spec_root = hierarchy.get("spec-root")
+    if not spec_root:
+        return None, "Invalid spec: missing spec-root"
+
+    # Get phase children from spec-root
+    phase_ids = spec_root.get("children", [])
+
+    # Track results for each phase
+    phase_results: List[Dict[str, Any]] = []
+    spec_total_calculated = 0.0
+
+    for phase_id in phase_ids:
+        phase = hierarchy.get(phase_id)
+        if not phase or phase.get("type") != "phase":
+            continue
+
+        phase_metadata = phase.get("metadata", {})
+        previous_hours = phase_metadata.get("estimated_hours")
+
+        # Collect all descendants of this phase
+        descendants = _collect_descendants(hierarchy, phase_id)
+
+        # Sum estimated_hours from task/subtask/verify nodes
+        task_count = 0
+        calculated_hours = 0.0
+
+        for desc_id in descendants:
+            desc_node = hierarchy.get(desc_id)
+            if not desc_node:
+                continue
+
+            desc_type = desc_node.get("type")
+            if desc_type in ("task", "subtask", "verify"):
+                task_count += 1
+                desc_metadata = desc_node.get("metadata", {})
+                est = desc_metadata.get("estimated_hours")
+                if isinstance(est, (int, float)) and est >= 0:
+                    calculated_hours += float(est)
+
+        # Calculate delta
+        prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
+        delta = calculated_hours - prev_value
+
+        phase_results.append({
+            "phase_id": phase_id,
+            "title": phase.get("title", ""),
+            "previous": previous_hours,
+            "calculated": calculated_hours,
+            "delta": delta,
+            "task_count": task_count,
+        })
+
+        # Update phase metadata (will be saved if not dry_run)
+        if "metadata" not in phase:
+            phase["metadata"] = {}
+        phase["metadata"]["estimated_hours"] = calculated_hours
+
+        # Add to spec total
+        spec_total_calculated += calculated_hours
+
+    # Get spec-level previous value
+    spec_metadata = spec_data.get("metadata", {})
+    spec_previous = spec_metadata.get("estimated_hours")
+    spec_prev_value = float(spec_previous) if isinstance(spec_previous, (int, float)) else 0.0
+    spec_delta = spec_total_calculated - spec_prev_value
+
+    # Update spec metadata
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    spec_data["metadata"]["estimated_hours"] = spec_total_calculated
+
+    # Build result
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "dry_run": dry_run,
+        "spec_level": {
+            "previous": spec_previous,
+            "calculated": spec_total_calculated,
+            "delta": spec_delta,
+        },
+        "phases": phase_results,
+        "summary": {
+            "total_phases": len(phase_results),
+            "phases_changed": sum(1 for p in phase_results if p["delta"] != 0),
+            "spec_changed": spec_delta != 0,
+        },
+    }
+
+    if dry_run:
+        result["message"] = "Dry run - changes not saved"
+        return result, None
+
+    # Save spec
+    saved = save_spec(spec_id, spec_data, specs_dir)
+    if not saved:
+        return None, "Failed to save specification"
+
+    return result, None
+
+
+def recalculate_actual_hours(
+    spec_id: str,
+    dry_run: bool = False,
+    specs_dir: Optional[Path] = None,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Recalculate actual_hours by aggregating from tasks up through the hierarchy.
+
+    Performs full hierarchy rollup:
+    1. For each phase: sums actual_hours from all task/subtask/verify descendants
+    2. Updates each phase's metadata.actual_hours with the calculated sum
+    3. Sums all phase actuals to get the spec total
+    4. Updates spec metadata.actual_hours with the calculated sum
+
+    Args:
+        spec_id: Specification ID to recalculate.
+        dry_run: If True, return report without saving changes.
+        specs_dir: Path to specs directory (auto-detected if not provided).
+
+    Returns:
+        Tuple of (result_dict, error_message).
+        On success: ({"spec_id": ..., "phases": [...], "spec_level": {...}, ...}, None)
+        On failure: (None, "error message")
+    """
+    # Validate spec_id
+    if not spec_id or not spec_id.strip():
+        return None, "Specification ID is required"
+
+    # Find specs directory
+    if specs_dir is None:
+        specs_dir = find_specs_directory()
+
+    if specs_dir is None:
+        return None, "Could not find specs directory"
+
+    # Load spec
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, f"Specification '{spec_id}' not found"
+
+    hierarchy = spec_data.get("hierarchy", {})
+    spec_root = hierarchy.get("spec-root")
+    if not spec_root:
+        return None, "Invalid spec: missing spec-root"
+
+    # Get phase children from spec-root
+    phase_ids = spec_root.get("children", [])
+
+    # Track results for each phase
+    phase_results: List[Dict[str, Any]] = []
+    spec_total_calculated = 0.0
+
+    for phase_id in phase_ids:
+        phase = hierarchy.get(phase_id)
+        if not phase or phase.get("type") != "phase":
+            continue
+
+        phase_metadata = phase.get("metadata", {})
+        previous_hours = phase_metadata.get("actual_hours")
+
+        # Collect all descendants of this phase
+        descendants = _collect_descendants(hierarchy, phase_id)
+
+        # Sum actual_hours from task/subtask/verify nodes
+        task_count = 0
+        calculated_hours = 0.0
+
+        for desc_id in descendants:
+            desc_node = hierarchy.get(desc_id)
+            if not desc_node:
+                continue
+
+            desc_type = desc_node.get("type")
+            if desc_type in ("task", "subtask", "verify"):
+                task_count += 1
+                desc_metadata = desc_node.get("metadata", {})
+                act = desc_metadata.get("actual_hours")
+                if isinstance(act, (int, float)) and act >= 0:
+                    calculated_hours += float(act)
+
+        # Calculate delta
+        prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
+        delta = calculated_hours - prev_value
+
+        phase_results.append({
+            "phase_id": phase_id,
+            "title": phase.get("title", ""),
+            "previous": previous_hours,
+            "calculated": calculated_hours,
+            "delta": delta,
+            "task_count": task_count,
+        })
+
+        # Update phase metadata (will be saved if not dry_run)
+        if "metadata" not in phase:
+            phase["metadata"] = {}
+        phase["metadata"]["actual_hours"] = calculated_hours
+
+        # Add to spec total
+        spec_total_calculated += calculated_hours
+
+    # Get spec-level previous value
+    spec_metadata = spec_data.get("metadata", {})
+    spec_previous = spec_metadata.get("actual_hours")
+    spec_prev_value = float(spec_previous) if isinstance(spec_previous, (int, float)) else 0.0
+    spec_delta = spec_total_calculated - spec_prev_value
+
+    # Update spec metadata
+    if "metadata" not in spec_data:
+        spec_data["metadata"] = {}
+    spec_data["metadata"]["actual_hours"] = spec_total_calculated
+
+    # Build result
+    result: Dict[str, Any] = {
+        "spec_id": spec_id,
+        "dry_run": dry_run,
+        "spec_level": {
+            "previous": spec_previous,
+            "calculated": spec_total_calculated,
+            "delta": spec_delta,
+        },
+        "phases": phase_results,
+        "summary": {
+            "total_phases": len(phase_results),
+            "phases_changed": sum(1 for p in phase_results if p["delta"] != 0),
+            "spec_changed": spec_delta != 0,
+        },
+    }
+
+    if dry_run:
+        result["message"] = "Dry run - changes not saved"
+        return result, None
+
+    # Save spec
+    saved = save_spec(spec_id, spec_data, specs_dir)
+    if not saved:
+        return None, "Failed to save specification"
+
+    return result, None
+
+
 def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     Get the hierarchical structure for a spec template.
@@ -2921,14 +3204,10 @@ def create_spec(
     }, None
 
 
-# Valid assumption types
-ASSUMPTION_TYPES = ("constraint", "requirement")
-
-
 def add_assumption(
     spec_id: str,
     text: str,
-    assumption_type: str = "constraint",
+    assumption_type: Optional[str] = None,
     author: Optional[str] = None,
     specs_dir: Optional[Path] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
@@ -2942,7 +3221,8 @@ def add_assumption(
     Args:
         spec_id: Specification ID to add assumption to.
         text: Assumption text/description.
-        assumption_type: Type of assumption (constraint, requirement). For API compatibility.
+        assumption_type: Optional type/category (any string accepted, e.g. "constraint",
+            "architectural", "security"). For API compatibility only.
         author: Optional author. For API compatibility.
         specs_dir: Path to specs directory (auto-detected if not provided).
 
@@ -2951,12 +3231,6 @@ def add_assumption(
         On success: ({"spec_id": ..., "text": ..., ...}, None)
         On failure: (None, "error message")
     """
-    # Validate assumption_type (for API compatibility)
-    if assumption_type not in ASSUMPTION_TYPES:
-        return (
-            None,
-            f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}",
-        )
 
     # Validate text
     if not text or not text.strip():
@@ -3131,7 +3405,7 @@ def list_assumptions(
 
     Args:
         spec_id: Specification ID to list assumptions from.
-        assumption_type: Optional filter by type (constraint, requirement).
+        assumption_type: Optional filter parameter (any string accepted).
             Note: Since assumptions are stored as strings, this filter is
             provided for API compatibility but has no effect.
         specs_dir: Path to specs directory (auto-detected if not provided).
@@ -3141,13 +3415,6 @@ def list_assumptions(
         On success: ({"spec_id": ..., "assumptions": [...], ...}, None)
         On failure: (None, "error message")
     """
-    # Validate assumption_type if provided
-    if assumption_type and assumption_type not in ASSUMPTION_TYPES:
-        return (
-            None,
-            f"Invalid assumption_type '{assumption_type}'. Must be one of: {', '.join(ASSUMPTION_TYPES)}",
-        )
-
     # Find specs directory
     if specs_dir is None:
         specs_dir = find_specs_directory()

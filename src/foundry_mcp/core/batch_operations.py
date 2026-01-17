@@ -1007,6 +1007,12 @@ def complete_batch(
                 task_data["metadata"] = metadata
             metadata["completed_at"] = now
 
+            # Auto-calculate actual_hours if started_at exists and not manually set
+            if "started_at" in metadata and "actual_hours" not in metadata:
+                started_at = datetime.fromisoformat(metadata["started_at"].replace("Z", "+00:00"))
+                completed_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
+                metadata["actual_hours"] = round((completed_at - started_at).total_seconds() / 3600, 2)
+
             # Add journal entry for completion
             add_journal_entry(
                 spec_data=spec_data,

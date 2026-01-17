@@ -449,6 +449,48 @@ class TestUpdateTaskStatus:
         result = update_task_status(spec_with_task, "nonexistent", "in_progress")
         assert result is False
 
+    def test_auto_calculates_actual_hours_on_completion(self, spec_with_task):
+        """Test that actual_hours is auto-calculated when completing a task with started_at."""
+        # First set to in_progress to get started_at
+        update_task_status(spec_with_task, "task-1", "in_progress")
+
+        # Manually set started_at to 1.5 hours ago for predictable test
+        from datetime import datetime, timezone, timedelta
+        started = datetime.now(timezone.utc) - timedelta(hours=1.5)
+        spec_with_task["hierarchy"]["task-1"]["metadata"]["started_at"] = started.isoformat().replace("+00:00", "Z")
+
+        # Complete the task
+        update_task_status(spec_with_task, "task-1", "completed")
+
+        metadata = spec_with_task["hierarchy"]["task-1"]["metadata"]
+        assert "actual_hours" in metadata
+        # Should be approximately 1.5 hours (allow small delta for test execution time)
+        assert 1.4 <= metadata["actual_hours"] <= 1.6
+
+    def test_preserves_manual_actual_hours(self, spec_with_task):
+        """Test that manually set actual_hours is not overwritten."""
+        # Set to in_progress first
+        update_task_status(spec_with_task, "task-1", "in_progress")
+
+        # Manually set actual_hours before completing
+        spec_with_task["hierarchy"]["task-1"]["metadata"]["actual_hours"] = 5.0
+
+        # Complete the task
+        update_task_status(spec_with_task, "task-1", "completed")
+
+        metadata = spec_with_task["hierarchy"]["task-1"]["metadata"]
+        # Manual entry should be preserved
+        assert metadata["actual_hours"] == 5.0
+
+    def test_no_actual_hours_without_started_at(self, spec_with_task):
+        """Test that actual_hours is not set if started_at doesn't exist."""
+        # Complete directly without going through in_progress
+        update_task_status(spec_with_task, "task-1", "completed")
+
+        metadata = spec_with_task["hierarchy"]["task-1"]["metadata"]
+        # Should not have actual_hours since there was no started_at
+        assert "actual_hours" not in metadata
+
 
 class TestMarkTaskJournaled:
     """Tests for mark_task_journaled function."""
