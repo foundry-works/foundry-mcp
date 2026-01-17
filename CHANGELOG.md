@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.24] - 2026-01-17
+
+### Changed
+
+- **Updated skill references for claude-foundry v1.6.8**: Renamed all skill references to match the new unified naming convention
+  - `sdd-toolkit:sdd-pr` → `foundry:foundry-pr`
+  - `sdd-toolkit:sdd-modify` → `foundry:foundry-spec`
+  - `sdd-toolkit:sdd-plan-review` → `foundry:foundry-spec`
+  - Updated 15 occurrences across 4 files: `tools/unified/pr.py`, `tools/unified/review.py`, `core/review.py`, `cli/commands/review.py`
+  - Plugin name changed from `sdd-toolkit` to `foundry`
+
 ## [0.8.23] - 2026-01-11
 
 ### Fixed

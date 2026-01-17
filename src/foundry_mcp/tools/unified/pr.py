@@ -54,7 +54,7 @@ def perform_pr_create_with_spec(
     return asdict(
         error_response(
             "PR creation requires GitHub CLI integration and LLM-powered description generation. "
-            "Use the sdd-toolkit:sdd-pr skill for AI-powered PR creation.",
+            "Use the foundry:foundry-pr skill for AI-powered PR creation.",
             error_code=ErrorCode.UNAVAILABLE,
             error_type=ErrorType.UNAVAILABLE,
             data={
@@ -66,10 +66,10 @@ def perform_pr_create_with_spec(
                 "include_diffs": include_diffs,
                 "path": path,
                 "model": model,
-                "alternative": "sdd-toolkit:sdd-pr skill",
+                "alternative": "foundry:foundry-pr skill",
                 "feature_status": "requires_external_integration",
             },
-            remediation="Use the sdd-toolkit:sdd-pr skill which provides GitHub CLI integration and LLM-powered PR description generation.",
+            remediation="Use the foundry:foundry-pr skill which provides GitHub CLI integration and LLM-powered PR description generation.",
         )
     )
 

@@ -86,24 +86,24 @@ REVIEW_TOOL_DEFINITIONS = [
     },
     {
         "name": "full-review",
-        "description": "LLM-powered deep review via sdd-toolkit.",
+        "description": "LLM-powered deep review via foundry:foundry-spec.",
         "capabilities": ["structure", "quality", "suggestions"],
         "requires_llm": True,
-        "alternative": "sdd-toolkit:sdd-plan-review",
+        "alternative": "foundry:foundry-spec",
     },
     {
         "name": "security-review",
         "description": "Security-focused LLM analysis.",
         "capabilities": ["security", "trust_boundaries"],
         "requires_llm": True,
-        "alternative": "sdd-toolkit:sdd-plan-review",
+        "alternative": "foundry:foundry-spec",
     },
     {
         "name": "feasibility-review",
         "description": "Implementation feasibility assessment (LLM).",
         "capabilities": ["complexity", "risk", "dependencies"],
         "requires_llm": True,
-        "alternative": "sdd-toolkit:sdd-plan-review",
+        "alternative": "foundry:foundry-spec",
     },
 ]
 
@@ -242,7 +242,7 @@ def review_tools_cmd(ctx: click.Context) -> None:
         }
         if not available:
             tool_info["alternative"] = definition.get("alternative")
-            tool_info["message"] = "Use the sdd-toolkit workflow for this review type"
+            tool_info["message"] = "Use the foundry workflow for this review type"
         tools_info.append(tool_info)
 
     duration_ms = (time.perf_counter() - start_time) * 1000
@@ -307,8 +307,8 @@ def review_plan_tools_cmd(ctx: click.Context) -> None:
         if tool["llm_required"]:
             tool_info["status"] = "external"
             tool_info["available"] = False
-            tool_info["reason"] = "Use the sdd-toolkit:sdd-plan-review workflow"
-            tool_info["alternative"] = "sdd-toolkit:sdd-plan-review"
+            tool_info["reason"] = "Use the foundry:foundry-spec workflow"
+            tool_info["alternative"] = "foundry:foundry-spec"
         else:
             tool_info["status"] = "native"
             tool_info["available"] = True
@@ -316,7 +316,7 @@ def review_plan_tools_cmd(ctx: click.Context) -> None:
 
     recommendations = [
         "Use 'quick-review' for structural validation inside foundry-mcp",
-        "Invoke sdd-toolkit:sdd-plan-review for AI-assisted plan analysis",
+        "Invoke foundry:foundry-spec for AI-assisted plan analysis",
         "Configure LLM credentials when ready to adopt the toolkit workflow",
     ]
 

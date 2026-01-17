@@ -355,17 +355,17 @@ def _handle_parse_feedback(*, config: ServerConfig, payload: Dict[str, Any]) -> 
     return asdict(
         error_response(
             "Review feedback parsing requires complex text/markdown parsing. "
-            "Use the sdd-toolkit:sdd-modify skill to apply review feedback.",
+            "Use the foundry:foundry-spec skill to apply review feedback.",
             error_code=ErrorCode.UNAVAILABLE,
             error_type=ErrorType.UNAVAILABLE,
             data={
                 "spec_id": spec_id,
                 "review_path": review_path,
                 "output_path": output_path,
-                "alternative": "sdd-toolkit:sdd-modify skill",
+                "alternative": "foundry:foundry-spec skill",
                 "feature_status": "requires_complex_parsing",
             },
-            remediation="Use the sdd-toolkit:sdd-modify skill for parsing support.",
+            remediation="Use the foundry:foundry-spec skill for parsing support.",
         )
     )
 
