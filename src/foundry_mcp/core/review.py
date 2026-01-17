@@ -2,7 +2,7 @@
 Non-LLM review logic for SDD specifications.
 
 Provides structural review capabilities that don't require AI/LLM integration.
-For LLM-powered reviews, use the sdd-toolkit:sdd-plan-review skill.
+For LLM-powered reviews, use the foundry:foundry-spec skill.
 """
 
 from dataclasses import dataclass, field
