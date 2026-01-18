@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.28] - 2026-01-18
+
+### Changed
+
+- **Perplexity provider enhancements**: Improved deep research content extraction
+  - Added `include_raw_content` option to map snippets to content field for source aggregation
+  - Added `max_tokens` (50000) and `max_tokens_per_page` (2048) parameters for better content retrieval
+
+### Removed
+
+- **Google search provider**: Removed Google Custom Search from deep research providers
+  - Removed `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` environment variables from documentation
+  - Removed `google` from default `deep_research_providers` list
+  - Removed Google rate limit configuration
+
 ## [0.8.27] - 2026-01-18
 
 ### Fixed

@@ -133,8 +133,6 @@ export CURSOR_API_KEY="key-..."
 # Deep research providers (for /foundry-research deep workflow)
 export TAVILY_API_KEY="..."
 export PERPLEXITY_API_KEY="..."
-export GOOGLE_API_KEY="..."
-export GOOGLE_CSE_ID="..."
 ```
 
 ### TOML Configuration (Optional)

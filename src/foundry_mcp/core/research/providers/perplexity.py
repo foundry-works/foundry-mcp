@@ -123,6 +123,7 @@ class PerplexitySearchProvider(SearchProvider):
                 - domain_filter: List of domains to include (max 20)
                 - country: Geographic filter ('US', 'GB', etc.)
                 - sub_query_id: SubQuery ID for source tracking
+                - include_raw_content: If True, map snippet to content field
 
         Returns:
             List of ResearchSource objects
@@ -137,6 +138,7 @@ class PerplexitySearchProvider(SearchProvider):
         domain_filter = kwargs.get("domain_filter", [])
         country = kwargs.get("country")
         sub_query_id = kwargs.get("sub_query_id")
+        include_raw_content = kwargs.get("include_raw_content", False)
 
         # Clamp max_results to Perplexity's limit (1-20)
         max_results = max(1, min(max_results, 20))
@@ -145,6 +147,8 @@ class PerplexitySearchProvider(SearchProvider):
         payload: dict[str, Any] = {
             "query": query,
             "max_results": max_results,
+            "max_tokens": 50000,  # Total content budget
+            "max_tokens_per_page": 2048,  # Per-page content
         }
 
         if recency_filter and recency_filter in ("day", "week", "month", "year"):
@@ -159,7 +163,7 @@ class PerplexitySearchProvider(SearchProvider):
         response_data = await self._execute_with_retry(payload)
 
         # Parse results
-        return self._parse_response(response_data, sub_query_id)
+        return self._parse_response(response_data, sub_query_id, include_raw_content)
 
     async def _execute_with_retry(
         self,
@@ -311,6 +315,7 @@ class PerplexitySearchProvider(SearchProvider):
         self,
         data: dict[str, Any],
         sub_query_id: Optional[str] = None,
+        include_raw_content: bool = False,
     ) -> list[ResearchSource]:
         """Parse Perplexity API response into ResearchSource objects.
 
@@ -330,6 +335,7 @@ class PerplexitySearchProvider(SearchProvider):
         Args:
             data: Perplexity API response JSON
             sub_query_id: SubQuery ID for source tracking
+            include_raw_content: If True, map snippet to content field
 
         Returns:
             List of ResearchSource objects
@@ -344,11 +350,12 @@ class PerplexitySearchProvider(SearchProvider):
             )
 
             # Create SearchResult from Perplexity response
+            # Map snippet to content when include_raw_content is requested
             search_result = SearchResult(
                 url=result.get("url", ""),
                 title=result.get("title", "Untitled"),
                 snippet=result.get("snippet"),
-                content=None,  # Perplexity doesn't provide full content in search
+                content=result.get("snippet") if include_raw_content else None,
                 score=None,  # Perplexity doesn't provide relevance scores
                 published_date=published_date,
                 source=self._extract_domain(result.get("url", "")),

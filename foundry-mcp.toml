@@ -13,7 +13,7 @@ structured = true
 [server]
 name = "foundry-mcp"
 version = "0.5.0"
-disabled_tools = ["error", "health", "metrics", "test"]
+disabled_tools = ["error", "health", "metrics"]
 
 [workflow]
 mode = "autonomous"
@@ -111,7 +111,7 @@ deep_research_max_concurrent = 3
 deep_research_audit_artifacts = true
 # Research mode: "general" | "academic" | "technical"
 deep_research_mode = "technical"
-deep_research_providers = ["tavily", "perplexity", "google", "semantic_scholar"]
+deep_research_providers = ["tavily", "perplexity", "semantic_scholar"]
 
 # Per-phase timeouts (seconds) - minimum 360s for AI CLI providers
 deep_research_planning_timeout = 360.0
@@ -133,5 +133,4 @@ max_concurrent_searches = 3
 [research.per_provider_rate_limits]
 tavily = 60
 perplexity = 60
-google = 100
 semantic_scholar = 100
