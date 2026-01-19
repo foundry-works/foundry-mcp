@@ -725,7 +725,7 @@ class TestIntakeSecurityPathTraversal:
         specs_dir.mkdir(exist_ok=True)
 
         store = IntakeStore(specs_dir, workspace_root=temp_workspace)
-        assert store.specs_dir.is_relative_to(temp_workspace)
+        assert store.specs_dir.is_relative_to(temp_workspace.resolve())
 
 
 class TestIntakeSecurityPromptInjection:

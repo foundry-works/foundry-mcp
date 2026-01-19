@@ -1,6 +1,6 @@
 {
-  "spec_id": "bikelane-intake-2025-12-28-001",
-  "title": "bikelane-intake",
+  "spec_id": "notes-intake-2025-12-28-001",
+  "title": "notes-intake",
   "generated": "2025-12-28T20:03:56.848130Z",
   "last_updated": "2025-12-29T12:07:56.551743Z",
   "metadata": {
@@ -21,7 +21,7 @@
   "hierarchy": {
     "spec-root": {
       "type": "spec",
-      "title": "bikelane-intake",
+      "title": "notes-intake",
       "status": "completed",
       "parent": null,
       "children": [
@@ -114,8 +114,8 @@
         "file_path": "src/foundry_mcp/core/intake.py",
         "estimated_hours": 4.0,
         "acceptance_criteria": [
-          "IntakeStore class with storage at specs/.bikelane/intake.jsonl",
-          "Lock file at specs/.bikelane/.intake.lock",
+          "IntakeStore class with storage at specs/.notes/intake.jsonl",
+          "Lock file at specs/.notes/.intake.lock",
           "fcntl.flock() for cross-process locking",
           "threading.Lock() for in-memory thread safety",
           "Atomic writes via temp file rename pattern",
@@ -749,11 +749,11 @@
       "total_tasks": 1,
       "completed_tasks": 1,
       "metadata": {
-        "description": "Write user documentation explaining the bikelane concept, how to use intake-add/list/dismiss, storage location, pagination usage, and common workflows.",
+        "description": "Write user documentation explaining the notes concept, how to use intake-add/list/dismiss, storage location, pagination usage, and common workflows.",
         "file_path": "docs/guides/intake.md",
         "estimated_hours": 1.5,
         "acceptance_criteria": [
-          "Explains bikelane fast-capture concept",
+          "Explains notes fast-capture concept",
           "Documents all three actions with examples",
           "Covers pagination and cursor usage",
           "Explains file rotation behavior",
@@ -876,7 +876,7 @@
       "timestamp": "2025-12-28T20:58:14.874938Z",
       "entry_type": "status_change",
       "title": "Task Completed: Create intake core module",
-      "content": "Created src/foundry_mcp/core/intake.py with IntakeStore class implementing: JSONL storage at specs/.bikelane/intake.jsonl, lock file at .intake.lock, fcntl.flock() for cross-process locking (shared for reads, exclusive for writes), threading.Lock() for in-memory thread safety, atomic writes via temp file rename pattern, 5-second lock acquisition timeout raising LockAcquisitionError. Also includes IntakeItem dataclass, PaginationCursor for cursor-based pagination, add/list_new/dismiss/get methods, input sanitization (strip control chars), tag normalization to lowercase. Added RESOURCE_BUSY to ErrorCode enum in responses.py.",
+      "content": "Created src/foundry_mcp/core/intake.py with IntakeStore class implementing: JSONL storage at specs/.notes/intake.jsonl, lock file at .intake.lock, fcntl.flock() for cross-process locking (shared for reads, exclusive for writes), threading.Lock() for in-memory thread safety, atomic writes via temp file rename pattern, 5-second lock acquisition timeout raising LockAcquisitionError. Also includes IntakeItem dataclass, PaginationCursor for cursor-based pagination, add/list_new/dismiss/get methods, input sanitization (strip control chars), tag normalization to lowercase. Added RESOURCE_BUSY to ErrorCode enum in responses.py.",
       "author": "foundry-mcp",
       "metadata": {},
       "task_id": "task-3-2"
@@ -1137,7 +1137,7 @@
       "timestamp": "2025-12-28T23:33:11.670844Z",
       "entry_type": "status_change",
       "title": "Task Completed: Create intake user guide",
-      "content": "Created comprehensive intake user guide at docs/guides/intake.md. Covers all acceptance criteria: (1) Explains bikelane fast-capture concept with overview of key concepts and storage location. (2) Documents all 3 actions (intake-add, intake-list, intake-dismiss) with parameters tables, example requests/responses. (3) Covers pagination with cursor usage examples and internals explanation. (4) Explains file rotation behavior (1000 items or 1MB threshold) and JSONL format. (5) Lists all validation constraints in a table: title (1-140 chars), description (max 2000), priority (p0-p4), tags (max 20, 1-32 chars each), source/requester (max 100), idempotency_key (max 64). Also includes common workflows, feature flag info, and best practices.",
+      "content": "Created comprehensive intake user guide at docs/guides/intake.md. Covers all acceptance criteria: (1) Explains notes fast-capture concept with overview of key concepts and storage location. (2) Documents all 3 actions (intake-add, intake-list, intake-dismiss) with parameters tables, example requests/responses. (3) Covers pagination with cursor usage examples and internals explanation. (4) Explains file rotation behavior (1000 items or 1MB threshold) and JSONL format. (5) Lists all validation constraints in a table: title (1-140 chars), description (max 2000), priority (p0-p4), tags (max 20, 1-32 chars each), source/requester (max 100), idempotency_key (max 64). Also includes common workflows, feature flag info, and best practices.",
       "author": "foundry-mcp",
       "metadata": {},
       "task_id": "task-8-3"

@@ -45,6 +45,7 @@ class LifecycleState:
 # Constants
 
 VALID_FOLDERS = {"pending", "active", "completed", "archived"}
+FOLDER_SEARCH_ORDER = ("pending", "active", "completed", "archived")
 
 FOLDER_TRANSITIONS = {
     "pending": ["active", "archived"],
@@ -349,7 +350,7 @@ def _find_spec_location(
     Returns:
         Tuple of (folder_name, path) or (None, None) if not found
     """
-    for folder in VALID_FOLDERS:
+    for folder in FOLDER_SEARCH_ORDER:
         folder_path = specs_dir / folder
         if not folder_path.exists():
             continue

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.29] - 2026-01-19
+
+### Changed
+
+- **Renamed bikelane to notes**: Intake queue terminology updated across tools, docs, and specs
+  - Config key `notes_dir` replaces `bikelane_dir` (no backward compatibility)
+  - Env var `FOUNDRY_MCP_NOTES_DIR` replaces `FOUNDRY_MCP_BIKELANE_DIR`
+  - Default storage path is now `specs/.notes/`
+
 ## [0.8.28] - 2026-01-18
 
 ### Changed
@@ -269,7 +278,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `auto`: Skip prompts between tasks (default: false)
   - `delegate`: Use subagents for implementation (default: **true**)
   - `parallel`: Run subagents concurrently (default: false)
-  - `model`: Model for delegated tasks - haiku, sonnet, opus (default: haiku)
+- `model`: Size for delegated tasks - small, medium, large (default: small)
 
 ## [0.8.9] - 2026-01-04
 
@@ -669,7 +678,7 @@ research(action="deep-research-report", research_id="...")
 
 ### Added
 
-- **Bikelane Intake System**: Fast-capture queue for rapid idea/task capture with automatic triage workflow
+- **Notes Intake System**: Fast-capture queue for rapid idea/task capture with automatic triage workflow
   - **intake-add**: Add items to the intake queue with title, description, priority (p0-p4), tags, source, and requester fields
     - Idempotency key support for deduplication (checks last 100 items)
     - Tag normalization to lowercase
@@ -681,7 +690,7 @@ research(action="deep-research-report", research_id="...")
   - **intake-dismiss**: Mark items as dismissed with optional reason
     - Atomic file rewrite pattern for data integrity
     - Supports dry-run mode
-  - JSONL-based storage at `specs/.bikelane/intake.jsonl` with fcntl file locking
+  - JSONL-based storage at `specs/.notes/intake.jsonl` with fcntl file locking
   - Automatic file rotation at 1000 items or 1MB
   - Thread-safe and cross-process safe with 5-second lock timeout
   - Security hardening: path traversal prevention, prompt injection sanitization, control character stripping

@@ -510,7 +510,6 @@ class TestEdgeCases:
         state = get_lifecycle_state("corrupted", specs_dir)
         assert state is None
 
-    @pytest.mark.xfail(reason="Pre-existing: move_spec behavior changed for existing target")
     def test_target_already_exists(self, specs_dir, pending_spec_file, sample_spec):
         """Test handling when target file already exists."""
         # Create same file in target folder

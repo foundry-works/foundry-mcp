@@ -34,7 +34,7 @@ the workflow is organized, and how to use the CLI and MCP tools.
 
 | Doc | Description |
 |-----|-------------|
-| [Intake Guide](guides/intake.md) | Fast-capture bikelane system |
+| [Intake Guide](guides/intake.md) | Fast-capture notes system |
 | [LLM Configuration](guides/llm-configuration.md) | Provider setup and troubleshooting |
 
 ## Examples
@@ -104,7 +104,7 @@ docs/
 │   └── deep_research_workflow.md
 │
 ├── guides/
-│   ├── intake.md               # Intake/bikelane guide
+│   ├── intake.md               # Intake/notes guide
 │   └── llm-configuration.md    # LLM setup
 │
 ├── examples/

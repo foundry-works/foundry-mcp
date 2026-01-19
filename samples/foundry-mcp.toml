@@ -1,19 +1,22 @@
 # foundry-mcp Configuration Sample
 #
-# This file demonstrates all available configuration options.
-# Copy to your project root as `foundry-mcp.toml` and customize.
+# This file is both a reference and a starting point.
+# The values shown are "good defaults" for a typical local setup.
+# Leave a setting commented to use the built-in default.
+# Keep secrets (API keys) in environment variables when possible.
 #
 # Configuration Priority (highest to lowest):
-# 1. Environment variables
+# 1. Environment variables (override this file)
 # 2. TOML config file
-# 3. Default values
+# 3. Built-in defaults
 
 # =============================================================================
 # Workspace Configuration
 # =============================================================================
 
 [workspace]
-# Path to specs directory (auto-detected if not set)
+# Where your specs live (auto-detected if not set).
+# Good default: keep specs in ./specs.
 specs_dir = "./specs"
 
 # Additional workspace roots for multi-project setups
@@ -22,9 +25,9 @@ specs_dir = "./specs"
 # Path to journals directory (defaults to specs_dir/journals)
 # journals_path = "./specs/journals"
 
-# Path to bikelane intake queue storage (defaults to specs_dir/.bikelane)
-# Env var: FOUNDRY_MCP_BIKELANE_DIR
-# bikelane_dir = "./specs/.bikelane"
+# Notes inbox (defaults to specs_dir/.notes)
+# Env var: FOUNDRY_MCP_NOTES_DIR
+# notes_dir = "./specs/.notes"
 
 # =============================================================================
 # Logging Configuration
@@ -34,7 +37,7 @@ specs_dir = "./specs"
 # Log level: DEBUG, INFO, WARNING, ERROR
 level = "INFO"
 
-# Enable structured JSON logging (recommended for production)
+# JSON logs are easier to ingest; set false for human-readable logs.
 structured = true
 
 # =============================================================================
@@ -42,44 +45,33 @@ structured = true
 # =============================================================================
 
 [tools]
-# Disable specific tools to reduce context window usage
-# Tool descriptions are loaded into Claude's context on each message,
-# so disabling unused tools can significantly reduce token consumption.
+# Disable specific tools to reduce prompt size.
+# Tool descriptions are loaded into the model's context on each message.
+# Good default: disable setup-only tools you do not use day-to-day.
 #
 # Available tools:
-#   health      - Liveness/readiness checks (used by setup)
-#   plan        - Plan creation and review workflows
-#   pr          - Pull request creation
-#   error       - Error collection and querying
-#   journal     - Implementation journals
-#   authoring   - Spec authoring operations
-#   review      - Fidelity and code reviews
-#   spec        - Spec management
-#   task        - Task management
-#   provider    - AI provider status
-#   environment - Environment setup and detection
-#   lifecycle   - Spec lifecycle transitions
+#   health       - Liveness/readiness checks (used by setup)
+#   plan         - Plan creation and review workflows
+#   pr           - Pull request creation
+#   error        - Error collection and querying
+#   journal      - Implementation journals
+#   authoring    - Spec authoring operations
+#   review       - Fidelity and code reviews
+#   spec         - Spec management
+#   task         - Task management
+#   provider     - AI provider status
+#   environment  - Environment setup and detection
+#   lifecycle    - Spec lifecycle transitions
 #   verification - Verification workflows
-#   server      - Server introspection
-#   test        - Test runner integration
-#   research    - Research workflows (chat, consensus, thinkdeep, ideate, deep)
+#   server       - Server introspection
+#   test         - Test runner integration
+#   research     - Research workflows (chat, consensus, thinkdeep, ideate, deep)
 #
-# Example: disable tools only used during setup (default is empty list - all tools enabled)
-# disabled_tools = ["error", "health", "environment"]
+# Default: disable tools not needed, or only needed during setup
+disabled_tools = ["error", "health", "environment"]
 
 # Environment variable alternative: FOUNDRY_MCP_DISABLED_TOOLS (comma-separated)
 # Example: FOUNDRY_MCP_DISABLED_TOOLS=error,research
-
-# =============================================================================
-# Authentication Configuration
-# =============================================================================
-
-[auth]
-# Require API key authentication for all requests
-require_auth = false
-
-# Valid API keys (rotate regularly, recommended: every 90 days)
-# api_keys = ["key1", "key2"]
 
 # =============================================================================
 # Observability Configuration
@@ -111,110 +103,19 @@ prometheus_host = "0.0.0.0"          # HTTP server bind address
 prometheus_namespace = "foundry_mcp" # Metric name prefix
 
 # =============================================================================
-# Implement Command Configuration
-# =============================================================================
-#
-# Default flags for the /implement command. These can be overridden via CLI flags.
-# The implement skill uses these settings when determining execution mode.
-
-[implement]
-# Skip user prompts between tasks (autonomous execution)
-auto = false
-
-# Use subagent(s) for implementation (recommended for better focus)
-delegate = true
-
-# Run subagents concurrently for independent tasks (implies delegate=true)
-parallel = false
-
-# =============================================================================
-# Git Workflow Configuration
+# Health Checks Configuration
 # =============================================================================
 
-[git]
-# Enable git-aware workflows (automatic commit prompts, commit cadence, etc.)
-enabled = false
+[health]
+# Health probes for liveness/readiness.
+enabled = true
+liveness_timeout = 1.0
+readiness_timeout = 5.0
+health_timeout = 10.0
 
-# Determine when to offer automatic commits: "manual", "task", or "phase"
-commit_cadence = "manual"
-
-# Control automated behaviors (all default to false for safety)
-auto_commit = false
-auto_push = false
-auto_pr = false
-
-# Show staged file preview before committing (recommended)
-show_before_commit = true
-
-# =============================================================================
-# Workflow Configuration
-# =============================================================================
-
-[workflow]
-# Execution mode:
-#   "single"     - One task at a time with user approval
-#   "autonomous" - Complete all phase tasks automatically
-#   "batch"      - Execute batch_size tasks, then pause
-mode = "single"
-
-# Automatically run validation after task completion
-auto_validate = true
-
-# Enable journaling of task completions
-journal_enabled = true
-
-# Number of tasks to execute in batch mode
-batch_size = 5
-
-# Context usage threshold (%) to trigger automatic pause
-# When context reaches this threshold, autonomous/batch mode pauses
-context_threshold = 85
-
-# =============================================================================
-# AI Consultation Configuration
-# =============================================================================
-
-[consultation]
-# Default timeout for AI CLI provider calls in seconds
-# Minimum recommended: 360s for per-provider operations
-default_timeout = 360
-
-# Number of retry attempts per provider for transient failures
-max_retries = 2
-
-# Delay between retry attempts in seconds
-retry_delay = 5.0
-
-# Enable fallback to next available provider when one fails
-fallback_enabled = true
-
-# Cache time-to-live in seconds for consultation results
-cache_ttl = 3600
-
-# Provider priority list - first available provider wins
-# Uncomment and customize:
-# priority = [
-#   "[cli]gemini:pro",
-#   "[cli]codex:gpt-5.2-codex",
-#   "[cli]cursor-agent:gpt-5.1-codex",
-#   "[cli]opencode:openai/gpt-5.2-codex",
-#   "[cli]claude:opus",
-# ]
-
-# Per-workflow overrides
-[consultation.workflows.fidelity_review]
-min_models = 2
-timeout_override = 600.0
-default_review_type = "full"
-
-[consultation.workflows.plan_review]
-min_models = 3
-default_review_type = "full"
-
-[consultation.workflows.markdown_plan_review]
-min_models = 2
-timeout_override = 600.0
-default_review_type = "full"
+# Disk space thresholds (MB)
+disk_space_threshold_mb = 100
+disk_space_warning_mb = 500
 
 # =============================================================================
 # Error Collection Configuration
@@ -244,6 +145,153 @@ include_stack_traces = true
 redact_inputs = true
 
 # =============================================================================
+# Metrics Persistence Configuration
+# =============================================================================
+#
+# Persist time-series metrics to disk so they survive restarts.
+
+[metrics_persistence]
+# Enable metrics persistence (default: false)
+enabled = false
+
+# Storage path (default: ~/.foundry-mcp/metrics)
+# storage_path = "~/.foundry-mcp/metrics"
+
+# Delete records older than this many days
+retention_days = 7
+
+# Maximum number of metric records to keep
+max_records = 100000
+
+# Bucket interval for aggregation (seconds)
+bucket_interval_seconds = 60
+
+# Flush interval to disk (seconds)
+flush_interval_seconds = 30
+
+# Persist a subset of metrics (empty list = persist all)
+persist_metrics = [
+    "tool_invocations_total",
+    "tool_duration_seconds",
+    "tool_errors_total",
+    "health_status",
+]
+
+# =============================================================================
+# Implement Command Configuration
+# =============================================================================
+#
+# Default flags for the /implement command. These can be overridden via CLI flags.
+
+[implement]
+# Skip user prompts between tasks (autonomous execution)
+auto = false
+
+# Use subagent(s) for implementation (off by default; enable for focus)
+delegate = false
+
+# Run subagents concurrently for independent tasks (implies delegate=true)
+parallel = false
+
+# =============================================================================
+# Git Workflow Configuration
+# =============================================================================
+
+[git]
+# Enable git-aware workflows (automatic commit prompts, commit cadence, etc.)
+# Good default: false until you want automated prompts.
+enabled = false
+
+# Determine when to offer automatic commits: "manual", "task", or "phase"
+commit_cadence = "manual"
+
+# Control automated behaviors (all default to false for safety)
+auto_commit = false
+auto_push = false
+auto_pr = false
+
+# Show staged file preview before committing (recommended)
+show_before_commit = true
+
+# =============================================================================
+# Workflow Configuration
+# =============================================================================
+
+[workflow]
+# Execution mode:
+#   "single"     - One task at a time with user approval
+#   "autonomous" - Complete all phase tasks automatically
+#   "batch"      - Execute batch_size tasks, then pause
+# Good default: "single"
+mode = "single"
+
+# Automatically run validation after task completion
+auto_validate = true
+
+# Enable journaling of task completions
+journal_enabled = true
+
+# Number of tasks to execute in batch mode
+batch_size = 5
+
+# Context usage threshold (%) to trigger automatic pause
+# When context reaches this threshold, autonomous/batch mode pauses
+context_threshold = 85
+
+# =============================================================================
+# AI Consultation Configuration
+# =============================================================================
+
+[consultation]
+# Default timeout for AI provider calls in seconds
+# Default is 300; 360 is a safer "good default" for CLI providers.
+default_timeout = 360
+
+# Number of retry attempts per provider for transient failures
+max_retries = 2
+
+# Delay between retry attempts in seconds
+retry_delay = 5.0
+
+# Enable fallback to next available provider when one fails
+fallback_enabled = true
+
+# Cache time-to-live in seconds for consultation results
+cache_ttl = 3600
+
+# Provider priority list - first available provider wins
+# Update order to match your preferred providers/models.
+priority = [
+  "[cli]gemini:pro",
+  "[cli]codex:gpt-5.2-codex",
+  "[cli]cursor-agent:gpt-5.1-codex",
+  "[cli]opencode:openai/gpt-5.2-codex",
+  "[cli]claude:opus",
+]
+
+# Per-provider overrides (optional)
+# [consultation.overrides]
+# "[cli]opencode:openai/gpt-5.2-codex" = { timeout = 600 }
+
+# Per-workflow overrides
+[consultation.workflows.fidelity_review]
+# Good default: 2 models for consensus
+min_models = 2
+timeout_override = 600.0
+default_review_type = "full"
+
+[consultation.workflows.plan_review]
+# Good default: 3 models for architecture-heavy reviews (set to 2 for lower cost)
+min_models = 3
+default_review_type = "full"
+
+[consultation.workflows.markdown_plan_review]
+# Good default: 2 models
+min_models = 2
+timeout_override = 600.0
+default_review_type = "full"
+
+# =============================================================================
 # Research Workflow Configuration
 # =============================================================================
 
@@ -251,12 +299,17 @@ redact_inputs = true
 # Enable research tools (chat, consensus, thinkdeep, ideate, deep-research)
 enabled = true
 
+# Storage backend and path (default backend: "file")
+storage_backend = "file"
+# storage_path = "~/.foundry-mcp/research"
+
 # Default LLM provider for research workflows
-# Supports ProviderSpec format: "[cli]gemini:pro", "[api]openai/gpt-4.1", or simple: "gemini"
+# Supports ProviderSpec format: "[cli]gemini:pro" or simple: "gemini"
 default_provider = "[cli]gemini:pro"
 
-# Storage path for research state (default: ~/.foundry-mcp/research)
-# storage_path = "~/.foundry-mcp/research"
+# Providers for CONSENSUS workflow (multi-model consultation)
+# Use the providers you have installed.
+consensus_providers = ["[cli]gemini:pro", "[cli]claude:opus"]
 
 # State TTL in hours before cleanup
 ttl_hours = 24
@@ -264,25 +317,9 @@ ttl_hours = 24
 # Maximum messages per conversation thread
 max_messages_per_thread = 100
 
-# Default timeout for AI CLI provider calls in seconds
-# Minimum recommended: 360s for per-provider operations
-default_timeout = 360
-
-# Per-provider timeout for consensus workflow (seconds)
-timeout_per_provider = 360
-
-# Per-operation timeout for deep research workflow (seconds)
-timeout_per_operation = 360
-
-# Providers for CONSENSUS workflow (multi-model consultation)
-# Supports mixed notation - simple IDs and ProviderSpec both work
-consensus_providers = [
-    "[cli]gemini:pro",
-    "[cli]codex:gpt-5.2-codex",
-    "[cli]cursor-agent:gpt-5.1-codex",
-    "[cli]opencode:openai/gpt-5.2-codex",
-    "[cli]claude:opus",
-]
+# Default timeout for provider calls in seconds
+# Minimum recommended: 360s for AI CLI providers
+default_timeout = 360.0
 
 # Maximum investigation depth for THINKDEEP workflow
 thinkdeep_max_depth = 5
@@ -322,7 +359,7 @@ deep_research_audit_artifacts = true
 deep_research_mode = "general"
 
 # Search providers (in priority order)
-# Available: tavily, perplexity, semantic_scholar
+# Available: tavily, perplexity, google, semantic_scholar
 deep_research_providers = ["tavily", "perplexity", "semantic_scholar"]
 
 # -----------------------------------------------------------------------------
@@ -339,15 +376,14 @@ deep_research_refinement_timeout = 360.0  # Gap identification
 # Per-Phase Providers (override default_provider)
 # -----------------------------------------------------------------------------
 # Supports ProviderSpec format for model selection:
-#   "[cli]gemini:pro"           - Gemini CLI with pro model
-#   "[cli]claude:opus"          - Claude CLI with opus model
+#   "[cli]gemini:pro"              - Gemini CLI with pro model
+#   "[cli]claude:opus"             - Claude CLI with opus model
 #   "[cli]opencode:openai/gpt-5.2" - opencode routing to OpenAI
-#   "[api]openai/gpt-4.1"       - Direct OpenAI API
 
-# deep_research_planning_provider = "[cli]gemini:pro"
-# deep_research_analysis_provider = "[cli]gemini:pro"
-# deep_research_synthesis_provider = "[cli]claude:opus"  # Claude for report writing
-# deep_research_refinement_provider = "[cli]gemini:pro"
+deep_research_planning_provider = "[cli]gemini:pro"
+deep_research_analysis_provider = "[cli]gemini:pro"
+deep_research_synthesis_provider = "[cli]gemini:pro"
+deep_research_refinement_provider = "[cli]gemini:pro"
 
 # -----------------------------------------------------------------------------
 # Search Rate Limiting
@@ -359,7 +395,17 @@ max_concurrent_searches = 3         # Concurrent search requests
 [research.per_provider_rate_limits]
 tavily = 60
 perplexity = 60
+google = 100
 semantic_scholar = 100
+
+# -----------------------------------------------------------------------------
+# Search Provider Credentials (optional, prefer env vars)
+# -----------------------------------------------------------------------------
+# tavily_api_key = "..."
+# perplexity_api_key = "..."
+# google_api_key = "..."
+# google_cse_id = "..."
+# semantic_scholar_api_key = "..."
 
 # =============================================================================
 # Test Runner Configuration
@@ -375,3 +421,10 @@ semantic_scholar = 100
 # Default runner to use when running tests
 # Valid values: pytest, go, npm, jest, make, or any custom runner name
 default_runner = "pytest"
+
+# Example custom runner:
+# [test.runners.go]
+# command = ["go", "test"]
+# run_args = ["./..."]
+# pattern = "*_test.go"
+# timeout = 300

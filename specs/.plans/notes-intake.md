@@ -1,15 +1,15 @@
-# Bikelane Intake Plan
+# Notes Intake Plan
 
-This document defines the fast-intake ("bikelane") capability for foundry-mcp, aligned with the dev_docs/mcp_best_practices and codebase standards.
+This document defines the fast-intake ("notes") capability for foundry-mcp, aligned with the dev_docs/mcp_best_practices and codebase standards.
 
 ---
 
 ## 1) Summary
 
-Goal: Add a lightweight intake queue that captures work ideas quickly without forcing a full spec up front. Intake items live in a separate JSONL store and are exposed via new authoring actions (`intake-add`, `intake-list`, `intake-dismiss`). The bikelane is not a spec; specs remain the source of truth for implementation.
+Goal: Add a lightweight intake queue that captures work ideas quickly without forcing a full spec up front. Intake items live in a separate JSONL store and are exposed via new authoring actions (`intake-add`, `intake-list`, `intake-dismiss`). Notes are not a spec; specs remain the source of truth for implementation.
 
 Key constraints:
-- Storage lives at `specs/.bikelane/intake.jsonl`
+- Storage lives at `specs/.notes/intake.jsonl`
 - `intake-list` returns only `status="new"` items (sorted FIFO)
 - Use standard response envelopes (`response-v2`) via `success_response` and `error_response` helpers from `foundry_mcp.core.responses`
 - Use cursor-based pagination with documented O(n) characteristics
@@ -57,15 +57,15 @@ Key constraints:
 ## 5) Storage
 
 ### Location
-- Directory: `specs/.bikelane/`
-- Active file: `specs/.bikelane/intake.jsonl`
-- Archive pattern: `specs/.bikelane/intake.YYYY-MM.jsonl`
+- Directory: `specs/.notes/`
+- Active file: `specs/.notes/intake.jsonl`
+- Archive pattern: `specs/.notes/intake.YYYY-MM.jsonl`
 
 ### Format
 - JSON Lines (one JSON object per line)
 - Append-only writes for `intake-add`
 - In-place status update for `intake-dismiss` (single field change)
-- Lock file: `specs/.bikelane/.intake.lock`
+- Lock file: `specs/.notes/.intake.lock`
 
 ### File Rotation
 When `intake.jsonl` exceeds **1000 items** OR **1MB**:
@@ -297,7 +297,7 @@ Purpose: Mark an intake item as dismissed (removes from triage list)
 **Execution Model:** Synchronous. All intake operations use blocking file I/O with advisory locks. This is appropriate for the file-based storage backend.
 
 ### Lock Strategy
-- Lock file: `specs/.bikelane/.intake.lock`
+- Lock file: `specs/.notes/.intake.lock`
 - Use `fcntl.flock()` for advisory locking
 - Shared lock for reads (`intake-list`)
 - Exclusive lock for writes (`intake-add`, `intake-dismiss`)
@@ -456,10 +456,10 @@ Update `mcp/capabilities_manifest.json`:
 ## 16) Specs, Docs, and Tests
 
 **Spec:**
-- Create `specs/pending/bikelane-intake.json` defining all three actions
+- Create `specs/pending/notes-intake.json` defining all three actions
 
 **Docs:**
-- Create `docs/guides/intake.md` explaining bikelane concept
+- Create `docs/guides/intake.md` explaining notes concept
 - Update authoring action reference
 
 **Tests:**
@@ -489,7 +489,7 @@ Update `mcp/capabilities_manifest.json`:
 
 ## 18) Acceptance Criteria
 
-1. `authoring(intake-add)` writes valid JSONL to `specs/.bikelane/intake.jsonl`
+1. `authoring(intake-add)` writes valid JSONL to `specs/.notes/intake.jsonl`
 2. `authoring(intake-list)` returns only `status="new"` items in FIFO order
 3. `authoring(intake-dismiss)` changes item status to `dismissed`
 4. All responses use response-v2 envelope

@@ -1,11 +1,11 @@
 """
-Intake storage backend for the bikelane fast-capture system.
+Intake storage backend for the notes fast-capture system.
 
 Provides thread-safe JSONL-based storage for intake items with file locking
-for concurrent access. Items are stored in specs/.bikelane/intake.jsonl.
+for concurrent access. Items are stored in specs/.notes/intake.jsonl.
 
 Storage Structure:
-    specs/.bikelane/
+    specs/.notes/
         intake.jsonl      - Append-only intake log
         .intake.lock      - Lock file for cross-process synchronization
         intake.YYYY-MM.jsonl  - Archived intake files (after rotation)
@@ -50,7 +50,7 @@ TAG_PATTERN = re.compile(r"^[a-z0-9_-]+$")
 @dataclass
 class IntakeItem:
     """
-    Represents a single intake item in the bikelane queue.
+    Represents a single intake item in the notes queue.
 
     Attributes:
         schema_version: Fixed value 'intake-v1'
@@ -170,7 +170,7 @@ class IntakeStore:
     - File rotation when thresholds are exceeded
 
     Directory structure:
-        specs/.bikelane/
+        specs/.notes/
             intake.jsonl       - Active intake items
             .intake.lock       - Lock file for synchronization
             intake.YYYY-MM.jsonl - Archived files (rotated)
@@ -180,7 +180,7 @@ class IntakeStore:
         self,
         specs_dir: str | Path,
         workspace_root: Optional[str | Path] = None,
-        bikelane_dir: Optional[str | Path] = None,
+        notes_dir: Optional[str | Path] = None,
     ):
         """
         Initialize the intake store.
@@ -189,11 +189,11 @@ class IntakeStore:
             specs_dir: Path to the specs directory (e.g., /workspace/specs)
             workspace_root: Optional workspace root for path validation.
                            Defaults to specs_dir parent.
-            bikelane_dir: Optional custom path for bikelane storage.
-                         Defaults to specs_dir/.bikelane if not provided.
+            notes_dir: Optional custom path for notes storage.
+                         Defaults to specs_dir/.notes if not provided.
 
         Raises:
-            ValueError: If specs_dir or bikelane_dir is outside the workspace root
+            ValueError: If specs_dir or notes_dir is outside the workspace root
                        (path traversal attempt)
         """
         self.specs_dir = Path(specs_dir).resolve()
@@ -205,26 +205,26 @@ class IntakeStore:
                 f"specs_dir '{specs_dir}' is outside workspace root '{self.workspace_root}'"
             )
 
-        # Use custom bikelane_dir if provided, otherwise default to specs/.bikelane
-        if bikelane_dir is not None:
-            self.bikelane_dir = Path(bikelane_dir).resolve()
-            # Validate bikelane_dir is within workspace
-            if not self._validate_path_in_workspace(self.bikelane_dir):
+        # Use custom notes_dir if provided, otherwise default to specs/.notes
+        if notes_dir is not None:
+            self.notes_dir = Path(notes_dir).resolve()
+            # Validate notes_dir is within workspace
+            if not self._validate_path_in_workspace(self.notes_dir):
                 raise ValueError(
-                    f"bikelane_dir '{bikelane_dir}' is outside workspace root '{self.workspace_root}'"
+                    f"notes_dir '{notes_dir}' is outside workspace root '{self.workspace_root}'"
                 )
         else:
-            self.bikelane_dir = self.specs_dir / ".bikelane"
+            self.notes_dir = self.specs_dir / ".notes"
 
-        self.intake_file = self.bikelane_dir / "intake.jsonl"
-        self.lock_file = self.bikelane_dir / ".intake.lock"
+        self.intake_file = self.notes_dir / "intake.jsonl"
+        self.lock_file = self.notes_dir / ".intake.lock"
 
         self._thread_lock = threading.Lock()
         self._ensure_directory()
 
     def _ensure_directory(self) -> None:
-        """Ensure the bikelane directory exists."""
-        self.bikelane_dir.mkdir(parents=True, exist_ok=True)
+        """Ensure the notes directory exists."""
+        self.notes_dir.mkdir(parents=True, exist_ok=True)
 
     def _validate_path_in_workspace(self, path: Path) -> bool:
         """
@@ -446,13 +446,13 @@ class IntakeStore:
 
             # Generate unique archive name
             archive_name = f"intake.{date_str}.jsonl"
-            archive_path = self.bikelane_dir / archive_name
+            archive_path = self.notes_dir / archive_name
 
             # If archive already exists, add a suffix
             counter = 1
             while archive_path.exists():
                 archive_name = f"intake.{date_str}.{counter}.jsonl"
-                archive_path = self.bikelane_dir / archive_name
+                archive_path = self.notes_dir / archive_name
                 counter += 1
 
             fd = None
@@ -899,15 +899,15 @@ _store_lock = threading.Lock()
 
 def get_intake_store(
     specs_dir: Optional[str | Path] = None,
-    bikelane_dir: Optional[str | Path] = None,
+    notes_dir: Optional[str | Path] = None,
 ) -> IntakeStore:
     """
     Get the global intake store instance.
 
     Args:
         specs_dir: Path to specs directory. Required on first call.
-        bikelane_dir: Optional custom path for bikelane storage.
-                     Defaults to specs_dir/.bikelane if not provided.
+        notes_dir: Optional custom path for notes storage.
+                     Defaults to specs_dir/.notes if not provided.
 
     Returns:
         The IntakeStore instance.
@@ -921,7 +921,7 @@ def get_intake_store(
         if _intake_store is None:
             if specs_dir is None:
                 raise ValueError("specs_dir required for first IntakeStore initialization")
-            _intake_store = IntakeStore(specs_dir, bikelane_dir=bikelane_dir)
+            _intake_store = IntakeStore(specs_dir, notes_dir=notes_dir)
 
         return _intake_store
 

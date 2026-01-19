@@ -1,6 +1,6 @@
-# Intake Guide - Bikelane Fast-Capture System
+# Intake Guide - Notes Fast-Capture System
 
-A guide to using the bikelane intake system for rapid idea capture and triage.
+A guide to using the notes intake system for rapid idea capture and triage.
 
 See [MCP Tool Reference](../05-mcp-tool-reference.md) for the full tool/action list.
 For the end-to-end flow, read the [Workflow Guide](../03-workflow-guide.md).
@@ -23,7 +23,7 @@ For the end-to-end flow, read the [Workflow Guide](../03-workflow-guide.md).
 
 ## Overview
 
-The **bikelane** is a fast-capture queue for ideas, tasks, and requests that need quick recording without immediate triage. Think of it as a "bike lane" - a fast path for capturing items that can be processed later.
+Notes are a fast-capture queue for ideas, tasks, and requests that need quick recording without immediate triage. Think of them as a lightweight scratchpad for items you can triage later.
 
 ### Key Concepts
 
@@ -36,7 +36,7 @@ The **bikelane** is a fast-capture queue for ideas, tasks, and requests that nee
 
 Intake items are stored in:
 ```
-specs/.bikelane/
+specs/.notes/
     intake.jsonl       - Active intake items
     .intake.lock       - Lock file for synchronization
     intake.YYYY-MM.jsonl - Archived files (after rotation)
@@ -134,7 +134,7 @@ Add a new item to the intake queue.
       "updated_at": "2024-01-15T10:30:00.000Z"
     },
     "was_duplicate": false,
-    "intake_path": "/workspace/specs/.bikelane/intake.jsonl"
+    "intake_path": "/workspace/specs/.notes/intake.jsonl"
   }
 }
 ```

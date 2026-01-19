@@ -2273,7 +2273,7 @@
       "timestamp": "2025-12-31T17:24:17.641662Z",
       "entry_type": "status_change",
       "title": "Status changed to in_progress",
-      "content": "Creating DeepResearchConfig model. Deferring synthesis_depth and confidence_threshold to bikelane since they don't exist in codebase.",
+      "content": "Creating DeepResearchConfig model. Deferring synthesis_depth and confidence_threshold to notes since they don't exist in codebase.",
       "author": "foundry-mcp",
       "metadata": {},
       "task_id": "task-5-9"

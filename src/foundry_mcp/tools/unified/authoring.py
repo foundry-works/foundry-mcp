@@ -71,7 +71,7 @@ _ACTION_SUMMARY = {
     "assumption-add": "Append an assumption entry to spec metadata",
     "assumption-list": "List recorded assumptions for a spec",
     "revision-add": "Record a revision entry in the spec history",
-    "intake-add": "Capture a new work idea in the bikelane intake queue",
+    "intake-add": "Capture a new work idea in the notes intake queue",
     "intake-list": "List new intake items awaiting triage in FIFO order",
     "intake-dismiss": "Dismiss an intake item from the triage queue",
 }
@@ -2801,7 +2801,7 @@ def _intake_feature_flag_blocked(request_id: str) -> Optional[dict]:
 
 
 def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
-    """Add a new intake item to the bikelane queue."""
+    """Add a new intake item to the notes queue."""
     request_id = _request_id()
     action = "intake-add"
 
@@ -3039,9 +3039,9 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     start_time = time.perf_counter()
 
     try:
-        # Get bikelane_dir from config (allows customization via TOML or env var)
-        bikelane_dir = config.get_bikelane_dir(specs_dir)
-        store = IntakeStore(specs_dir, bikelane_dir=bikelane_dir)
+        # Get notes_dir from config (allows customization via TOML or env var)
+        notes_dir = config.get_notes_dir(specs_dir)
+        store = IntakeStore(specs_dir, notes_dir=notes_dir)
         item, was_duplicate, lock_wait_ms = store.add(
             title=title,
             description=description,
@@ -3182,9 +3182,9 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
     start_time = time.perf_counter()
 
     try:
-        # Get bikelane_dir from config (allows customization via TOML or env var)
-        bikelane_dir = config.get_bikelane_dir(specs_dir)
-        store = IntakeStore(specs_dir, bikelane_dir=bikelane_dir)
+        # Get notes_dir from config (allows customization via TOML or env var)
+        notes_dir = config.get_notes_dir(specs_dir)
+        store = IntakeStore(specs_dir, notes_dir=notes_dir)
         items, total_count, next_cursor, has_more, lock_wait_ms = store.list_new(
             cursor=cursor,
             limit=limit,
@@ -3346,9 +3346,9 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     start_time = time.perf_counter()
 
     try:
-        # Get bikelane_dir from config (allows customization via TOML or env var)
-        bikelane_dir = config.get_bikelane_dir(specs_dir)
-        store = IntakeStore(specs_dir, bikelane_dir=bikelane_dir)
+        # Get notes_dir from config (allows customization via TOML or env var)
+        notes_dir = config.get_notes_dir(specs_dir)
+        store = IntakeStore(specs_dir, notes_dir=notes_dir)
         item, lock_wait_ms = store.dismiss(
             intake_id=intake_id,
             reason=reason,

@@ -532,7 +532,7 @@
             }
           },
           {
-            "description": "Capture a new work idea in the bikelane intake queue",
+            "description": "Capture a new work idea in the notes intake queue",
             "input": {
               "action": "intake-add",
               "title": "Add dark mode support",
@@ -1528,7 +1528,7 @@
         "expires_at": null
       },
       "intake_tools": {
-        "description": "Bikelane intake queue tools for fast work idea capture and triage (intake-add, intake-list, intake-dismiss)",
+        "description": "Notes intake queue tools for fast work idea capture and triage (intake-add, intake-list, intake-dismiss)",
         "state": "beta",
         "default_enabled": true,
         "percentage_rollout": 100,
