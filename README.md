@@ -137,9 +137,16 @@ export PERPLEXITY_API_KEY="..."
 
 ### TOML Configuration (Optional)
 
-For advanced settings, copy the sample config to your project:
+Configuration loads in layers (later layers override earlier):
+
+1. **User config** (`~/.foundry-mcp.toml`) - User-wide defaults for API keys, preferred providers
+2. **Project config** (`./foundry-mcp.toml`) - Project-specific settings
 
 ```bash
+# For user-wide settings (API keys, provider preferences)
+cp samples/home-foundry-mcp.toml ~/.foundry-mcp.toml
+
+# For project-specific settings
 cp samples/foundry-mcp.toml ./foundry-mcp.toml
 ```
 

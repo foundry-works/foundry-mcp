@@ -5,9 +5,24 @@ and MCP server share the same settings.
 
 ## Configuration order
 
-1. `foundry-mcp.toml`
-2. Environment variables
-3. Defaults
+Configuration is loaded in layers, with each layer overriding the previous:
+
+1. **Defaults** - Built-in default values
+2. **User config** - `~/.foundry-mcp.toml` (optional, user-wide settings)
+3. **Project config** - `./foundry-mcp.toml` (optional, project-specific)
+4. **Environment variables** - Runtime overrides (highest priority)
+
+### Config file locations
+
+| Location | Purpose | Example use cases |
+|----------|---------|-------------------|
+| `~/.foundry-mcp.toml` | User defaults | API keys, preferred LLM providers, logging preferences |
+| `./foundry-mcp.toml` | Project settings | specs_dir, workspace roots, project-specific tool config |
+
+### Legacy compatibility
+
+For backwards compatibility, if `./foundry-mcp.toml` doesn't exist, the system
+will fall back to `./.foundry-mcp.toml` (dot-prefixed) in the project directory.
 
 ## Minimal TOML example
 

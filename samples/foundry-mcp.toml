@@ -1,14 +1,20 @@
-# foundry-mcp Configuration Sample
+# foundry-mcp Project Configuration Sample
 #
-# This file is both a reference and a starting point.
+# This file is for PROJECT-LEVEL settings (./foundry-mcp.toml).
+# Place in your project root directory.
+#
+# For USER-LEVEL defaults (API keys, preferred providers), use
+# ~/.foundry-mcp.toml instead. See samples/home-foundry-mcp.toml.
+#
 # The values shown are "good defaults" for a typical local setup.
 # Leave a setting commented to use the built-in default.
-# Keep secrets (API keys) in environment variables when possible.
+# Keep secrets (API keys) in environment variables or user config.
 #
 # Configuration Priority (highest to lowest):
-# 1. Environment variables (override this file)
-# 2. TOML config file
-# 3. Built-in defaults
+# 1. Environment variables (runtime overrides)
+# 2. Project config (./foundry-mcp.toml - this file)
+# 3. User config (~/.foundry-mcp.toml)
+# 4. Built-in defaults
 
 # =============================================================================
 # Workspace Configuration

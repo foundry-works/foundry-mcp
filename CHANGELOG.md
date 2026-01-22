@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.30] - 2026-01-22
+
+### Added
+
+- **Layered configuration loading**: Configuration now loads in layers for better separation of concerns
+  - Home config (`~/.foundry-mcp.toml`) for user-wide defaults (API keys, preferred providers, logging preferences)
+  - Project config (`./foundry-mcp.toml`) for project-specific overrides
+  - Environment variables for runtime overrides (highest priority)
+  - Legacy `.foundry-mcp.toml` fallback maintained for backwards compatibility
+- **User config sample**: New `samples/home-foundry-mcp.toml` example for user-level configuration
+- **Config hierarchy tests**: Comprehensive test coverage for layered configuration loading
+
+### Changed
+
+- **Updated configuration documentation**: `docs/06-configuration.md` explains the new config hierarchy with table of file locations and use cases
+- **Updated project config sample**: `samples/foundry-mcp.toml` updated with layered config priority comments
+
 ## [0.8.29] - 2026-01-19
 
 ### Changed

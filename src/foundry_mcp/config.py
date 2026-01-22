@@ -890,8 +890,9 @@ class ServerConfig:
 
         Priority (highest to lowest):
         1. Environment variables
-        2. TOML config file
-        3. Default values
+        2. Project TOML config (./foundry-mcp.toml or ./.foundry-mcp.toml)
+        3. User TOML config (~/.foundry-mcp.toml)
+        4. Default values
         """
         config = cls()
 
@@ -900,11 +901,24 @@ class ServerConfig:
         if toml_path:
             config._load_toml(Path(toml_path))
         else:
-            # Try default locations
-            for default_path in ["foundry-mcp.toml", ".foundry-mcp.toml"]:
-                if Path(default_path).exists():
-                    config._load_toml(Path(default_path))
-                    break
+            # Layered config loading:
+            # 1. Home directory config (user defaults)
+            home_config = Path.home() / ".foundry-mcp.toml"
+            if home_config.exists():
+                config._load_toml(home_config)
+                logger.debug(f"Loaded user config from {home_config}")
+
+            # 2. Project directory config (project overrides)
+            # Try foundry-mcp.toml first, fall back to .foundry-mcp.toml for compatibility
+            project_config = Path("foundry-mcp.toml")
+            if project_config.exists():
+                config._load_toml(project_config)
+                logger.debug(f"Loaded project config from {project_config}")
+            else:
+                legacy_config = Path(".foundry-mcp.toml")
+                if legacy_config.exists():
+                    config._load_toml(legacy_config)
+                    logger.debug(f"Loaded project config from {legacy_config}")
 
         # Override with environment variables
         config._load_env()
