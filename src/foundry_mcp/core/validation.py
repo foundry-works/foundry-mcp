@@ -111,7 +111,7 @@ class SpecStats:
 
 STATUS_FIELDS = {"pending", "in_progress", "completed", "blocked"}
 VALID_NODE_TYPES = {"spec", "phase", "group", "task", "subtask", "verify", "research"}
-VALID_STATUSES = {"pending", "in_progress", "completed", "blocked"}
+VALID_STATUSES = {"pending", "in_progress", "completed", "blocked", "archived"}
 VALID_TASK_CATEGORIES = {
     "investigation",
     "implementation",

@@ -40,11 +40,23 @@ class AutonomousSession:
     NOTE: This state is EPHEMERAL - it exists only in memory and does
     not persist across CLI restarts. Each new CLI session starts with
     autonomous mode disabled.
+
+    Attributes:
+        enabled: Whether autonomous mode is currently active.
+        tasks_completed: Count of tasks completed in current autonomous run.
+        pause_reason: Why auto-mode paused: "limit", "error", "user", "context", "batch".
+        started_at: ISO timestamp when auto-mode was enabled.
+        batch_mode: Whether running in batch mode (pause after batch_size tasks).
+        batch_size: Number of tasks to execute before pausing in batch mode.
+        batch_remaining: Tasks remaining in current batch (None = not tracking).
     """
     enabled: bool = False
     tasks_completed: int = 0
-    pause_reason: Optional[str] = None  # Why auto-mode paused: "limit", "error", "user", "context"
-    started_at: Optional[str] = None    # ISO timestamp when auto-mode was enabled
+    pause_reason: Optional[str] = None
+    started_at: Optional[str] = None
+    batch_mode: bool = False
+    batch_size: int = 5
+    batch_remaining: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON output."""
@@ -53,6 +65,9 @@ class AutonomousSession:
             "tasks_completed": self.tasks_completed,
             "pause_reason": self.pause_reason,
             "started_at": self.started_at,
+            "batch_mode": self.batch_mode,
+            "batch_size": self.batch_size,
+            "batch_remaining": self.batch_remaining,
         }
 
     @classmethod
@@ -63,6 +78,9 @@ class AutonomousSession:
             tasks_completed=data.get("tasks_completed", 0),
             pause_reason=data.get("pause_reason"),
             started_at=data.get("started_at"),
+            batch_mode=data.get("batch_mode", False),
+            batch_size=data.get("batch_size", 5),
+            batch_remaining=data.get("batch_remaining"),
         )
 
 

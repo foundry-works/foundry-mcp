@@ -79,7 +79,7 @@ def _get_memory() -> ResearchMemory:
     if _memory is None:
         if _config is not None:
             _memory = ResearchMemory(
-                base_path=_config.research.get_storage_path(),
+                base_path=_config.get_research_dir(),
                 ttl_hours=_config.research.ttl_hours,
             )
         else:

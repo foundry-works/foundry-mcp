@@ -120,7 +120,6 @@ def research_config(tmp_path: Path) -> ResearchConfig:
     """Create a ResearchConfig for testing."""
     return ResearchConfig(
         enabled=True,
-        storage_path=str(tmp_path / "research"),
         ttl_hours=24,
         default_provider="gemini",
         consensus_providers=["gemini", "claude"],
@@ -357,14 +356,19 @@ class TestConsensusWorkflow:
         """Should execute with single provider."""
         workflow = ConsensusWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
+        with patch(
+            "foundry_mcp.core.research.workflows.consensus.available_providers",
+            return_value=["gemini"],
         ):
-            result = workflow.execute(
-                prompt="What is 2+2?",
-                providers=["gemini"],
-                strategy=ConsensusStrategy.FIRST_VALID,
-            )
+            with patch(
+                "foundry_mcp.core.research.workflows.consensus.resolve_provider",
+                return_value=mock_provider_context,
+            ):
+                result = workflow.execute(
+                    prompt="What is 2+2?",
+                    providers=["gemini"],
+                    strategy=ConsensusStrategy.FIRST_VALID,
+                )
 
         assert result.success is True
         assert result.content is not None
@@ -378,14 +382,19 @@ class TestConsensusWorkflow:
         """Should return all responses with ALL_RESPONSES strategy."""
         workflow = ConsensusWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
+        with patch(
+            "foundry_mcp.core.research.workflows.consensus.available_providers",
+            return_value=["gemini", "claude"],
         ):
-            result = workflow.execute(
-                prompt="Explain X",
-                providers=["gemini", "claude"],
-                strategy=ConsensusStrategy.ALL_RESPONSES,
-            )
+            with patch(
+                "foundry_mcp.core.research.workflows.consensus.resolve_provider",
+                return_value=mock_provider_context,
+            ):
+                result = workflow.execute(
+                    prompt="Explain X",
+                    providers=["gemini", "claude"],
+                    strategy=ConsensusStrategy.ALL_RESPONSES,
+                )
 
         assert result.success is True
         assert "providers_consulted" in result.metadata
@@ -396,7 +405,10 @@ class TestConsensusWorkflow:
         """Should handle provider failures gracefully."""
         workflow = ConsensusWorkflow(research_config, mock_memory)
 
-        with patch.object(workflow, "_resolve_provider", return_value=None):
+        with patch(
+            "foundry_mcp.core.research.workflows.consensus.available_providers",
+            return_value=[],
+        ):
             result = workflow.execute(
                 prompt="Test",
                 providers=["nonexistent"],
@@ -413,10 +425,15 @@ class TestConsensusWorkflow:
         """Should return properly structured response."""
         workflow = ConsensusWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
+        with patch(
+            "foundry_mcp.core.research.workflows.consensus.available_providers",
+            return_value=["gemini"],
         ):
-            result = workflow.execute(prompt="Test", providers=["gemini"])
+            with patch(
+                "foundry_mcp.core.research.workflows.consensus.resolve_provider",
+                return_value=mock_provider_context,
+            ):
+                result = workflow.execute(prompt="Test", providers=["gemini"])
 
         assert isinstance(result, WorkflowResult)
         assert isinstance(result.success, bool)

@@ -48,7 +48,7 @@ def mock_config(tmp_path: Path):
     with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
         mock_cfg = MagicMock()
         mock_cfg.research.enabled = True
-        mock_cfg.research.get_storage_path.return_value = tmp_path
+        mock_cfg.get_research_dir.return_value = tmp_path
         mock_cfg.research.ttl_hours = 24
         mock_get_config.return_value = mock_cfg
         yield mock_cfg

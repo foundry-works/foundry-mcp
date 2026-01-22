@@ -212,7 +212,6 @@ class TestResearchRouterSmoke:
 
         research_cfg = ResearchConfig(
             enabled=True,
-            storage_path=str(tmp_path),
             ttl_hours=24,
             default_provider="gemini",
             consensus_providers=["gemini"],
@@ -223,6 +222,7 @@ class TestResearchRouterSmoke:
         from unittest.mock import MagicMock
         mock_server_cfg = MagicMock()
         mock_server_cfg.research = research_cfg
+        mock_server_cfg.get_research_dir.return_value = tmp_path
 
         with patch("foundry_mcp.tools.unified.research._get_config", return_value=mock_server_cfg):
             yield
@@ -289,7 +289,6 @@ class TestResearchRouterConsensusSmoke:
 
         research_cfg = ResearchConfig(
             enabled=True,
-            storage_path=str(tmp_path),
             ttl_hours=24,
             default_provider="gemini",
             consensus_providers=["gemini", "codex"],
@@ -300,6 +299,7 @@ class TestResearchRouterConsensusSmoke:
         from unittest.mock import MagicMock
         mock_server_cfg = MagicMock()
         mock_server_cfg.research = research_cfg
+        mock_server_cfg.get_research_dir.return_value = tmp_path
 
         with patch("foundry_mcp.tools.unified.research._get_config", return_value=mock_server_cfg):
             yield

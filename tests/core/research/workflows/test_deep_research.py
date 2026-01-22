@@ -43,7 +43,6 @@ def mock_config():
     """Create a mock ResearchConfig."""
     config = MagicMock()
     config.default_provider = "test-provider"
-    config.get_storage_path.return_value = Path("/tmp/test-research")
     config.ttl_hours = 24
     config.deep_research_max_iterations = 3
     config.deep_research_max_sub_queries = 5
@@ -89,9 +88,10 @@ def mock_config():
 
 
 @pytest.fixture
-def mock_memory():
+def mock_memory(tmp_path: Path):
     """Create a mock ResearchMemory."""
     memory = MagicMock()
+    memory.base_path = tmp_path
     memory.save_deep_research = MagicMock()
     memory.load_deep_research = MagicMock(return_value=None)
     memory.delete_deep_research = MagicMock(return_value=True)
@@ -334,13 +334,12 @@ class TestDeepResearchWorkflow:
         """Should write audit events to JSONL artifact."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
-        mock_config.get_storage_path.return_value = tmp_path
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
         state = DeepResearchState(original_query="Audit test")
 
         workflow._write_audit_event(state, "test_event", data={"ok": True})
 
-        audit_path = tmp_path / "deep_research" / f"{state.id}.audit.jsonl"
+        audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
         assert audit_path.exists()
         lines = audit_path.read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1
@@ -354,7 +353,6 @@ class TestDeepResearchWorkflow:
         """Should include enhanced statistics in workflow_complete audit event."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
-        mock_config.get_storage_path.return_value = tmp_path
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
 
         # Create state with sample data
@@ -460,7 +458,7 @@ class TestDeepResearchWorkflow:
             },
         )
 
-        audit_path = tmp_path / "deep_research" / f"{state.id}.audit.jsonl"
+        audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
         assert audit_path.exists()
         lines = audit_path.read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1
@@ -1132,7 +1130,7 @@ class TestDeepResearchActionHandlers:
         with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
             mock_cfg = MagicMock()
             mock_cfg.research.enabled = True
-            mock_cfg.research.get_storage_path.return_value = tmp_path
+            mock_cfg.get_research_dir.return_value = tmp_path
             mock_cfg.research.ttl_hours = 24
             mock_get_config.return_value = mock_cfg
             yield mock_cfg

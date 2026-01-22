@@ -93,10 +93,12 @@ AI assistants (or humans) query for the next actionable task. Each task includes
 Run verification steps defined for each phase. Record results. If verification fails, the phase remains open until issues are resolved.
 
 ### 5. Complete
-Mark tasks as done with completion notes. Generate PR descriptions from spec context and journal entries. The spec provides rich context for code review.
+When all tasks are finished successfully, mark the spec as completed. Generate PR descriptions from spec context and journal entries. The spec provides rich context for code review. Completed specs move to `specs/completed/`.
 
 ### 6. Archive
-Move completed specs to `specs/completed/` or `specs/archived/` for historical reference. The decision trail remains available for future consultation.
+If a spec is abandoned, superseded by another spec, or deprioritized, archive it. Archived specs move to `specs/archived/`. This preserves the decision trail while clearly indicating the work was not finished.
+
+**Key distinction**: Use **complete** for specs that achieved their goals. Use **archive** for specs you decided not to pursue.
 
 ---
 

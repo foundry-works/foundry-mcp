@@ -259,9 +259,14 @@ Spec lifecycle transitions.
 |--------|-------------|
 | `move` | Move spec between folders |
 | `activate` | Activate spec (pending → active) |
-| `complete` | Complete spec (active → completed) |
-| `archive` | Archive spec |
+| `complete` | Mark spec as finished successfully (requires 100% progress or `force`) |
+| `archive` | Archive spec that won't be pursued (abandoned, superseded, deprioritized) |
 | `state` | Get lifecycle state |
+
+### Complete vs Archive
+
+- **complete**: Use when all tasks are done and the spec achieved its goals. Sets status to `completed`.
+- **archive**: Use when you decide not to pursue the spec, regardless of progress. Sets status to `archived`.
 
 ### Parameters
 

@@ -933,8 +933,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
 
     def _audit_path(self, research_id: str) -> Path:
         """Resolve audit artifact path for a research session."""
-        storage_path = self.config.get_storage_path()
-        return storage_path / "deep_research" / f"{research_id}.audit.jsonl"
+        # Use memory's base_path which is set from ServerConfig.get_research_dir()
+        return self.memory.base_path / "deep_research" / f"{research_id}.audit.jsonl"
 
     def _write_audit_event(
         self,

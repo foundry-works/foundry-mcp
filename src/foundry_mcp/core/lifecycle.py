@@ -388,7 +388,7 @@ def _update_spec_folder_status(path: Path, folder: str) -> bool:
         "pending": "pending",
         "active": "in_progress",
         "completed": "completed",
-        "archived": "completed",
+        "archived": "archived",
     }
 
     new_status = folder_to_status.get(folder, "pending")

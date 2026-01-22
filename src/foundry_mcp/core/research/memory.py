@@ -193,7 +193,8 @@ class ResearchMemory:
         """Initialize research memory.
 
         Args:
-            base_path: Base directory for all storage (default: ~/.foundry-mcp/research)
+            base_path: Base directory for all storage (default: specs/.research when
+                      called via config, falls back to ~/.foundry-mcp/research otherwise)
             ttl_hours: Default TTL for all storages
         """
         if base_path is None:

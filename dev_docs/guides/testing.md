@@ -40,7 +40,8 @@ python -c "import foundry_mcp; print('foundry-mcp installed')"
 |----------|-------------|---------|
 | `FOUNDRY_MCP_SPECS_DIR` | Path to specs directory | `/path/to/specs` |
 | `FOUNDRY_MCP_WORKSPACE_ROOTS` | Comma-separated workspace roots | `/path/one,/path/two` |
-| `FOUNDRY_MCP_JOURNALS_PATH` | Path to journals directory | `/path/to/journals` |
+| `FOUNDRY_MCP_NOTES_DIR` | Path to notes intake directory | `/path/to/specs/.notes` |
+| `FOUNDRY_MCP_RESEARCH_DIR` | Path to research state directory | `/path/to/specs/.research` |
 | `FOUNDRY_MCP_LOG_LEVEL` | Logging level | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `FOUNDRY_MCP_CONFIG_FILE` | Path to TOML config file | `./foundry-mcp.toml` |
 | `FOUNDRY_MCP_API_KEYS` | Comma-separated API keys (optional) | `key1,key2` |
@@ -53,7 +54,6 @@ You can also use a `foundry-mcp.toml` file:
 ```toml
 [workspace]
 specs_dir = "/path/to/specs"
-journals_path = "/path/to/journals"
 
 [logging]
 level = "INFO"

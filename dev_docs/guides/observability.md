@@ -141,7 +141,7 @@ Each line is a structured event covering phase starts/completions, provider
 results, LLM prompts/responses, and summary stats.
 
 **Location (default)**:
-- `~/.foundry-mcp/research/deep_research/<research_id>.audit.jsonl`
+- `specs/.research/deep_research/<research_id>.audit.jsonl`
 
 **Config toggle**:
 - `research.deep_research_audit_artifacts = true`

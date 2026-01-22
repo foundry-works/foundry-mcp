@@ -70,6 +70,7 @@ from foundry_mcp.cli.context import (
     AutonomousSession,
     get_context_tracker,
 )
+from foundry_mcp.core.llm_config import get_workflow_config, WorkflowMode
 from foundry_mcp.core.validation import VALID_VERIFICATION_TYPES
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
@@ -1441,23 +1442,56 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     completed_at = task_data.get("metadata", {}).get("completed_at")
+
+    # Update autonomous session tracking for batch mode
+    tracker = get_context_tracker()
+    session = tracker.get_session()
+    autonomous_state = None
+    batch_paused = False
+
+    if session and session.autonomous and session.autonomous.enabled:
+        session.autonomous.tasks_completed += 1
+
+        # Check batch mode limits
+        if session.autonomous.batch_mode and session.autonomous.batch_remaining is not None:
+            session.autonomous.batch_remaining -= 1
+            if session.autonomous.batch_remaining <= 0:
+                session.autonomous.pause_reason = "batch"
+                session.autonomous.enabled = False
+                batch_paused = True
+
+        autonomous_state = session.autonomous.to_dict()
+
     progress = get_progress_summary(spec_data)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    response = success_response(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
-        completed_at=completed_at,
-        progress={
+
+    response_kwargs: Dict[str, Any] = {
+        "spec_id": spec_id.strip(),
+        "task_id": task_id.strip(),
+        "completed_at": completed_at,
+        "progress": {
             "completed_tasks": progress.get("completed_tasks", 0),
             "total_tasks": progress.get("total_tasks", 0),
             "percentage": progress.get("percentage", 0),
         },
-        suggest_commit=suggest_commit,
-        commit_scope=commit_scope,
-        commit_message_hint=commit_message_hint,
-        request_id=request_id,
-        telemetry={"duration_ms": round(elapsed_ms, 2)},
-    )
+        "suggest_commit": suggest_commit,
+        "commit_scope": commit_scope,
+        "commit_message_hint": commit_message_hint,
+        "request_id": request_id,
+        "telemetry": {"duration_ms": round(elapsed_ms, 2)},
+    }
+
+    # Include autonomous state if available
+    if autonomous_state is not None:
+        response_kwargs["autonomous"] = autonomous_state
+        if batch_paused:
+            response_kwargs["batch_paused"] = True
+            response_kwargs["batch_pause_message"] = (
+                "Batch limit reached. Call task(action='session-config', auto_mode=true) "
+                "to resume autonomous execution."
+            )
+
+    response = success_response(**response_kwargs)
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
     return asdict(response)
@@ -3492,9 +3526,26 @@ def _handle_session_config(*, config: ServerConfig, payload: Dict[str, Any]) -> 
     tracker = get_context_tracker()
     session = tracker.get_or_create_session()
 
-    # Initialize autonomous if not present
+    # Initialize autonomous if not present, applying defaults from WorkflowConfig
     if session.autonomous is None:
-        session.autonomous = AutonomousSession()
+        workflow_config = get_workflow_config()
+        # Determine initial state based on workflow mode
+        initial_enabled = False
+        initial_batch_mode = False
+        initial_batch_size = workflow_config.batch_size
+
+        if workflow_config.mode == WorkflowMode.AUTONOMOUS:
+            initial_enabled = True
+        elif workflow_config.mode == WorkflowMode.BATCH:
+            initial_enabled = True
+            initial_batch_mode = True
+
+        session.autonomous = AutonomousSession(
+            enabled=initial_enabled,
+            batch_mode=initial_batch_mode,
+            batch_size=initial_batch_size,
+            batch_remaining=initial_batch_size if initial_batch_mode else None,
+        )
 
     # If just getting, return current state
     if get_only:
@@ -3523,12 +3574,22 @@ def _handle_session_config(*, config: ServerConfig, payload: Dict[str, Any]) -> 
         session.autonomous.enabled = auto_mode
 
         if auto_mode and not previous_enabled:
-            # Starting autonomous mode
+            # Starting autonomous mode - apply workflow config for batch settings
+            workflow_config = get_workflow_config()
             session.autonomous.started_at = (
                 datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             )
             session.autonomous.tasks_completed = 0
             session.autonomous.pause_reason = None
+
+            # Configure batch mode based on workflow config
+            if workflow_config.mode == WorkflowMode.BATCH:
+                session.autonomous.batch_mode = True
+                session.autonomous.batch_size = workflow_config.batch_size
+                session.autonomous.batch_remaining = workflow_config.batch_size
+            else:
+                session.autonomous.batch_mode = False
+                session.autonomous.batch_remaining = None
         elif not auto_mode and previous_enabled:
             # Stopping autonomous mode
             session.autonomous.pause_reason = "user"

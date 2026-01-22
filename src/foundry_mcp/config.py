@@ -9,8 +9,8 @@ Supports configuration via:
 Environment variables:
 - FOUNDRY_MCP_WORKSPACE_ROOTS: Comma-separated list of workspace root paths
 - FOUNDRY_MCP_SPECS_DIR: Path to specs directory
-- FOUNDRY_MCP_JOURNALS_PATH: Path to journals directory
 - FOUNDRY_MCP_NOTES_DIR: Path to notes intake queue directory (default: specs/.notes)
+- FOUNDRY_MCP_RESEARCH_DIR: Path to research state directory (default: specs/.research)
 - FOUNDRY_MCP_LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR)
 - FOUNDRY_MCP_API_KEYS: Comma-separated list of valid API keys (optional)
 - FOUNDRY_MCP_REQUIRE_AUTH: Whether to require API key authentication (true/false)
@@ -404,8 +404,6 @@ class ResearchConfig:
 
     Attributes:
         enabled: Master switch for research tools
-        storage_path: Directory for research state persistence (default: ~/.foundry-mcp/research)
-        storage_backend: Storage backend type (currently only 'file' supported)
         ttl_hours: Time-to-live for stored states in hours
         max_messages_per_thread: Maximum messages retained in a conversation thread
         default_provider: Default LLM provider for single-model workflows
@@ -432,8 +430,6 @@ class ResearchConfig:
     """
 
     enabled: bool = True
-    storage_path: str = ""  # Empty = use default (~/.foundry-mcp/research)
-    storage_backend: str = "file"
     ttl_hours: int = 24
     max_messages_per_thread: int = 100
     default_provider: str = "gemini"
@@ -532,8 +528,6 @@ class ResearchConfig:
 
         return cls(
             enabled=_parse_bool(data.get("enabled", True)),
-            storage_path=str(data.get("storage_path", "")),
-            storage_backend=str(data.get("storage_backend", "file")),
             ttl_hours=int(data.get("ttl_hours", 24)),
             max_messages_per_thread=int(data.get("max_messages_per_thread", 100)),
             default_provider=str(data.get("default_provider", "gemini")),
@@ -575,16 +569,6 @@ class ResearchConfig:
             google_cse_id=data.get("google_cse_id"),
             semantic_scholar_api_key=data.get("semantic_scholar_api_key"),
         )
-
-    def get_storage_path(self) -> Path:
-        """Get resolved storage path.
-
-        Returns:
-            Path to storage directory (creates if needed)
-        """
-        if self.storage_path:
-            return Path(self.storage_path).expanduser()
-        return Path.home() / ".foundry-mcp" / "research"
 
     def get_provider_rate_limit(self, provider: str) -> int:
         """Get rate limit for a specific provider.
@@ -844,8 +828,8 @@ class ServerConfig:
     # Workspace configuration
     workspace_roots: List[Path] = field(default_factory=list)
     specs_dir: Optional[Path] = None
-    journals_path: Optional[Path] = None
     notes_dir: Optional[Path] = None  # Intake queue storage (default: specs/.notes)
+    research_dir: Optional[Path] = None  # Research state storage (default: specs/.research)
 
     # Logging configuration
     log_level: str = "INFO"
@@ -942,10 +926,10 @@ class ServerConfig:
                     self.workspace_roots = [Path(p) for p in ws["roots"]]
                 if "specs_dir" in ws:
                     self.specs_dir = Path(ws["specs_dir"])
-                if "journals_path" in ws:
-                    self.journals_path = Path(ws["journals_path"])
                 if "notes_dir" in ws:
                     self.notes_dir = Path(ws["notes_dir"])
+                if "research_dir" in ws:
+                    self.research_dir = Path(ws["research_dir"])
 
             # Logging settings
             if "logging" in data:
@@ -1039,13 +1023,13 @@ class ServerConfig:
         if specs := os.environ.get("FOUNDRY_MCP_SPECS_DIR"):
             self.specs_dir = Path(specs)
 
-        # Journals path
-        if journals := os.environ.get("FOUNDRY_MCP_JOURNALS_PATH"):
-            self.journals_path = Path(journals)
-
         # Notes directory (intake queue storage)
         if notes := os.environ.get("FOUNDRY_MCP_NOTES_DIR"):
             self.notes_dir = Path(notes)
+
+        # Research directory (research state storage)
+        if research := os.environ.get("FOUNDRY_MCP_RESEARCH_DIR"):
+            self.research_dir = Path(research)
 
         # Log level
         if level := os.environ.get("FOUNDRY_MCP_LOG_LEVEL"):
@@ -1238,6 +1222,28 @@ class ServerConfig:
         # Fall back to default: specs/.notes
         base_specs = specs_dir or self.specs_dir or Path("./specs")
         return base_specs / ".notes"
+
+    def get_research_dir(self, specs_dir: Optional[Path] = None) -> Path:
+        """
+        Get the resolved research directory path.
+
+        Priority:
+        1. Explicitly configured research_dir (from TOML or env var)
+        2. Default: specs_dir/.research (where specs_dir is resolved)
+
+        Args:
+            specs_dir: Optional specs directory to use for default path.
+                      If not provided, uses self.specs_dir or "./specs"
+
+        Returns:
+            Path to research directory
+        """
+        if self.research_dir is not None:
+            return self.research_dir.expanduser()
+
+        # Fall back to default: specs/.research
+        base_specs = specs_dir or self.specs_dir or Path("./specs")
+        return base_specs / ".research"
 
     def setup_logging(self) -> None:
         """Configure logging based on settings."""

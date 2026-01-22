@@ -12,15 +12,26 @@ A specification file is a JSON document that defines:
 
 ## File Location
 
-Specs are stored in the `specs/` directory organized by status:
+Specs are stored in the `specs/` directory organized by lifecycle status:
 
 ```
 specs/
 ├── pending/           # Not yet started
 ├── active/            # Currently in progress
-├── completed/         # Finished specs
-└── archived/          # Historical specs
+├── completed/         # Finished successfully (all tasks done)
+└── archived/          # Abandoned, superseded, or deprioritized
 ```
+
+### Folder Semantics
+
+| Folder | Status | Meaning |
+|--------|--------|---------|
+| `pending/` | `pending` | Spec created but work not started |
+| `active/` | `in_progress` | Work is actively being done |
+| `completed/` | `completed` | All work finished successfully |
+| `archived/` | `archived` | Decided not to pursue (abandoned, superseded, deprioritized) |
+
+**Key distinction**: Use `completed/` when all tasks are done. Use `archived/` when you decide not to finish the spec, regardless of progress.
 
 ## Spec ID Format
 
@@ -180,6 +191,7 @@ The `hierarchy` object contains all phases, tasks, and their relationships.
 | `in_progress` | Currently being worked on |
 | `completed` | Finished successfully |
 | `blocked` | Cannot proceed (has blocker) |
+| `archived` | Abandoned or deprioritized (spec-root only) |
 
 ### Valid Transitions
 

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.31] - 2026-01-22
+
+### Added
+
+- **Batch mode for autonomous sessions**: New workflow mode that executes a fixed number of tasks before pausing for approval
+  - `AutonomousSession` now tracks `batch_mode`, `batch_size`, and `batch_remaining`
+  - Task `complete` action decrements batch counter and auto-pauses when limit reached
+  - Session config `session-config` applies `WorkflowConfig` defaults for batch settings
+  - Supports `WorkflowMode.BATCH` and `WorkflowMode.AUTONOMOUS` from config
+
+### Changed
+
+- **Research state storage relocation**: Default storage moved from `~/.foundry-mcp/research` to project-local `specs/.research`
+  - New `research_dir` config option replaces old global storage path
+  - New `FOUNDRY_MCP_RESEARCH_DIR` environment variable
+- **Sample config updates**: Increased default research timeouts from 360s to 600s, updated provider examples
+- **Documentation updates**: Various fixes across guides and tool reference
+
+### Removed
+
+- **Simplified ResearchConfig**: Removed `storage_path` and `storage_backend` fields (storage is now always project-local)
+- **Removed `journals_path`**: Replaced with `research_dir` for research state storage
+- **Removed root config file**: Deleted `foundry-mcp.toml` from repository root (use `samples/foundry-mcp.toml` as template)
+- **Removed home config sample**: Deleted `samples/home-foundry-mcp.toml` (layered config still works but sample removed)
+
 ## [0.8.30] - 2026-01-22
 
 ### Added

@@ -101,10 +101,9 @@ class ResearchWorkflowBase(ABC):
             memory: Optional memory instance (creates default if not provided)
         """
         self.config = config
-        self.memory = memory or ResearchMemory(
-            base_path=config.get_storage_path(),
-            ttl_hours=config.ttl_hours,
-        )
+        # Memory should be provided by caller with proper research_dir from ServerConfig
+        # Fallback uses ResearchMemory default (~/.foundry-mcp/research)
+        self.memory = memory or ResearchMemory(ttl_hours=config.ttl_hours)
         self._provider_cache: dict[str, ProviderContext] = {}
 
     def _resolve_provider(

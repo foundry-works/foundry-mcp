@@ -53,7 +53,7 @@ journal_enabled = true
 
 [implement]
 # Default flags for /implement command (can be overridden via CLI flags)
-auto = false      # --auto: skip prompts between tasks
+# NOTE: Use [workflow].mode for autonomous execution control.
 delegate = false  # --delegate: use subagent(s) for implementation
 parallel = false  # --parallel: run subagents concurrently (implies delegate)
 
@@ -1151,7 +1151,6 @@ def _handle_get_config(
         if "implement" in requested and "implement" in data:
             impl_data = data["implement"]
             result["implement"] = {
-                "auto": impl_data.get("auto", False),
                 "delegate": impl_data.get("delegate", False),
                 "parallel": impl_data.get("parallel", False),
             }
@@ -1171,7 +1170,6 @@ def _handle_get_config(
             if section not in result:
                 if section == "implement":
                     result["implement"] = {
-                        "auto": False,
                         "delegate": False,
                         "parallel": False,
                     }

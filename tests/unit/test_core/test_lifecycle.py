@@ -481,15 +481,15 @@ class TestFolderStatusMapping:
 
         assert data["hierarchy"]["spec-root"]["status"] == "completed"
 
-    def test_archived_folder_sets_completed_status(self, specs_dir, active_spec_file, sample_spec):
-        """Test that moving to archived sets completed status."""
+    def test_archived_folder_sets_archived_status(self, specs_dir, active_spec_file, sample_spec):
+        """Test that moving to archived sets archived status."""
         move_spec(sample_spec["spec_id"], "archived", specs_dir)
 
         new_path = specs_dir / "archived" / f"{sample_spec['spec_id']}.json"
         with open(new_path, "r") as f:
             data = json.load(f)
 
-        assert data["hierarchy"]["spec-root"]["status"] == "completed"
+        assert data["hierarchy"]["spec-root"]["status"] == "archived"
 
 
 class TestEdgeCases:

@@ -86,7 +86,9 @@ def activate_spec_cmd(ctx: click.Context, spec_id: str) -> None:
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec completion timed out")
 def complete_spec_cmd(ctx: click.Context, spec_id: str, force: bool) -> None:
-    """Mark a specification as completed.
+    """Mark a specification as finished successfully.
+
+    Requires 100% progress unless --force is used. Use this when all work is done.
 
     SPEC_ID is the specification identifier.
     """
@@ -135,7 +137,9 @@ def complete_spec_cmd(ctx: click.Context, spec_id: str, force: bool) -> None:
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Spec archival timed out")
 def archive_spec_cmd(ctx: click.Context, spec_id: str) -> None:
-    """Archive a specification.
+    """Archive a specification that won't be pursued.
+
+    Use this for specs that are abandoned, superseded, or deprioritized.
 
     SPEC_ID is the specification identifier.
     """
