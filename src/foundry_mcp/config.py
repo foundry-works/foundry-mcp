@@ -639,7 +639,8 @@ class ResearchConfig:
             "synthesis": self.deep_research_synthesis_provider,
             "refinement": self.deep_research_refinement_provider,
         }
-        spec_str = phase_providers.get(phase.lower()) or self.default_provider
+        configured = phase_providers.get(phase.lower())
+        spec_str = configured or self.default_provider
         return _parse_provider_spec(spec_str)
 
     def get_search_provider_api_key(

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.33] - 2026-01-24
+
+### Added
+
+- **Research workflow exception handling**: Improved resilience to prevent MCP server crashes
+  - `DeepResearchWorkflow.execute()` now catches all exceptions and returns error result
+  - `_dispatch_research_action()` catches exceptions and returns structured error response
+  - Added warning logging when provider resolution fails in base workflow
+  - Added comprehensive tests for exception handling behavior
+
 ## [0.8.32] - 2026-01-22
 
 ### Changed

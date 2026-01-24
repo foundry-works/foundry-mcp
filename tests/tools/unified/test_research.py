@@ -754,6 +754,45 @@ class TestErrorConditions:
         # Empty string is falsy, so neither topic nor investigation_id provided
         assert "topic" in result["error"].lower() or "investigation_id" in result["error"].lower()
 
+    def test_dispatch_exception_returns_error_response(self, mock_config, mock_memory):
+        """Exceptions during dispatch should return error response, not crash MCP server."""
+        from foundry_mcp.tools.unified.research import _dispatch_research_action
+
+        with patch(
+            "foundry_mcp.tools.unified.research.ChatWorkflow"
+        ) as MockWorkflow:
+            # Simulate an exception (e.g., provider API failure)
+            MockWorkflow.return_value.execute.side_effect = RuntimeError(
+                "API insufficient credits"
+            )
+
+            result = _dispatch_research_action("chat", prompt="Hello")
+
+            # Should return error response, not raise exception
+            assert result["success"] is False
+            assert "error" in result
+            assert "insufficient credits" in result["error"].lower()
+            # error_type is inside data dict in response schema
+            assert result["data"]["error_type"] == "internal"
+            assert "action" in result["data"].get("details", {})
+
+    def test_dispatch_exception_logs_error(self, mock_config, mock_memory, caplog):
+        """Exceptions during dispatch should be logged."""
+        from foundry_mcp.tools.unified.research import _dispatch_research_action
+        import logging
+
+        with caplog.at_level(logging.ERROR):
+            with patch(
+                "foundry_mcp.tools.unified.research.ChatWorkflow"
+            ) as MockWorkflow:
+                MockWorkflow.return_value.execute.side_effect = ValueError(
+                    "test error"
+                )
+
+                _dispatch_research_action("chat", prompt="Hello")
+
+        assert "test error" in caplog.text
+
 
 # =============================================================================
 # ActionRouter Unit Tests

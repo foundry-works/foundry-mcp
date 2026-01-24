@@ -814,6 +814,25 @@ class TestDeepResearchWorkflow:
         assert result.success is False
         assert "Unknown action" in result.error
 
+    def test_execute_catches_exceptions(self, mock_config, mock_memory):
+        """Exceptions during execute should be caught and return error result."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+        from unittest.mock import patch
+
+        workflow = DeepResearchWorkflow(mock_config, mock_memory)
+
+        # Simulate an exception during _start_research
+        with patch.object(
+            workflow, "_start_research", side_effect=RuntimeError("Storage unavailable")
+        ):
+            result = workflow.execute(query="test query", action="start")
+
+        # Should return error result, not raise exception
+        assert result.success is False
+        assert "Storage unavailable" in result.error
+        assert result.metadata["action"] == "start"
+        assert result.metadata["error_type"] == "RuntimeError"
+
     def test_get_status_success(self, mock_config, mock_memory, sample_deep_research_state):
         """Should return status for existing research."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow

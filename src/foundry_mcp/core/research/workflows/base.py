@@ -186,6 +186,10 @@ class ResearchWorkflowBase(ABC):
         """
         provider = self._resolve_provider(provider_id, hooks)
         if provider is None:
+            logger.warning(
+                "_execute_provider: Provider resolution failed for '%s'",
+                provider_id or self.config.default_provider,
+            )
             return WorkflowResult(
                 success=False,
                 content="",

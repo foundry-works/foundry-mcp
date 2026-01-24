@@ -1102,40 +1102,54 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         Returns:
             WorkflowResult with research state or error
         """
-        if action == "start":
-            return self._start_research(
-                query=query,
-                provider_id=provider_id,
-                system_prompt=system_prompt,
-                max_iterations=max_iterations,
-                max_sub_queries=max_sub_queries,
-                max_sources_per_query=max_sources_per_query,
-                follow_links=follow_links,
-                timeout_per_operation=timeout_per_operation,
-                max_concurrent=max_concurrent,
-                background=background,
-                task_timeout=task_timeout,
-            )
-        elif action == "continue":
-            return self._continue_research(
-                research_id=research_id,
-                provider_id=provider_id,
-                timeout_per_operation=timeout_per_operation,
-                max_concurrent=max_concurrent,
-                background=background,
-                task_timeout=task_timeout,
-            )
-        elif action == "status":
-            return self._get_status(research_id=research_id)
-        elif action == "report":
-            return self._get_report(research_id=research_id)
-        elif action == "cancel":
-            return self._cancel_research(research_id=research_id)
-        else:
+        try:
+            if action == "start":
+                return self._start_research(
+                    query=query,
+                    provider_id=provider_id,
+                    system_prompt=system_prompt,
+                    max_iterations=max_iterations,
+                    max_sub_queries=max_sub_queries,
+                    max_sources_per_query=max_sources_per_query,
+                    follow_links=follow_links,
+                    timeout_per_operation=timeout_per_operation,
+                    max_concurrent=max_concurrent,
+                    background=background,
+                    task_timeout=task_timeout,
+                )
+            elif action == "continue":
+                return self._continue_research(
+                    research_id=research_id,
+                    provider_id=provider_id,
+                    timeout_per_operation=timeout_per_operation,
+                    max_concurrent=max_concurrent,
+                    background=background,
+                    task_timeout=task_timeout,
+                )
+            elif action == "status":
+                return self._get_status(research_id=research_id)
+            elif action == "report":
+                return self._get_report(research_id=research_id)
+            elif action == "cancel":
+                return self._cancel_research(research_id=research_id)
+            else:
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=f"Unknown action '{action}'. Use: start, continue, status, report, cancel",
+                )
+        except Exception as exc:
+            # Catch all exceptions to ensure graceful failure
+            logger.exception("Deep research execute failed for action '%s': %s", action, exc)
             return WorkflowResult(
                 success=False,
                 content="",
-                error=f"Unknown action '{action}'. Use: start, continue, status, report, cancel",
+                error=f"Deep research failed: {exc}",
+                metadata={
+                    "action": action,
+                    "research_id": research_id,
+                    "error_type": exc.__class__.__name__,
+                },
             )
 
     # =========================================================================
