@@ -2086,15 +2086,19 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         system_prompt = self._build_planning_system_prompt(state)
         user_prompt = self._build_planning_user_prompt(state)
 
-        # Execute LLM call with context window error handling
+        # Execute LLM call with context window error handling and timeout protection
         try:
-            result = self._execute_provider(
+            result = await self._execute_provider_async(
                 prompt=user_prompt,
                 provider_id=provider_id or state.planning_provider,
                 model=state.planning_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
                 temperature=0.7,  # Some creativity for diverse sub-queries
+                phase="planning",
+                fallback_providers=self.config.get_phase_fallback_providers("planning"),
+                max_retries=self.config.deep_research_max_retries,
+                retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
             logger.error(
@@ -2120,7 +2124,14 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             )
 
         if not result.success:
-            logger.error("Planning phase LLM call failed: %s", result.error)
+            # Check if this was a timeout
+            if result.metadata and result.metadata.get("timeout"):
+                logger.error(
+                    "Planning phase timed out after exhausting all providers: %s",
+                    result.metadata.get("providers_tried", []),
+                )
+            else:
+                logger.error("Planning phase LLM call failed: %s", result.error)
             return result
 
         # Track token usage
@@ -2709,15 +2720,19 @@ Generate the research plan as JSON."""
         system_prompt = self._build_analysis_system_prompt(state)
         user_prompt = self._build_analysis_user_prompt(state)
 
-        # Execute LLM call with context window error handling
+        # Execute LLM call with context window error handling and timeout protection
         try:
-            result = self._execute_provider(
+            result = await self._execute_provider_async(
                 prompt=user_prompt,
                 provider_id=provider_id or state.analysis_provider,
                 model=state.analysis_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
                 temperature=0.3,  # Lower temperature for analytical tasks
+                phase="analysis",
+                fallback_providers=self.config.get_phase_fallback_providers("analysis"),
+                max_retries=self.config.deep_research_max_retries,
+                retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
             logger.error(
@@ -2746,7 +2761,14 @@ Generate the research plan as JSON."""
             )
 
         if not result.success:
-            logger.error("Analysis phase LLM call failed: %s", result.error)
+            # Check if this was a timeout
+            if result.metadata and result.metadata.get("timeout"):
+                logger.error(
+                    "Analysis phase timed out after exhausting all providers: %s",
+                    result.metadata.get("providers_tried", []),
+                )
+            else:
+                logger.error("Analysis phase LLM call failed: %s", result.error)
             return result
 
         # Track token usage
@@ -3134,15 +3156,19 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         system_prompt = self._build_synthesis_system_prompt(state)
         user_prompt = self._build_synthesis_user_prompt(state)
 
-        # Execute LLM call with context window error handling
+        # Execute LLM call with context window error handling and timeout protection
         try:
-            result = self._execute_provider(
+            result = await self._execute_provider_async(
                 prompt=user_prompt,
                 provider_id=provider_id or state.synthesis_provider,
                 model=state.synthesis_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
                 temperature=0.5,  # Balanced for coherent but varied writing
+                phase="synthesis",
+                fallback_providers=self.config.get_phase_fallback_providers("synthesis"),
+                max_retries=self.config.deep_research_max_retries,
+                retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
             logger.error(
@@ -3171,7 +3197,14 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             )
 
         if not result.success:
-            logger.error("Synthesis phase LLM call failed: %s", result.error)
+            # Check if this was a timeout
+            if result.metadata and result.metadata.get("timeout"):
+                logger.error(
+                    "Synthesis phase timed out after exhausting all providers: %s",
+                    result.metadata.get("providers_tried", []),
+                )
+            else:
+                logger.error("Synthesis phase LLM call failed: %s", result.error)
             return result
 
         # Track token usage
@@ -3541,15 +3574,19 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
         system_prompt = self._build_refinement_system_prompt(state)
         user_prompt = self._build_refinement_user_prompt(state)
 
-        # Execute LLM call with context window error handling
+        # Execute LLM call with context window error handling and timeout protection
         try:
-            result = self._execute_provider(
+            result = await self._execute_provider_async(
                 prompt=user_prompt,
                 provider_id=provider_id or state.refinement_provider,
                 model=state.refinement_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
                 temperature=0.4,  # Lower temperature for focused analysis
+                phase="refinement",
+                fallback_providers=self.config.get_phase_fallback_providers("refinement"),
+                max_retries=self.config.deep_research_max_retries,
+                retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
             logger.error(
@@ -3573,7 +3610,14 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
             )
 
         if not result.success:
-            logger.error("Refinement phase LLM call failed: %s", result.error)
+            # Check if this was a timeout
+            if result.metadata and result.metadata.get("timeout"):
+                logger.error(
+                    "Refinement phase timed out after exhausting all providers: %s",
+                    result.metadata.get("providers_tried", []),
+                )
+            else:
+                logger.error("Refinement phase LLM call failed: %s", result.error)
             return result
 
         # Track token usage

@@ -395,6 +395,42 @@ deep_research_synthesis_provider = "[cli]gemini:pro"
 deep_research_refinement_provider = "[cli]gemini:pro"
 
 # -----------------------------------------------------------------------------
+# Per-Phase Fallback Provider Lists (Retry & Resilience)
+# -----------------------------------------------------------------------------
+# Each phase can have an ordered list of fallback providers.
+# On failure/timeout, the workflow retries with backoff, then tries
+# the next provider in the list until success or exhaustion.
+# Empty list = no fallback (use only the primary provider)
+
+# Planning phase: query decomposition (can use faster/cheaper models)
+deep_research_planning_providers = [
+    "[cli]gemini:pro",
+    "[cli]claude:sonnet",
+]
+
+# Analysis phase: finding extraction
+deep_research_analysis_providers = [
+    "[cli]gemini:pro",
+    "[cli]claude:sonnet",
+]
+
+# Synthesis phase: report generation (may benefit from stronger models)
+deep_research_synthesis_providers = [
+    "[cli]claude:opus",
+    "[cli]gemini:pro",
+]
+
+# Refinement phase: gap identification
+deep_research_refinement_providers = [
+    "[cli]gemini:pro",
+    "[cli]claude:sonnet",
+]
+
+# Retry settings for all deep research phases
+deep_research_max_retries = 2       # Retry attempts per provider before fallback
+deep_research_retry_delay = 5.0     # Seconds between retries
+
+# -----------------------------------------------------------------------------
 # Search Rate Limiting
 # -----------------------------------------------------------------------------
 

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.34] - 2026-01-24
+
+### Added
+
+- **Deep research timeout resilience**: Async provider execution with timeout protection and retry/fallback logic
+  - New `_execute_provider_async()` method in base workflow with `asyncio.wait_for()` timeout protection
+  - All 4 deep research phase methods now use async execution with timeout handling
+  - Per-phase fallback provider lists: `deep_research_planning_providers`, `deep_research_analysis_providers`, `deep_research_synthesis_providers`, `deep_research_refinement_providers`
+  - Retry settings: `deep_research_max_retries` (default: 2) and `deep_research_retry_delay` (default: 5.0s)
+  - `get_phase_fallback_providers()` helper method in `ResearchConfig`
+  - Enhanced timeout logging with phase context and provider history
+  - Sample TOML documentation for new retry/fallback settings
+
 ## [0.8.33] - 2026-01-24
 
 ### Added

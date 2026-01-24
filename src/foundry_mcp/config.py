@@ -458,6 +458,15 @@ class ResearchConfig:
     deep_research_analysis_provider: Optional[str] = None
     deep_research_synthesis_provider: Optional[str] = None
     deep_research_refinement_provider: Optional[str] = None
+    # Per-phase fallback provider lists (for retry/fallback on failure)
+    # On failure, tries next provider in the list until success or exhaustion
+    deep_research_planning_providers: List[str] = field(default_factory=list)
+    deep_research_analysis_providers: List[str] = field(default_factory=list)
+    deep_research_synthesis_providers: List[str] = field(default_factory=list)
+    deep_research_refinement_providers: List[str] = field(default_factory=list)
+    # Retry settings for deep research phases
+    deep_research_max_retries: int = 2  # Retry attempts per provider
+    deep_research_retry_delay: float = 5.0  # Seconds between retries
     deep_research_providers: List[str] = field(
         default_factory=lambda: ["tavily", "google", "semantic_scholar"]
     )
@@ -513,6 +522,18 @@ class ResearchConfig:
                 p.strip() for p in deep_research_providers.split(",") if p.strip()
             ]
 
+        # Parse per-phase fallback provider lists
+        def _parse_provider_list(key: str) -> List[str]:
+            val = data.get(key, [])
+            if isinstance(val, str):
+                return [p.strip() for p in val.split(",") if p.strip()]
+            return list(val) if val else []
+
+        deep_research_planning_providers = _parse_provider_list("deep_research_planning_providers")
+        deep_research_analysis_providers = _parse_provider_list("deep_research_analysis_providers")
+        deep_research_synthesis_providers = _parse_provider_list("deep_research_synthesis_providers")
+        deep_research_refinement_providers = _parse_provider_list("deep_research_refinement_providers")
+
         # Parse per_provider_rate_limits - handle dict from TOML
         per_provider_rate_limits = data.get("per_provider_rate_limits", {
             "tavily": 60,
@@ -552,6 +573,14 @@ class ResearchConfig:
             deep_research_analysis_provider=data.get("deep_research_analysis_provider"),
             deep_research_synthesis_provider=data.get("deep_research_synthesis_provider"),
             deep_research_refinement_provider=data.get("deep_research_refinement_provider"),
+            # Per-phase fallback provider lists
+            deep_research_planning_providers=deep_research_planning_providers,
+            deep_research_analysis_providers=deep_research_analysis_providers,
+            deep_research_synthesis_providers=deep_research_synthesis_providers,
+            deep_research_refinement_providers=deep_research_refinement_providers,
+            # Retry settings
+            deep_research_max_retries=int(data.get("deep_research_max_retries", 2)),
+            deep_research_retry_delay=float(data.get("deep_research_retry_delay", 5.0)),
             deep_research_providers=deep_research_providers,
             deep_research_audit_artifacts=_parse_bool(
                 data.get("deep_research_audit_artifacts", True)
@@ -642,6 +671,26 @@ class ResearchConfig:
         configured = phase_providers.get(phase.lower())
         spec_str = configured or self.default_provider
         return _parse_provider_spec(spec_str)
+
+    def get_phase_fallback_providers(self, phase: str) -> List[str]:
+        """Get fallback provider list for a specific deep research phase.
+
+        Returns the phase-specific fallback provider list if configured,
+        otherwise returns an empty list (no fallback).
+
+        Args:
+            phase: Phase name ("planning", "analysis", "synthesis", "refinement")
+
+        Returns:
+            List of fallback provider IDs to try on failure
+        """
+        phase_fallbacks = {
+            "planning": self.deep_research_planning_providers,
+            "analysis": self.deep_research_analysis_providers,
+            "synthesis": self.deep_research_synthesis_providers,
+            "refinement": self.deep_research_refinement_providers,
+        }
+        return phase_fallbacks.get(phase.lower(), [])
 
     def get_search_provider_api_key(
         self,

@@ -72,49 +72,62 @@ class ChatWorkflow(ResearchWorkflowBase):
         Returns:
             WorkflowResult with assistant response and thread metadata
         """
-        # Get or create thread
-        thread = self._get_or_create_thread(
-            thread_id=thread_id,
-            system_prompt=system_prompt,
-            provider_id=provider_id,
-            title=title,
-        )
-
-        # Add user message
-        thread.add_message(role="user", content=prompt)
-
-        # Build context for provider
-        context = self._build_context(thread)
-
-        # Execute provider
-        result = self._execute_provider(
-            prompt=context,
-            provider_id=thread.provider_id or provider_id,
-            system_prompt=thread.system_prompt,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        if result.success:
-            # Add assistant message
-            thread.add_message(
-                role="assistant",
-                content=result.content,
-                provider_id=result.provider_id,
-                model_used=result.model_used,
-                tokens_used=result.tokens_used,
+        try:
+            # Get or create thread
+            thread = self._get_or_create_thread(
+                thread_id=thread_id,
+                system_prompt=system_prompt,
+                provider_id=provider_id,
+                title=title,
             )
 
-            # Persist thread
-            self.memory.save_thread(thread)
+            # Add user message
+            thread.add_message(role="user", content=prompt)
 
-            # Add thread info to result metadata
-            result.metadata["thread_id"] = thread.id
-            result.metadata["message_count"] = len(thread.messages)
-            result.metadata["thread_title"] = thread.title
+            # Build context for provider
+            context = self._build_context(thread)
 
-        return result
+            # Execute provider
+            result = self._execute_provider(
+                prompt=context,
+                provider_id=thread.provider_id or provider_id,
+                system_prompt=thread.system_prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            if result.success:
+                # Add assistant message
+                thread.add_message(
+                    role="assistant",
+                    content=result.content,
+                    provider_id=result.provider_id,
+                    model_used=result.model_used,
+                    tokens_used=result.tokens_used,
+                )
+
+                # Persist thread
+                self.memory.save_thread(thread)
+
+                # Add thread info to result metadata
+                result.metadata["thread_id"] = thread.id
+                result.metadata["message_count"] = len(thread.messages)
+                result.metadata["thread_title"] = thread.title
+
+            return result
+        except Exception as exc:
+            logger.exception("ChatWorkflow.execute() failed with unexpected error: %s", exc)
+            error_msg = str(exc) if str(exc) else exc.__class__.__name__
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=f"Chat workflow failed: {error_msg}",
+                metadata={
+                    "workflow": "chat",
+                    "error_type": exc.__class__.__name__,
+                },
+            )
 
     def _get_or_create_thread(
         self,

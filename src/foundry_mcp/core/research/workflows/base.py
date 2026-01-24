@@ -4,10 +4,12 @@ Provides common infrastructure for provider integration, error handling,
 and response normalization across all research workflow types.
 """
 
+import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from foundry_mcp.config import ResearchConfig
 from foundry_mcp.core.llm_config import ProviderSpec
@@ -280,6 +282,212 @@ class ResearchWorkflowBase(ABC):
                 provider_id=provider_id,
                 error=str(exc),
             )
+
+    async def _execute_provider_async(
+        self,
+        prompt: str,
+        provider_id: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout: Optional[float] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        hooks: Optional[ProviderHooks] = None,
+        phase: Optional[str] = None,
+        fallback_providers: Optional[List[str]] = None,
+        max_retries: int = 2,
+        retry_delay: float = 5.0,
+    ) -> WorkflowResult:
+        """Execute a provider request asynchronously with timeout protection.
+
+        This method wraps the synchronous provider.generate() call in an executor
+        with asyncio.wait_for() timeout protection. It also supports retry and
+        fallback logic for resilience.
+
+        Args:
+            prompt: User prompt
+            provider_id: Provider to use (uses config default if None)
+            system_prompt: Optional system prompt
+            model: Optional model override
+            timeout: Optional timeout in seconds (applied to provider execution)
+            temperature: Optional temperature setting
+            max_tokens: Optional max tokens
+            hooks: Optional provider hooks
+            phase: Phase name for logging (e.g., "planning", "analysis")
+            fallback_providers: List of fallback provider IDs to try on failure
+            max_retries: Maximum retry attempts per provider (default: 2)
+            retry_delay: Delay between retries in seconds (default: 5.0)
+
+        Returns:
+            WorkflowResult with response, error, or timeout metadata
+        """
+        effective_timeout = timeout or self.config.default_timeout
+        providers_to_try = [provider_id or self.config.default_provider]
+
+        # Add fallback providers if configured
+        if fallback_providers:
+            for fp in fallback_providers:
+                if fp not in providers_to_try:
+                    providers_to_try.append(fp)
+
+        providers_tried: List[str] = []
+        total_retries = 0
+        last_error: Optional[str] = None
+
+        for current_provider_id in providers_to_try:
+            # Try this provider with retries
+            for attempt in range(max_retries + 1):
+                start_time = time.perf_counter()
+                providers_tried.append(current_provider_id)
+
+                try:
+                    provider = self._resolve_provider(current_provider_id, hooks)
+                    if provider is None:
+                        last_error = f"Provider '{current_provider_id}' is not available"
+                        logger.warning(
+                            "%s phase: Provider resolution failed for '%s' (attempt %d)",
+                            phase or "unknown",
+                            current_provider_id,
+                            attempt + 1,
+                        )
+                        break  # Don't retry if provider can't be resolved
+
+                    request = ProviderRequest(
+                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        model=model,
+                        timeout=effective_timeout,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+
+                    # Run synchronous generate in thread pool with timeout
+                    loop = asyncio.get_running_loop()
+                    result: ProviderResult = await asyncio.wait_for(
+                        loop.run_in_executor(None, provider.generate, request),
+                        timeout=effective_timeout,
+                    )
+
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+
+                    if result.status != ProviderStatus.SUCCESS:
+                        last_error = f"Provider returned status: {result.status.value}"
+                        logger.warning(
+                            "%s phase: Provider %s returned %s (attempt %d)",
+                            phase or "unknown",
+                            current_provider_id,
+                            result.status.value,
+                            attempt + 1,
+                        )
+                        # Retry on non-success status
+                        if attempt < max_retries:
+                            total_retries += 1
+                            await asyncio.sleep(retry_delay)
+                            continue
+                        # Try next provider
+                        break
+
+                    # Success!
+                    return WorkflowResult(
+                        success=True,
+                        content=result.content,
+                        provider_id=result.provider_id,
+                        model_used=result.model_used,
+                        tokens_used=result.tokens.total_tokens if result.tokens else None,
+                        input_tokens=result.tokens.input_tokens if result.tokens else None,
+                        output_tokens=result.tokens.output_tokens if result.tokens else None,
+                        cached_tokens=result.tokens.cached_input_tokens if result.tokens else None,
+                        duration_ms=duration_ms,
+                        metadata={
+                            "phase": phase,
+                            "retries": total_retries,
+                            "providers_tried": providers_tried,
+                        },
+                    )
+
+                except asyncio.TimeoutError:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+                    last_error = f"Timed out after {effective_timeout}s"
+                    logger.warning(
+                        "%s phase: Provider %s timed out after %.1fs (attempt %d)",
+                        phase or "unknown",
+                        current_provider_id,
+                        effective_timeout,
+                        attempt + 1,
+                    )
+                    # Retry on timeout
+                    if attempt < max_retries:
+                        total_retries += 1
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    # Try next provider
+                    break
+
+                except ContextWindowError:
+                    # Don't retry context window errors - they'll fail everywhere
+                    raise
+
+                except Exception as exc:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+
+                    # Check if this is a context window error
+                    if is_context_window_error(exc):
+                        # Extract token counts and re-raise as ContextWindowError
+                        prompt_tokens, max_context = extract_token_counts(str(exc))
+                        estimated_tokens = _estimate_prompt_tokens(prompt, system_prompt)
+                        if prompt_tokens is None:
+                            prompt_tokens = estimated_tokens
+
+                        guidance = create_context_window_guidance(
+                            prompt_tokens=prompt_tokens,
+                            max_tokens=max_context,
+                            provider_id=current_provider_id,
+                        )
+                        raise ContextWindowError(
+                            guidance,
+                            provider=current_provider_id,
+                            prompt_tokens=prompt_tokens,
+                            max_tokens=max_context,
+                        ) from exc
+
+                    last_error = str(exc)
+                    logger.warning(
+                        "%s phase: Provider %s failed with %s (attempt %d): %s",
+                        phase or "unknown",
+                        current_provider_id,
+                        type(exc).__name__,
+                        attempt + 1,
+                        exc,
+                    )
+                    # Retry on other errors
+                    if attempt < max_retries:
+                        total_retries += 1
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    # Try next provider
+                    break
+
+        # All providers exhausted
+        logger.error(
+            "%s phase: All providers exhausted after %d total attempts. "
+            "Providers tried: %s. Last error: %s",
+            phase or "unknown",
+            len(providers_tried),
+            providers_tried,
+            last_error,
+        )
+
+        return WorkflowResult(
+            success=False,
+            content="",
+            error=last_error or "All providers exhausted",
+            metadata={
+                "phase": phase,
+                "timeout": True,
+                "retries": total_retries,
+                "providers_tried": providers_tried,
+            },
+        )
 
     def get_available_providers(self) -> list[str]:
         """Get list of available provider IDs.

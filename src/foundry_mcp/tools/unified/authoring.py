@@ -3528,6 +3528,18 @@ def _dispatch_authoring_action(
                 request_id=request_id,
             )
         )
+    except Exception as exc:
+        logger.exception("Authoring action '%s' failed with unexpected error: %s", action, exc)
+        error_msg = str(exc) if str(exc) else exc.__class__.__name__
+        return asdict(
+            error_response(
+                f"Authoring action '{action}' failed: {error_msg}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check configuration and logs for details.",
+                details={"action": action, "error_type": exc.__class__.__name__},
+            )
+        )
 
 
 def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
