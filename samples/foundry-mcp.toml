@@ -410,7 +410,7 @@ deep_research_planning_providers = [
     "[cli]gemini:flash",
     "[cli]codex:gpt-5.1-codex-mini",
     "[cli]opencode:openai/gpt-5.1-codex-mini",
-    "[cli]cursor-agent:gpt-5.1-codex-mini",
+    "[cli]cursor-agent:gpt-5.2-codex-fast",
     "[cli]claude:sonnet"
 ]
 
