@@ -78,114 +78,127 @@ class ConsensusWorkflow(ResearchWorkflowBase):
         Returns:
             WorkflowResult with synthesized or combined response
         """
-        # Resolve providers - parse specs and check availability
-        provider_specs = providers or self.config.consensus_providers
-        available = available_providers()
-
-        # Parse each provider spec and filter by availability
-        valid_specs: list[ProviderSpec] = []
-        for spec_str in provider_specs:
-            try:
-                spec = ProviderSpec.parse_flexible(spec_str)
-                if spec.provider in available:
-                    valid_specs.append(spec)
-                else:
-                    logger.warning(
-                        "Provider %s (from spec '%s') not available",
-                        spec.provider,
-                        spec_str,
-                    )
-            except ValueError as exc:
-                logger.warning("Invalid provider spec '%s': %s", spec_str, exc)
-
-        if not valid_specs:
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=f"No valid providers available. Requested: {provider_specs}, Available: {available}",
-            )
-
-        # Use full spec strings for tracking, but we'll parse again when resolving
-        valid_providers = [spec.raw or f"{spec.provider}:{spec.model}" if spec.model else spec.provider for spec in valid_specs]
-
-        # Create consensus config and state
-        consensus_config = ConsensusConfig(
-            providers=valid_providers,
-            strategy=strategy,
-            synthesis_provider=synthesis_provider or self.config.default_provider,
-            timeout_per_provider=timeout_per_provider,
-            max_concurrent=max_concurrent,
-            require_all=require_all,
-            min_responses=min_responses,
-        )
-
-        state = ConsensusState(
-            prompt=prompt,
-            config=consensus_config,
-            system_prompt=system_prompt,
-        )
-
-        # Execute parallel requests using ThreadPoolExecutor
-        # This avoids asyncio.run() conflicts with MCP server's event loop
         try:
-            responses = self._execute_parallel_sync(
-                prompt=prompt,
+            # Resolve providers - parse specs and check availability
+            provider_specs = providers or self.config.consensus_providers
+            available = available_providers()
+
+            # Parse each provider spec and filter by availability
+            valid_specs: list[ProviderSpec] = []
+            for spec_str in provider_specs:
+                try:
+                    spec = ProviderSpec.parse_flexible(spec_str)
+                    if spec.provider in available:
+                        valid_specs.append(spec)
+                    else:
+                        logger.warning(
+                            "Provider %s (from spec '%s') not available",
+                            spec.provider,
+                            spec_str,
+                        )
+                except ValueError as exc:
+                    logger.warning("Invalid provider spec '%s': %s", spec_str, exc)
+
+            if not valid_specs:
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=f"No valid providers available. Requested: {provider_specs}, Available: {available}",
+                )
+
+            # Use full spec strings for tracking, but we'll parse again when resolving
+            valid_providers = [spec.raw or f"{spec.provider}:{spec.model}" if spec.model else spec.provider for spec in valid_specs]
+
+            # Create consensus config and state
+            consensus_config = ConsensusConfig(
                 providers=valid_providers,
-                system_prompt=system_prompt,
-                timeout=timeout_per_provider,
+                strategy=strategy,
+                synthesis_provider=synthesis_provider or self.config.default_provider,
+                timeout_per_provider=timeout_per_provider,
                 max_concurrent=max_concurrent,
+                require_all=require_all,
+                min_responses=min_responses,
             )
+
+            state = ConsensusState(
+                prompt=prompt,
+                config=consensus_config,
+                system_prompt=system_prompt,
+            )
+
+            # Execute parallel requests using ThreadPoolExecutor
+            # This avoids asyncio.run() conflicts with MCP server's event loop
+            try:
+                responses = self._execute_parallel_sync(
+                    prompt=prompt,
+                    providers=valid_providers,
+                    system_prompt=system_prompt,
+                    timeout=timeout_per_provider,
+                    max_concurrent=max_concurrent,
+                )
+            except Exception as exc:
+                logger.error("Parallel execution failed: %s", exc)
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=f"Parallel execution failed: {exc}",
+                )
+
+            # Add responses to state
+            for response in responses:
+                state.add_response(response)
+
+            # Check if we have enough responses
+            successful = state.successful_responses()
+            if len(successful) < min_responses:
+                failed_info = [
+                    f"{r.provider_id}: {r.error_message}"
+                    for r in state.failed_responses()
+                ]
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=f"Insufficient responses ({len(successful)}/{min_responses}). Failures: {failed_info}",
+                    metadata={
+                        "successful_count": len(successful),
+                        "failed_count": len(state.failed_responses()),
+                        "responses": [r.model_dump() for r in responses],
+                    },
+                )
+
+            if require_all and len(state.failed_responses()) > 0:
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=f"Not all providers succeeded (require_all=True). Failed: {[r.provider_id for r in state.failed_responses()]}",
+                )
+
+            # Apply synthesis strategy
+            result = self._apply_strategy(state)
+
+            # Persist state
+            state.mark_completed(synthesis=result.content if result.success else None)
+            self.memory.save_consensus(state)
+
+            # Add consensus metadata
+            result.metadata["consensus_id"] = state.id
+            result.metadata["providers_consulted"] = [r.provider_id for r in successful]
+            result.metadata["strategy"] = strategy.value
+            result.metadata["response_count"] = len(successful)
+
+            return result
         except Exception as exc:
-            logger.error("Parallel execution failed: %s", exc)
+            logger.exception("ConsensusWorkflow.execute() failed with unexpected error: %s", exc)
+            error_msg = str(exc) if str(exc) else exc.__class__.__name__
             return WorkflowResult(
                 success=False,
                 content="",
-                error=f"Parallel execution failed: {exc}",
-            )
-
-        # Add responses to state
-        for response in responses:
-            state.add_response(response)
-
-        # Check if we have enough responses
-        successful = state.successful_responses()
-        if len(successful) < min_responses:
-            failed_info = [
-                f"{r.provider_id}: {r.error_message}"
-                for r in state.failed_responses()
-            ]
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=f"Insufficient responses ({len(successful)}/{min_responses}). Failures: {failed_info}",
+                error=f"Consensus workflow failed: {error_msg}",
                 metadata={
-                    "successful_count": len(successful),
-                    "failed_count": len(state.failed_responses()),
-                    "responses": [r.model_dump() for r in responses],
+                    "workflow": "consensus",
+                    "error_type": exc.__class__.__name__,
                 },
             )
-
-        if require_all and len(state.failed_responses()) > 0:
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=f"Not all providers succeeded (require_all=True). Failed: {[r.provider_id for r in state.failed_responses()]}",
-            )
-
-        # Apply synthesis strategy
-        result = self._apply_strategy(state)
-
-        # Persist state
-        state.mark_completed(synthesis=result.content if result.success else None)
-        self.memory.save_consensus(state)
-
-        # Add consensus metadata
-        result.metadata["consensus_id"] = state.id
-        result.metadata["providers_consulted"] = [r.provider_id for r in successful]
-        result.metadata["strategy"] = strategy.value
-        result.metadata["response_count"] = len(successful)
-
-        return result
 
     def _execute_parallel_sync(
         self,

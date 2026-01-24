@@ -71,73 +71,86 @@ class ThinkDeepWorkflow(ResearchWorkflowBase):
         Returns:
             WorkflowResult with investigation findings
         """
-        # Determine if starting new or continuing
-        if investigation_id:
-            state = self.memory.load_investigation(investigation_id)
-            if not state:
+        try:
+            # Determine if starting new or continuing
+            if investigation_id:
+                state = self.memory.load_investigation(investigation_id)
+                if not state:
+                    return WorkflowResult(
+                        success=False,
+                        content="",
+                        error=f"Investigation {investigation_id} not found",
+                    )
+                # Use query if provided, otherwise generate next question
+                current_query = query or self._generate_next_query(state)
+            elif topic:
+                state = ThinkDeepState(
+                    topic=topic,
+                    max_depth=max_depth or self.config.thinkdeep_max_depth,
+                    system_prompt=system_prompt,
+                )
+                current_query = self._generate_initial_query(topic)
+            else:
                 return WorkflowResult(
                     success=False,
                     content="",
-                    error=f"Investigation {investigation_id} not found",
+                    error="Either 'topic' (for new investigation) or 'investigation_id' (to continue) is required",
                 )
-            # Use query if provided, otherwise generate next question
-            current_query = query or self._generate_next_query(state)
-        elif topic:
-            state = ThinkDeepState(
-                topic=topic,
-                max_depth=max_depth or self.config.thinkdeep_max_depth,
-                system_prompt=system_prompt,
+
+            # Check if already converged
+            if state.converged:
+                return WorkflowResult(
+                    success=True,
+                    content=self._format_summary(state),
+                    metadata={
+                        "investigation_id": state.id,
+                        "converged": True,
+                        "convergence_reason": state.convergence_reason,
+                        "hypothesis_count": len(state.hypotheses),
+                        "step_count": len(state.steps),
+                    },
+                )
+
+            # Execute investigation step
+            result = self._execute_investigation_step(
+                state=state,
+                query=current_query,
+                provider_id=provider_id,
             )
-            current_query = self._generate_initial_query(topic)
-        else:
+
+            if not result.success:
+                return result
+
+            # Check for convergence
+            state.check_convergence()
+
+            # Persist state
+            self.memory.save_investigation(state)
+
+            # Add metadata
+            result.metadata["investigation_id"] = state.id
+            result.metadata["current_depth"] = state.current_depth
+            result.metadata["max_depth"] = state.max_depth
+            result.metadata["converged"] = state.converged
+            result.metadata["hypothesis_count"] = len(state.hypotheses)
+            result.metadata["step_count"] = len(state.steps)
+
+            if state.converged:
+                result.metadata["convergence_reason"] = state.convergence_reason
+
+            return result
+        except Exception as exc:
+            logger.exception("ThinkDeepWorkflow.execute() failed with unexpected error: %s", exc)
+            error_msg = str(exc) if str(exc) else exc.__class__.__name__
             return WorkflowResult(
                 success=False,
                 content="",
-                error="Either 'topic' (for new investigation) or 'investigation_id' (to continue) is required",
-            )
-
-        # Check if already converged
-        if state.converged:
-            return WorkflowResult(
-                success=True,
-                content=self._format_summary(state),
+                error=f"ThinkDeep workflow failed: {error_msg}",
                 metadata={
-                    "investigation_id": state.id,
-                    "converged": True,
-                    "convergence_reason": state.convergence_reason,
-                    "hypothesis_count": len(state.hypotheses),
-                    "step_count": len(state.steps),
+                    "workflow": "thinkdeep",
+                    "error_type": exc.__class__.__name__,
                 },
             )
-
-        # Execute investigation step
-        result = self._execute_investigation_step(
-            state=state,
-            query=current_query,
-            provider_id=provider_id,
-        )
-
-        if not result.success:
-            return result
-
-        # Check for convergence
-        state.check_convergence()
-
-        # Persist state
-        self.memory.save_investigation(state)
-
-        # Add metadata
-        result.metadata["investigation_id"] = state.id
-        result.metadata["current_depth"] = state.current_depth
-        result.metadata["max_depth"] = state.max_depth
-        result.metadata["converged"] = state.converged
-        result.metadata["hypothesis_count"] = len(state.hypotheses)
-        result.metadata["step_count"] = len(state.steps)
-
-        if state.converged:
-            result.metadata["convergence_reason"] = state.convergence_reason
-
-        return result
 
     def _generate_initial_query(self, topic: str) -> str:
         """Generate the initial investigation query.

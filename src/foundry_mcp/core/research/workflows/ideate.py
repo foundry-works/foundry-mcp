@@ -73,60 +73,73 @@ class IdeateWorkflow(ResearchWorkflowBase):
         Returns:
             WorkflowResult with ideation results
         """
-        # Get or create state
-        if ideation_id:
-            state = self.memory.load_ideation(ideation_id)
-            if not state:
+        try:
+            # Get or create state
+            if ideation_id:
+                state = self.memory.load_ideation(ideation_id)
+                if not state:
+                    return WorkflowResult(
+                        success=False,
+                        content="",
+                        error=f"Ideation session {ideation_id} not found",
+                    )
+            elif topic:
+                state = IdeationState(
+                    topic=topic,
+                    perspectives=perspectives or self.config.ideate_perspectives,
+                    scoring_criteria=scoring_criteria or ["novelty", "feasibility", "impact"],
+                    system_prompt=system_prompt,
+                )
+            else:
                 return WorkflowResult(
                     success=False,
                     content="",
-                    error=f"Ideation session {ideation_id} not found",
+                    error="Either 'topic' (for new session) or 'ideation_id' (to continue) is required",
                 )
-        elif topic:
-            state = IdeationState(
-                topic=topic,
-                perspectives=perspectives or self.config.ideate_perspectives,
-                scoring_criteria=scoring_criteria or ["novelty", "feasibility", "impact"],
-                system_prompt=system_prompt,
-            )
-        else:
+
+            # Dispatch to action handler
+            if action == "generate":
+                result = self._generate_ideas(state, perspective, provider_id)
+            elif action == "cluster":
+                result = self._cluster_ideas(state, provider_id)
+            elif action == "score":
+                result = self._score_ideas(state, provider_id)
+            elif action == "select":
+                result = self._select_clusters(state, cluster_ids)
+            elif action == "elaborate":
+                result = self._elaborate_clusters(state, provider_id)
+            elif action == "status":
+                result = self._get_status(state)
+            else:
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=f"Unknown action '{action}'. Valid: generate, cluster, score, select, elaborate, status",
+                )
+
+            if result.success:
+                # Persist state
+                self.memory.save_ideation(state)
+
+                # Add common metadata
+                result.metadata["ideation_id"] = state.id
+                result.metadata["phase"] = state.phase.value
+                result.metadata["idea_count"] = len(state.ideas)
+                result.metadata["cluster_count"] = len(state.clusters)
+
+            return result
+        except Exception as exc:
+            logger.exception("IdeateWorkflow.execute() failed with unexpected error: %s", exc)
+            error_msg = str(exc) if str(exc) else exc.__class__.__name__
             return WorkflowResult(
                 success=False,
                 content="",
-                error="Either 'topic' (for new session) or 'ideation_id' (to continue) is required",
+                error=f"Ideate workflow failed: {error_msg}",
+                metadata={
+                    "workflow": "ideate",
+                    "error_type": exc.__class__.__name__,
+                },
             )
-
-        # Dispatch to action handler
-        if action == "generate":
-            result = self._generate_ideas(state, perspective, provider_id)
-        elif action == "cluster":
-            result = self._cluster_ideas(state, provider_id)
-        elif action == "score":
-            result = self._score_ideas(state, provider_id)
-        elif action == "select":
-            result = self._select_clusters(state, cluster_ids)
-        elif action == "elaborate":
-            result = self._elaborate_clusters(state, provider_id)
-        elif action == "status":
-            result = self._get_status(state)
-        else:
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=f"Unknown action '{action}'. Valid: generate, cluster, score, select, elaborate, status",
-            )
-
-        if result.success:
-            # Persist state
-            self.memory.save_ideation(state)
-
-            # Add common metadata
-            result.metadata["ideation_id"] = state.id
-            result.metadata["phase"] = state.phase.value
-            result.metadata["idea_count"] = len(state.ideas)
-            result.metadata["cluster_count"] = len(state.clusters)
-
-        return result
 
     def _generate_ideas(
         self,
