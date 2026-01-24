@@ -969,6 +969,16 @@ class DeepResearchState(BaseModel):
         description="Count of queries executed per search provider",
     )
 
+    # Polling tracking
+    status_check_count: int = Field(
+        default=0,
+        description="Number of status checks made",
+    )
+    last_status_check_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp of last status check",
+    )
+
     # Configuration
     source_types: list[SourceType] = Field(
         default_factory=lambda: [SourceType.WEB, SourceType.ACADEMIC],

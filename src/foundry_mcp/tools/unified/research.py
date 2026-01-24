@@ -437,7 +437,18 @@ def _handle_deep_research(
         response_data = {
             "research_id": result.metadata.get("research_id"),
             "status": "started",
-            "message": "Deep research started in background. Use deep-research-status to poll progress.",
+            "message": (
+                "Deep research started. This typically takes 3-5 minutes. "
+                "IMPORTANT: Communicate progress to user before each status check. "
+                "Maximum 5 status checks allowed. "
+                "Do NOT use WebSearch/WebFetch while this research is running."
+            ),
+            "polling_guidance": {
+                "max_checks": 5,
+                "typical_duration_minutes": 5,
+                "require_user_communication": True,
+                "no_independent_research": True,
+            },
         }
 
         # Include additional metadata if available (for continue/resume)
@@ -477,7 +488,21 @@ def _handle_deep_research_status(
     )
 
     if result.success:
-        return asdict(success_response(data=result.metadata))
+        # Add next_action guidance based on check count
+        status_data = dict(result.metadata) if result.metadata else {}
+        check_count = status_data.get("status_check_count", 1)
+        checks_remaining = max(0, 5 - check_count)
+
+        if checks_remaining > 0:
+            status_data["next_action"] = (
+                f"BEFORE next check: Tell user about progress. {checks_remaining} checks remaining."
+            )
+        else:
+            status_data["next_action"] = (
+                "Max checks reached. Offer user options: wait, background, or cancel."
+            )
+
+        return asdict(success_response(data=status_data))
     else:
         return asdict(
             error_response(

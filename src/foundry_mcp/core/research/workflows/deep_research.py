@@ -1552,8 +1552,11 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         # Check background task first
         bg_task = self.get_background_task(research_id)
         if bg_task:
-            # Also load persisted state to get progress metrics
-            state = self.memory.load_deep_research(research_id)
+            is_active = not bg_task.is_done
+            # Prefer in-memory state for active tasks to avoid clobbering workflow saves.
+            state = _active_research_sessions.get(research_id) if is_active else None
+            if state is None:
+                state = self.memory.load_deep_research(research_id)
             metadata: dict[str, Any] = {
                 "research_id": research_id,
                 "task_status": bg_task.status.value,
@@ -1562,6 +1565,12 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             }
             # Include progress from persisted state if available
             if state:
+                # Track status check count for polling mitigation
+                state.status_check_count += 1
+                state.last_status_check_at = datetime.utcnow()
+                if not is_active:
+                    self.memory.save_deep_research(state)
+
                 metadata.update({
                     "original_query": state.original_query,
                     "phase": state.phase.value,
@@ -1575,6 +1584,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                     "total_tokens_used": state.total_tokens_used,
                     "is_failed": bool(state.metadata.get("failed")),
                     "failure_error": state.metadata.get("failure_error"),
+                    "status_check_count": state.status_check_count,
                 })
             return WorkflowResult(
                 success=True,
@@ -1590,6 +1600,11 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 content="",
                 error=f"Research session '{research_id}' not found",
             )
+
+        # Track status check count for polling mitigation
+        state.status_check_count += 1
+        state.last_status_check_at = datetime.utcnow()
+        self.memory.save_deep_research(state)
 
         # Determine status string
         is_failed = bool(state.metadata.get("failed"))
@@ -1640,6 +1655,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 "total_duration_ms": state.total_duration_ms,
                 "timed_out": bool(state.metadata.get("timeout")),
                 "cancelled": bool(state.metadata.get("cancelled")),
+                "status_check_count": state.status_check_count,
             },
         )
 

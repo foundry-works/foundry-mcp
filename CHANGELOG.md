@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.35] - 2026-01-24
+
+### Added
+
+- **Deep research polling mitigation**: Track status check counts and provide guidance to prevent aggressive polling
+  - New `status_check_count` and `last_status_check_at` fields in `DeepResearchState`
+  - Start response now includes `polling_guidance` with max checks, typical duration, and behavioral rules
+  - Status response includes `next_action` guidance based on check count (warns at limit)
+  - Instructs callers not to use WebSearch/WebFetch while deep research is running
+
 ## [0.8.34] - 2026-01-24
 
 ### Added

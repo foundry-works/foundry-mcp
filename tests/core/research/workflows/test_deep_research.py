@@ -719,11 +719,14 @@ class TestDeepResearchWorkflow:
 
             # Check status while running - this should NOT crash
             # (Previously crashed with "'NoneType' object has no attribute 'done'")
+            before_save_calls = mock_memory.save_deep_research.call_count
             status_result = workflow.execute(action="status", research_id=state.id)
 
             assert status_result.success is True
             assert status_result.metadata["research_id"] == state.id
             assert status_result.metadata["is_complete"] is False  # Still running
+            assert status_result.metadata["status_check_count"] == 1
+            assert mock_memory.save_deep_research.call_count == before_save_calls
 
             # Wait for completion
             bg_task = workflow.get_background_task(state.id)
