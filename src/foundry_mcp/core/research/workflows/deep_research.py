@@ -3104,7 +3104,11 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             if source.discovered_at:
                 from datetime import datetime, timezone
                 now = datetime.now(timezone.utc)
-                age_hours = (now - source.discovered_at).total_seconds() / 3600
+                discovered = source.discovered_at
+                # Handle timezone-naive datetimes (legacy data)
+                if discovered.tzinfo is None:
+                    discovered = discovered.replace(tzinfo=timezone.utc)
+                age_hours = (now - discovered).total_seconds() / 3600
                 recency = compute_recency_score(age_hours, max_age_hours=720.0)
 
             # Compute overall priority (0-1 scale, higher = higher priority)
