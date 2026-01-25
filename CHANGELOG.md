@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0b2] - 2026-01-25
+
+### Fixed
+
+- **Deep research timezone crash**: Fixed `TypeError: can't subtract offset-naive and offset-aware datetimes` in `_allocate_source_budget` when Tavily returns timezone-naive `discovered_at` timestamps
+
 ## [0.9.0b1] - 2026-01-25
 
 ### Added
