@@ -458,10 +458,61 @@ perplexity = 60
 semantic_scholar = 100
 
 # -----------------------------------------------------------------------------
+# Tavily Search Provider Configuration
+# -----------------------------------------------------------------------------
+# Tavily is optimized for AI applications. Get API key at https://tavily.com/
+
+# Search depth: affects result quality and API credit cost
+# - "basic"      : Standard search (default, 1x credits)
+# - "advanced"   : Deeper analysis with more content (2x credits)
+# - "fast"       : Reduced latency
+# - "ultra_fast" : Minimal latency
+tavily_search_depth = "basic"
+
+# Search topic: "general" or "news"
+tavily_topic = "general"
+
+# Days limit for news search (1-365, only when topic="news")
+# tavily_news_days = 7
+
+# Include image results
+tavily_include_images = false
+
+# ISO 3166-1 alpha-2 country code to boost results (e.g., "US", "GB", "DE")
+# tavily_country = "US"
+
+# Chunks per source for advanced search (1-5)
+tavily_chunks_per_source = 3
+
+# Let Tavily auto-configure parameters based on query intent
+tavily_auto_parameters = false
+
+# -----------------------------------------------------------------------------
+# Tavily Extract Provider Configuration
+# -----------------------------------------------------------------------------
+# Extract structured content from URLs for deeper analysis
+
+# Extract depth: "basic" or "advanced"
+tavily_extract_depth = "basic"
+
+# Include images in extracted content
+tavily_extract_include_images = false
+
+# Enable extract as follow-up step in deep research workflow
+# When true, deep research will extract full content from top search results
+tavily_extract_in_deep_research = false
+
+# Maximum URLs to extract per deep research run
+tavily_extract_max_urls = 5
+
+# -----------------------------------------------------------------------------
 # Search Provider Credentials (optional, prefer env vars)
 # -----------------------------------------------------------------------------
-# tavily_api_key = "..."
-# perplexity_api_key = "..."
+# API keys can be set here or via environment variables (preferred):
+#   TAVILY_API_KEY, PERPLEXITY_API_KEY, SEMANTIC_SCHOLAR_API_KEY
+#
+# tavily_api_key = "tvly-..."
+# perplexity_api_key = "pplx-..."
 # semantic_scholar_api_key = "..."
 
 # =============================================================================

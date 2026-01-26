@@ -23,6 +23,10 @@ from foundry_mcp.core.research.providers.semantic_scholar import (
     SemanticScholarProvider,
 )
 from foundry_mcp.core.research.providers.tavily import TavilySearchProvider
+from foundry_mcp.core.research.providers.tavily_extract import (
+    TavilyExtractProvider,
+    UrlValidationError,
+)
 
 __all__ = [
     # Abstract base
@@ -30,6 +34,7 @@ __all__ = [
     "SearchResult",
     # Concrete providers
     "TavilySearchProvider",
+    "TavilyExtractProvider",
     "PerplexitySearchProvider",
     "GoogleSearchProvider",
     "SemanticScholarProvider",
@@ -37,4 +42,5 @@ __all__ = [
     "SearchProviderError",
     "RateLimitError",
     "AuthenticationError",
+    "UrlValidationError",
 ]
