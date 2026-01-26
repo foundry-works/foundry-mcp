@@ -882,3 +882,108 @@ class TestActionRouter:
         description = router.describe()
         assert description["action1"] == "First action"
         assert description["action2"] == "Second action"
+
+
+# =============================================================================
+# Timeout Configuration Tests
+# =============================================================================
+
+
+class TestDeepResearchTimeoutConfig:
+    """Tests for deep research timeout configuration precedence."""
+
+    def test_config_default_applies_when_param_omitted(self, mock_config, mock_memory):
+        """Config default timeout applies when task_timeout param is omitted."""
+        from foundry_mcp.tools.unified.research import _handle_deep_research
+
+        # Set config timeout to custom value
+        mock_config.research.deep_research_timeout = 300.0
+
+        with patch(
+            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+        ) as MockWorkflow:
+            mock_workflow = MagicMock()
+            mock_workflow.execute.return_value = WorkflowResult(
+                success=True,
+                content="Started",
+                metadata={"research_id": "test-123"},
+            )
+            MockWorkflow.return_value = mock_workflow
+
+            result = _handle_deep_research(
+                query="test query",
+                deep_research_action="start",
+                # task_timeout NOT provided - should use config default
+            )
+
+            # Verify workflow was called with config default timeout
+            mock_workflow.execute.assert_called_once()
+            call_kwargs = mock_workflow.execute.call_args.kwargs
+            assert call_kwargs["task_timeout"] == 300.0
+
+            # Verify effective_timeout is in response
+            assert result["success"] is True
+            assert result["data"]["effective_timeout"] == 300.0
+
+    def test_explicit_param_overrides_config(self, mock_config, mock_memory):
+        """Explicit task_timeout param overrides config default."""
+        from foundry_mcp.tools.unified.research import _handle_deep_research
+
+        # Set config timeout
+        mock_config.research.deep_research_timeout = 300.0
+
+        with patch(
+            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+        ) as MockWorkflow:
+            mock_workflow = MagicMock()
+            mock_workflow.execute.return_value = WorkflowResult(
+                success=True,
+                content="Started",
+                metadata={"research_id": "test-456"},
+            )
+            MockWorkflow.return_value = mock_workflow
+
+            result = _handle_deep_research(
+                query="test query",
+                deep_research_action="start",
+                task_timeout=900.0,  # Explicit override
+            )
+
+            # Verify workflow was called with explicit timeout, not config
+            call_kwargs = mock_workflow.execute.call_args.kwargs
+            assert call_kwargs["task_timeout"] == 900.0
+
+            # Verify effective_timeout reflects explicit param
+            assert result["data"]["effective_timeout"] == 900.0
+
+    def test_hardcoded_fallback_when_config_missing(self, mock_memory):
+        """Hardcoded fallback (600s) used when config field missing."""
+        from foundry_mcp.tools.unified.research import _handle_deep_research
+
+        with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
+            mock_cfg = MagicMock()
+            mock_cfg.research.enabled = True
+            # Simulate missing deep_research_timeout by having it return default
+            mock_cfg.research.deep_research_timeout = 600.0  # Hardcoded default
+            mock_get_config.return_value = mock_cfg
+
+            with patch(
+                "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            ) as MockWorkflow:
+                mock_workflow = MagicMock()
+                mock_workflow.execute.return_value = WorkflowResult(
+                    success=True,
+                    content="Started",
+                    metadata={"research_id": "test-789"},
+                )
+                MockWorkflow.return_value = mock_workflow
+
+                result = _handle_deep_research(
+                    query="test query",
+                    deep_research_action="start",
+                )
+
+                # Verify hardcoded fallback is used
+                call_kwargs = mock_workflow.execute.call_args.kwargs
+                assert call_kwargs["task_timeout"] == 600.0
+                assert result["data"]["effective_timeout"] == 600.0

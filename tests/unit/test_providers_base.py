@@ -511,6 +511,19 @@ class TestProviderErrors:
         assert isinstance(err, RuntimeError)
         assert err.provider == "cursor-agent"
 
+    def test_provider_timeout_error_with_metadata(self):
+        """ProviderTimeoutError should include elapsed and timeout fields."""
+        err = ProviderTimeoutError(
+            "Command timed out after 30 seconds",
+            provider="gemini",
+            elapsed=30.5,
+            timeout=30.0,
+        )
+        assert err.provider == "gemini"
+        assert err.elapsed == 30.5
+        assert err.timeout == 30.0
+        assert "30 seconds" in str(err)
+
     def test_error_hierarchy_catch_all(self):
         """All provider errors should be catchable via ProviderError."""
         errors = [

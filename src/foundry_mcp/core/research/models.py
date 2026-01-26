@@ -1313,6 +1313,12 @@ class DeepResearchState(BaseModel):
         description="Timestamp of last status check",
     )
 
+    # Heartbeat tracking for progress visibility
+    last_heartbeat_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp of last heartbeat (updated before provider calls)",
+    )
+
     # Content fidelity tracking (for token budget management)
     # Per-item fidelity records: content_fidelity[item_id].phases[phase] = {level, reason, warnings, timestamp}
     content_fidelity: dict[str, ContentFidelityRecord] = Field(
@@ -1511,6 +1517,10 @@ class DeepResearchState(BaseModel):
     def completed_sub_queries(self) -> list[SubQuery]:
         """Get successfully completed sub-queries."""
         return [sq for sq in self.sub_queries if sq.status == "completed"]
+
+    def failed_sub_queries(self) -> list[SubQuery]:
+        """Get sub-queries that failed during execution."""
+        return [sq for sq in self.sub_queries if sq.status == "failed"]
 
     def unresolved_gaps(self) -> list[ResearchGap]:
         """Get gaps that haven't been resolved yet."""

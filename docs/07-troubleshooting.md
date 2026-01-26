@@ -568,3 +568,90 @@ See [Error Codes Reference](reference/error-codes.md) for the complete list.
    - [CLI Command Reference](04-cli-command-reference.md)
    - [MCP Tool Reference](05-mcp-tool-reference.md)
    - [Configuration Guide](06-configuration.md)
+
+---
+
+## Deep Research Resilience Issues
+
+### Research task timed out
+
+**Symptoms:**
+- Status response shows `is_timed_out: true`
+- Error message mentions timeout
+
+**Solutions:**
+
+1. Increase the workflow timeout:
+   ```toml
+   [research]
+   deep_research_timeout = 900.0  # 15 minutes
+   ```
+
+2. Pass explicit timeout in API call:
+   ```json
+   {"action": "deep-research", "query": "...", "task_timeout": 1200}
+   ```
+
+3. Reduce scope to complete faster:
+   - Decrease `max_iterations` (default: 3)
+   - Decrease `max_sub_queries` (default: 5)
+   - Decrease `max_sources_per_query` (default: 5)
+
+### Research task appears stale
+
+**Symptoms:**
+- Status response shows `is_stale: true`
+- `last_heartbeat_at` is more than 5 minutes ago
+
+**Causes:**
+- Provider is slow to respond
+- Network issues between server and LLM provider
+- Provider rate limiting
+
+**Solutions:**
+
+1. Check provider status and availability
+2. Review `last_heartbeat_at` to see when last activity occurred
+3. Consider cancelling and retrying with different provider:
+   ```json
+   {"action": "deep-research", "research_id": "...", "deep_research_action": "cancel"}
+   ```
+
+### Cancellation not working
+
+**Symptoms:**
+- Cancel action returns success but task continues
+- Task shows as cancelled but still consuming resources
+
+**Solutions:**
+
+1. Cancellation uses two-phase approach:
+   - First, sets cooperative cancellation flag
+   - Then, forces cancellation after 5 seconds
+
+2. If task is stuck in provider call, it will complete current operation before checking cancellation flag
+
+3. Check task status to confirm cancellation:
+   ```json
+   {"action": "deep-research-status", "research_id": "..."}
+   ```
+
+### Partial results after crash
+
+**Symptoms:**
+- Research was interrupted mid-workflow
+- Status shows partial progress
+
+**Solutions:**
+
+1. Check status to see what was completed:
+   ```json
+   {"action": "deep-research-status", "research_id": "..."}
+   ```
+
+2. Resume from last checkpoint:
+   ```json
+   {"action": "deep-research", "research_id": "...", "deep_research_action": "continue"}
+   ```
+
+3. If resume fails, start new research - state is persisted after each phase

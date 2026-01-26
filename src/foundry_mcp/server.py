@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -98,6 +99,104 @@ def _init_metrics_persistence(config: ServerConfig) -> None:
         logger.warning("Failed to initialize metrics persistence: %s", exc)
 
 
+def _init_timeout_watchdog() -> None:
+    """Initialize the timeout watchdog for background task monitoring."""
+    try:
+        from foundry_mcp.core.timeout_watchdog import start_watchdog
+
+        async def _start_watchdog_async() -> None:
+            await start_watchdog(
+                poll_interval=10.0,  # Check every 10 seconds
+                stale_threshold=300.0,  # 5 minutes without activity = stale
+            )
+            logger.info("Timeout watchdog started")
+
+        import asyncio
+
+        asyncio.create_task(_start_watchdog_async())
+    except Exception as exc:
+        # Don't fail server startup due to optional watchdog
+        logger.warning("Failed to initialize timeout watchdog: %s", exc)
+
+
+def _build_lifespan(config: ServerConfig):
+    """Create server lifespan handler to manage background services."""
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastMCP):
+        _init_timeout_watchdog()
+        _init_provider_executor(config)
+        try:
+            yield
+        finally:
+            await shutdown_timeout_watchdog()
+            await shutdown_provider_executor()
+
+    return _lifespan
+
+
+async def shutdown_timeout_watchdog() -> None:
+    """Shutdown the timeout watchdog gracefully.
+
+    Should be called during server shutdown to stop the watchdog
+    background task cleanly.
+    """
+    try:
+        from foundry_mcp.core.timeout_watchdog import stop_watchdog
+
+        await stop_watchdog(timeout=5.0)
+        logger.info("Timeout watchdog stopped")
+    except Exception as exc:
+        logger.warning("Error stopping timeout watchdog: %s", exc)
+
+
+def _init_provider_executor(config: ServerConfig) -> None:
+    """Initialize the provider executor for blocking operation isolation.
+
+    Creates a dedicated thread pool executor for CLI provider subprocess calls
+    and other blocking operations to prevent event loop starvation.
+    """
+    try:
+        from foundry_mcp.core.executor import configure_executor
+
+        # Use config values or defaults
+        pool_size = getattr(config, "executor_pool_size", 4)
+        queue_limit = getattr(config, "executor_queue_limit", 100)
+        enabled = getattr(config, "executor_isolation_enabled", True)
+
+        executor = configure_executor(
+            pool_size=pool_size,
+            queue_limit=queue_limit,
+            enabled=enabled,
+        )
+        executor.start()
+        logger.info(
+            "Provider executor initialized: pool_size=%d, queue_limit=%d, enabled=%s",
+            pool_size,
+            queue_limit,
+            enabled,
+        )
+    except Exception as exc:
+        # Don't fail server startup due to optional executor
+        logger.warning("Failed to initialize provider executor: %s", exc)
+
+
+async def shutdown_provider_executor() -> None:
+    """Shutdown the provider executor gracefully.
+
+    Should be called during server shutdown to stop the executor
+    and wait for pending tasks to complete.
+    """
+    try:
+        from foundry_mcp.core.executor import get_provider_executor
+
+        executor = get_provider_executor()
+        await executor.shutdown(wait=True)
+        logger.info("Provider executor stopped")
+    except Exception as exc:
+        logger.warning("Error stopping provider executor: %s", exc)
+
+
 def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     """Create and configure the FastMCP server instance."""
 
@@ -109,8 +208,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     _init_observability(config)
     _init_error_collection(config)
     _init_metrics_persistence(config)
-
-    mcp = FastMCP(name=config.server_name)
+    mcp = FastMCP(name=config.server_name, lifespan=_build_lifespan(config))
 
     # Unified-only tool surface
     register_unified_tools(mcp, config)

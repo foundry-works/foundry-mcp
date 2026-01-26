@@ -416,6 +416,12 @@ def _handle_deep_research(
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
+    # Apply config default for task_timeout if not explicitly set
+    # Precedence: explicit param > config > hardcoded fallback (600s)
+    effective_timeout = task_timeout
+    if effective_timeout is None:
+        effective_timeout = config.research.deep_research_timeout
+
     # Execute with background=True for non-blocking execution
     # This uses asyncio.create_task() internally and returns immediately
     result = workflow.execute(
@@ -431,7 +437,7 @@ def _handle_deep_research(
         timeout_per_operation=timeout_per_operation,
         max_concurrent=max_concurrent,
         background=True,  # CRITICAL: Run in background, return immediately
-        task_timeout=task_timeout,
+        task_timeout=effective_timeout,
     )
 
     if result.success:
@@ -439,6 +445,7 @@ def _handle_deep_research(
         response_data = {
             "research_id": result.metadata.get("research_id"),
             "status": "started",
+            "effective_timeout": effective_timeout,
             "message": (
                 "Deep research started. This typically takes 3-5 minutes. "
                 "IMPORTANT: Communicate progress to user before each status check. "

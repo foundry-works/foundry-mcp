@@ -151,6 +151,54 @@ deep_research_mode = "technical"   # "general", "academic", "technical"
 - `search_depth="advanced"` - 2x credit cost (use for deeper analysis)
 - `search_depth="fast"` / `"ultra_fast"` - Reduced latency, standard cost
 
+### Deep Research Resilience
+
+The following settings control timeout, cancellation, and resilience behavior for deep research workflows.
+
+#### Timeout Configuration
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `deep_research_timeout` | float | `600.0` | Overall workflow timeout in seconds (10 minutes) |
+| `deep_research_planning_timeout` | float | `360.0` | Planning phase timeout |
+| `deep_research_analysis_timeout` | float | `360.0` | Analysis phase timeout |
+| `deep_research_synthesis_timeout` | float | `600.0` | Synthesis phase timeout (longer for complex reports) |
+| `deep_research_refinement_timeout` | float | `360.0` | Refinement phase timeout |
+
+**Timeout Precedence:**
+1. Explicit `task_timeout` parameter in API call (highest priority)
+2. `deep_research_timeout` from configuration
+3. Hardcoded fallback of 600 seconds
+
+#### Status Response Metadata
+
+When polling `deep-research-status`, the response includes resilience metadata:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `last_heartbeat_at` | string (ISO 8601) | Last activity timestamp, updated before provider calls |
+| `is_timed_out` | bool | True if task exceeded timeout |
+| `is_stale` | bool | True if no activity for 5+ minutes |
+| `effective_timeout` | float | The actual timeout applied to the task |
+
+#### Example Configuration
+
+```toml
+[research]
+# Workflow-level timeout (overall limit)
+deep_research_timeout = 600.0  # 10 minutes
+
+# Per-phase timeouts (optional overrides)
+deep_research_planning_timeout = 360.0
+deep_research_analysis_timeout = 360.0
+deep_research_synthesis_timeout = 600.0
+deep_research_refinement_timeout = 360.0
+
+# Retry behavior
+deep_research_max_retries = 2
+deep_research_retry_delay = 5.0
+```
+
 ## Specs directory resolution
 
 If you do not set `FOUNDRY_MCP_SPECS_DIR`, the CLI and server will attempt to

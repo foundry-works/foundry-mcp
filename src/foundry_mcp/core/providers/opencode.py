@@ -438,6 +438,8 @@ class OpenCodeProvider(ProviderContext):
         raise ProviderTimeoutError(
             f"OpenCode server failed to start within {SERVER_STARTUP_TIMEOUT} seconds",
             provider=self.metadata.provider_id,
+            elapsed=float(SERVER_STARTUP_TIMEOUT),
+            timeout=float(SERVER_STARTUP_TIMEOUT),
         )
 
     def _validate_request(self, request: ProviderRequest) -> None:
@@ -547,6 +549,8 @@ class OpenCodeProvider(ProviderContext):
             raise ProviderTimeoutError(
                 f"OpenCode wrapper timed out after {timeout}s",
                 provider=self.metadata.provider_id,
+                elapsed=float(timeout) if timeout else None,
+                timeout=float(timeout) if timeout else None,
             ) from exc
 
         if completed.returncode != 0:

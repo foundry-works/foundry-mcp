@@ -274,7 +274,37 @@ class ProviderExecutionError(ProviderError):
 
 
 class ProviderTimeoutError(ProviderError):
-    """Raised when a provider exceeds its allotted execution time."""
+    """Raised when a provider exceeds its allotted execution time.
+
+    This error indicates the provider did not respond within the configured
+    timeout period. It includes timing information to help with debugging
+    and timeout configuration tuning.
+
+    Attributes:
+        provider: Provider that timed out
+        elapsed: Actual elapsed time in seconds before timeout
+        timeout: Configured timeout value in seconds
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: Optional[str] = None,
+        elapsed: Optional[float] = None,
+        timeout: Optional[float] = None,
+    ):
+        """Initialize provider timeout error.
+
+        Args:
+            message: Error message describing the timeout
+            provider: Provider that timed out
+            elapsed: Actual elapsed time in seconds
+            timeout: Configured timeout in seconds
+        """
+        super().__init__(message, provider=provider)
+        self.elapsed = elapsed
+        self.timeout = timeout
 
 
 class ContextWindowError(ProviderExecutionError):
@@ -467,6 +497,44 @@ class ProviderContext(ABC):
     def _emit_stream_chunk(self, chunk: StreamChunk) -> None:
         """Helper for subclasses to publish streaming output through hooks."""
         self._hooks.emit_stream(chunk, self._metadata)
+
+    async def _run_blocking(
+        self,
+        func: Callable[..., Any],
+        *args: Any,
+        timeout: Optional[float] = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Run a blocking operation in the provider executor.
+
+        CLI providers should use this to wrap subprocess.run() and other
+        blocking calls to prevent event loop starvation.
+
+        Args:
+            func: Blocking function to execute
+            *args: Positional arguments for func
+            timeout: Optional timeout in seconds
+            **kwargs: Keyword arguments for func
+
+        Returns:
+            Result of the function call
+
+        Example:
+            result = await self._run_blocking(
+                subprocess.run,
+                ["claude", "--prompt", prompt],
+                capture_output=True,
+                timeout=30.0,
+            )
+        """
+        try:
+            from foundry_mcp.core.executor import get_provider_executor
+
+            executor = get_provider_executor()
+            return await executor.run_blocking(func, *args, timeout=timeout, **kwargs)
+        except ImportError:
+            # Executor not available, run inline
+            return func(*args, **kwargs)
 
     @abstractmethod
     def _execute(self, request: ProviderRequest) -> ProviderResult:

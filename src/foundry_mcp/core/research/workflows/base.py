@@ -20,6 +20,7 @@ from foundry_mcp.core.providers import (
     ProviderRequest,
     ProviderResult,
     ProviderStatus,
+    ProviderTimeoutError,
     is_context_window_error,
     extract_token_counts,
     create_context_window_guidance,
@@ -420,6 +421,25 @@ class ResearchWorkflowBase(ABC):
                             "providers_tried": providers_tried,
                         },
                     )
+
+                except ProviderTimeoutError as exc:
+                    duration_ms = (time.perf_counter() - start_time) * 1000
+                    last_error = str(exc) or f"Timed out after {effective_timeout}s"
+                    saw_timeout = True
+                    logger.warning(
+                        "%s phase: Provider %s timed out after %.1fs (attempt %d)",
+                        phase or "unknown",
+                        current_provider_id,
+                        effective_timeout,
+                        attempt + 1,
+                    )
+                    # Retry on timeout
+                    if attempt < max_retries:
+                        total_retries += 1
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    # Try next provider
+                    break
 
                 except asyncio.TimeoutError:
                     duration_ms = (time.perf_counter() - start_time) * 1000

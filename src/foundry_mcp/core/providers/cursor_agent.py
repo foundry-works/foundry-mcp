@@ -410,6 +410,8 @@ class CursorAgentProvider(ProviderContext):
             raise ProviderTimeoutError(
                 f"Command timed out after {exc.timeout} seconds",
                 provider=self.metadata.provider_id,
+                elapsed=float(exc.timeout) if exc.timeout else None,
+                timeout=float(exc.timeout) if exc.timeout else None,
             ) from exc
 
     def _run_with_retry(

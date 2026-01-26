@@ -38,6 +38,9 @@ from typing import Any, Callable, Optional
 from uuid import uuid4
 
 from foundry_mcp.config import ResearchConfig
+from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
+from foundry_mcp.core import task_registry
+from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models import (
     ConfidenceLevel,
@@ -351,17 +354,6 @@ def _normalize_title(title: str) -> str:
 # =============================================================================
 
 
-class TaskStatus(str, Enum):
-    """Status of a background research task."""
-
-    PENDING = "pending"  # Created but not started
-    RUNNING = "running"  # Currently executing
-    COMPLETED = "completed"  # Finished successfully
-    FAILED = "failed"  # Finished with error
-    CANCELLED = "cancelled"  # Cancelled by user
-    TIMEOUT = "timeout"  # Exceeded timeout limit
-
-
 class AgentRole(str, Enum):
     """Specialist agent roles in the multi-agent research workflow.
 
@@ -434,118 +426,6 @@ class AgentDecision:
             "outputs": self.outputs,
             "timestamp": self.timestamp.isoformat(),
         }
-
-
-class BackgroundTask:
-    """Tracks a background research task.
-
-    Supports both asyncio.Task-based and thread-based execution for
-    lifecycle management, cancellation support, and timeout handling.
-    """
-
-    def __init__(
-        self,
-        research_id: str,
-        task: Optional[asyncio.Task[WorkflowResult]] = None,
-        thread: Optional[threading.Thread] = None,
-        timeout: Optional[float] = None,
-    ) -> None:
-        """Initialize background task.
-
-        Args:
-            research_id: ID of the research session
-            task: Optional asyncio task running the workflow
-            thread: Optional thread running the workflow (preferred)
-            timeout: Optional timeout in seconds
-        """
-        self.research_id = research_id
-        self.task = task
-        self.thread = thread
-        self.timeout = timeout
-        self.status = TaskStatus.RUNNING
-        self.started_at = time.time()
-        self.completed_at: Optional[float] = None
-        self.error: Optional[str] = None
-        self.result: Optional[WorkflowResult] = None
-        # Event for signaling cancellation to thread-based execution
-        self._cancel_event = threading.Event()
-
-    @property
-    def elapsed_ms(self) -> float:
-        """Get elapsed time in milliseconds."""
-        end = self.completed_at or time.time()
-        return (end - self.started_at) * 1000
-
-    @property
-    def is_timed_out(self) -> bool:
-        """Check if task has exceeded timeout."""
-        if self.timeout is None:
-            return False
-        return (time.time() - self.started_at) > self.timeout
-
-    @property
-    def is_cancelled(self) -> bool:
-        """Check if cancellation has been requested."""
-        return self._cancel_event.is_set()
-
-    @property
-    def is_done(self) -> bool:
-        """Check if the task is done (for both thread and asyncio modes).
-
-        Returns:
-            True if the task has completed, False if still running.
-        """
-        if self.thread is not None:
-            return not self.thread.is_alive()
-        elif self.task is not None:
-            return self.task.done()
-        # Neither thread nor task - consider done (shouldn't happen)
-        return True
-
-    def cancel(self) -> bool:
-        """Cancel the task.
-
-        Returns:
-            True if cancellation was requested, False if already done
-        """
-        # Handle thread-based execution
-        if self.thread is not None:
-            if not self.thread.is_alive():
-                return False
-            self._cancel_event.set()
-            # Give thread a chance to clean up
-            self.thread.join(timeout=5.0)
-            self.status = TaskStatus.CANCELLED
-            self.completed_at = time.time()
-            return True
-        # Handle asyncio-based execution
-        elif self.task is not None:
-            if self.task.done():
-                return False
-            self.task.cancel()
-            self.status = TaskStatus.CANCELLED
-            self.completed_at = time.time()
-            return True
-        return False
-
-    def mark_completed(self, result: WorkflowResult) -> None:
-        """Mark task as completed with result."""
-        self.status = TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
-        self.result = result
-        self.completed_at = time.time()
-        if not result.success:
-            self.error = result.error
-
-    def mark_timeout(self) -> None:
-        """Mark task as timed out."""
-        self.status = TaskStatus.TIMEOUT
-        self.completed_at = time.time()
-        self.error = f"Task exceeded timeout of {self.timeout}s"
-        # Signal cancellation
-        if self.thread is not None:
-            self._cancel_event.set()
-        elif self.task is not None:
-            self.task.cancel()
 
 
 # =============================================================================
@@ -1331,6 +1211,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         )
         with self._tasks_lock:
             self._tasks[state.id] = bg_task
+        # Also register with global task registry for watchdog monitoring
+        task_registry.register(bg_task)
 
         # Register session for crash handler visibility (under lock)
         with _active_sessions_lock:
@@ -1412,12 +1294,15 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
 
                 # Handle completion
                 if result.metadata and result.metadata.get("timeout"):
-                    bg_task.status = TaskStatus.TIMEOUT
+                    bg_task.mark_timeout()
                     bg_task.result = result
-                    bg_task.completed_at = time.time()
                     bg_task.error = result.error
                 else:
-                    bg_task.mark_completed(result)
+                    # Use core BackgroundTask mark_completed signature
+                    if result.success:
+                        bg_task.mark_completed(result=result)
+                    else:
+                        bg_task.mark_completed(result=result, error=result.error)
 
             except Exception as exc:
                 # Log the exception with full traceback
@@ -1761,15 +1646,31 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 "elapsed_ms": bg_task.elapsed_ms,
                 "is_complete": bg_task.is_done,
             }
+            # Add timeout/staleness metadata when applicable
+            if bg_task.is_timed_out or bg_task.status.value == "timeout":
+                metadata["is_timed_out"] = True
+                metadata["timeout_configured"] = bg_task.timeout
+                if bg_task.timed_out_at:
+                    metadata["timed_out_at"] = bg_task.timed_out_at
+                if bg_task.timeout_elapsed_seconds:
+                    metadata["timeout_elapsed_seconds"] = bg_task.timeout_elapsed_seconds
+            if hasattr(bg_task, "is_stale") and callable(bg_task.is_stale):
+                # Check staleness with default threshold (300s)
+                if bg_task.is_stale(300.0):
+                    metadata["is_stale"] = True
+                    metadata["last_activity"] = bg_task.last_activity
             # Include progress from persisted state if available
             if state:
                 # Track status check count for polling mitigation
                 state.status_check_count += 1
                 state.last_status_check_at = datetime.now(timezone.utc)
-                try:
-                    self.memory.save_deep_research(state)
-                except Exception as exc:
-                    logger.debug("Failed to save status check state: %s", exc)
+                # Only persist for completed tasks; active tasks hold state in-memory
+                # to avoid clobbering concurrent workflow saves (see comment at line 1750)
+                if not is_active:
+                    try:
+                        self.memory.save_deep_research(state)
+                    except Exception as exc:
+                        logger.debug("Failed to save status check state: %s", exc)
 
                 metadata.update({
                     "original_query": state.original_query,
@@ -1785,10 +1686,22 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                     "is_failed": bool(state.metadata.get("failed")),
                     "failure_error": state.metadata.get("failure_error"),
                     "status_check_count": state.status_check_count,
+                    "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
                 })
+                # Build detailed status content when state is available
+                status_lines = [
+                    f"Research ID: {state.id}",
+                    f"Query: {state.original_query}",
+                    f"Task Status: {bg_task.status.value}",
+                    f"Phase: {state.phase.value}",
+                    f"Iteration: {state.iteration}/{state.max_iterations}",
+                ]
+                content = "\n".join(status_lines)
+            else:
+                content = f"Task status: {bg_task.status.value}"
             return WorkflowResult(
                 success=True,
-                content=f"Task status: {bg_task.status.value}",
+                content=content,
                 metadata=metadata,
             )
 
@@ -1834,6 +1747,16 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             failure_error = state.metadata.get("failure_error", "Unknown error")
             status_lines.append(f"Error: {failure_error}")
 
+        # Build failed sub-queries list with reasons
+        failed_sub_queries = [
+            {
+                "id": sq.id,
+                "query": sq.query,
+                "error": sq.error,
+            }
+            for sq in state.failed_sub_queries()
+        ]
+
         return WorkflowResult(
             success=True,
             content="\n".join(status_lines),
@@ -1845,6 +1768,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 "max_iterations": state.max_iterations,
                 "sub_queries_total": len(state.sub_queries),
                 "sub_queries_completed": len(state.completed_sub_queries()),
+                "sub_queries_failed": len(failed_sub_queries),
+                "failed_sub_queries": failed_sub_queries,
                 "source_count": len(state.sources),
                 "finding_count": len(state.findings),
                 "gap_count": len(state.unresolved_gaps()),
@@ -1856,6 +1781,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 "timed_out": bool(state.metadata.get("timeout")),
                 "cancelled": bool(state.metadata.get("cancelled")),
                 "status_check_count": state.status_check_count,
+                "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
             },
         )
 
@@ -1971,6 +1897,25 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
     # Async Workflow Execution
     # =========================================================================
 
+    def _check_cancellation(self, state: DeepResearchState) -> None:
+        """Check if cancellation has been requested for this research session.
+
+        Raises:
+            asyncio.CancelledError: If cancellation is detected
+        """
+        # Retrieve the background task for this research session
+        with self._tasks_lock:
+            bg_task = self._tasks.get(state.id)
+
+        if bg_task and bg_task.is_cancelled:
+            logger.info(
+                "Cancellation detected for research %s at phase %s, iteration %d",
+                state.id,
+                state.phase.value,
+                state.iteration,
+            )
+            raise asyncio.CancelledError("Cancellation requested")
+
     async def _execute_workflow_async(
         self,
         state: DeepResearchState,
@@ -1987,6 +1932,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         try:
             # Phase execution based on current state
             if state.phase == DeepResearchPhase.PLANNING:
+                # Check for cancellation at the start of the phase
+                self._check_cancellation(state)
                 phase_started = time.perf_counter()
                 self.hooks.emit_phase_start(state)
                 self._write_audit_event(
@@ -2022,6 +1969,12 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 self._safe_orchestrator_transition(state, DeepResearchPhase.PLANNING)
 
             if state.phase == DeepResearchPhase.GATHERING:
+                # Check for cancellation at the start of the phase
+                self._check_cancellation(state)
+                # Mark the current iteration as in progress (for cancellation handling)
+                # This applies to iteration 1 (first pass) and new iterations started after refinement
+                state.metadata["iteration_in_progress"] = True
+
                 phase_started = time.perf_counter()
                 self.hooks.emit_phase_start(state)
                 self._write_audit_event(
@@ -2074,6 +2027,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         )
 
             if state.phase == DeepResearchPhase.ANALYSIS:
+                # Check for cancellation at the start of the phase
+                self._check_cancellation(state)
                 phase_started = time.perf_counter()
                 self.hooks.emit_phase_start(state)
                 self._write_audit_event(
@@ -2109,6 +2064,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 self._safe_orchestrator_transition(state, DeepResearchPhase.ANALYSIS)
 
             if state.phase == DeepResearchPhase.SYNTHESIS:
+                # Check for cancellation at the start of the phase
+                self._check_cancellation(state)
                 phase_started = time.perf_counter()
                 self.hooks.emit_phase_start(state)
                 self._write_audit_event(
@@ -2170,10 +2127,18 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 if state.should_continue_refinement():
                     state.phase = DeepResearchPhase.REFINEMENT
                 else:
+                    # Mark iteration as successfully completed (no more refinement)
+                    state.metadata["iteration_in_progress"] = False
+                    state.metadata["last_completed_iteration"] = state.iteration
                     state.mark_completed(report=result.content)
 
             # Handle refinement phase
             if state.phase == DeepResearchPhase.REFINEMENT:
+                # Check for cancellation at the start of the phase
+                self._check_cancellation(state)
+                # Mark the current iteration as in progress (for cancellation handling)
+                state.metadata["iteration_in_progress"] = True
+
                 phase_started = time.perf_counter()
                 self.hooks.emit_phase_start(state)
                 self._write_audit_event(
@@ -2197,7 +2162,13 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                     },
                 )
 
+                # Mark iteration as successfully completed
+                state.metadata["iteration_in_progress"] = False
+                state.metadata["last_completed_iteration"] = state.iteration
+
                 if state.should_continue_refinement():
+                    # Check for cancellation before starting new iteration
+                    self._check_cancellation(state)
                     state.start_new_iteration()
                     # Recursively continue workflow
                     return await self._execute_workflow_async(
@@ -2287,6 +2258,83 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 },
             )
 
+        except asyncio.CancelledError:
+            # Handle cancellation: implement partial result policy
+            # Discard incomplete iteration results, persist only completed iterations
+
+            # Transition to "cancelling" state
+            state.metadata["cancellation_state"] = "cancelling"
+            logger.info(
+                "Workflow entering cancelling state for research %s",
+                state.id,
+            )
+
+            logger.warning(
+                "Workflow cancelled at phase %s, iteration %d, research %s",
+                state.phase.value,
+                state.iteration,
+                state.id,
+            )
+            state.metadata["cancelled"] = True
+
+            # Check if current iteration is incomplete
+            if state.metadata.get("iteration_in_progress"):
+                # Current iteration is incomplete - discard partial results from this iteration
+                last_completed_iteration = state.metadata.get("last_completed_iteration")
+                if last_completed_iteration is not None and last_completed_iteration < state.iteration:
+                    # We have a safe checkpoint from a prior completed iteration
+                    logger.info(
+                        "Discarding partial results from incomplete iteration %d (last completed: %d), research %s",
+                        state.iteration,
+                        last_completed_iteration,
+                        state.id,
+                    )
+                    # Rollback state to last completed iteration by restoring from checkpoint
+                    # For now, mark that we need to discard this iteration on resume
+                    state.metadata["discarded_iteration"] = state.iteration
+                    state.iteration = last_completed_iteration
+                    state.phase = DeepResearchPhase.SYNTHESIS
+                else:
+                    # First iteration is incomplete - we cannot safely resume, must discard entire session
+                    logger.warning(
+                        "First iteration incomplete at cancellation, marking session for discard, research %s",
+                        state.id,
+                    )
+                    state.metadata["discarded_iteration"] = state.iteration
+            else:
+                # Iteration was successfully completed, safe to save
+                logger.info(
+                    "Cancelled after completed iteration %d, research %s",
+                    state.iteration,
+                    state.id,
+                )
+
+            # Save state with cancelling transition
+            self.memory.save_deep_research(state)
+
+            # Transition to "cleanup" state before cleanup phase
+            state.metadata["cancellation_state"] = "cleanup"
+            logger.info(
+                "Workflow entering cleanup state for research %s",
+                state.id,
+            )
+            self.memory.save_deep_research(state)
+
+            self._write_audit_event(
+                state,
+                "workflow_cancelled",
+                data={
+                    "phase": state.phase.value,
+                    "iteration": state.iteration,
+                    "iteration_in_progress": state.metadata.get("iteration_in_progress"),
+                    "last_completed_iteration": state.metadata.get("last_completed_iteration"),
+                    "discarded_iteration": state.metadata.get("discarded_iteration"),
+                    "cancellation_state": state.metadata.get("cancellation_state"),
+                },
+                level="warning",
+            )
+            # Re-raise to propagate cancellation to caller
+            raise
         except Exception as exc:
             tb_str = traceback.format_exc()
             logger.exception(
@@ -2320,6 +2368,40 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                     "iteration": state.iteration,
                 },
             )
+        finally:
+            # Ensure resources are cleaned up on cancellation, timeout, or any other exit
+            # This block runs regardless of exception type or successful completion,
+            # but does not re-save state if already saved (to avoid duplicate saves)
+            logger.debug(
+                "Workflow cleanup phase for research %s at phase %s",
+                state.id,
+                state.phase.value,
+            )
+
+            # Close any open search provider connections
+            # (Currently search providers don't maintain persistent connections,
+            # but this is in place for future stateful provider implementations)
+            for provider in self._search_providers.values():
+                try:
+                    # Check if provider has async close method
+                    if hasattr(provider, 'aclose'):
+                        await provider.aclose()
+                    elif hasattr(provider, 'close'):
+                        provider.close()
+                except Exception as cleanup_exc:
+                    logger.warning(
+                        "Error closing search provider during cleanup: %s",
+                        cleanup_exc,
+                    )
+
+            # After cleanup completes, mark cancellation as fully complete if transitioning through cleanup state
+            if state.metadata.get("cancellation_state") == "cleanup":
+                state.metadata["cancellation_state"] = "cancelled"
+                logger.info(
+                    "Workflow cancellation complete for research %s",
+                    state.id,
+                )
+                self.memory.save_deep_research(state)
 
     # =========================================================================
     # Phase Implementations (Stubs for now - implemented in later tasks)
@@ -2349,15 +2431,44 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         """
         logger.info("Starting planning phase for query: %s", state.original_query[:100])
 
+        # Emit phase.started audit event
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "planning",
+                "iteration": state.iteration,
+                "task_id": state.id,
+            },
+        )
+
         # Build the planning prompt
         system_prompt = self._build_planning_system_prompt(state)
         user_prompt = self._build_planning_user_prompt(state)
 
+        # Check for cancellation before making provider call
+        self._check_cancellation(state)
+
         # Execute LLM call with context window error handling and timeout protection
+        effective_provider = provider_id or state.planning_provider
+        llm_call_start_time = time.perf_counter()
+        # Update heartbeat and persist interim state for progress visibility
+        state.last_heartbeat_at = datetime.now(timezone.utc)
+        self.memory.save_deep_research(state)
+        self._write_audit_event(
+            state,
+            "llm.call.started",
+            data={
+                "provider": effective_provider,
+                "task_id": state.id,
+                "phase": "planning",
+            },
+        )
         try:
             result = await self._execute_provider_async(
                 prompt=user_prompt,
-                provider_id=provider_id or state.planning_provider,
+                provider_id=effective_provider,
                 model=state.planning_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
@@ -2368,6 +2479,23 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
+            llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+            self._write_audit_event(
+                state,
+                "llm.call.completed",
+                data={
+                    "provider": effective_provider,
+                    "task_id": state.id,
+                    "duration_ms": llm_call_duration_ms,
+                    "status": "error",
+                    "error_type": "context_window_exceeded",
+                },
+            )
+            get_metrics().histogram(
+                "foundry_mcp_research_llm_call_duration_seconds",
+                llm_call_duration_ms / 1000.0,
+                labels={"provider": effective_provider, "status": "error"},
+            )
             logger.error(
                 "Planning phase context window exceeded: prompt_tokens=%s, "
                 "max_tokens=%s, truncation_needed=%s, provider=%s",
@@ -2389,6 +2517,26 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                     "truncation_needed": e.truncation_needed,
                 },
             )
+
+        # Emit llm.call.completed audit event
+        llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+        llm_call_status = "success" if result.success else "error"
+        llm_call_provider: str = result.provider_id or effective_provider or "unknown"
+        self._write_audit_event(
+            state,
+            "llm.call.completed",
+            data={
+                "provider": llm_call_provider,
+                "task_id": state.id,
+                "duration_ms": llm_call_duration_ms,
+                "status": llm_call_status,
+            },
+        )
+        get_metrics().histogram(
+            "foundry_mcp_research_llm_call_duration_seconds",
+            llm_call_duration_ms / 1000.0,
+            labels={"provider": llm_call_provider, "status": llm_call_status},
+        )
 
         if not result.success:
             # Check if this was a timeout
@@ -2471,6 +2619,26 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             len(state.sub_queries),
         )
 
+        # Emit phase.completed audit event
+        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
+        self._write_audit_event(
+            state,
+            "phase.completed",
+            data={
+                "phase_name": "planning",
+                "iteration": state.iteration,
+                "task_id": state.id,
+                "duration_ms": phase_duration_ms,
+            },
+        )
+
+        # Emit phase duration metric
+        get_metrics().histogram(
+            "foundry_mcp_research_phase_duration_seconds",
+            phase_duration_ms / 1000.0,
+            labels={"phase_name": "planning", "status": "success"},
+        )
+
         return WorkflowResult(
             success=True,
             content=state.research_brief or "Planning complete",
@@ -2489,11 +2657,13 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         """Build system prompt for query decomposition.
 
         Args:
-            state: Current research state
+            state: Current research state (reserved for future state-aware prompts)
 
         Returns:
             System prompt string
         """
+        # state is reserved for future state-aware prompt customization
+        _ = state
         return """You are a research planning assistant. Your task is to analyze a research query and decompose it into focused sub-queries that can be researched independently.
 
 Your response MUST be valid JSON with this exact structure:
@@ -2669,13 +2839,15 @@ Generate the research plan as JSON."""
 
         Args:
             state: Current research state with sub-queries
-            provider_id: LLM provider (not used in gathering)
+            provider_id: LLM provider (reserved for future use in gathering)
             timeout: Request timeout in seconds
             max_concurrent: Maximum concurrent search requests
 
         Returns:
             WorkflowResult with gathering outcome
         """
+        # provider_id is reserved for future use (e.g., LLM-assisted query refinement)
+        _ = provider_id
         pending_queries = state.pending_sub_queries()
         if not pending_queries:
             logger.warning("No pending sub-queries for gathering phase")
@@ -2689,6 +2861,18 @@ Generate the research plan as JSON."""
             "Starting gathering phase: %d sub-queries, max_concurrent=%d",
             len(pending_queries),
             max_concurrent,
+        )
+
+        # Emit phase.started audit event
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "gathering",
+                "iteration": state.iteration,
+                "task_id": state.id,
+            },
         )
 
         provider_names = getattr(
@@ -2720,6 +2904,10 @@ Generate the research plan as JSON."""
         semaphore = asyncio.Semaphore(max_concurrent)
         state_lock = asyncio.Lock()
 
+        # Update heartbeat and persist interim state for progress visibility
+        state.last_heartbeat_at = datetime.now(timezone.utc)
+        self.memory.save_deep_research(state)
+
         # Track collected sources for deduplication
         seen_urls: set[str] = {s.url for s in state.sources if s.url}
         seen_titles: dict[str, str] = {}
@@ -2730,171 +2918,198 @@ Generate the research plan as JSON."""
         total_sources_added = 0
         failed_queries = 0
 
-        async def execute_sub_query(sub_query) -> tuple[int, Optional[str]]:
-            """Execute a single sub-query and return (sources_added, error)."""
-            async with semaphore:
-                sub_query.status = "executing"
+        try:
+            async def execute_sub_query(sub_query) -> tuple[int, Optional[str]]:
+                """Execute a single sub-query and return (sources_added, error)."""
+                async with semaphore:
+                    # Check for cancellation before executing sub-query
+                    self._check_cancellation(state)
 
-                provider_errors: list[str] = []
-                added = 0
+                    sub_query.status = "executing"
 
-                for provider in available_providers:
-                    provider_name = provider.get_provider_name()
-                    try:
-                        # Build provider-specific kwargs
-                        search_kwargs: dict[str, Any] = {
-                            "query": sub_query.query,
-                            "max_results": state.max_sources_per_query,
-                            "sub_query_id": sub_query.id,
-                        }
+                    provider_errors: list[str] = []
+                    added = 0
 
-                        # Add Tavily-specific kwargs for Tavily provider
-                        if provider_name == "tavily":
-                            tavily_kwargs = self._get_tavily_search_kwargs(state)
-                            search_kwargs.update(tavily_kwargs)
-                        else:
-                            # Non-Tavily providers just get include_raw_content
-                            search_kwargs["include_raw_content"] = state.follow_links
+                    for provider in available_providers:
+                        provider_name = provider.get_provider_name()
+                        try:
+                            # Check for cancellation before making search provider call
+                            self._check_cancellation(state)
 
-                        sources = await asyncio.wait_for(
-                            provider.search(**search_kwargs),
-                            timeout=timeout,
-                        )
-
-                        # Add sources with deduplication
-                        for source in sources:
-                            async with state_lock:
-                                # URL-based deduplication
-                                if source.url and source.url in seen_urls:
-                                    continue  # Skip duplicate URL
-
-                                # Title-based deduplication (same paper from different domains)
-                                normalized_title = _normalize_title(source.title)
-                                if normalized_title and len(normalized_title) > 20:
-                                    if normalized_title in seen_titles:
-                                        logger.debug(
-                                            "Skipping duplicate by title: %s (already have %s)",
-                                            source.url,
-                                            seen_titles[normalized_title],
-                                        )
-                                        continue  # Skip duplicate title
-                                    seen_titles[normalized_title] = source.url or ""
-
-                                if source.url:
-                                    seen_urls.add(source.url)
-                                    # Apply domain-based quality scoring
-                                    if source.quality == SourceQuality.UNKNOWN:
-                                        source.quality = get_domain_quality(
-                                            source.url, state.research_mode
-                                        )
-
-                                # Add source to state
-                                state.sources.append(source)
-                                state.total_sources_examined += 1
-                                sub_query.source_ids.append(source.id)
-                                added += 1
-
-                        self._write_audit_event(
-                            state,
-                            "gathering_provider_result",
-                            data={
-                                "provider": provider_name,
+                            # Build provider-specific kwargs
+                            search_kwargs: dict[str, Any] = {
+                                "query": sub_query.query,
+                                "max_results": state.max_sources_per_query,
                                 "sub_query_id": sub_query.id,
-                                "sub_query": sub_query.query,
-                                "sources_added": len(sources),
-                            },
-                        )
-                        # Track search provider query count
-                        async with state_lock:
-                            state.search_provider_stats[provider_name] = (
-                                state.search_provider_stats.get(provider_name, 0) + 1
+                            }
+
+                            # Add Tavily-specific kwargs for Tavily provider
+                            if provider_name == "tavily":
+                                tavily_kwargs = self._get_tavily_search_kwargs(state)
+                                search_kwargs.update(tavily_kwargs)
+                            else:
+                                # Non-Tavily providers just get include_raw_content
+                                search_kwargs["include_raw_content"] = state.follow_links
+
+                            sources = await asyncio.wait_for(
+                                provider.search(**search_kwargs),
+                                timeout=timeout,
                             )
-                    except SearchProviderError as e:
-                        provider_errors.append(f"{provider_name}: {e}")
-                        self._write_audit_event(
-                            state,
-                            "gathering_provider_result",
-                            data={
-                                "provider": provider_name,
-                                "sub_query_id": sub_query.id,
-                                "sub_query": sub_query.query,
-                                "sources_added": 0,
-                                "error": str(e),
-                            },
-                            level="warning",
-                        )
-                    except asyncio.TimeoutError:
-                        provider_errors.append(
-                            f"{provider_name}: timeout after {timeout}s"
-                        )
-                        self._write_audit_event(
-                            state,
-                            "gathering_provider_result",
-                            data={
-                                "provider": provider_name,
-                                "sub_query_id": sub_query.id,
-                                "sub_query": sub_query.query,
-                                "sources_added": 0,
-                                "error": f"timeout after {timeout}s",
-                            },
-                            level="warning",
-                        )
-                    except Exception as e:
-                        provider_errors.append(f"{provider_name}: {e}")
-                        self._write_audit_event(
-                            state,
-                            "gathering_provider_result",
-                            data={
-                                "provider": provider_name,
-                                "sub_query_id": sub_query.id,
-                                "sub_query": sub_query.query,
-                                "sources_added": 0,
-                                "error": str(e),
-                            },
-                            level="warning",
-                        )
 
-                if added > 0:
-                    sub_query.mark_completed(
-                        findings=f"Found {added} sources"
-                    )
-                    logger.debug(
-                        "Sub-query '%s' completed: %d sources",
+                            # Add sources with deduplication
+                            for source in sources:
+                                async with state_lock:
+                                    # URL-based deduplication
+                                    if source.url and source.url in seen_urls:
+                                        continue  # Skip duplicate URL
+
+                                    # Title-based deduplication (same paper from different domains)
+                                    normalized_title = _normalize_title(source.title)
+                                    if normalized_title and len(normalized_title) > 20:
+                                        if normalized_title in seen_titles:
+                                            logger.debug(
+                                                "Skipping duplicate by title: %s (already have %s)",
+                                                source.url,
+                                                seen_titles[normalized_title],
+                                            )
+                                            continue  # Skip duplicate title
+                                        seen_titles[normalized_title] = source.url or ""
+
+                                    if source.url:
+                                        seen_urls.add(source.url)
+                                        # Apply domain-based quality scoring
+                                        if source.quality == SourceQuality.UNKNOWN:
+                                            source.quality = get_domain_quality(
+                                                source.url, state.research_mode
+                                            )
+
+                                    # Add source to state
+                                    state.sources.append(source)
+                                    state.total_sources_examined += 1
+                                    sub_query.source_ids.append(source.id)
+                                    added += 1
+
+                            self._write_audit_event(
+                                state,
+                                "gathering_provider_result",
+                                data={
+                                    "provider": provider_name,
+                                    "sub_query_id": sub_query.id,
+                                    "sub_query": sub_query.query,
+                                    "sources_added": len(sources),
+                                },
+                            )
+                            # Track search provider query count
+                            async with state_lock:
+                                state.search_provider_stats[provider_name] = (
+                                    state.search_provider_stats.get(provider_name, 0) + 1
+                                )
+                        except SearchProviderError as e:
+                            provider_errors.append(f"{provider_name}: {e}")
+                            self._write_audit_event(
+                                state,
+                                "gathering_provider_result",
+                                data={
+                                    "provider": provider_name,
+                                    "sub_query_id": sub_query.id,
+                                    "sub_query": sub_query.query,
+                                    "sources_added": 0,
+                                    "error": str(e),
+                                },
+                                level="warning",
+                            )
+                        except asyncio.TimeoutError:
+                            provider_errors.append(
+                                f"{provider_name}: timeout after {timeout}s"
+                            )
+                            self._write_audit_event(
+                                state,
+                                "gathering_provider_result",
+                                data={
+                                    "provider": provider_name,
+                                    "sub_query_id": sub_query.id,
+                                    "sub_query": sub_query.query,
+                                    "sources_added": 0,
+                                    "error": f"timeout after {timeout}s",
+                                },
+                                level="warning",
+                            )
+                        except Exception as e:
+                            provider_errors.append(f"{provider_name}: {e}")
+                            self._write_audit_event(
+                                state,
+                                "gathering_provider_result",
+                                data={
+                                    "provider": provider_name,
+                                    "sub_query_id": sub_query.id,
+                                    "sub_query": sub_query.query,
+                                    "sources_added": 0,
+                                    "error": str(e),
+                                },
+                                level="warning",
+                            )
+
+                    if added > 0:
+                        sub_query.mark_completed(
+                            findings=f"Found {added} sources"
+                        )
+                        logger.debug(
+                            "Sub-query '%s' completed: %d sources",
+                            sub_query.query[:50],
+                            added,
+                        )
+                        return added, None
+
+                    error_summary = "; ".join(provider_errors) or "No sources found"
+                    sub_query.mark_failed(error_summary)
+                    logger.warning(
+                        "Sub-query '%s' failed: %s",
                         sub_query.query[:50],
-                        added,
+                        error_summary,
                     )
-                    return added, None
+                    return 0, error_summary
 
-                error_summary = "; ".join(provider_errors) or "No sources found"
-                sub_query.mark_failed(error_summary)
-                logger.warning(
-                    "Sub-query '%s' failed: %s",
-                    sub_query.query[:50],
-                    error_summary,
-                )
-                return 0, error_summary
+            # Check for cancellation before executing sub-query batch
+            self._check_cancellation(state)
 
-        # Execute all sub-queries concurrently
-        tasks = [execute_sub_query(sq) for sq in pending_queries]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Execute all sub-queries concurrently
+            tasks = [execute_sub_query(sq) for sq in pending_queries]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Aggregate results
-        for result in results:
-            # Check for BaseException (includes Exception, CancelledError, KeyboardInterrupt, etc.)
-            # asyncio.gather with return_exceptions=True can return any BaseException
-            if isinstance(result, BaseException):
-                failed_queries += 1
-                logger.error("Task exception: %s", result)
-            else:
-                added, error = result
-                total_sources_added += added
-                if error:
+            # Aggregate results
+            for result in results:
+                # Check for BaseException (includes Exception, CancelledError, KeyboardInterrupt, etc.)
+                # asyncio.gather with return_exceptions=True can return any BaseException
+                if isinstance(result, BaseException):
                     failed_queries += 1
+                    logger.error("Task exception: %s", result)
+                else:
+                    added, error = result
+                    total_sources_added += added
+                    if error:
+                        failed_queries += 1
 
-        # Update state timestamp
-        state.updated_at = datetime.now(timezone.utc)
+        except asyncio.CancelledError:
+            # Handle cancellation: save interim state before re-raising
+            logger.warning(
+                "Gathering phase cancelled during sub-query execution for research %s",
+                state.id,
+            )
+            try:
+                state.updated_at = datetime.now(timezone.utc)
+                self.memory.save_deep_research(state)
+            except Exception as save_exc:
+                logger.error(
+                    "Error saving state during gathering cancellation for research %s: %s",
+                    state.id,
+                    save_exc,
+                )
+            raise
+        finally:
+            # Ensure state timestamp is updated on any exit
+            state.updated_at = datetime.now(timezone.utc)
 
-        # Save state
+        # Save state (normal execution path after finally block)
         self.memory.save_deep_research(state)
         self._write_audit_event(
             state,
@@ -2928,6 +3143,26 @@ Generate the research plan as JSON."""
             total_sources_added,
             len(pending_queries),
             failed_queries,
+        )
+
+        # Emit phase.completed audit event
+        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
+        self._write_audit_event(
+            state,
+            "phase.completed",
+            data={
+                "phase_name": "gathering",
+                "iteration": state.iteration,
+                "task_id": state.id,
+                "duration_ms": phase_duration_ms,
+            },
+        )
+
+        # Emit phase duration metric
+        get_metrics().histogram(
+            "foundry_mcp_research_phase_duration_seconds",
+            phase_duration_ms / 1000.0,
+            labels={"phase_name": "gathering", "status": "success" if success else "error"},
         )
 
         return WorkflowResult(
@@ -3136,6 +3371,18 @@ Generate the research plan as JSON."""
             len(state.sources),
         )
 
+        # Emit phase.started audit event
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "analysis",
+                "iteration": state.iteration,
+                "task_id": state.id,
+            },
+        )
+
         # Allocate token budget for sources
         allocation_result = self._allocate_source_budget(
             state=state,
@@ -3163,7 +3410,7 @@ Generate the research plan as JSON."""
         user_prompt = self._build_analysis_user_prompt(state, allocation_result)
 
         # Final-fit validation before provider dispatch
-        valid, preflight, system_prompt, user_prompt = self._final_fit_validate(
+        valid, _preflight, system_prompt, user_prompt = self._final_fit_validate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             provider_id=provider_id or state.analysis_provider,
@@ -3177,11 +3424,28 @@ Generate the research plan as JSON."""
                 "Analysis phase final-fit validation failed, proceeding with truncated prompts"
             )
 
+        # Check for cancellation before making provider call
+        self._check_cancellation(state)
+
         # Execute LLM call with context window error handling and timeout protection
+        effective_provider = provider_id or state.analysis_provider
+        llm_call_start_time = time.perf_counter()
+        # Update heartbeat and persist interim state for progress visibility
+        state.last_heartbeat_at = datetime.now(timezone.utc)
+        self.memory.save_deep_research(state)
+        self._write_audit_event(
+            state,
+            "llm.call.started",
+            data={
+                "provider": effective_provider,
+                "task_id": state.id,
+                "phase": "analysis",
+            },
+        )
         try:
             result = await self._execute_provider_async(
                 prompt=user_prompt,
-                provider_id=provider_id or state.analysis_provider,
+                provider_id=effective_provider,
                 model=state.analysis_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
@@ -3192,6 +3456,23 @@ Generate the research plan as JSON."""
                 retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
+            llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+            self._write_audit_event(
+                state,
+                "llm.call.completed",
+                data={
+                    "provider": effective_provider,
+                    "task_id": state.id,
+                    "duration_ms": llm_call_duration_ms,
+                    "status": "error",
+                    "error_type": "context_window_exceeded",
+                },
+            )
+            get_metrics().histogram(
+                "foundry_mcp_research_llm_call_duration_seconds",
+                llm_call_duration_ms / 1000.0,
+                labels={"provider": effective_provider or "unknown", "status": "error"},
+            )
             logger.error(
                 "Analysis phase context window exceeded: prompt_tokens=%s, "
                 "max_tokens=%s, truncation_needed=%s, provider=%s, source_count=%d",
@@ -3216,6 +3497,26 @@ Generate the research plan as JSON."""
                     "guidance": "Try reducing max_sources_per_query or processing sources in batches",
                 },
             )
+
+        # Emit llm.call.completed audit event
+        llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+        llm_call_status = "success" if result.success else "error"
+        llm_call_provider: str = result.provider_id or effective_provider or "unknown"
+        self._write_audit_event(
+            state,
+            "llm.call.completed",
+            data={
+                "provider": llm_call_provider,
+                "task_id": state.id,
+                "duration_ms": llm_call_duration_ms,
+                "status": llm_call_status,
+            },
+        )
+        get_metrics().histogram(
+            "foundry_mcp_research_llm_call_duration_seconds",
+            llm_call_duration_ms / 1000.0,
+            labels={"provider": llm_call_provider, "status": llm_call_status},
+        )
 
         if not result.success:
             # Check if this was a timeout
@@ -3331,6 +3632,26 @@ Generate the research plan as JSON."""
             len(parsed["gaps"]),
         )
 
+        # Emit phase.completed audit event
+        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
+        self._write_audit_event(
+            state,
+            "phase.completed",
+            data={
+                "phase_name": "analysis",
+                "iteration": state.iteration,
+                "task_id": state.id,
+                "duration_ms": phase_duration_ms,
+            },
+        )
+
+        # Emit phase duration metric
+        get_metrics().histogram(
+            "foundry_mcp_research_phase_duration_seconds",
+            phase_duration_ms / 1000.0,
+            labels={"phase_name": "analysis", "status": "success"},
+        )
+
         return WorkflowResult(
             success=True,
             content=f"Extracted {len(parsed['findings'])} findings and identified {len(parsed['gaps'])} gaps",
@@ -3350,11 +3671,13 @@ Generate the research plan as JSON."""
         """Build system prompt for source analysis.
 
         Args:
-            state: Current research state
+            state: Current research state (reserved for future state-aware prompts)
 
         Returns:
             System prompt string
         """
+        # state is reserved for future state-aware prompt customization
+        _ = state
         return """You are a research analyst. Your task is to analyze research sources and extract key findings, assess their quality, and identify knowledge gaps.
 
 Your response MUST be valid JSON with this exact structure:
@@ -4004,11 +4327,13 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         Args:
             content: Raw LLM response content
-            state: Current research state
+            state: Current research state (reserved for context-aware parsing)
 
         Returns:
             Dict with 'success', 'findings', 'gaps', and 'quality_updates' keys
         """
+        # state is reserved for future context-aware parsing
+        _ = state
         result = {
             "success": False,
             "findings": [],
@@ -4157,6 +4482,18 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             len(state.sources),
         )
 
+        # Emit phase.started audit event
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "synthesis",
+                "iteration": state.iteration,
+                "task_id": state.id,
+            },
+        )
+
         # Allocate token budget for findings and sources
         allocation_result = self._allocate_synthesis_budget(
             state=state,
@@ -4184,7 +4521,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         user_prompt = self._build_synthesis_user_prompt(state, allocation_result)
 
         # Final-fit validation before provider dispatch
-        valid, preflight, system_prompt, user_prompt = self._final_fit_validate(
+        valid, _preflight, system_prompt, user_prompt = self._final_fit_validate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             provider_id=provider_id or state.synthesis_provider,
@@ -4198,11 +4535,28 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 "Synthesis phase final-fit validation failed, proceeding with truncated prompts"
             )
 
+        # Check for cancellation before making provider call
+        self._check_cancellation(state)
+
         # Execute LLM call with context window error handling and timeout protection
+        effective_provider = provider_id or state.synthesis_provider
+        llm_call_start_time = time.perf_counter()
+        # Update heartbeat and persist interim state for progress visibility
+        state.last_heartbeat_at = datetime.now(timezone.utc)
+        self.memory.save_deep_research(state)
+        self._write_audit_event(
+            state,
+            "llm.call.started",
+            data={
+                "provider": effective_provider,
+                "task_id": state.id,
+                "phase": "synthesis",
+            },
+        )
         try:
             result = await self._execute_provider_async(
                 prompt=user_prompt,
-                provider_id=provider_id or state.synthesis_provider,
+                provider_id=effective_provider,
                 model=state.synthesis_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
@@ -4213,6 +4567,23 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
+            llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+            self._write_audit_event(
+                state,
+                "llm.call.completed",
+                data={
+                    "provider": effective_provider,
+                    "task_id": state.id,
+                    "duration_ms": llm_call_duration_ms,
+                    "status": "error",
+                    "error_type": "context_window_exceeded",
+                },
+            )
+            get_metrics().histogram(
+                "foundry_mcp_research_llm_call_duration_seconds",
+                llm_call_duration_ms / 1000.0,
+                labels={"provider": effective_provider or "unknown", "status": "error"},
+            )
             logger.error(
                 "Synthesis phase context window exceeded: prompt_tokens=%s, "
                 "max_tokens=%s, truncation_needed=%s, provider=%s, finding_count=%d",
@@ -4237,6 +4608,26 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                     "guidance": "Try reducing the number of findings or source content included",
                 },
             )
+
+        # Emit llm.call.completed audit event
+        llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+        llm_call_status = "success" if result.success else "error"
+        llm_call_provider: str = result.provider_id or effective_provider or "unknown"
+        self._write_audit_event(
+            state,
+            "llm.call.completed",
+            data={
+                "provider": llm_call_provider,
+                "task_id": state.id,
+                "duration_ms": llm_call_duration_ms,
+                "status": llm_call_status,
+            },
+        )
+        get_metrics().histogram(
+            "foundry_mcp_research_llm_call_duration_seconds",
+            llm_call_duration_ms / 1000.0,
+            labels={"provider": llm_call_provider, "status": llm_call_status},
+        )
 
         if not result.success:
             # Check if this was a timeout
@@ -4300,6 +4691,26 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             len(state.report),
         )
 
+        # Emit phase.completed audit event
+        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
+        self._write_audit_event(
+            state,
+            "phase.completed",
+            data={
+                "phase_name": "synthesis",
+                "iteration": state.iteration,
+                "task_id": state.id,
+                "duration_ms": phase_duration_ms,
+            },
+        )
+
+        # Emit phase duration metric
+        get_metrics().histogram(
+            "foundry_mcp_research_phase_duration_seconds",
+            phase_duration_ms / 1000.0,
+            labels={"phase_name": "synthesis", "status": "success"},
+        )
+
         return WorkflowResult(
             success=True,
             content=state.report,
@@ -4320,11 +4731,13 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         """Build system prompt for report synthesis.
 
         Args:
-            state: Current research state
+            state: Current research state (reserved for future state-aware prompts)
 
         Returns:
             System prompt string
         """
+        # state is reserved for future state-aware prompt customization
+        _ = state
         return """You are a research synthesizer. Your task is to create a comprehensive, well-structured research report from analyzed findings.
 
 Generate a markdown-formatted report with the following structure:
@@ -4658,8 +5071,20 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
             state.max_iterations,
         )
 
+        # Emit phase.started audit event
+        phase_start_time = time.perf_counter()
+        self._write_audit_event(
+            state,
+            "phase.started",
+            data={
+                "phase_name": "refinement",
+                "iteration": state.iteration,
+                "task_id": state.id,
+            },
+        )
+
         # Compute budget allocation to prevent unbounded context growth
-        phase_budget, report_budget, remaining_budget = self._compute_refinement_budget(
+        _phase_budget, report_budget, remaining_budget = self._compute_refinement_budget(
             provider_id, state
         )
 
@@ -4689,7 +5114,7 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
         )
 
         # Final-fit validation before provider dispatch
-        valid, preflight, system_prompt, user_prompt = self._final_fit_validate(
+        valid, _preflight, system_prompt, user_prompt = self._final_fit_validate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             provider_id=provider_id or state.refinement_provider,
@@ -4703,11 +5128,28 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
                 "Refinement phase final-fit validation failed, proceeding with truncated prompts"
             )
 
+        # Check for cancellation before making provider call
+        self._check_cancellation(state)
+
         # Execute LLM call with context window error handling and timeout protection
+        effective_provider = provider_id or state.refinement_provider
+        llm_call_start_time = time.perf_counter()
+        # Update heartbeat and persist interim state for progress visibility
+        state.last_heartbeat_at = datetime.now(timezone.utc)
+        self.memory.save_deep_research(state)
+        self._write_audit_event(
+            state,
+            "llm.call.started",
+            data={
+                "provider": effective_provider,
+                "task_id": state.id,
+                "phase": "refinement",
+            },
+        )
         try:
             result = await self._execute_provider_async(
                 prompt=user_prompt,
-                provider_id=provider_id or state.refinement_provider,
+                provider_id=effective_provider,
                 model=state.refinement_model,
                 system_prompt=system_prompt,
                 timeout=timeout,
@@ -4718,6 +5160,23 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
                 retry_delay=self.config.deep_research_retry_delay,
             )
         except ContextWindowError as e:
+            llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+            self._write_audit_event(
+                state,
+                "llm.call.completed",
+                data={
+                    "provider": effective_provider,
+                    "task_id": state.id,
+                    "duration_ms": llm_call_duration_ms,
+                    "status": "error",
+                    "error_type": "context_window_exceeded",
+                },
+            )
+            get_metrics().histogram(
+                "foundry_mcp_research_llm_call_duration_seconds",
+                llm_call_duration_ms / 1000.0,
+                labels={"provider": effective_provider or "unknown", "status": "error"},
+            )
             logger.error(
                 "Refinement phase context window exceeded: prompt_tokens=%s, "
                 "max_tokens=%s, gap_count=%d",
@@ -4737,6 +5196,26 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
                     "max_tokens": e.max_tokens,
                 },
             )
+
+        # Emit llm.call.completed audit event
+        llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
+        llm_call_status = "success" if result.success else "error"
+        llm_call_provider: str = result.provider_id or effective_provider or "unknown"
+        self._write_audit_event(
+            state,
+            "llm.call.completed",
+            data={
+                "provider": llm_call_provider,
+                "task_id": state.id,
+                "duration_ms": llm_call_duration_ms,
+                "status": llm_call_status,
+            },
+        )
+        get_metrics().histogram(
+            "foundry_mcp_research_llm_call_duration_seconds",
+            llm_call_duration_ms / 1000.0,
+            labels={"provider": llm_call_provider, "status": llm_call_status},
+        )
 
         if not result.success:
             # Check if this was a timeout
@@ -4819,6 +5298,26 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
             new_sub_queries,
         )
 
+        # Emit phase.completed audit event
+        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
+        self._write_audit_event(
+            state,
+            "phase.completed",
+            data={
+                "phase_name": "refinement",
+                "iteration": state.iteration,
+                "task_id": state.id,
+                "duration_ms": phase_duration_ms,
+            },
+        )
+
+        # Emit phase duration metric
+        get_metrics().histogram(
+            "foundry_mcp_research_phase_duration_seconds",
+            phase_duration_ms / 1000.0,
+            labels={"phase_name": "refinement", "status": "success"},
+        )
+
         return WorkflowResult(
             success=True,
             content=f"Generated {new_sub_queries} follow-up queries from {len(unresolved_gaps)} gaps",
@@ -4839,11 +5338,13 @@ Unfortunately, the analysis phase did not yield extractable findings from the ga
         """Build system prompt for gap analysis and refinement.
 
         Args:
-            state: Current research state
+            state: Current research state (reserved for future state-aware prompts)
 
         Returns:
             System prompt string
         """
+        # state is reserved for future state-aware prompt customization
+        _ = state
         return """You are a research refiner. Your task is to analyze knowledge gaps identified during research and generate focused follow-up queries to address them.
 
 Your response MUST be valid JSON with this exact structure:
@@ -5003,11 +5504,13 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         Args:
             content: Raw LLM response content
-            state: Current research state
+            state: Current research state (reserved for context-aware parsing)
 
         Returns:
             Dict with 'success', 'follow_up_queries', 'addressed_gap_ids', etc.
         """
+        # state is reserved for future context-aware parsing
+        _ = state
         result = {
             "success": False,
             "gap_analysis": [],
@@ -5090,7 +5593,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         """
         queries = []
         for gap in state.unresolved_gaps():
-            for i, sq in enumerate(gap.suggested_queries[:2]):  # Max 2 per gap
+            for sq in gap.suggested_queries[:2]:  # Max 2 per gap
                 queries.append({
                     "query": sq,
                     "target_gap_id": gap.id,
@@ -5321,15 +5824,9 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             if not state.findings:
                 issues.append("No findings found for synthesis phase")
 
-        # Check for corrupted collections (None instead of empty list)
-        if state.sub_queries is None:
-            issues.append("Corrupted sub_queries collection (null)")
-        if state.sources is None:
-            issues.append("Corrupted sources collection (null)")
-        if state.findings is None:
-            issues.append("Corrupted findings collection (null)")
-        if state.gaps is None:
-            issues.append("Corrupted gaps collection (null)")
+        # Note: Pydantic's default_factory=list guarantees collections are never None,
+        # so explicit None checks are unnecessary. Corrupted data would fail Pydantic
+        # validation during deserialization.
 
         if issues:
             return {

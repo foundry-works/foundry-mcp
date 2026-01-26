@@ -8,10 +8,8 @@ Tests the multi-phase iterative research workflow including:
 - Refinement phase (gap identification)
 """
 
-from datetime import datetime
 import json
 from pathlib import Path
-from typing import Any, Optional
 from unittest.mock import MagicMock, patch, AsyncMock
 import asyncio
 
@@ -22,11 +20,8 @@ from foundry_mcp.core.research.models import (
     DeepResearchPhase,
     DeepResearchState,
     PhaseMetrics,
-    ResearchFinding,
-    ResearchGap,
     ResearchMode,
     ResearchSource,
-    SourceQuality,
     SourceType,
     SubQuery,
 )
@@ -311,6 +306,46 @@ class TestSubQuery:
         assert sq.status == "failed"
         assert sq.completed_at is not None
         assert sq.error == "Timeout error"
+
+
+class TestDeepResearchStateFailedSubQueries:
+    """Tests for failed sub-query tracking."""
+
+    def test_failed_sub_queries_returns_failed(self):
+        """Should return sub-queries with status='failed'."""
+        state = DeepResearchState(original_query="Test query")
+
+        sq1 = state.add_sub_query("Completed query")
+        sq1.mark_completed(findings="Found data")
+
+        sq2 = state.add_sub_query("Failed query 1")
+        sq2.mark_failed("Timeout after 30s")
+
+        sq3 = state.add_sub_query("Pending query")
+
+        sq4 = state.add_sub_query("Failed query 2")
+        sq4.mark_failed("Provider unavailable")
+
+        failed = state.failed_sub_queries()
+
+        assert len(failed) == 2
+        assert failed[0].query == "Failed query 1"
+        assert failed[0].error == "Timeout after 30s"
+        assert failed[1].query == "Failed query 2"
+        assert failed[1].error == "Provider unavailable"
+
+    def test_failed_sub_queries_empty_when_none_failed(self):
+        """Should return empty list when no sub-queries failed."""
+        state = DeepResearchState(original_query="Test query")
+
+        sq1 = state.add_sub_query("Completed query")
+        sq1.mark_completed(findings="Found data")
+
+        sq2 = state.add_sub_query("Pending query")
+
+        failed = state.failed_sub_queries()
+
+        assert len(failed) == 0
 
 
 # =============================================================================
@@ -626,10 +661,8 @@ class TestDeepResearchWorkflow:
 
     def test_background_task_timeout(self, mock_config, mock_memory):
         """Should mark background task as timed out."""
-        from foundry_mcp.core.research.workflows.deep_research import (
-            DeepResearchWorkflow,
-            TaskStatus,
-        )
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+        from foundry_mcp.core.background_task import TaskStatus
 
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
         state = DeepResearchState(original_query="Timeout test")
@@ -649,19 +682,19 @@ class TestDeepResearchWorkflow:
                 task_timeout=0.05,
             )
             bg_task = workflow.get_background_task(state.id)
+            assert bg_task is not None
+            assert bg_task.thread is not None
             # Wait for the thread to complete (instead of awaiting asyncio task)
             bg_task.thread.join(timeout=5.0)
 
         assert result.success is True
         assert bg_task.status == TaskStatus.TIMEOUT
+        assert bg_task.result is not None
         assert bg_task.result.metadata["timeout"] is True
 
     def test_background_task_is_done_property(self, mock_config, mock_memory):
         """Should correctly report is_done for thread-based execution."""
-        from foundry_mcp.core.research.workflows.deep_research import (
-            DeepResearchWorkflow,
-            BackgroundTask,
-        )
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
         state = DeepResearchState(original_query="is_done test")
@@ -673,7 +706,7 @@ class TestDeepResearchWorkflow:
         with patch.object(
             workflow, "_execute_workflow_async", side_effect=slow_execute
         ):
-            result = workflow._start_background_task(
+            _ = workflow._start_background_task(
                 state=state,
                 provider_id=None,
                 timeout_per_operation=1.0,
@@ -681,6 +714,7 @@ class TestDeepResearchWorkflow:
                 task_timeout=10.0,
             )
             bg_task = workflow.get_background_task(state.id)
+            assert bg_task is not None
 
             # Task should not be None (but it will be for thread-based execution)
             # The is_done property should handle both cases
@@ -730,6 +764,8 @@ class TestDeepResearchWorkflow:
 
             # Wait for completion
             bg_task = workflow.get_background_task(state.id)
+            assert bg_task is not None
+            assert bg_task.thread is not None
             bg_task.thread.join(timeout=5.0)
 
     def test_continue_research_with_background(
@@ -781,6 +817,7 @@ class TestDeepResearchWorkflow:
         result = workflow.execute(action="start", query=None)
 
         assert result.success is False
+        assert result.error is not None
         assert "Query is required" in result.error
 
     def test_execute_continue_without_research_id(self, mock_config, mock_memory):
@@ -792,6 +829,7 @@ class TestDeepResearchWorkflow:
         result = workflow.execute(action="continue", research_id=None)
 
         assert result.success is False
+        assert result.error is not None
         assert "research_id is required" in result.error
 
     def test_execute_status_not_found(self, mock_config, mock_memory):
@@ -804,6 +842,7 @@ class TestDeepResearchWorkflow:
         result = workflow.execute(action="status", research_id="nonexistent")
 
         assert result.success is False
+        assert result.error is not None
         assert "not found" in result.error
 
     def test_execute_unknown_action(self, mock_config, mock_memory):
@@ -815,6 +854,7 @@ class TestDeepResearchWorkflow:
         result = workflow.execute(action="unknown")
 
         assert result.success is False
+        assert result.error is not None
         assert "Unknown action" in result.error
 
     def test_execute_catches_exceptions(self, mock_config, mock_memory):
@@ -832,6 +872,7 @@ class TestDeepResearchWorkflow:
 
         # Should return error result, not raise exception
         assert result.success is False
+        assert result.error is not None
         assert "Storage unavailable" in result.error
         assert result.metadata["action"] == "start"
         assert result.metadata["error_type"] == "RuntimeError"
@@ -861,6 +902,7 @@ class TestDeepResearchWorkflow:
         result = workflow.execute(action="report", research_id="deepres-test123")
 
         assert result.success is False
+        assert result.error is not None
         assert "not yet generated" in result.error
 
     def test_get_report_success(self, mock_config, mock_memory, sample_deep_research_state):

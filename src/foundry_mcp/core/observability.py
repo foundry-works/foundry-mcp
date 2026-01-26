@@ -483,6 +483,8 @@ class AuditEventType(Enum):
     TOOL_INVOCATION = "tool_invocation"
     PERMISSION_DENIED = "permission_denied"
     CONFIG_CHANGE = "config_change"
+    TASK_TIMEOUT = "task_timeout"
+    TASK_STALE = "task_stale"
 
 
 @dataclass

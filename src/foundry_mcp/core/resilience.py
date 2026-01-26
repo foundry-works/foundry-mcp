@@ -61,6 +61,10 @@ SLOW_TIMEOUT_MAX: float = 300.0
 BACKGROUND_TIMEOUT: float = 600.0
 BACKGROUND_TIMEOUT_MAX: float = 3600.0
 
+#: Deep research workflow timeout (default 600s = 10 minutes)
+#: Applied when no explicit timeout is provided to deep-research actions
+DEFAULT_DEEP_RESEARCH_TIMEOUT: float = 600.0
+
 
 T = TypeVar("T")
 

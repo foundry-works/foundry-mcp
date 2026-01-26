@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Deep Research Resilience**: Comprehensive resilience improvements for long-running research workflows
+  - **Task Registry & Cancellation**: Centralized task registry with two-phase cancellation (cooperative then forced)
+  - **Timeout Watchdog**: Background monitor that detects timeout and staleness conditions
+  - **Provider Timeout Enforcement**: Per-provider timeout handling with `ProviderTimeoutError`
+  - **Progress Heartbeats**: `last_heartbeat_at` timestamp updated before each provider call for visibility
+  - **Default Timeout Configuration**: Configurable `deep_research_timeout` with precedence rules (explicit > config > 600s fallback)
+  - **Executor Isolation**: `ProviderExecutor` thread pool for isolating blocking CLI provider operations
+  - **Status Metadata**: New fields in status response: `last_heartbeat_at`, `is_timed_out`, `is_stale`, `effective_timeout`
+
+- **Documentation**: Added resilience configuration and troubleshooting guides
+  - Timeout behavior and configuration in `docs/06-configuration.md`
+  - Troubleshooting for timeout, staleness, and cancellation issues in `docs/07-troubleshooting.md`
+
 ## [0.9.0b5] - 2026-01-26
 
 ### Fixed
