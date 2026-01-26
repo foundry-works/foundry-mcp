@@ -13,6 +13,7 @@ Example usage:
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime
 from typing import Any, Optional
 
@@ -35,6 +36,86 @@ TAVILY_SEARCH_ENDPOINT = "/search"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RATE_LIMIT = 1.0  # requests per second
+
+# Valid parameter values
+VALID_SEARCH_DEPTHS = frozenset(["basic", "advanced", "fast", "ultra_fast"])
+VALID_TOPICS = frozenset(["general", "news"])
+
+
+def _normalize_include_raw_content(value: bool | str) -> bool | str:
+    """Normalize include_raw_content parameter for Tavily API.
+
+    Args:
+        value: The input value (bool or string).
+
+    Returns:
+        Normalized value for API: False, "markdown", or "text".
+
+    Raises:
+        ValueError: If value is not a valid option.
+    """
+    if value is True:
+        return "markdown"  # True maps to markdown format
+    if value is False:
+        return False
+    if isinstance(value, str) and value in ("markdown", "text"):
+        return value
+    raise ValueError(
+        f"Invalid include_raw_content: {value!r}. "
+        "Use bool or 'markdown'/'text'."
+    )
+
+
+def _validate_search_params(
+    search_depth: str,
+    topic: str,
+    days: int | None,
+    country: str | None,
+    chunks_per_source: int | None,
+) -> None:
+    """Validate Tavily search parameters.
+
+    Args:
+        search_depth: Search depth level.
+        topic: Search topic category.
+        days: Days limit for news search.
+        country: ISO country code.
+        chunks_per_source: Chunks per source limit.
+
+    Raises:
+        ValueError: If any parameter is invalid.
+    """
+    if search_depth not in VALID_SEARCH_DEPTHS:
+        raise ValueError(
+            f"Invalid search_depth: {search_depth!r}. "
+            f"Must be one of: {sorted(VALID_SEARCH_DEPTHS)}"
+        )
+
+    if topic not in VALID_TOPICS:
+        raise ValueError(
+            f"Invalid topic: {topic!r}. "
+            f"Must be one of: {sorted(VALID_TOPICS)}"
+        )
+
+    if days is not None:
+        if not isinstance(days, int) or days < 1 or days > 365:
+            raise ValueError(
+                f"Invalid days: {days!r}. Must be an integer between 1 and 365."
+            )
+
+    if country is not None:
+        if not isinstance(country, str) or not re.match(r"^[A-Z]{2}$", country):
+            raise ValueError(
+                f"Invalid country: {country!r}. "
+                "Must be a 2-letter uppercase ISO 3166-1 alpha-2 code (e.g., 'US', 'GB')."
+            )
+
+    if chunks_per_source is not None:
+        if not isinstance(chunks_per_source, int) or chunks_per_source < 1 or chunks_per_source > 5:
+            raise ValueError(
+                f"Invalid chunks_per_source: {chunks_per_source!r}. "
+                "Must be an integer between 1 and 5."
+            )
 
 
 class TavilySearchProvider(SearchProvider):
@@ -110,54 +191,134 @@ class TavilySearchProvider(SearchProvider):
         self,
         query: str,
         max_results: int = 10,
+        *,
+        search_depth: str = "basic",
+        topic: str = "general",
+        days: int | None = None,
+        include_domains: list[str] | None = None,
+        exclude_domains: list[str] | None = None,
+        include_answer: bool | str = False,
+        include_raw_content: bool | str = False,
+        include_images: bool = False,
+        include_favicon: bool = False,
+        country: str | None = None,
+        chunks_per_source: int | None = None,
+        auto_parameters: bool = False,
+        sub_query_id: str | None = None,
         **kwargs: Any,
     ) -> list[ResearchSource]:
         """Execute a web search via Tavily API.
 
         Args:
-            query: The search query string
-            max_results: Maximum number of results to return (default: 10, max: 20)
-            **kwargs: Additional Tavily options:
-                - search_depth: "basic" or "advanced" (default: "basic")
-                - include_domains: List of domains to include
-                - exclude_domains: List of domains to exclude
-                - include_answer: Whether to include AI answer (default: False)
-                - include_raw_content: Whether to include raw HTML (default: False)
-                - sub_query_id: SubQuery ID for source tracking
+            query: The search query string (max 400 characters).
+            max_results: Maximum number of results to return (default: 10, max: 20).
+            search_depth: Search depth level. Options:
+                - "basic": Standard search (1 credit)
+                - "advanced": Deeper search with better relevance (2 credits)
+                - "fast": Quick search with reduced depth
+                - "ultra_fast": Fastest search option
+                Default: "basic"
+            topic: Search topic category. Options:
+                - "general": General web search (default)
+                - "news": News-focused search (use with `days` parameter)
+            days: Limit results to the last N days (1-365). Only applicable when
+                topic="news". Default: None (no time limit).
+            include_domains: List of domains to restrict search to (max 300).
+                Example: ["arxiv.org", "github.com"]
+            exclude_domains: List of domains to exclude from results (max 150).
+                Example: ["pinterest.com", "facebook.com"]
+            include_answer: Whether to include an AI-generated answer. Options:
+                - False: No answer (default)
+                - True or "basic": Include basic AI answer
+                - "advanced": Include detailed AI answer
+            include_raw_content: Whether to include full page content. Options:
+                - False: No raw content (default)
+                - True or "markdown": Include content as markdown
+                - "text": Include content as plain text
+            include_images: Whether to include image results (default: False).
+            include_favicon: Whether to include favicon URLs for each result
+                (default: False).
+            country: ISO 3166-1 alpha-2 country code to boost results from
+                (e.g., "US", "GB", "DE"). Default: None (no country boost).
+            chunks_per_source: Number of content chunks per source (1-5).
+                Only applicable with search_depth="advanced". Default: 3.
+            auto_parameters: Let Tavily auto-configure parameters based on
+                query intent (default: False). Explicit parameters override
+                auto-configured values.
+            sub_query_id: SubQuery ID for source tracking in deep research
+                workflows. Used internally to associate results with sub-queries.
+            **kwargs: Additional parameters for forward compatibility.
 
         Returns:
-            List of ResearchSource objects
+            List of ResearchSource objects containing search results.
 
         Raises:
-            AuthenticationError: If API key is invalid
-            RateLimitError: If rate limit exceeded after all retries
-            SearchProviderError: For other API errors
+            AuthenticationError: If API key is invalid.
+            RateLimitError: If rate limit exceeded after all retries.
+            SearchProviderError: For other API errors.
+
+        Example:
+            # Basic search
+            results = await provider.search("python tutorials", max_results=5)
+
+            # Advanced search with domain filtering
+            results = await provider.search(
+                "machine learning papers",
+                max_results=10,
+                search_depth="advanced",
+                include_domains=["arxiv.org", "paperswithcode.com"],
+                include_raw_content="markdown",
+            )
+
+            # News search with time limit
+            results = await provider.search(
+                "AI regulations",
+                topic="news",
+                days=7,
+                country="US",
+            )
         """
-        # Extract Tavily-specific options
-        search_depth = kwargs.get("search_depth", "basic")
-        include_domains = kwargs.get("include_domains", [])
-        exclude_domains = kwargs.get("exclude_domains", [])
-        include_answer = kwargs.get("include_answer", False)
-        include_raw_content = kwargs.get("include_raw_content", False)
-        sub_query_id = kwargs.get("sub_query_id")
+        # Validate parameters
+        _validate_search_params(
+            search_depth=search_depth,
+            topic=topic,
+            days=days,
+            country=country,
+            chunks_per_source=chunks_per_source,
+        )
 
         # Clamp max_results to Tavily's limit
         max_results = min(max_results, 20)
 
-        # Build request payload
-        payload = {
+        # Normalize include_raw_content (True -> "markdown")
+        normalized_raw_content = _normalize_include_raw_content(include_raw_content)
+
+        # Build request payload with required parameters
+        payload: dict[str, Any] = {
             "api_key": self._api_key,
             "query": query,
             "max_results": max_results,
             "search_depth": search_depth,
+            "topic": topic,
             "include_answer": include_answer,
-            "include_raw_content": include_raw_content,
+            "include_raw_content": normalized_raw_content,
+            "include_images": include_images,
+            "include_favicon": include_favicon,
         }
 
+        # Conditionally include optional parameters only when set
         if include_domains:
             payload["include_domains"] = include_domains
         if exclude_domains:
             payload["exclude_domains"] = exclude_domains
+        if days is not None:
+            payload["days"] = days
+        if country is not None:
+            payload["country"] = country
+        if chunks_per_source is not None:
+            payload["chunks_per_source"] = chunks_per_source
+        if auto_parameters:
+            payload["auto_parameters"] = auto_parameters
 
         # Execute with retry logic
         response_data = await self._execute_with_retry(payload)

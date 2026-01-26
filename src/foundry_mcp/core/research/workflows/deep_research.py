@@ -60,6 +60,7 @@ from foundry_mcp.core.research.providers import (
     PerplexitySearchProvider,
     SemanticScholarProvider,
     TavilySearchProvider,
+    TavilyExtractProvider,
 )
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 from foundry_mcp.core.research.token_management import (
@@ -1010,6 +1011,77 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 flush=True,
             )
 
+    def _get_tavily_search_kwargs(self, state: "DeepResearchState") -> dict[str, Any]:
+        """Build Tavily search kwargs based on config and research mode.
+
+        Applies parameter precedence:
+        1. Config values (highest priority when explicitly set)
+        2. Research-mode defaults (academic/technical/general)
+        3. Base defaults
+
+        Research mode defaults:
+        - general: search_depth=basic, chunks_per_source=3
+        - academic: search_depth=advanced, chunks_per_source=5, include_raw_content=markdown
+        - technical: search_depth=advanced, chunks_per_source=4, include_raw_content=markdown
+
+        Args:
+            state: Current deep research state (for research_mode)
+
+        Returns:
+            Dict of kwargs to pass to TavilySearchProvider.search()
+        """
+        # Start with research-mode defaults
+        mode = state.research_mode or self.config.deep_research_mode
+        mode_defaults: dict[str, Any] = {
+            "general": {
+                "search_depth": "basic",
+                "chunks_per_source": 3,
+                "include_raw_content": False,
+            },
+            "academic": {
+                "search_depth": "advanced",
+                "chunks_per_source": 5,
+                "include_raw_content": "markdown",
+            },
+            "technical": {
+                "search_depth": "advanced",
+                "chunks_per_source": 4,
+                "include_raw_content": "markdown",
+            },
+        }
+        kwargs = mode_defaults.get(mode, mode_defaults["general"]).copy()
+
+        # Override with config values (if explicitly set/non-default)
+        config = self.config
+        default_search_depth = "basic"
+        default_topic = "general"
+        default_chunks_per_source = 3
+
+        if config.tavily_search_depth != default_search_depth:
+            kwargs["search_depth"] = config.tavily_search_depth
+        if config.tavily_topic != default_topic or config.tavily_news_days is not None:
+            kwargs["topic"] = config.tavily_topic
+        if config.tavily_include_images:
+            kwargs["include_images"] = True
+        kwargs["include_favicon"] = False  # Not typically needed for research
+        if config.tavily_auto_parameters:
+            kwargs["auto_parameters"] = True
+        if config.tavily_chunks_per_source != default_chunks_per_source:
+            kwargs["chunks_per_source"] = config.tavily_chunks_per_source
+
+        # Only include optional parameters when explicitly set
+        if config.tavily_news_days is not None:
+            kwargs["days"] = config.tavily_news_days
+        if config.tavily_country is not None:
+            kwargs["country"] = config.tavily_country
+
+        # Handle include_raw_content: config value or mode default, but state.follow_links takes precedence
+        if state.follow_links:
+            # If follow_links is True, we want raw content
+            kwargs["include_raw_content"] = kwargs.get("include_raw_content", "markdown") or "markdown"
+
+        return kwargs
+
     def _record_workflow_error(
         self,
         error: Exception,
@@ -1890,6 +1962,22 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 # Think pause: supervisor evaluates gathering quality
                 self._safe_orchestrator_transition(state, DeepResearchPhase.GATHERING)
 
+                # Optional: Execute extract follow-up to expand URL content
+                if self.config.tavily_extract_in_deep_research:
+                    extract_result = await self._execute_extract_followup_async(
+                        state=state,
+                        max_urls=self.config.tavily_extract_max_urls,
+                    )
+                    if extract_result:
+                        self._write_audit_event(
+                            state,
+                            "extract_followup_complete",
+                            data={
+                                "urls_extracted": extract_result.get("urls_extracted", 0),
+                                "urls_failed": extract_result.get("urls_failed", 0),
+                            },
+                        )
+
             if state.phase == DeepResearchPhase.ANALYSIS:
                 phase_started = time.perf_counter()
                 self.hooks.emit_phase_start(state)
@@ -2551,12 +2639,22 @@ Generate the research plan as JSON."""
                 for provider in available_providers:
                     provider_name = provider.get_provider_name()
                     try:
-                        sources = await provider.search(
-                            query=sub_query.query,
-                            max_results=state.max_sources_per_query,
-                            sub_query_id=sub_query.id,
-                            include_raw_content=state.follow_links,
-                        )
+                        # Build provider-specific kwargs
+                        search_kwargs: dict[str, Any] = {
+                            "query": sub_query.query,
+                            "max_results": state.max_sources_per_query,
+                            "sub_query_id": sub_query.id,
+                        }
+
+                        # Add Tavily-specific kwargs for Tavily provider
+                        if provider_name == "tavily":
+                            tavily_kwargs = self._get_tavily_search_kwargs(state)
+                            search_kwargs.update(tavily_kwargs)
+                        else:
+                            # Non-Tavily providers just get include_raw_content
+                            search_kwargs["include_raw_content"] = state.follow_links
+
+                        sources = await provider.search(**search_kwargs)
 
                         # Add sources with deduplication
                         for source in sources:
@@ -2721,6 +2819,121 @@ Generate the research plan as JSON."""
                 "providers_unavailable": unavailable_providers,
             },
         )
+
+    async def _execute_extract_followup_async(
+        self,
+        state: DeepResearchState,
+        max_urls: int = 5,
+    ) -> Optional[dict[str, Any]]:
+        """Execute Tavily Extract as optional follow-up after gathering phase.
+
+        This step expands URL content for top-ranked sources discovered during search.
+        It runs between GATHERING and ANALYSIS phases when enabled via config flag
+        `tavily_extract_in_deep_research`.
+
+        Per acceptance criteria:
+        - Extract can expand URLs discovered during search
+        - Optional step controlled by config flag: tavily_extract_in_deep_research
+        - Max 5 URLs extracted per deep research run (configurable)
+        - URL prioritization: top-N by relevance score (quality)
+        - Results integrated into source collection with extract_source=true metadata
+        - Extraction occurs after search phase, before analysis phase
+
+        Args:
+            state: Current research state with sources from gathering
+            max_urls: Maximum URLs to extract (default: 5)
+
+        Returns:
+            Dict with extraction stats or None on complete failure
+        """
+        import os
+
+        # Get sources that have URLs but no content yet
+        sources_with_urls = [
+            s for s in state.sources
+            if s.url and not s.content
+        ]
+
+        if not sources_with_urls:
+            logger.debug("No sources need content extraction")
+            return {"urls_extracted": 0, "urls_failed": 0, "skipped": "no_eligible_sources"}
+
+        # Prioritize by quality score (HIGH > MEDIUM > LOW > UNKNOWN)
+        quality_order = {
+            SourceQuality.HIGH: 0,
+            SourceQuality.MEDIUM: 1,
+            SourceQuality.LOW: 2,
+            SourceQuality.UNKNOWN: 3,
+        }
+        sources_with_urls.sort(key=lambda s: quality_order.get(s.quality, 99))
+
+        # Take top N URLs
+        urls_to_extract = [s.url for s in sources_with_urls[:max_urls] if s.url]
+
+        if not urls_to_extract:
+            logger.debug("No URLs to extract after filtering")
+            return {"urls_extracted": 0, "urls_failed": 0, "skipped": "no_urls_after_filter"}
+
+        logger.info(
+            "Executing extract follow-up: %d URLs (max %d)",
+            len(urls_to_extract),
+            max_urls,
+        )
+
+        # Get API key
+        api_key = self.config.tavily_api_key or os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            logger.warning("Tavily API key not available for extract follow-up")
+            return {"urls_extracted": 0, "urls_failed": len(urls_to_extract), "error": "no_api_key"}
+
+        try:
+            provider = TavilyExtractProvider(api_key=api_key)
+
+            # Execute extraction
+            extracted_sources = await provider.extract(
+                urls=urls_to_extract,
+                extract_depth=self.config.tavily_extract_depth,
+                include_images=self.config.tavily_extract_include_images,
+            )
+
+            # Map extracted content back to existing sources and add extract_source metadata
+            urls_extracted = 0
+            for extracted in extracted_sources:
+                # Find matching source by URL
+                for source in state.sources:
+                    if source.url == extracted.url:
+                        # Update source with extracted content
+                        source.content = extracted.content
+                        if extracted.snippet and not source.snippet:
+                            source.snippet = extracted.snippet
+                        # Add extract_source=true to metadata
+                        source.metadata["extract_source"] = True
+                        source.metadata["extract_depth"] = extracted.metadata.get("extract_depth")
+                        source.metadata["chunk_count"] = extracted.metadata.get("chunk_count")
+                        urls_extracted += 1
+                        break
+
+            # Save updated state
+            self.memory.save_deep_research(state)
+
+            logger.info(
+                "Extract follow-up complete: %d/%d URLs extracted",
+                urls_extracted,
+                len(urls_to_extract),
+            )
+
+            return {
+                "urls_extracted": urls_extracted,
+                "urls_failed": len(urls_to_extract) - urls_extracted,
+            }
+
+        except Exception as e:
+            logger.error("Extract follow-up failed: %s", e)
+            return {
+                "urls_extracted": 0,
+                "urls_failed": len(urls_to_extract),
+                "error": str(e),
+            }
 
     def _get_search_provider(self, provider_name: str) -> Optional[SearchProvider]:
         """Get or create a search provider instance.

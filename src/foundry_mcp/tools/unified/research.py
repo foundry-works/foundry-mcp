@@ -62,6 +62,8 @@ _ACTION_SUMMARY = {
     "node-record": "Record research findings to spec node",
     "node-status": "Get research node status and linked session info",
     "node-findings": "Retrieve recorded findings from spec node",
+    # Tavily extract action
+    "extract": "Extract content from URLs using Tavily Extract API",
 }
 
 
@@ -1036,6 +1038,333 @@ def _handle_node_findings(
 
 
 # =============================================================================
+# Extract Handler
+# =============================================================================
+
+
+def _handle_extract(
+    *,
+    urls: Optional[list[str]] = None,
+    extract_depth: str = "basic",
+    include_images: bool = False,
+    format: str = "markdown",
+    query: Optional[str] = None,
+    chunks_per_source: Optional[int] = None,
+    **kwargs: Any,
+) -> dict:
+    """Extract content from URLs using Tavily Extract API.
+
+    Response envelope patterns (per MCP best practices):
+    - Full success: success=True, data contains sources and stats, error=None
+    - Partial success: success=True, data.failed_urls populated, meta.warnings contains summary
+    - Total failure: success=False, data contains error_code/error_type/remediation/details
+
+    Error codes:
+    - VALIDATION_ERROR: Invalid parameters or URL format
+    - INVALID_URL: URL parsing or scheme validation failed
+    - BLOCKED_HOST: SSRF protection blocked the URL
+    - RATE_LIMIT_EXCEEDED: API rate limit hit
+    - TIMEOUT: Request timeout
+    - EXTRACT_FAILED: General extraction failure
+
+    Args:
+        urls: List of URLs to extract content from (required, max 10).
+        extract_depth: "basic" or "advanced" (default: "basic").
+        include_images: Include images in results (default: False).
+        format: Output format, "markdown" or "text" (default: "markdown").
+        query: Optional query for relevance-based chunk reranking.
+        chunks_per_source: Chunks per URL, 1-5 (default: 3).
+
+    Returns:
+        MCP response envelope with extracted content as ResearchSource objects.
+    """
+    import asyncio
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    from foundry_mcp.core.research.providers.tavily_extract import (
+        TavilyExtractProvider,
+        UrlValidationError,
+        validate_extract_url,
+    )
+    from foundry_mcp.core.research.providers.base import (
+        RateLimitError,
+        AuthenticationError,
+    )
+
+    # Validate required parameter
+    if not urls:
+        return asdict(
+            error_response(
+                "urls parameter is required",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide a list of URLs to extract content from",
+            )
+        )
+
+    if not isinstance(urls, list) or not all(isinstance(u, str) for u in urls):
+        return asdict(
+            error_response(
+                "urls must be a list of strings",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+            )
+        )
+
+    # Get API key from config or environment
+    config = _get_config()
+    api_key = config.research.tavily_api_key or os.environ.get("TAVILY_API_KEY")
+    if not api_key:
+        return asdict(
+            error_response(
+                "Tavily API key not configured",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Set TAVILY_API_KEY environment variable or tavily_api_key in config",
+            )
+        )
+
+    # Pre-validate URLs and track validation failures
+    valid_urls: list[str] = []
+    failed_urls: list[str] = []
+    error_details: list[dict[str, Any]] = []
+
+    for url in urls:
+        try:
+            validate_extract_url(url, resolve_dns=False)  # Skip DNS in validation
+            valid_urls.append(url)
+        except UrlValidationError as e:
+            failed_urls.append(url)
+            error_details.append({
+                "url": url,
+                "error": e.reason,
+                "error_code": e.error_code,
+            })
+
+    # If all URLs failed validation, return total failure
+    if not valid_urls:
+        return asdict(
+            error_response(
+                f"All {len(urls)} URLs failed validation",
+                error_code="INVALID_URL",
+                error_type=ErrorType.VALIDATION,
+                remediation="Check URL formats and ensure they are publicly accessible HTTP/HTTPS URLs",
+                details={
+                    "failed_urls": failed_urls,
+                    "error_details": error_details,
+                },
+            )
+        )
+
+    try:
+        provider = TavilyExtractProvider(api_key=api_key)
+
+        # Build extract kwargs
+        extract_kwargs: dict[str, Any] = {
+            "extract_depth": extract_depth,
+            "include_images": include_images,
+            "format": format,
+        }
+        if query is not None:
+            extract_kwargs["query"] = query
+        if chunks_per_source is not None:
+            extract_kwargs["chunks_per_source"] = chunks_per_source
+
+        def _run_async(coro: Any) -> Any:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(coro)
+            # Avoid blocking a running loop by executing in a worker thread.
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(asyncio.run, coro)
+                return future.result()
+
+        # Execute extraction for valid URLs only
+        sources = _run_async(provider.extract(valid_urls, **extract_kwargs))
+
+        # Convert ResearchSource objects to dicts
+        source_dicts = []
+        succeeded_urls = set()
+        for src in sources:
+            src_dict = {
+                "url": src.url,
+                "title": src.title,
+                "source_type": src.source_type.value if src.source_type else "web",
+                "snippet": src.snippet,
+                "content": src.content,
+                "metadata": src.metadata,
+            }
+            source_dicts.append(src_dict)
+            if src.url:
+                succeeded_urls.add(src.url)
+
+        # Check for URLs that were valid but failed extraction
+        for url in valid_urls:
+            if url not in succeeded_urls:
+                failed_urls.append(url)
+                error_details.append({
+                    "url": url,
+                    "error": "Extraction returned no content",
+                    "error_code": "EXTRACT_FAILED",
+                })
+
+        # Build response based on success/failure pattern
+        stats = {
+            "requested": len(urls),
+            "succeeded": len(sources),
+            "failed": len(failed_urls),
+        }
+
+        # Determine response type
+        if len(sources) == 0:
+            # Total failure: no sources extracted
+            return asdict(
+                error_response(
+                    f"Extract failed: no content extracted from {len(urls)} URLs",
+                    error_code="EXTRACT_FAILED",
+                    error_type=ErrorType.INTERNAL,
+                    remediation="Check that URLs are publicly accessible and contain extractable content",
+                    details={
+                        "failed_urls": failed_urls,
+                        "error_details": error_details,
+                    },
+                )
+            )
+        elif failed_urls:
+            # Partial success: some URLs succeeded, some failed
+            warnings = [
+                f"{len(failed_urls)} of {len(urls)} URLs failed extraction"
+            ]
+            return asdict(
+                success_response(
+                    data={
+                        "action": "extract",
+                        "sources": source_dicts,
+                        "stats": stats,
+                        "failed_urls": failed_urls,
+                        "error_details": error_details,
+                    },
+                    warnings=warnings,
+                )
+            )
+        else:
+            # Full success: all URLs extracted
+            return asdict(
+                success_response(
+                    data={
+                        "action": "extract",
+                        "sources": source_dicts,
+                        "stats": stats,
+                    }
+                )
+            )
+
+    except AuthenticationError as e:
+        return asdict(
+            error_response(
+                f"Authentication failed: {e}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                remediation="Check that TAVILY_API_KEY is valid",
+                details={
+                    "failed_urls": urls,
+                    "error_details": [{
+                        "url": None,
+                        "error": str(e),
+                        "error_code": "AUTHENTICATION_ERROR",
+                    }],
+                },
+            )
+        )
+    except RateLimitError as e:
+        return asdict(
+            error_response(
+                f"Rate limit exceeded: {e}",
+                error_code="RATE_LIMIT_EXCEEDED",
+                error_type=ErrorType.RATE_LIMIT,
+                remediation=f"Wait {e.retry_after or 60} seconds before retrying" if hasattr(e, 'retry_after') else "Wait before retrying",
+                details={
+                    "failed_urls": urls,
+                    "error_details": [{
+                        "url": None,
+                        "error": str(e),
+                        "error_code": "RATE_LIMIT_EXCEEDED",
+                    }],
+                },
+            )
+        )
+    except UrlValidationError as e:
+        return asdict(
+            error_response(
+                f"URL validation failed: {e.reason}",
+                error_code=e.error_code,
+                error_type=ErrorType.VALIDATION,
+                details={
+                    "failed_urls": [e.url],
+                    "error_details": [{
+                        "url": e.url,
+                        "error": e.reason,
+                        "error_code": e.error_code,
+                    }],
+                },
+            )
+        )
+    except ValueError as e:
+        return asdict(
+            error_response(
+                str(e),
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                details={
+                    "failed_urls": urls if urls else [],
+                    "error_details": [{
+                        "url": None,
+                        "error": str(e),
+                        "error_code": ErrorCode.VALIDATION_ERROR,
+                    }],
+                },
+            )
+        )
+    except asyncio.TimeoutError:
+        return asdict(
+            error_response(
+                "Extract request timed out",
+                error_code="TIMEOUT",
+                error_type=ErrorType.UNAVAILABLE,
+                remediation="Try with fewer URLs or increase timeout",
+                details={
+                    "failed_urls": urls,
+                    "error_details": [{
+                        "url": None,
+                        "error": "Request timed out",
+                        "error_code": "TIMEOUT",
+                    }],
+                },
+            )
+        )
+    except Exception as e:
+        logger.exception("Extract failed: %s", e)
+        return asdict(
+            error_response(
+                f"Extract failed: {e}",
+                error_code="EXTRACT_FAILED",
+                error_type=ErrorType.INTERNAL,
+                remediation="Check logs for details or try with different URLs",
+                details={
+                    "failed_urls": urls if urls else [],
+                    "error_details": [{
+                        "url": None,
+                        "error": str(e),
+                        "error_code": "EXTRACT_FAILED",
+                    }],
+                },
+            )
+        )
+
+
+# =============================================================================
 # Router Setup
 # =============================================================================
 
@@ -1122,6 +1451,12 @@ def _build_router() -> ActionRouter:
             name="node-findings",
             handler=_handle_node_findings,
             summary=_ACTION_SUMMARY["node-findings"],
+        ),
+        # Tavily extract action
+        ActionDefinition(
+            name="extract",
+            handler=_handle_extract,
+            summary=_ACTION_SUMMARY["extract"],
         ),
     ]
     return ActionRouter(tool_name="research", actions=definitions)

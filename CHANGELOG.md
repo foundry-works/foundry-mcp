@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.9.0b4] - 2026-01-25
+
+### Added
+
+- **Tavily API Enhancements**: Extended Tavily search provider with all parameters from the Tavily API spec and added new Extract endpoint support
+  - **New Search Parameters**:
+    - `search_depth`: Search mode - `"basic"` (default), `"advanced"` (2x credits), `"fast"`, `"ultra_fast"`
+    - `topic`: Search topic - `"general"` (default), `"news"`
+    - `days`: News recency limit (1-365 days, only when `topic="news"`)
+    - `include_images`: Include image results (default: false)
+    - `include_raw_content`: Get raw page content - `false`, `true`/`"markdown"`, or `"text"`
+    - `country`: ISO 3166-1 alpha-2 country code to boost results (e.g., `"US"`)
+    - `chunks_per_source`: Chunk count for advanced search (1-5, default: 3)
+    - `auto_parameters`: Let Tavily auto-configure based on query intent
+  - **Tavily Extract Provider** (`TavilyExtractProvider`): New provider for URL content extraction
+    - Extracts structured content from up to 10 URLs per request
+    - Parameters: `extract_depth` (`"basic"`/`"advanced"`), `include_images`, `format` (`"markdown"`/`"text"`), `query`, `chunks_per_source`
+    - SSRF protection: blocks private IPs, localhost, reserved ranges, suspicious schemes
+    - Partial failure handling: returns successful extractions even when some URLs fail
+    - Retry logic with exponential backoff matching search provider
+  - **Configuration Fields**: New `[research]` TOML config options
+    - `tavily_search_depth`, `tavily_topic`, `tavily_news_days`, `tavily_include_images`
+    - `tavily_country`, `tavily_chunks_per_source`, `tavily_auto_parameters`
+    - `tavily_extract_depth`, `tavily_extract_include_images`
+    - `tavily_extract_in_deep_research`: Enable extract as follow-up step in deep research
+    - `tavily_extract_max_urls`: Max URLs to extract per deep research run (default: 5)
+  - **Deep Research Integration**:
+    - `_get_tavily_search_kwargs()` method propagates config to search calls
+    - Research mode smart defaults: academic/technical modes prefer `"advanced"` depth
+    - Optional extract follow-up step when `tavily_extract_in_deep_research=true`
+  - **Security**: URL validation for extract with SSRF protection
+    - Blocks localhost, private IPs (10.x, 172.16.x, 192.168.x), link-local, loopback
+    - Blocks dangerous schemes (file://, gopher://, dict://, data://)
+    - DNS resolution with timeout to prevent DNS rebinding
+    - Max URL length (2048 chars), max content size (50KB per source)
+
+### Migration
+
+**Default behavior unchanged**: All new config fields have defaults that preserve existing behavior. Users not configuring Tavily options will see no change.
+
+**Credit cost awareness**: Using `search_depth="advanced"` doubles Tavily API credit usage. Consider `"basic"` for most queries, `"advanced"` only when deeper analysis is needed.
+
+**Configuration example**:
+```toml
+[research]
+# Search configuration
+tavily_search_depth = "basic"  # or "advanced" (2x credits), "fast", "ultra_fast"
+tavily_topic = "general"       # or "news"
+tavily_news_days = 7           # only when topic = "news"
+tavily_include_images = false
+tavily_country = "US"          # boost results from country
+tavily_chunks_per_source = 3   # 1-5, for advanced search
+tavily_auto_parameters = false # let Tavily auto-configure
+
+# Extract configuration
+tavily_extract_depth = "basic"           # or "advanced"
+tavily_extract_include_images = false
+tavily_extract_in_deep_research = false  # enable extract follow-up
+tavily_extract_max_urls = 5              # max URLs per deep research run
+```
+
 ## [0.9.0b3] - 2026-01-25
 
 ### Added

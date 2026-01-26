@@ -72,6 +72,85 @@ LLM configuration is documented in detail here:
 
 - [LLM Configuration Guide](guides/llm-configuration.md)
 
+## Research Configuration
+
+The `[research]` section controls deep research workflows including search provider
+settings. For full configuration options, see `samples/foundry-mcp.toml`.
+
+### Tavily Search Provider
+
+Tavily is a web search provider optimized for AI applications. Configure via
+environment variable or TOML:
+
+```bash
+export TAVILY_API_KEY="tvly-..."
+```
+
+#### Search Parameters
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `tavily_search_depth` | string | `"basic"` | Search mode: `"basic"`, `"advanced"` (2x credits), `"fast"`, `"ultra_fast"` |
+| `tavily_topic` | string | `"general"` | Search topic: `"general"`, `"news"` |
+| `tavily_news_days` | int | `null` | Days limit for news (1-365, only when `topic="news"`) |
+| `tavily_include_images` | bool | `false` | Include image results |
+| `tavily_country` | string | `null` | ISO 3166-1 alpha-2 code to boost results (e.g., `"US"`) |
+| `tavily_chunks_per_source` | int | `3` | Chunks per source for advanced search (1-5) |
+| `tavily_auto_parameters` | bool | `false` | Let Tavily auto-configure based on query |
+
+#### Extract Parameters
+
+Tavily Extract enables URL content extraction for deeper analysis.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `tavily_extract_depth` | string | `"basic"` | Extract mode: `"basic"`, `"advanced"` |
+| `tavily_extract_include_images` | bool | `false` | Include images in extraction |
+| `tavily_extract_in_deep_research` | bool | `false` | Enable extract as follow-up step |
+| `tavily_extract_max_urls` | int | `5` | Max URLs to extract per deep research run |
+
+#### Research Mode Smart Defaults
+
+When using deep research, parameters are adjusted based on `deep_research_mode`:
+
+| Mode | Search Depth | Source Prioritization |
+|------|-------------|----------------------|
+| `"general"` | `basic` | No preference |
+| `"academic"` | `advanced` | Journals, publishers, preprints |
+| `"technical"` | `advanced` | Official docs, arxiv, Stack Overflow |
+
+#### Example Configuration
+
+```toml
+[research]
+# Search provider credentials (prefer env vars in production)
+# tavily_api_key = "tvly-..."
+
+# Search parameters
+tavily_search_depth = "basic"      # "basic", "advanced" (2x credits), "fast", "ultra_fast"
+tavily_topic = "general"           # "general", "news"
+tavily_news_days = 7               # only when topic = "news"
+tavily_include_images = false
+tavily_country = "US"              # boost results from country
+tavily_chunks_per_source = 3       # 1-5, for advanced search
+tavily_auto_parameters = false     # let Tavily auto-configure
+
+# Extract parameters
+tavily_extract_depth = "basic"           # "basic", "advanced"
+tavily_extract_include_images = false
+tavily_extract_in_deep_research = false  # enable extract follow-up
+tavily_extract_max_urls = 5              # max URLs per deep research run
+
+# Deep research mode affects Tavily parameter selection
+deep_research_mode = "technical"   # "general", "academic", "technical"
+```
+
+#### Credit Cost Awareness
+
+- `search_depth="basic"` - Standard credit cost
+- `search_depth="advanced"` - 2x credit cost (use for deeper analysis)
+- `search_depth="fast"` / `"ultra_fast"` - Reduced latency, standard cost
+
 ## Specs directory resolution
 
 If you do not set `FOUNDRY_MCP_SPECS_DIR`, the CLI and server will attempt to

@@ -429,6 +429,15 @@ class ResearchConfig:
         google_api_key: API key for Google Custom Search (optional, reads from GOOGLE_API_KEY env var)
         google_cse_id: Google Custom Search Engine ID (optional, reads from GOOGLE_CSE_ID env var)
         semantic_scholar_api_key: API key for Semantic Scholar (optional, reads from SEMANTIC_SCHOLAR_API_KEY env var)
+        tavily_search_depth: Tavily search depth ("basic", "advanced", "fast", "ultra_fast")
+        tavily_topic: Tavily search topic ("general", "news")
+        tavily_news_days: Days limit for news search (1-365, only for topic="news")
+        tavily_include_images: Include image results in Tavily search
+        tavily_country: ISO country code to boost results from (e.g., "US")
+        tavily_chunks_per_source: Chunks per source for advanced search (1-5)
+        tavily_auto_parameters: Let Tavily auto-configure parameters based on query
+        tavily_extract_depth: Tavily extract depth ("basic", "advanced")
+        tavily_extract_include_images: Include images in Tavily extract results
         token_management_enabled: Master switch for token management features
         token_safety_margin: Fraction of budget to reserve as safety buffer (0.0-1.0)
         runtime_overhead: Tokens reserved for runtime overhead (e.g., Claude Code context)
@@ -519,6 +528,22 @@ class ResearchConfig:
     content_archive_enabled: bool = False  # Archive dropped content to disk
     content_archive_ttl_hours: int = 168  # TTL for archived content (7 days)
     research_archive_dir: Optional[str] = None  # Directory for archive storage
+
+    # Tavily search configuration
+    tavily_search_depth: str = "basic"  # "basic", "advanced", "fast", "ultra_fast"
+    tavily_topic: str = "general"  # "general", "news"
+    tavily_news_days: Optional[int] = None  # 1-365, only for topic="news"
+    tavily_include_images: bool = False
+    tavily_country: Optional[str] = None  # ISO 3166-1 alpha-2 code (e.g., "US")
+    tavily_chunks_per_source: int = 3  # 1-5, only for advanced search
+    tavily_auto_parameters: bool = False  # Let Tavily auto-configure based on query
+
+    # Tavily extract configuration
+    tavily_extract_depth: str = "basic"  # "basic", "advanced"
+    tavily_extract_include_images: bool = False
+    # Tavily extract integration with deep research
+    tavily_extract_in_deep_research: bool = False  # Enable extract as follow-up step
+    tavily_extract_max_urls: int = 5  # Max URLs to extract per deep research run
 
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
@@ -626,6 +651,20 @@ class ResearchConfig:
             google_api_key=data.get("google_api_key"),
             google_cse_id=data.get("google_cse_id"),
             semantic_scholar_api_key=data.get("semantic_scholar_api_key"),
+            # Tavily search configuration
+            tavily_search_depth=str(data.get("tavily_search_depth", "basic")),
+            tavily_topic=str(data.get("tavily_topic", "general")),
+            tavily_news_days=int(data["tavily_news_days"]) if data.get("tavily_news_days") is not None else None,
+            tavily_include_images=_parse_bool(data.get("tavily_include_images", False)),
+            tavily_country=data.get("tavily_country"),  # None or str
+            tavily_chunks_per_source=int(data.get("tavily_chunks_per_source", 3)),
+            tavily_auto_parameters=_parse_bool(data.get("tavily_auto_parameters", False)),
+            # Tavily extract configuration
+            tavily_extract_depth=str(data.get("tavily_extract_depth", "basic")),
+            tavily_extract_include_images=_parse_bool(data.get("tavily_extract_include_images", False)),
+            # Tavily extract in deep research
+            tavily_extract_in_deep_research=_parse_bool(data.get("tavily_extract_in_deep_research", False)),
+            tavily_extract_max_urls=int(data.get("tavily_extract_max_urls", 5)),
             # Token management configuration
             token_management_enabled=_parse_bool(
                 data.get("token_management_enabled", True)
@@ -650,6 +689,65 @@ class ResearchConfig:
             content_archive_ttl_hours=int(data.get("content_archive_ttl_hours", 168)),
             research_archive_dir=data.get("research_archive_dir"),
         )
+
+    def __post_init__(self) -> None:
+        """Validate Tavily configuration fields after initialization."""
+        self._validate_tavily_config()
+
+    def _validate_tavily_config(self) -> None:
+        """Validate all Tavily configuration fields.
+
+        Raises:
+            ValueError: If any Tavily config field has an invalid value.
+        """
+        import re
+
+        # Validate search_depth
+        valid_search_depths = {"basic", "advanced", "fast", "ultra_fast"}
+        if self.tavily_search_depth not in valid_search_depths:
+            raise ValueError(
+                f"Invalid tavily_search_depth: {self.tavily_search_depth!r}. "
+                f"Must be one of: {sorted(valid_search_depths)}"
+            )
+
+        # Validate topic
+        valid_topics = {"general", "news"}
+        if self.tavily_topic not in valid_topics:
+            raise ValueError(
+                f"Invalid tavily_topic: {self.tavily_topic!r}. "
+                f"Must be one of: {sorted(valid_topics)}"
+            )
+
+        # Validate news_days (1-365 or None)
+        if self.tavily_news_days is not None:
+            if not isinstance(self.tavily_news_days, int) or self.tavily_news_days < 1 or self.tavily_news_days > 365:
+                raise ValueError(
+                    f"Invalid tavily_news_days: {self.tavily_news_days!r}. "
+                    "Must be an integer between 1 and 365."
+                )
+
+        # Validate country (ISO 3166-1 alpha-2 or None)
+        if self.tavily_country is not None:
+            if not isinstance(self.tavily_country, str) or not re.match(r"^[A-Z]{2}$", self.tavily_country):
+                raise ValueError(
+                    f"Invalid tavily_country: {self.tavily_country!r}. "
+                    "Must be a 2-letter uppercase ISO 3166-1 alpha-2 code (e.g., 'US', 'GB')."
+                )
+
+        # Validate chunks_per_source (1-5)
+        if not isinstance(self.tavily_chunks_per_source, int) or self.tavily_chunks_per_source < 1 or self.tavily_chunks_per_source > 5:
+            raise ValueError(
+                f"Invalid tavily_chunks_per_source: {self.tavily_chunks_per_source!r}. "
+                "Must be an integer between 1 and 5."
+            )
+
+        # Validate extract_depth
+        valid_extract_depths = {"basic", "advanced"}
+        if self.tavily_extract_depth not in valid_extract_depths:
+            raise ValueError(
+                f"Invalid tavily_extract_depth: {self.tavily_extract_depth!r}. "
+                f"Must be one of: {sorted(valid_extract_depths)}"
+            )
 
     def get_provider_rate_limit(self, provider: str) -> int:
         """Get rate limit for a specific provider.
