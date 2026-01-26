@@ -887,15 +887,257 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         self.hooks = hooks or SupervisorHooks()
         self.orchestrator = SupervisorOrchestrator()
         self._search_providers: dict[str, SearchProvider] = {}
+        # Track last persistence time for throttling (see status_persistence_throttle_seconds)
+        self._last_persisted_at: datetime | None = None
+        # Track last persisted phase/iteration for change detection
+        self._last_persisted_phase: DeepResearchPhase | None = None
+        self._last_persisted_iteration: int | None = None
 
     def _audit_enabled(self) -> bool:
         """Return True if audit artifacts are enabled."""
         return bool(getattr(self.config, "deep_research_audit_artifacts", True))
 
+    def _sync_persistence_tracking_from_state(self, state: DeepResearchState) -> None:
+        """Sync persistence tracking fields from state metadata if available.
+
+        This ensures throttling works across workflow instances by loading
+        the last persisted timestamp/phase/iteration from persisted state.
+        """
+        if (
+            self._last_persisted_at is not None
+            and self._last_persisted_phase is not None
+            and self._last_persisted_iteration is not None
+        ):
+            return
+
+        meta = state.metadata.get("_status_persistence")
+        if not isinstance(meta, dict):
+            return
+
+        # Load last persisted timestamp
+        if self._last_persisted_at is None:
+            raw_ts = meta.get("last_persisted_at")
+            if isinstance(raw_ts, datetime):
+                ts = raw_ts
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                self._last_persisted_at = ts
+            elif isinstance(raw_ts, str):
+                try:
+                    ts = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    self._last_persisted_at = ts
+                except ValueError:
+                    pass
+
+        # Load last persisted phase
+        if self._last_persisted_phase is None:
+            raw_phase = meta.get("last_persisted_phase")
+            if isinstance(raw_phase, DeepResearchPhase):
+                self._last_persisted_phase = raw_phase
+            elif isinstance(raw_phase, str):
+                try:
+                    self._last_persisted_phase = DeepResearchPhase(raw_phase)
+                except ValueError:
+                    pass
+
+        # Load last persisted iteration
+        if self._last_persisted_iteration is None:
+            raw_iter = meta.get("last_persisted_iteration")
+            if isinstance(raw_iter, int):
+                self._last_persisted_iteration = raw_iter
+
+    def _is_terminal_state(self, state: DeepResearchState) -> bool:
+        """Check if state represents a terminal condition (completed or failed)."""
+        if state.completed_at is not None:
+            return True
+        if state.metadata.get("failed"):
+            return True
+        return False
+
+    def _should_persist_status(self, state: DeepResearchState) -> bool:
+        """Determine if state should be persisted based on throttle rules.
+
+        Priority (highest to lowest):
+        1. Terminal state (completed/failed) - always persist
+        2. Phase/iteration change - always persist
+        3. Throttle interval elapsed - persist if interval exceeded
+
+        A throttle_seconds of 0 means always persist (current behavior).
+
+        Args:
+            state: Current deep research state
+
+        Returns:
+            True if state should be persisted, False to skip
+        """
+        # Sync persisted tracking fields from state metadata if needed
+        self._sync_persistence_tracking_from_state(state)
+
+        # Priority 1: Terminal states always persist
+        if self._is_terminal_state(state):
+            return True
+
+        # Priority 2: Phase or iteration change always persists
+        if (
+            self._last_persisted_phase is not None
+            and state.phase != self._last_persisted_phase
+        ):
+            return True
+        if (
+            self._last_persisted_iteration is not None
+            and state.iteration != self._last_persisted_iteration
+        ):
+            return True
+
+        # Priority 3: Check throttle interval
+        throttle_seconds = getattr(
+            self.config, "status_persistence_throttle_seconds", 5
+        )
+
+        # 0 means always persist (backwards compatibility)
+        if throttle_seconds == 0:
+            return True
+
+        # No previous persistence - should persist
+        if self._last_persisted_at is None:
+            return True
+
+        # Check if throttle interval has elapsed
+        elapsed = (datetime.now(timezone.utc) - self._last_persisted_at).total_seconds()
+        return elapsed >= throttle_seconds
+
+    def _persist_state(self, state: DeepResearchState) -> None:
+        """Persist state and update tracking fields.
+
+        Updates _last_persisted_at, _last_persisted_phase, and
+        _last_persisted_iteration after successful save.
+
+        Args:
+            state: State to persist
+        """
+        now = datetime.now(timezone.utc)
+        state.metadata["_status_persistence"] = {
+            "last_persisted_at": now.isoformat(),
+            "last_persisted_phase": state.phase.value,
+            "last_persisted_iteration": state.iteration,
+        }
+        self.memory.save_deep_research(state)
+        logger.debug(
+            "Status persisted: research_id=%s phase=%s iteration=%d",
+            state.id,
+            state.phase.value,
+            state.iteration,
+        )
+        self._last_persisted_at = now
+        self._last_persisted_phase = state.phase
+        self._last_persisted_iteration = state.iteration
+
+    def _persist_state_if_needed(self, state: DeepResearchState) -> bool:
+        """Conditionally persist state based on throttle rules.
+
+        Args:
+            state: State to potentially persist
+
+        Returns:
+            True if state was persisted, False if skipped
+        """
+        if self._should_persist_status(state):
+            try:
+                self._persist_state(state)
+                return True
+            except Exception as exc:
+                logger.debug("Failed to persist state: %s", exc)
+                return False
+        logger.debug(
+            "Status persistence skipped (throttled): research_id=%s phase=%s iteration=%d",
+            state.id,
+            state.phase.value,
+            state.iteration,
+        )
+        return False
+
+    def _flush_state(self, state: DeepResearchState) -> None:
+        """Force-persist state, bypassing throttle rules.
+
+        Use this for workflow completion paths (success, failure, cancellation)
+        to ensure final state is always saved regardless of throttle interval.
+
+        This guarantees:
+        - Token usage/cache data is persisted
+        - Final status is captured
+        - Completion timestamp is saved
+
+        Args:
+            state: State to persist
+        """
+        self._persist_state(state)
+
     def _audit_path(self, research_id: str) -> Path:
         """Resolve audit artifact path for a research session."""
         # Use memory's base_path which is set from ServerConfig.get_research_dir()
         return self.memory.base_path / "deep_research" / f"{research_id}.audit.jsonl"
+
+    def _prepare_audit_payload(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Prepare audit payload based on configured verbosity level.
+
+        In 'full' mode: Returns data unchanged for complete audit trail.
+        In 'minimal' mode: Sets large text fields to null while preserving
+        metrics and schema shape for analysis compatibility.
+
+        Nulled fields in minimal mode:
+        - Top-level: system_prompt, user_prompt, raw_response, report, error, traceback
+        - Nested: findings[*].content, gaps[*].description
+
+        Preserved fields (always included):
+        - provider_id, model_used, tokens_used, duration_ms
+        - sources_added, report_length, parse_success
+        - All other scalar metrics
+
+        Args:
+            data: Original audit event data dictionary
+
+        Returns:
+            Processed data dictionary (same schema shape, potentially nulled values)
+        """
+        verbosity = self.config.audit_verbosity
+
+        # Full mode: return unchanged
+        if verbosity == "full":
+            return data
+
+        # Minimal mode: null out large text fields while preserving schema
+        result = dict(data)  # Shallow copy
+
+        # Top-level fields to null
+        text_fields = {
+            "system_prompt",
+            "user_prompt",
+            "raw_response",
+            "report",
+            "error",
+            "traceback",
+        }
+        for field in text_fields:
+            if field in result:
+                result[field] = None
+
+        # Handle nested findings array
+        if "findings" in result and isinstance(result["findings"], list):
+            result["findings"] = [
+                {**f, "content": None} if isinstance(f, dict) and "content" in f else f
+                for f in result["findings"]
+            ]
+
+        # Handle nested gaps array
+        if "gaps" in result and isinstance(result["gaps"], list):
+            result["gaps"] = [
+                {**g, "description": None} if isinstance(g, dict) and "description" in g else g
+                for g in result["gaps"]
+            ]
+
+        return result
 
     def _write_audit_event(
         self,
@@ -917,7 +1159,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             "research_id": research_id,
             "phase": state.phase.value if state else None,
             "iteration": state.iteration if state else None,
-            "data": data or {},
+            "data": self._prepare_audit_payload(data or {}),
         }
 
         try:
@@ -1666,11 +1908,9 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 state.last_status_check_at = datetime.now(timezone.utc)
                 # Only persist for completed tasks; active tasks hold state in-memory
                 # to avoid clobbering concurrent workflow saves (see comment at line 1750)
+                # Use throttle logic to reduce disk I/O for frequent status checks
                 if not is_active:
-                    try:
-                        self.memory.save_deep_research(state)
-                    except Exception as exc:
-                        logger.debug("Failed to save status check state: %s", exc)
+                    self._persist_state_if_needed(state)
 
                 metadata.update({
                     "original_query": state.original_query,
@@ -1717,7 +1957,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         # Track status check count for polling mitigation
         state.status_check_count += 1
         state.last_status_check_at = datetime.now(timezone.utc)
-        self.memory.save_deep_research(state)
+        # Use throttle logic to reduce disk I/O for frequent status checks
+        self._persist_state_if_needed(state)
 
         # Determine status string
         is_failed = bool(state.metadata.get("failed"))
@@ -1954,7 +2195,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         level="error",
                     )
                     state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self.memory.save_deep_research(state)
+                    self._flush_state(state)
                     return result
                 self.hooks.emit_phase_complete(state)
                 self._write_audit_event(
@@ -1996,7 +2237,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         level="error",
                     )
                     state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self.memory.save_deep_research(state)
+                    self._flush_state(state)
                     return result
                 self.hooks.emit_phase_complete(state)
                 self._write_audit_event(
@@ -2049,7 +2290,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         level="error",
                     )
                     state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self.memory.save_deep_research(state)
+                    self._flush_state(state)
                     return result
                 self.hooks.emit_phase_complete(state)
                 self._write_audit_event(
@@ -2086,7 +2327,7 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                         level="error",
                     )
                     state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self.memory.save_deep_research(state)
+                    self._flush_state(state)
                     return result
                 self.hooks.emit_phase_complete(state)
                 self._write_audit_event(
@@ -2184,8 +2425,8 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
             duration_ms = (time.perf_counter() - start_time) * 1000
             state.total_duration_ms += duration_ms
 
-            # Save final state
-            self.memory.save_deep_research(state)
+            # Flush final state (bypasses throttle to ensure completion is captured)
+            self._flush_state(state)
             self._write_audit_event(
                 state,
                 "workflow_complete",
@@ -3792,6 +4033,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 content=content,
                 priority=int_priority,
                 source_id=source.id,
+                source_ref=source,
                 protected=source.quality == SourceQuality.HIGH,  # Protect high-quality sources
             ))
 
@@ -3926,6 +4168,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 content=content,
                 priority=int_priority,
                 source_id=source.id,
+                source_ref=source,
                 protected=False,  # Sources can be dropped if needed
             ))
 

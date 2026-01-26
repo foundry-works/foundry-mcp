@@ -28,6 +28,8 @@ from foundry_mcp.core.research.token_management import (
     preflight_count,
     preflight_count_multiple,
     _PROVIDER_TOKENIZERS,
+    _get_cached_encoding,
+    _TIKTOKEN_AVAILABLE,
 )
 
 
@@ -395,6 +397,107 @@ class TestEstimateTokensCache:
         cleared = clear_token_cache()
         assert cleared == 2
         assert get_cache_stats()["size"] == 0
+
+
+# =============================================================================
+# Test: Encoding Cache (_get_cached_encoding)
+# =============================================================================
+
+
+class TestEncodingCache:
+    """Tests for _get_cached_encoding lru_cache behavior."""
+
+    def setup_method(self):
+        """Clear encoding cache before each test."""
+        _get_cached_encoding.cache_clear()
+
+    @pytest.mark.skipif(not _TIKTOKEN_AVAILABLE, reason="tiktoken not installed")
+    def test_cache_reuses_encoding_objects(self):
+        """Test cache returns the same encoding object for repeated calls."""
+        # First call
+        encoding1 = _get_cached_encoding("")
+        # Second call - should return cached object
+        encoding2 = _get_cached_encoding("")
+
+        # Same object identity (not just equality)
+        assert encoding1 is encoding2
+
+        # Verify cache was hit
+        cache_info = _get_cached_encoding.cache_info()
+        assert cache_info.hits >= 1
+        assert cache_info.misses == 1
+
+    @pytest.mark.skipif(not _TIKTOKEN_AVAILABLE, reason="tiktoken not installed")
+    def test_cache_reuses_for_same_model(self):
+        """Test cache returns same encoding for identical model names."""
+        encoding1 = _get_cached_encoding("gpt-4")
+        encoding2 = _get_cached_encoding("gpt-4")
+
+        assert encoding1 is encoding2
+
+        cache_info = _get_cached_encoding.cache_info()
+        assert cache_info.hits >= 1
+
+    @pytest.mark.skipif(not _TIKTOKEN_AVAILABLE, reason="tiktoken not installed")
+    def test_different_models_different_cache_entries(self):
+        """Test different model names create different cache entries."""
+        # Empty string gets default encoding
+        encoding_default = _get_cached_encoding("")
+        # Unknown model falls back to cl100k_base (same encoding but different cache key)
+        encoding_unknown = _get_cached_encoding("unknown-model-xyz")
+
+        cache_info = _get_cached_encoding.cache_info()
+        # Both should be misses (different keys)
+        assert cache_info.misses == 2
+
+    @pytest.mark.skipif(not _TIKTOKEN_AVAILABLE, reason="tiktoken not installed")
+    def test_token_counts_identical_with_cache(self):
+        """Test token counts are identical whether from cache or fresh."""
+        test_content = "Hello, this is a test of token counting!"
+
+        # Clear cache and get fresh encoding
+        _get_cached_encoding.cache_clear()
+        encoding_fresh = _get_cached_encoding("")
+        tokens_fresh = len(encoding_fresh.encode(test_content))
+
+        # Get cached encoding
+        encoding_cached = _get_cached_encoding("")
+        tokens_cached = len(encoding_cached.encode(test_content))
+
+        assert tokens_fresh == tokens_cached
+
+    @pytest.mark.skipif(not _TIKTOKEN_AVAILABLE, reason="tiktoken not installed")
+    def test_unknown_model_falls_back_to_cl100k_base(self):
+        """Test unknown model names fall back to cl100k_base encoding."""
+        # Get encoding for unknown model
+        encoding = _get_cached_encoding("definitely-not-a-real-model")
+
+        # Verify it can encode content (cl100k_base fallback works)
+        tokens = encoding.encode("test content")
+        assert len(tokens) > 0
+
+    @pytest.mark.skipif(not _TIKTOKEN_AVAILABLE, reason="tiktoken not installed")
+    def test_cache_maxsize_bound(self):
+        """Test cache respects maxsize=32 bound."""
+        # Fill cache with 32 different keys
+        for i in range(32):
+            _get_cached_encoding(f"model-{i}")
+
+        cache_info = _get_cached_encoding.cache_info()
+        assert cache_info.currsize <= 32
+
+        # Add one more - should evict oldest
+        _get_cached_encoding("model-overflow")
+        cache_info = _get_cached_encoding.cache_info()
+        assert cache_info.currsize <= 32
+
+    def test_graceful_error_when_tiktoken_unavailable(self):
+        """Test RuntimeError raised when tiktoken not available."""
+        if _TIKTOKEN_AVAILABLE:
+            pytest.skip("Test only runs when tiktoken is NOT installed")
+
+        with pytest.raises(RuntimeError, match="tiktoken is not available"):
+            _get_cached_encoding("")
 
 
 # =============================================================================

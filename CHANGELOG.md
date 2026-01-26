@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0b7] - 2026-01-26
+
+### Added
+
+- **Deep Research CPU Optimization**: Performance improvements to reduce CPU and I/O overhead in deep research workflows
+  - **Status Persistence Throttling**: New `status_persistence_throttle_seconds` config (default: 5) limits disk writes during research, persisting immediately only on phase/iteration changes or terminal states
+  - **Token Count Caching**: Content hash-based caching in `ResearchSource` eliminates redundant token estimation calls on workflow resume
+  - **Audit Verbosity Modes**: New `audit_verbosity` config option (`"full"` or `"minimal"`) controls JSONL audit payload size - minimal mode nulls large text fields while preserving schema shape for downstream compatibility
+
+### Changed
+
+- Status persistence now uses smart throttling instead of persisting after every operation
+- Token estimation skips already-cached sources, reducing CPU on resume operations
+
 ## [0.9.0b6] - 2026-01-26
 
 ### Added

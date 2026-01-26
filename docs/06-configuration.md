@@ -199,6 +199,58 @@ deep_research_max_retries = 2
 deep_research_retry_delay = 5.0
 ```
 
+### Audit Verbosity
+
+The `audit_verbosity` setting controls the size of JSONL audit payloads written during deep research workflows. This can reduce CPU spent on large audit writes while maintaining schema stability for downstream analysis tools.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `audit_verbosity` | string | `"full"` | Audit payload detail level: `"full"` or `"minimal"` |
+
+**Verbosity Modes:**
+
+| Mode | Behavior |
+|------|----------|
+| `full` | Original audit events unchanged - complete audit trail with all prompts, responses, and content |
+| `minimal` | Large text fields set to `null` while preserving schema shape and metrics |
+
+**Fields Nulled in Minimal Mode:**
+
+Top-level fields:
+- `system_prompt` - LLM system prompt text
+- `user_prompt` - LLM user prompt text
+- `raw_response` - Raw LLM response text
+- `report` - Generated report content
+- `error` - Error message text
+- `traceback` - Error traceback text
+
+Nested fields:
+- `findings[*].content` - Finding content text
+- `gaps[*].description` - Gap description text
+
+**Fields Preserved (Always Included):**
+
+Metrics and identifiers are always preserved for analysis compatibility:
+- `provider_id` - LLM provider identifier
+- `model_used` - Model identifier
+- `tokens_used` - Token consumption
+- `duration_ms` - Operation duration
+- `sources_added` - Source count
+- `report_length` - Report character count
+- `parse_success` - Parse status boolean
+
+**Schema Stability Guarantee:**
+
+Both modes produce the same JSON schema shape - all keys are present in both modes. The difference is that `minimal` mode sets large text values to `null`. This ensures downstream analysis tools can process audit files from either mode without schema changes.
+
+**Example Configuration:**
+
+```toml
+[research]
+# Reduce audit file size while maintaining schema
+audit_verbosity = "minimal"
+```
+
 ## Specs directory resolution
 
 If you do not set `FOUNDRY_MCP_SPECS_DIR`, the CLI and server will attempt to
