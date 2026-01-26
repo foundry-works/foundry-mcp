@@ -1,0 +1,708 @@
+{
+  "spec_id": "deep-research-cpu-optimization-2026-01-26-001",
+  "title": "deep-research-cpu-optimization",
+  "generated": "2026-01-26T15:22:41.491833Z",
+  "last_updated": "2026-01-26T15:43:36.144113Z",
+  "metadata": {
+    "description": "",
+    "mission": "Reduce CPU usage in the deep research workflow without changing research outputs, preserving behavior and content fidelity",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 0,
+    "assumptions": [
+      "Content fidelity must remain identical for a given run",
+      "Existing APIs and defaults are preserved unless new config flags are explicitly set",
+      "tiktoken library availability is optional (graceful fallback exists)",
+      "Byte-identical outputs refers to: final research reports, findings, gaps, and source attributions (NOT internal audit artifacts)",
+      "Benchmark workload: 3 deep research queries with 5 status polls each",
+      "Target: Status persistence writes reduced to \u226420% of baseline (5x reduction)",
+      "Target: Token estimation calls on resume should be 0 (full cache hit)",
+      "Measurement method: DEBUG log lines for persistence and estimation calls, compare before/after"
+    ],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "deep-research-cpu-optimization",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4"
+      ],
+      "total_tasks": 24,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Throttle Status Persistence",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5",
+        "task-1-6",
+        "verify-1-1"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Reduce disk I/O by adding a minimum interval between status-save operations"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add status_persistence_throttle_seconds config",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add status_persistence_throttle_seconds: int = 5 to ResearchConfig with validation (must be >= 0, where 0 means always persist)",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "Config field added with default value 5",
+          "Validation rejects negative values",
+          "Value of 0 means always persist (current behavior)"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Add _last_persisted_at tracking field",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add _last_persisted_at: datetime | None tracking field to DeepResearchRunner",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Field initialized to None",
+          "Field updated when state is persisted"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Modify _get_status to throttle persistence",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Modify _get_status to only persist when: phase/iteration changes, terminal state reached, or throttle interval elapsed. Priority: terminal > phase change > throttle",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Always persist on phase/iteration change",
+          "Always persist on terminal state (completed/failed)",
+          "Only persist when throttle interval elapsed otherwise",
+          "status_check_count and last_status_check_at updated in memory"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "Add unit tests for throttle behavior",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add unit tests for throttle edge cases: throttle_seconds=0, terminal state during throttle, phase change during throttle",
+        "file_path": "tests/unit/research/test_deep_research.py",
+        "acceptance_criteria": [
+          "Test throttle_seconds=0 always persists",
+          "Test terminal state persists even during throttle",
+          "Test phase change persists even during throttle",
+          "Test normal throttle behavior"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Fidelity review Phase 1",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify implementation matches spec requirements for throttle status persistence",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Token Count Caching Across Sessions",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "task-2-5",
+        "task-2-6",
+        "verify-2-1"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Persist per-source token counts keyed by provider/model and content hash to avoid re-estimation after process restarts"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Add _content_hash helper to ResearchSource",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add _content_hash() helper method returning first 32 chars of SHA-256 of content (128-bit collision resistance)",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Returns 32-char hex string",
+          "Deterministic for same content",
+          "Handles empty/None content gracefully"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Define token cache schema in source metadata",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Define token cache schema: metadata['_token_cache'] = {'v': 1, 'counts': {'{hash_32}:{len}:{provider}:{model}': count}}. Key includes content length for additional collision protection.",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "Schema versioned with 'v' field",
+          "Key includes 32-char hash + content length + provider + model",
+          "Underscore prefix marks as internal"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Modify ContextBudgetManager for cached token lookup",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Check for cached token count in ResearchSource.metadata before estimation, store computed counts with FIFO bounds (max 50 entries, oldest evicted when full). Dict operations are atomic for single assignments.",
+        "file_path": "src/foundry_mcp/core/research/context_budget.py",
+        "acceptance_criteria": [
+          "Cache hit returns stored count without re-estimation",
+          "Cache miss computes and stores count",
+          "FIFO eviction when exceeding 50 entries (oldest key removed)",
+          "No complex locking needed - dict single-key ops are thread-safe"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "Add _internal_fields exclusion for _token_cache",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Ensure _token_cache is excluded from API response serialization via _internal_fields pattern",
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "acceptance_criteria": [
+          "_token_cache not present in API responses",
+          "Field still persisted to state files"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-5": {
+      "type": "task",
+      "title": "Add unit tests for token cache behavior",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add tests for cache hit/miss, FIFO eviction, persistence across sessions, and backward compatibility with old state files",
+        "file_path": "tests/unit/research/test_context_budget.py",
+        "acceptance_criteria": [
+          "Test cache hit returns cached value",
+          "Test cache miss computes and stores",
+          "Test FIFO eviction at 50 entries (oldest removed)",
+          "Test loading old state without _token_cache",
+          "Test persistence/reload preserves cache"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Fidelity review Phase 2",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify implementation matches spec requirements for token count caching",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Cache Tokenizer Encodings",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "task-3-3",
+        "verify-3-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Add module-level cache for tiktoken encodings to reduce overhead from repeated encoding lookups"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Add lru_cache for tokenizer encodings",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add @functools.lru_cache(maxsize=32) decorated _get_cached_encoding(model_name: str) helper function",
+        "file_path": "src/foundry_mcp/core/research/token_management.py",
+        "acceptance_criteria": [
+          "Function decorated with lru_cache",
+          "maxsize=32 to bound memory",
+          "Returns tiktoken encoding object"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Modify _estimate_with_tiktoken to use cached encodings",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update _estimate_with_tiktoken to call _get_cached_encoding instead of directly calling tiktoken functions",
+        "file_path": "src/foundry_mcp/core/research/token_management.py",
+        "acceptance_criteria": [
+          "Uses cached encoding getter",
+          "Graceful fallback when tiktoken unavailable",
+          "Token counts unchanged"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Add unit tests for encoding cache",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add tests verifying encoding cache reuses objects and produces identical token counts",
+        "file_path": "tests/unit/research/test_token_management.py",
+        "acceptance_criteria": [
+          "Test cache reuses encoding objects",
+          "Test token counts identical with/without cache",
+          "Test graceful fallback when tiktoken unavailable"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Fidelity review Phase 3",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify implementation matches spec requirements for encoding caching",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Optional Audit Payload Reduction",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "task-4-5",
+        "verify-4-1"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Add configurable audit verbosity levels to reduce CPU spent on large JSONL audit writes while maintaining schema stability"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Add audit_verbosity config option",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add audit_verbosity: str = 'full' to ResearchConfig with validation for allowed values ('full', 'minimal')",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "Config field added with default 'full'",
+          "Validation rejects invalid values",
+          "Clear error message for invalid input"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Add _prepare_audit_payload helper",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add helper that in 'full' mode returns event unchanged, in 'minimal' mode sets these fields to null: data.system_prompt, data.user_prompt, data.raw_response, data.report, data.error, data.traceback, data.findings[*].content, data.gaps[*].description. Preserves: provider_id, model_used, tokens_used, duration_ms, sources_added, report_length, parse_success.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Full mode: event unchanged",
+          "Minimal mode: prompt/response/error fields set to null",
+          "Nested fields (findings.content, gaps.description) also nulled",
+          "Metrics fields preserved (tokens_used, duration_ms, etc)",
+          "Schema shape identical (same keys present)"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Integrate audit verbosity in event writing",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Modify audit event writing to call _prepare_audit_payload based on config setting",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Reads verbosity from config",
+          "Applies payload preparation before writing",
+          "Default behavior unchanged"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Update documentation for audit_verbosity",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Document the new audit_verbosity config flag including: schema stability guarantee, exact list of fields nulled in minimal mode (system_prompt, user_prompt, raw_response, report, error, traceback, findings[*].content, gaps[*].description), and fields preserved (metrics).",
+        "file_path": "docs/deep-research.md",
+        "acceptance_criteria": [
+          "Config flag documented with allowed values",
+          "Schema stability guarantee explained",
+          "Exact field list for nulled fields documented",
+          "Preserved metrics fields listed"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "Add unit tests for audit verbosity modes",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add tests asserting schema shape identical in both modes, content differs only in documented redacted fields, and nested field handling works correctly",
+        "file_path": "tests/unit/research/test_deep_research.py",
+        "acceptance_criteria": [
+          "Test full mode has complete data",
+          "Test minimal mode has null for documented fields",
+          "Test schema keys identical in both modes",
+          "Test nested fields (findings, gaps) handled correctly"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Fidelity review Phase 4",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify implementation matches spec requirements for audit payload reduction",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "Add explicit state flush on workflow completion",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Ensure final state save in _run_orchestration completion path regardless of throttle interval. This guarantees token cache and final status are persisted even if throttle hasn't elapsed.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-6": {
+      "type": "task",
+      "title": "Add DEBUG logging for status persistence",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add DEBUG log line when status is persisted to disk to enable benchmark measurement of write reduction",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-6": {
+      "type": "task",
+      "title": "Add DEBUG logging for token estimation",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add DEBUG log line for token estimation calls (cache hit vs miss) to enable benchmark measurement",
+        "file_path": "src/foundry_mcp/core/research/context_budget.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": []
+}
