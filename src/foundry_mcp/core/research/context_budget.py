@@ -64,7 +64,7 @@ from enum import Enum
 from typing import Any, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 from foundry_mcp.core.research.token_management import estimate_tokens
-from foundry_mcp.core.research.models import ConfidenceLevel, SourceQuality
+from foundry_mcp.core.research.models import ConfidenceLevel, ResearchSource, SourceQuality
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,9 @@ TRUNCATION_MARKER = " [... truncated]"
 
 # Characters per token estimate for truncation calculations
 CHARS_PER_TOKEN = 4
+
+# Maximum entries in per-source token cache (FIFO eviction)
+MAX_TOKEN_CACHE_ENTRIES = 50
 
 
 # =============================================================================
@@ -309,6 +312,7 @@ class ContentItem:
         content: Text content to be included in the context
         priority: Priority level (1 = highest, higher numbers = lower priority)
         source_id: Optional identifier of the source (e.g., ResearchSource.id)
+        source_ref: Optional ResearchSource object for token cache reuse
         token_count: Pre-computed token count (if None, will be estimated)
         protected: If True, item must not be dropped during allocation.
             Use for critical content like citations or key findings.
@@ -335,6 +339,7 @@ class ContentItem:
     content: str
     priority: int = 1
     source_id: Optional[str] = None
+    source_ref: Optional[ResearchSource] = None
     token_count: Optional[int] = None
     protected: bool = False
 
@@ -1512,19 +1517,87 @@ class ContextBudgetManager:
     def _get_item_tokens(self, item: Any) -> int:
         """Get or estimate token count for an item.
 
+        For ResearchSource items, checks the internal token cache first.
+        On cache miss, computes the token count and stores it with FIFO
+        eviction when the cache exceeds MAX_TOKEN_CACHE_ENTRIES (50).
+
         Args:
             item: Content item (must have 'content' attribute)
 
         Returns:
-            Token count (from item.tokens if present, else estimated)
+            Token count (from cache, item.tokens if present, else estimated)
         """
         # Check for pre-computed tokens
         if hasattr(item, "tokens") and item.tokens is not None:
             return item.tokens
 
+        # For ResearchSource (direct or attached to content item), check cached token count
+        source_ref: Optional[ResearchSource] = None
+        if isinstance(item, ResearchSource):
+            source_ref = item
+        else:
+            candidate = getattr(item, "source_ref", None)
+            if isinstance(candidate, ResearchSource):
+                source_ref = candidate
+
+        if source_ref is not None and self._provider and self._model:
+            cached = source_ref._get_cached_token_count(self._provider, self._model)
+            if cached is not None:
+                logger.debug(
+                    f"Token cache hit for {source_ref.id}: {cached} tokens "
+                    f"(provider={self._provider}, model={self._model})"
+                )
+                return cached
+
         # Estimate from content
         content = getattr(item, "content", "")
-        return self._estimate_tokens(content)
+        tokens = self._estimate_tokens(content)
+
+        # For ResearchSource, store in cache with FIFO eviction
+        if source_ref is not None and self._provider and self._model:
+            self._store_token_count_with_eviction(source_ref, tokens)
+            logger.debug(
+                f"Token cache miss for {source_ref.id}: computed {tokens} tokens "
+                f"(provider={self._provider}, model={self._model})"
+            )
+
+        return tokens
+
+    def _store_token_count_with_eviction(
+        self, source: ResearchSource, count: int
+    ) -> None:
+        """Store token count in source cache with FIFO eviction.
+
+        If the cache exceeds MAX_TOKEN_CACHE_ENTRIES, removes the oldest
+        entry before adding the new one. Dict key insertion order is
+        preserved in Python 3.7+, so we remove the first key for FIFO.
+
+        Args:
+            source: ResearchSource to update
+            count: Token count to store
+        """
+        if not self._provider or not self._model:
+            return
+
+        # Ensure cache exists
+        if "_token_cache" not in source.metadata:
+            source.metadata["_token_cache"] = {"v": 1, "counts": {}}
+
+        cache = source.metadata["_token_cache"]
+        if "counts" not in cache:
+            cache["counts"] = {}
+
+        counts = cache["counts"]
+
+        # FIFO eviction if at capacity
+        while len(counts) >= MAX_TOKEN_CACHE_ENTRIES:
+            # Remove oldest entry (first key in insertion order)
+            oldest_key = next(iter(counts))
+            del counts[oldest_key]
+            logger.debug(f"Token cache eviction: removed {oldest_key}")
+
+        # Store new count
+        source._set_cached_token_count(self._provider, self._model, count)
 
     def _sort_by_priority(self, items: Sequence[Any]) -> list[Any]:
         """Sort items by priority (1 = highest, first).

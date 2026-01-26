@@ -1195,13 +1195,18 @@ def _handle_extract(
         source_dicts = []
         succeeded_urls = set()
         for src in sources:
+            metadata = (
+                src.public_metadata()
+                if hasattr(src, "public_metadata")
+                else src.metadata
+            )
             src_dict = {
                 "url": src.url,
                 "title": src.title,
                 "source_type": src.source_type.value if src.source_type else "web",
                 "snippet": src.snippet,
                 "content": src.content,
-                "metadata": src.metadata,
+                "metadata": metadata,
             }
             source_dicts.append(src_dict)
             if src.url:

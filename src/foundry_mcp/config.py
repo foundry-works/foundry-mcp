@@ -301,7 +301,6 @@ class MetricsPersistenceConfig:
 
 
 @dataclass
-@dataclass
 class RunnerConfig:
     """Configuration for a test runner (pytest, go, npm, etc.).
 
@@ -450,6 +449,7 @@ class ResearchConfig:
         content_archive_enabled: Archive dropped/compressed content to disk
         content_archive_ttl_hours: TTL for archived content in hours (default: 168 = 7 days)
         research_archive_dir: Directory for content archive storage (default: research_dir/.archive)
+        status_persistence_throttle_seconds: Minimum seconds between status saves (default: 5, 0 = always persist)
     """
 
     enabled: bool = True
@@ -544,6 +544,12 @@ class ResearchConfig:
     # Tavily extract integration with deep research
     tavily_extract_in_deep_research: bool = False  # Enable extract as follow-up step
     tavily_extract_max_urls: int = 5  # Max URLs to extract per deep research run
+
+    # Status persistence throttling (reduces disk I/O during deep research)
+    status_persistence_throttle_seconds: int = 5  # Minimum seconds between status saves (0 = always persist)
+
+    # Audit verbosity level for deep research artifact writes
+    audit_verbosity: str = "full"  # "full" or "minimal" - controls JSONL audit payload size
 
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
@@ -688,11 +694,19 @@ class ResearchConfig:
             ),
             content_archive_ttl_hours=int(data.get("content_archive_ttl_hours", 168)),
             research_archive_dir=data.get("research_archive_dir"),
+            # Status persistence throttling
+            status_persistence_throttle_seconds=int(
+                data.get("status_persistence_throttle_seconds", 5)
+            ),
+            # Audit verbosity
+            audit_verbosity=str(data.get("audit_verbosity", "full")),
         )
 
     def __post_init__(self) -> None:
-        """Validate Tavily configuration fields after initialization."""
+        """Validate configuration fields after initialization."""
         self._validate_tavily_config()
+        self._validate_status_persistence_config()
+        self._validate_audit_verbosity_config()
 
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.
@@ -747,6 +761,33 @@ class ResearchConfig:
             raise ValueError(
                 f"Invalid tavily_extract_depth: {self.tavily_extract_depth!r}. "
                 f"Must be one of: {sorted(valid_extract_depths)}"
+            )
+
+    def _validate_status_persistence_config(self) -> None:
+        """Validate status persistence configuration fields.
+
+        Raises:
+            ValueError: If status_persistence_throttle_seconds is negative.
+        """
+        if self.status_persistence_throttle_seconds < 0:
+            raise ValueError(
+                f"Invalid status_persistence_throttle_seconds: "
+                f"{self.status_persistence_throttle_seconds!r}. "
+                "Must be >= 0 (0 means always persist, positive values set "
+                "minimum seconds between status saves)."
+            )
+
+    def _validate_audit_verbosity_config(self) -> None:
+        """Validate audit verbosity configuration field.
+
+        Raises:
+            ValueError: If audit_verbosity has an invalid value.
+        """
+        valid_verbosity_levels = {"full", "minimal"}
+        if self.audit_verbosity not in valid_verbosity_levels:
+            raise ValueError(
+                f"Invalid audit_verbosity: {self.audit_verbosity!r}. "
+                f"Must be one of: {sorted(valid_verbosity_levels)}"
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:

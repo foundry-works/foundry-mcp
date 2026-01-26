@@ -5,6 +5,7 @@ multi-model consensus, hypothesis-driven investigation, and creative
 brainstorming workflows.
 """
 
+import hashlib
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
@@ -1168,6 +1169,94 @@ class ResearchSource(BaseModel):
     )
     discovered_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def _content_hash(self) -> str:
+        """Generate a hash of the source content for cache keying.
+
+        Returns the first 32 characters of the SHA-256 hex digest,
+        providing 128 bits of collision resistance. This hash is
+        deterministic for the same content and can be used as a
+        cache key for token count caching across sessions.
+
+        Returns:
+            32-character hex string. Returns hash of empty string
+            if content is None or empty.
+        """
+        content = self.content or ""
+        return hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
+
+    def _token_cache_key(self, provider: str, model: str) -> str:
+        """Generate a cache key for token count lookup.
+
+        The key format includes content hash, content length, provider,
+        and model to ensure uniqueness. Content length provides additional
+        collision protection beyond the 32-char hash.
+
+        Args:
+            provider: Provider ID (e.g., "openai", "anthropic")
+            model: Model name (e.g., "gpt-4", "claude-3")
+
+        Returns:
+            Cache key in format "{hash_32}:{length}:{provider}:{model}"
+        """
+        content_len = len(self.content) if self.content else 0
+        return f"{self._content_hash()}:{content_len}:{provider}:{model}"
+
+    def _get_cached_token_count(self, provider: str, model: str) -> Optional[int]:
+        """Retrieve cached token count for this source.
+
+        Looks up the token count in the internal _token_cache metadata
+        field. Returns None if no cache exists or if the key is not found.
+
+        Args:
+            provider: Provider ID
+            model: Model name
+
+        Returns:
+            Cached token count, or None if not cached
+        """
+        cache = self.metadata.get("_token_cache")
+        if not cache or cache.get("v") != 1:
+            return None
+        key = self._token_cache_key(provider, model)
+        return cache.get("counts", {}).get(key)
+
+    def _set_cached_token_count(self, provider: str, model: str, count: int) -> None:
+        """Store token count in the internal cache.
+
+        Initializes the cache structure if needed and stores the count
+        under the appropriate key. The cache uses version 1 schema with
+        underscore prefix to mark it as internal.
+
+        Schema: metadata['_token_cache'] = {
+            'v': 1,
+            'counts': {'{hash_32}:{len}:{provider}:{model}': count, ...}
+        }
+
+        Args:
+            provider: Provider ID
+            model: Model name
+            count: Token count to cache
+        """
+        if "_token_cache" not in self.metadata:
+            self.metadata["_token_cache"] = {"v": 1, "counts": {}}
+        cache = self.metadata["_token_cache"]
+        if "counts" not in cache:
+            cache["counts"] = {}
+        key = self._token_cache_key(provider, model)
+        cache["counts"][key] = count
+
+    def public_metadata(self) -> dict[str, Any]:
+        """Return metadata with internal fields excluded.
+
+        Filters out metadata keys starting with underscore (e.g., _token_cache)
+        for API responses. Internal fields are still persisted to state files
+        via model_dump().
+
+        Returns:
+            Dict with internal fields (underscore-prefixed keys) removed.
+        """
+        return {k: v for k, v in self.metadata.items() if not k.startswith("_")}
 
 
 class ResearchFinding(BaseModel):

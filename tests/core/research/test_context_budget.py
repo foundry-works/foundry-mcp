@@ -511,3 +511,271 @@ class TestEdgeCases:
             allocated_tokens=0,
         )
         assert item.allocation_ratio == 1.0
+
+
+# =============================================================================
+# Test: Token Cache Behavior (Phase 2)
+# =============================================================================
+
+
+class TestTokenCacheResearchSource:
+    """Tests for ResearchSource token caching helpers."""
+
+    def test_content_hash_deterministic(self):
+        """Test _content_hash is deterministic for same content."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source1 = ResearchSource(title="Test", content="hello world")
+        source2 = ResearchSource(title="Different", content="hello world")
+
+        assert source1._content_hash() == source2._content_hash()
+
+    def test_content_hash_length(self):
+        """Test _content_hash returns 32 characters."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="some content")
+        assert len(source._content_hash()) == 32
+
+    def test_content_hash_handles_none(self):
+        """Test _content_hash handles None content gracefully."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content=None)
+        # Should return hash of empty string
+        hash_result = source._content_hash()
+        assert len(hash_result) == 32
+
+    def test_token_cache_key_format(self):
+        """Test _token_cache_key includes all components."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello")
+        key = source._token_cache_key("openai", "gpt-4")
+
+        parts = key.split(":")
+        assert len(parts) == 4
+        assert len(parts[0]) == 32  # hash
+        assert parts[1] == "5"  # content length
+        assert parts[2] == "openai"
+        assert parts[3] == "gpt-4"
+
+    def test_cache_set_and_get(self):
+        """Test _set_cached_token_count and _get_cached_token_count."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello world")
+        source._set_cached_token_count("openai", "gpt-4", 150)
+
+        cached = source._get_cached_token_count("openai", "gpt-4")
+        assert cached == 150
+
+    def test_cache_miss_returns_none(self):
+        """Test _get_cached_token_count returns None on miss."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello")
+        cached = source._get_cached_token_count("openai", "gpt-4")
+        assert cached is None
+
+    def test_cache_schema_version(self):
+        """Test cache has version field."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello")
+        source._set_cached_token_count("openai", "gpt-4", 100)
+
+        cache = source.metadata.get("_token_cache")
+        assert cache is not None
+        assert cache.get("v") == 1
+
+    def test_public_metadata_excludes_cache(self):
+        """Test public_metadata() excludes _token_cache."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello")
+        source.metadata["public_field"] = "visible"
+        source._set_cached_token_count("openai", "gpt-4", 100)
+
+        public = source.public_metadata()
+        assert "_token_cache" not in public
+        assert "public_field" in public
+
+
+class TestTokenCacheContextBudgetManager:
+    """Tests for ContextBudgetManager token caching integration."""
+
+    def test_cache_hit_returns_cached_value(self):
+        """Test cache hit returns stored value without re-estimation."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        manager = ContextBudgetManager(provider="openai", model="gpt-4")
+        source = ResearchSource(title="Test", content="hello world")
+
+        # Pre-populate cache with known value
+        source._set_cached_token_count("openai", "gpt-4", 999)
+
+        tokens = manager._get_item_tokens(source)
+        assert tokens == 999
+
+    def test_content_item_source_ref_uses_cache(self):
+        """ContentItem with source_ref should use cached token count."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        manager = ContextBudgetManager(provider="openai", model="gpt-4")
+        source = ResearchSource(title="Test", content="hello world")
+        source._set_cached_token_count("openai", "gpt-4", 321)
+
+        item = ContentItem(
+            id=source.id,
+            content=source.content or "",
+            priority=1,
+            source_id=source.id,
+            source_ref=source,
+        )
+
+        tokens = manager._get_item_tokens(item)
+        assert tokens == 321
+
+    def test_content_item_source_ref_stores_cache_on_miss(self):
+        """ContentItem with source_ref should populate cache on miss."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        manager = ContextBudgetManager(
+            provider="openai",
+            model="gpt-4",
+            token_estimator=lambda _: 42,
+        )
+        source = ResearchSource(title="Test", content="hello")
+
+        item = ContentItem(
+            id=source.id,
+            content=source.content or "",
+            priority=1,
+            source_id=source.id,
+            source_ref=source,
+        )
+
+        tokens = manager._get_item_tokens(item)
+        assert tokens == 42
+        assert source._get_cached_token_count("openai", "gpt-4") == 42
+
+    def test_cache_miss_computes_and_stores(self):
+        """Test cache miss computes and stores value."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        manager = ContextBudgetManager(provider="openai", model="gpt-4")
+        source = ResearchSource(title="Test", content="hello world")
+
+        # Initially no cache
+        assert source._get_cached_token_count("openai", "gpt-4") is None
+
+        # First call computes and stores
+        tokens = manager._get_item_tokens(source)
+        assert tokens > 0
+
+        # Cache should now exist
+        cached = source._get_cached_token_count("openai", "gpt-4")
+        assert cached == tokens
+
+    def test_fifo_eviction_at_50_entries(self):
+        """Test FIFO eviction when cache exceeds 50 entries."""
+        from foundry_mcp.core.research.context_budget import MAX_TOKEN_CACHE_ENTRIES
+        from foundry_mcp.core.research.models import ResearchSource
+
+        manager = ContextBudgetManager(provider="openai", model="gpt-4")
+        source = ResearchSource(title="Test", content="test content")
+
+        # Pre-populate cache to near limit
+        for i in range(MAX_TOKEN_CACHE_ENTRIES - 1):
+            source._set_cached_token_count(f"provider{i}", f"model{i}", i + 100)
+
+        assert len(source.metadata["_token_cache"]["counts"]) == MAX_TOKEN_CACHE_ENTRIES - 1
+
+        # Add one more via manager (triggers eviction logic)
+        manager._store_token_count_with_eviction(source, 999)
+
+        # Should still be at or under limit
+        assert len(source.metadata["_token_cache"]["counts"]) <= MAX_TOKEN_CACHE_ENTRIES
+
+    def test_fifo_evicts_oldest_entry(self):
+        """Test FIFO eviction removes the oldest entry."""
+        from foundry_mcp.core.research.context_budget import MAX_TOKEN_CACHE_ENTRIES
+        from foundry_mcp.core.research.models import ResearchSource
+
+        manager = ContextBudgetManager(provider="openai", model="gpt-4")
+        source = ResearchSource(title="Test", content="test content")
+
+        # Add first entry (this will be oldest)
+        first_key = "oldest:0:first:model"
+        source.metadata["_token_cache"] = {"v": 1, "counts": {first_key: 1}}
+
+        # Fill to capacity
+        for i in range(MAX_TOKEN_CACHE_ENTRIES - 1):
+            source.metadata["_token_cache"]["counts"][f"key{i}:0:p{i}:m{i}"] = i + 2
+
+        assert len(source.metadata["_token_cache"]["counts"]) == MAX_TOKEN_CACHE_ENTRIES
+        assert first_key in source.metadata["_token_cache"]["counts"]
+
+        # Add one more - should evict oldest
+        manager._store_token_count_with_eviction(source, 999)
+
+        # First key should be gone (evicted)
+        assert first_key not in source.metadata["_token_cache"]["counts"]
+
+    def test_loading_old_state_without_cache(self):
+        """Test backward compatibility with old state files lacking _token_cache."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        # Simulate loading old state without cache
+        source = ResearchSource(title="Old", content="legacy content")
+        # metadata is empty dict by default - simulates old state
+
+        # Should work without error
+        cached = source._get_cached_token_count("openai", "gpt-4")
+        assert cached is None
+
+        # Should be able to add cache
+        source._set_cached_token_count("openai", "gpt-4", 100)
+        assert source._get_cached_token_count("openai", "gpt-4") == 100
+
+    def test_persistence_preserves_cache(self):
+        """Test that cache is preserved through model_dump/model_validate cycle."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello")
+        source._set_cached_token_count("openai", "gpt-4", 150)
+
+        # Serialize
+        data = source.model_dump(mode="json")
+        assert "_token_cache" in data["metadata"]
+
+        # Deserialize
+        restored = ResearchSource.model_validate(data)
+        cached = restored._get_cached_token_count("openai", "gpt-4")
+        assert cached == 150
+
+    def test_cache_different_providers(self):
+        """Test caching works independently for different providers."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        source = ResearchSource(title="Test", content="hello")
+        source._set_cached_token_count("openai", "gpt-4", 100)
+        source._set_cached_token_count("anthropic", "claude-3", 120)
+
+        assert source._get_cached_token_count("openai", "gpt-4") == 100
+        assert source._get_cached_token_count("anthropic", "claude-3") == 120
+
+    def test_cache_ignored_without_provider(self):
+        """Test that caching is skipped when provider/model not set."""
+        from foundry_mcp.core.research.models import ResearchSource
+
+        # Manager without provider/model
+        manager = ContextBudgetManager()
+        source = ResearchSource(title="Test", content="hello world")
+
+        # Should compute but not cache
+        tokens = manager._get_item_tokens(source)
+        assert tokens > 0
+        assert source._get_cached_token_count("", "") is None
+        assert "_token_cache" not in source.metadata

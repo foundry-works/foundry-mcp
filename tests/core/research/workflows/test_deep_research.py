@@ -1412,3 +1412,507 @@ class TestDeepResearchActionHandlers:
                 cursor="dr-0",
                 completed_only=False,
             )
+
+
+# =============================================================================
+# Throttle Behavior Tests
+# =============================================================================
+
+
+class TestStatusPersistenceThrottle:
+    """Tests for status persistence throttling behavior.
+
+    Validates the throttle logic that reduces disk I/O during frequent
+    status checks by enforcing a minimum interval between saves.
+    """
+
+    @pytest.fixture
+    def workflow_with_throttle(self, mock_memory, tmp_path: Path):
+        """Create a workflow with throttle configuration."""
+        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        config = ResearchConfig(status_persistence_throttle_seconds=5)
+        workflow = DeepResearchWorkflow(config, mock_memory)
+        return workflow
+
+    @pytest.fixture
+    def workflow_zero_throttle(self, mock_memory, tmp_path: Path):
+        """Create a workflow with zero throttle (always persist)."""
+        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        config = ResearchConfig(status_persistence_throttle_seconds=0)
+        workflow = DeepResearchWorkflow(config, mock_memory)
+        return workflow
+
+    def test_throttle_zero_always_persists(
+        self, workflow_zero_throttle, sample_deep_research_state
+    ):
+        """Throttle=0 should always return True (always persist)."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_zero_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = state.iteration
+
+        # Should still persist with zero throttle
+        assert workflow._should_persist_status(state) is True
+
+    def test_throttle_first_call_always_persists(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """First call (no previous persistence) should always persist."""
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # No previous persistence
+        assert workflow._last_persisted_at is None
+
+        # Should persist
+        assert workflow._should_persist_status(state) is True
+
+    def test_throttle_blocks_immediate_second_call(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """Immediate second call should be blocked by throttle."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = state.iteration
+
+        # Should NOT persist (throttle active)
+        assert workflow._should_persist_status(state) is False
+
+    def test_throttle_uses_persisted_metadata_across_instances(
+        self, mock_memory, sample_deep_research_state
+    ):
+        """Throttle should respect persisted tracking data across instances."""
+        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        config = ResearchConfig(status_persistence_throttle_seconds=5)
+        state = sample_deep_research_state
+
+        workflow1 = DeepResearchWorkflow(config, mock_memory)
+        workflow1._persist_state(state)
+
+        workflow2 = DeepResearchWorkflow(config, mock_memory)
+        assert workflow2._should_persist_status(state) is False
+
+    def test_throttle_allows_after_interval_elapsed(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """Should persist after throttle interval has elapsed."""
+        from datetime import datetime, timezone, timedelta
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate persistence 10 seconds ago (throttle is 5)
+        workflow._last_persisted_at = datetime.now(timezone.utc) - timedelta(seconds=10)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = state.iteration
+
+        # Should persist (interval elapsed)
+        assert workflow._should_persist_status(state) is True
+
+    def test_terminal_state_completed_persists_during_throttle(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """Terminal state (completed) should persist even during throttle."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence (throttle active)
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = state.iteration
+
+        # Mark as completed (terminal state)
+        state.completed_at = datetime.now(timezone.utc)
+
+        # Should persist (terminal state overrides throttle)
+        assert workflow._should_persist_status(state) is True
+
+    def test_terminal_state_failed_persists_during_throttle(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """Terminal state (failed) should persist even during throttle."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence (throttle active)
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = state.iteration
+
+        # Mark as failed (terminal state)
+        state.metadata["failed"] = True
+
+        # Should persist (terminal state overrides throttle)
+        assert workflow._should_persist_status(state) is True
+
+    def test_phase_change_persists_during_throttle(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """Phase change should persist even during throttle."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence at PLANNING phase
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = DeepResearchPhase.PLANNING
+        workflow._last_persisted_iteration = state.iteration
+
+        # Change phase to GATHERING
+        state.phase = DeepResearchPhase.GATHERING
+
+        # Should persist (phase change overrides throttle)
+        assert workflow._should_persist_status(state) is True
+
+    def test_iteration_change_persists_during_throttle(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """Iteration change should persist even during throttle."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence at iteration 1
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = 1
+
+        # Change iteration to 2
+        state.iteration = 2
+
+        # Should persist (iteration change overrides throttle)
+        assert workflow._should_persist_status(state) is True
+
+    def test_persist_state_updates_tracking_fields(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """_persist_state should update all tracking fields."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Verify initial state
+        assert workflow._last_persisted_at is None
+        assert workflow._last_persisted_phase is None
+        assert workflow._last_persisted_iteration is None
+
+        # Persist state
+        workflow._persist_state(state)
+
+        # Verify tracking fields updated
+        assert workflow._last_persisted_at is not None
+        assert workflow._last_persisted_phase == state.phase
+        assert workflow._last_persisted_iteration == state.iteration
+
+        # Verify memory.save_deep_research was called
+        workflow.memory.save_deep_research.assert_called_once_with(state)
+
+    def test_persist_state_if_needed_returns_true_on_persist(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """_persist_state_if_needed should return True when persisting."""
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # First call should persist
+        result = workflow._persist_state_if_needed(state)
+        assert result is True
+
+    def test_persist_state_if_needed_returns_false_on_skip(
+        self, workflow_with_throttle, sample_deep_research_state
+    ):
+        """_persist_state_if_needed should return False when skipping."""
+        from datetime import datetime, timezone
+
+        workflow = workflow_with_throttle
+        state = sample_deep_research_state
+
+        # Simulate recent persistence
+        workflow._last_persisted_at = datetime.now(timezone.utc)
+        workflow._last_persisted_phase = state.phase
+        workflow._last_persisted_iteration = state.iteration
+
+        # Second call should skip
+        result = workflow._persist_state_if_needed(state)
+        assert result is False
+
+    def test_is_terminal_state_completed(self, workflow_with_throttle):
+        """_is_terminal_state should return True for completed state."""
+        from datetime import datetime, timezone
+
+        state = DeepResearchState(original_query="Test")
+        state.completed_at = datetime.now(timezone.utc)
+
+        assert workflow_with_throttle._is_terminal_state(state) is True
+
+    def test_is_terminal_state_failed(self, workflow_with_throttle):
+        """_is_terminal_state should return True for failed state."""
+        state = DeepResearchState(original_query="Test")
+        state.metadata["failed"] = True
+
+        assert workflow_with_throttle._is_terminal_state(state) is True
+
+    def test_is_terminal_state_in_progress(self, workflow_with_throttle):
+        """_is_terminal_state should return False for in-progress state."""
+        state = DeepResearchState(original_query="Test")
+
+        assert workflow_with_throttle._is_terminal_state(state) is False
+
+
+class TestAuditVerbosity:
+    """Tests for audit verbosity modes (_prepare_audit_payload)."""
+
+    @pytest.fixture
+    def workflow_full_verbosity(self, mock_memory, tmp_path):
+        """Create workflow with full audit verbosity."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        config = MagicMock()
+        config.audit_verbosity = "full"
+        config.deep_research_audit_artifacts = True
+        workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
+        return workflow
+
+    @pytest.fixture
+    def workflow_minimal_verbosity(self, mock_memory, tmp_path):
+        """Create workflow with minimal audit verbosity."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        config = MagicMock()
+        config.audit_verbosity = "minimal"
+        config.deep_research_audit_artifacts = True
+        workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
+        return workflow
+
+    @pytest.fixture
+    def sample_audit_data(self):
+        """Sample audit data with all field types."""
+        return {
+            # Fields to be nulled in minimal mode
+            "system_prompt": "You are a research assistant",
+            "user_prompt": "Tell me about deep learning",
+            "raw_response": "Deep learning is a subset of machine learning...",
+            "report": "# Research Report\n\nDeep learning...",
+            "error": "Some error message",
+            "traceback": "Traceback (most recent call last):\n  File...",
+            # Preserved metrics fields
+            "provider_id": "openai",
+            "model_used": "gpt-4",
+            "tokens_used": 1500,
+            "duration_ms": 2500,
+            "sources_added": 5,
+            "report_length": 4200,
+            "parse_success": True,
+            # Nested structures
+            "findings": [
+                {"id": "find-1", "content": "Finding content text", "confidence": "high"},
+                {"id": "find-2", "content": "Another finding", "confidence": "medium"},
+            ],
+            "gaps": [
+                {"id": "gap-1", "description": "Gap description text", "priority": 1},
+                {"id": "gap-2", "description": "Another gap", "priority": 2},
+            ],
+        }
+
+    def test_full_mode_returns_data_unchanged(
+        self, workflow_full_verbosity, sample_audit_data
+    ):
+        """Full mode should return audit data unchanged."""
+        result = workflow_full_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Data should be identical in full mode
+        assert result == sample_audit_data
+        # Verify text fields are preserved
+        assert result["system_prompt"] == "You are a research assistant"
+        assert result["user_prompt"] == "Tell me about deep learning"
+        assert result["raw_response"] == "Deep learning is a subset of machine learning..."
+        assert result["report"] == "# Research Report\n\nDeep learning..."
+        assert result["error"] == "Some error message"
+        assert result["traceback"] == "Traceback (most recent call last):\n  File..."
+
+    def test_minimal_mode_nulls_documented_fields(
+        self, workflow_minimal_verbosity, sample_audit_data
+    ):
+        """Minimal mode should null documented text fields."""
+        result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Top-level text fields should be null
+        assert result["system_prompt"] is None
+        assert result["user_prompt"] is None
+        assert result["raw_response"] is None
+        assert result["report"] is None
+        assert result["error"] is None
+        assert result["traceback"] is None
+
+    def test_minimal_mode_preserves_metrics(
+        self, workflow_minimal_verbosity, sample_audit_data
+    ):
+        """Minimal mode should preserve metrics fields."""
+        result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Metrics fields should be unchanged
+        assert result["provider_id"] == "openai"
+        assert result["model_used"] == "gpt-4"
+        assert result["tokens_used"] == 1500
+        assert result["duration_ms"] == 2500
+        assert result["sources_added"] == 5
+        assert result["report_length"] == 4200
+        assert result["parse_success"] is True
+
+    def test_schema_keys_identical_in_both_modes(
+        self, workflow_full_verbosity, workflow_minimal_verbosity, sample_audit_data
+    ):
+        """Both modes should produce the same set of keys (schema stability)."""
+        full_result = workflow_full_verbosity._prepare_audit_payload(sample_audit_data)
+        minimal_result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Top-level keys should be identical
+        assert set(full_result.keys()) == set(minimal_result.keys())
+
+        # Findings keys should be identical
+        assert len(full_result["findings"]) == len(minimal_result["findings"])
+        for full_f, min_f in zip(full_result["findings"], minimal_result["findings"]):
+            assert set(full_f.keys()) == set(min_f.keys())
+
+        # Gaps keys should be identical
+        assert len(full_result["gaps"]) == len(minimal_result["gaps"])
+        for full_g, min_g in zip(full_result["gaps"], minimal_result["gaps"]):
+            assert set(full_g.keys()) == set(min_g.keys())
+
+    def test_nested_findings_content_nulled_in_minimal(
+        self, workflow_minimal_verbosity, sample_audit_data
+    ):
+        """Minimal mode should null findings[*].content while preserving other fields."""
+        result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Content should be nulled
+        for finding in result["findings"]:
+            assert finding["content"] is None
+            # Other fields preserved
+            assert "id" in finding
+            assert "confidence" in finding
+
+        # Verify specific findings preserved other data
+        assert result["findings"][0]["id"] == "find-1"
+        assert result["findings"][0]["confidence"] == "high"
+        assert result["findings"][1]["id"] == "find-2"
+        assert result["findings"][1]["confidence"] == "medium"
+
+    def test_nested_gaps_description_nulled_in_minimal(
+        self, workflow_minimal_verbosity, sample_audit_data
+    ):
+        """Minimal mode should null gaps[*].description while preserving other fields."""
+        result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Description should be nulled
+        for gap in result["gaps"]:
+            assert gap["description"] is None
+            # Other fields preserved
+            assert "id" in gap
+            assert "priority" in gap
+
+        # Verify specific gaps preserved other data
+        assert result["gaps"][0]["id"] == "gap-1"
+        assert result["gaps"][0]["priority"] == 1
+        assert result["gaps"][1]["id"] == "gap-2"
+        assert result["gaps"][1]["priority"] == 2
+
+    def test_handles_missing_optional_fields(
+        self, workflow_minimal_verbosity
+    ):
+        """Minimal mode should handle data without optional text fields."""
+        minimal_data = {
+            "provider_id": "test",
+            "tokens_used": 100,
+        }
+
+        result = workflow_minimal_verbosity._prepare_audit_payload(minimal_data)
+
+        # Should not add fields that weren't present
+        assert "system_prompt" not in result
+        assert "report" not in result
+        # Preserved fields should remain
+        assert result["provider_id"] == "test"
+        assert result["tokens_used"] == 100
+
+    def test_handles_empty_nested_arrays(
+        self, workflow_minimal_verbosity
+    ):
+        """Minimal mode should handle empty findings and gaps arrays."""
+        data_with_empty_arrays = {
+            "provider_id": "test",
+            "findings": [],
+            "gaps": [],
+        }
+
+        result = workflow_minimal_verbosity._prepare_audit_payload(data_with_empty_arrays)
+
+        # Empty arrays should remain empty
+        assert result["findings"] == []
+        assert result["gaps"] == []
+
+    def test_handles_non_dict_items_in_nested_arrays(
+        self, workflow_minimal_verbosity
+    ):
+        """Minimal mode should handle non-dict items in nested arrays gracefully."""
+        data_with_mixed = {
+            "provider_id": "test",
+            "findings": [
+                {"content": "text", "id": "f1"},
+                "not a dict",  # Edge case: non-dict item
+                None,  # Edge case: null item
+            ],
+            "gaps": [
+                {"description": "text", "id": "g1"},
+                123,  # Edge case: non-dict item
+            ],
+        }
+
+        result = workflow_minimal_verbosity._prepare_audit_payload(data_with_mixed)
+
+        # Dict items should have content/description nulled
+        assert result["findings"][0]["content"] is None
+        assert result["findings"][0]["id"] == "f1"
+        assert result["gaps"][0]["description"] is None
+        assert result["gaps"][0]["id"] == "g1"
+
+        # Non-dict items should pass through unchanged
+        assert result["findings"][1] == "not a dict"
+        assert result["findings"][2] is None
+        assert result["gaps"][1] == 123
+
+    def test_does_not_mutate_original_data(
+        self, workflow_minimal_verbosity, sample_audit_data
+    ):
+        """Minimal mode should not mutate the original data dictionary."""
+        import copy
+        original_copy = copy.deepcopy(sample_audit_data)
+
+        workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
+
+        # Original should be unchanged
+        assert sample_audit_data == original_copy

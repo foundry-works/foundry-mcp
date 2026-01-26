@@ -40,6 +40,7 @@ Usage:
 
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Any, Callable, Optional
 import hashlib
 import logging
@@ -545,6 +546,36 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:16]
 
 
+@lru_cache(maxsize=32)
+def _get_cached_encoding(model_name: str) -> Any:
+    """Get a cached tiktoken encoding for the given model name.
+
+    Uses lru_cache to avoid repeated encoding lookups, which can be
+    expensive as tiktoken loads encoding data from disk.
+
+    Args:
+        model_name: Model name to get encoding for, or "" for default cl100k_base
+
+    Returns:
+        tiktoken Encoding object
+
+    Raises:
+        RuntimeError: If tiktoken is not available
+    """
+    if not _TIKTOKEN_AVAILABLE or tiktoken is None:
+        raise RuntimeError("tiktoken is not available")
+
+    if model_name:
+        try:
+            return tiktoken.encoding_for_model(model_name)
+        except KeyError:
+            # Model not found, fall back to cl100k_base (GPT-4/Claude-like)
+            return tiktoken.get_encoding("cl100k_base")
+    else:
+        # Default to cl100k_base for modern models
+        return tiktoken.get_encoding("cl100k_base")
+
+
 def _estimate_with_tiktoken(content: str, model: Optional[str] = None) -> Optional[int]:
     """Attempt to estimate tokens using tiktoken.
 
@@ -559,17 +590,7 @@ def _estimate_with_tiktoken(content: str, model: Optional[str] = None) -> Option
         return None
 
     try:
-        # Try to get model-specific encoding
-        if model:
-            try:
-                encoding = tiktoken.encoding_for_model(model)
-            except KeyError:
-                # Model not found, fall back to cl100k_base (GPT-4/Claude-like)
-                encoding = tiktoken.get_encoding("cl100k_base")
-        else:
-            # Default to cl100k_base for modern models
-            encoding = tiktoken.get_encoding("cl100k_base")
-
+        encoding = _get_cached_encoding(model or "")
         return len(encoding.encode(content))
     except Exception as e:
         logger.debug(f"tiktoken estimation failed: {e}")
