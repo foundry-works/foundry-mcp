@@ -437,6 +437,11 @@ class ResearchConfig:
         tavily_auto_parameters: Let Tavily auto-configure parameters based on query
         tavily_extract_depth: Tavily extract depth ("basic", "advanced")
         tavily_extract_include_images: Include images in Tavily extract results
+        perplexity_search_context_size: Perplexity context size ("low", "medium", "high")
+        perplexity_max_tokens: Perplexity maximum tokens for response (default: 50000)
+        perplexity_max_tokens_per_page: Perplexity maximum tokens per page (default: 2048)
+        perplexity_recency_filter: Perplexity time filter ("day", "week", "month", "year")
+        perplexity_country: Perplexity geographic filter (ISO 3166-1 alpha-2 code, e.g., "US")
         token_management_enabled: Master switch for token management features
         token_safety_margin: Fraction of budget to reserve as safety buffer (0.0-1.0)
         runtime_overhead: Tokens reserved for runtime overhead (e.g., Claude Code context)
@@ -544,6 +549,13 @@ class ResearchConfig:
     # Tavily extract integration with deep research
     tavily_extract_in_deep_research: bool = False  # Enable extract as follow-up step
     tavily_extract_max_urls: int = 5  # Max URLs to extract per deep research run
+
+    # Perplexity search configuration
+    perplexity_search_context_size: str = "medium"  # "low", "medium", "high"
+    perplexity_max_tokens: int = 50000  # Maximum tokens for response
+    perplexity_max_tokens_per_page: int = 2048  # Maximum tokens per page
+    perplexity_recency_filter: Optional[str] = None  # "day", "week", "month", "year"
+    perplexity_country: Optional[str] = None  # ISO 3166-1 alpha-2 code (e.g., "US")
 
     # Status persistence throttling (reduces disk I/O during deep research)
     status_persistence_throttle_seconds: int = 5  # Minimum seconds between status saves (0 = always persist)
@@ -671,6 +683,12 @@ class ResearchConfig:
             # Tavily extract in deep research
             tavily_extract_in_deep_research=_parse_bool(data.get("tavily_extract_in_deep_research", False)),
             tavily_extract_max_urls=int(data.get("tavily_extract_max_urls", 5)),
+            # Perplexity search configuration
+            perplexity_search_context_size=str(data.get("perplexity_search_context_size", "medium")),
+            perplexity_max_tokens=int(data.get("perplexity_max_tokens", 50000)),
+            perplexity_max_tokens_per_page=int(data.get("perplexity_max_tokens_per_page", 2048)),
+            perplexity_recency_filter=data.get("perplexity_recency_filter"),  # None or str
+            perplexity_country=data.get("perplexity_country"),  # None or str
             # Token management configuration
             token_management_enabled=_parse_bool(
                 data.get("token_management_enabled", True)
@@ -705,6 +723,7 @@ class ResearchConfig:
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
         self._validate_tavily_config()
+        self._validate_perplexity_config()
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
 
@@ -762,6 +781,53 @@ class ResearchConfig:
                 f"Invalid tavily_extract_depth: {self.tavily_extract_depth!r}. "
                 f"Must be one of: {sorted(valid_extract_depths)}"
             )
+
+    def _validate_perplexity_config(self) -> None:
+        """Validate all Perplexity configuration fields.
+
+        Raises:
+            ValueError: If any Perplexity config field has an invalid value.
+        """
+        import re
+
+        # Validate search_context_size
+        valid_context_sizes = {"low", "medium", "high"}
+        if self.perplexity_search_context_size not in valid_context_sizes:
+            raise ValueError(
+                f"Invalid perplexity_search_context_size: {self.perplexity_search_context_size!r}. "
+                f"Must be one of: {sorted(valid_context_sizes)}"
+            )
+
+        # Validate max_tokens (positive integer)
+        if not isinstance(self.perplexity_max_tokens, int) or self.perplexity_max_tokens < 1:
+            raise ValueError(
+                f"Invalid perplexity_max_tokens: {self.perplexity_max_tokens!r}. "
+                "Must be a positive integer."
+            )
+
+        # Validate max_tokens_per_page (positive integer)
+        if not isinstance(self.perplexity_max_tokens_per_page, int) or self.perplexity_max_tokens_per_page < 1:
+            raise ValueError(
+                f"Invalid perplexity_max_tokens_per_page: {self.perplexity_max_tokens_per_page!r}. "
+                "Must be a positive integer."
+            )
+
+        # Validate recency_filter (day/week/month/year or None)
+        if self.perplexity_recency_filter is not None:
+            valid_recency_filters = {"day", "week", "month", "year"}
+            if self.perplexity_recency_filter not in valid_recency_filters:
+                raise ValueError(
+                    f"Invalid perplexity_recency_filter: {self.perplexity_recency_filter!r}. "
+                    f"Must be one of: {sorted(valid_recency_filters)} or None."
+                )
+
+        # Validate country (ISO 3166-1 alpha-2 or None)
+        if self.perplexity_country is not None:
+            if not isinstance(self.perplexity_country, str) or not re.match(r"^[A-Z]{2}$", self.perplexity_country):
+                raise ValueError(
+                    f"Invalid perplexity_country: {self.perplexity_country!r}. "
+                    "Must be a 2-letter uppercase ISO 3166-1 alpha-2 code (e.g., 'US', 'GB')."
+                )
 
     def _validate_status_persistence_config(self) -> None:
         """Validate status persistence configuration fields.

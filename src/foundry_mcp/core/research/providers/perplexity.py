@@ -36,6 +36,129 @@ DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RATE_LIMIT = 1.0  # requests per second
 
+# Valid search_context_size values for search API
+VALID_SEARCH_CONTEXT_SIZES = frozenset(["low", "medium", "high"])
+
+
+def _validate_search_params(
+    search_context_size: str | None,
+    max_tokens: int | None,
+    max_tokens_per_page: int | None,
+    search_after_date: str | None,
+    search_before_date: str | None,
+    recency_filter: str | None,
+    last_updated_after_filter: str | None = None,
+    last_updated_before_filter: str | None = None,
+) -> None:
+    """Validate Perplexity search parameters.
+
+    Args:
+        search_context_size: Context size for search ('low', 'medium', 'high').
+        max_tokens: Maximum tokens for response content.
+        max_tokens_per_page: Maximum tokens per page.
+        search_after_date: Filter results after this date (MM/DD/YYYY).
+        search_before_date: Filter results before this date (MM/DD/YYYY).
+        recency_filter: Time filter ('day', 'week', 'month', 'year').
+        last_updated_after_filter: Filter by content modified after this date (MM/DD/YYYY).
+        last_updated_before_filter: Filter by content modified before this date (MM/DD/YYYY).
+
+    Raises:
+        ValueError: If any parameter is invalid.
+    """
+    if search_context_size is not None:
+        if search_context_size not in VALID_SEARCH_CONTEXT_SIZES:
+            raise ValueError(
+                f"Invalid search_context_size: {search_context_size!r}. "
+                f"Must be one of: {sorted(VALID_SEARCH_CONTEXT_SIZES)}"
+            )
+
+    if max_tokens is not None:
+        if not isinstance(max_tokens, int) or max_tokens < 1:
+            raise ValueError(
+                f"Invalid max_tokens: {max_tokens!r}. Must be a positive integer."
+            )
+
+    if max_tokens_per_page is not None:
+        if not isinstance(max_tokens_per_page, int) or max_tokens_per_page < 1:
+            raise ValueError(
+                f"Invalid max_tokens_per_page: {max_tokens_per_page!r}. "
+                "Must be a positive integer."
+            )
+
+    # Parse and validate dates
+    parsed_after = None
+    parsed_before = None
+
+    if search_after_date is not None:
+        try:
+            parsed_after = datetime.strptime(search_after_date, "%m/%d/%Y")
+        except ValueError:
+            raise ValueError(
+                f"Invalid search_after_date: {search_after_date!r}. "
+                "Must be in MM/DD/YYYY format."
+            )
+
+    if search_before_date is not None:
+        try:
+            parsed_before = datetime.strptime(search_before_date, "%m/%d/%Y")
+        except ValueError:
+            raise ValueError(
+                f"Invalid search_before_date: {search_before_date!r}. "
+                "Must be in MM/DD/YYYY format."
+            )
+
+    # Validate date range logic
+    if parsed_after is not None and parsed_before is not None:
+        if parsed_after >= parsed_before:
+            raise ValueError(
+                f"search_after_date ({search_after_date}) must be before "
+                f"search_before_date ({search_before_date})."
+            )
+
+    # Validate last_updated date filters
+    parsed_last_updated_after = None
+    parsed_last_updated_before = None
+
+    if last_updated_after_filter is not None:
+        try:
+            parsed_last_updated_after = datetime.strptime(last_updated_after_filter, "%m/%d/%Y")
+        except ValueError:
+            raise ValueError(
+                f"Invalid last_updated_after_filter: {last_updated_after_filter!r}. "
+                "Must be in MM/DD/YYYY format."
+            )
+
+    if last_updated_before_filter is not None:
+        try:
+            parsed_last_updated_before = datetime.strptime(last_updated_before_filter, "%m/%d/%Y")
+        except ValueError:
+            raise ValueError(
+                f"Invalid last_updated_before_filter: {last_updated_before_filter!r}. "
+                "Must be in MM/DD/YYYY format."
+            )
+
+    # Validate last_updated date range logic
+    if parsed_last_updated_after is not None and parsed_last_updated_before is not None:
+        if parsed_last_updated_after >= parsed_last_updated_before:
+            raise ValueError(
+                f"last_updated_after_filter ({last_updated_after_filter}) must be before "
+                f"last_updated_before_filter ({last_updated_before_filter})."
+            )
+
+    # Validate recency_filter exclusivity with date filters
+    if recency_filter is not None:
+        valid_recency_filters = {"day", "week", "month", "year"}
+        if recency_filter not in valid_recency_filters:
+            raise ValueError(
+                f"Invalid recency_filter: {recency_filter!r}. "
+                f"Must be one of: {sorted(valid_recency_filters)}."
+            )
+        if search_after_date is not None or search_before_date is not None:
+            raise ValueError(
+                "Cannot use recency_filter with search_after_date or search_before_date. "
+                "Use either recency_filter OR date filters, not both."
+            )
+
 
 class PerplexitySearchProvider(SearchProvider):
     """Perplexity Search API provider for web search.
@@ -119,11 +242,23 @@ class PerplexitySearchProvider(SearchProvider):
             query: The search query string
             max_results: Maximum number of results to return (default: 10, max: 20)
             **kwargs: Additional Perplexity options:
-                - recency_filter: Time filter ('day', 'week', 'month', 'year')
-                - domain_filter: List of domains to include (max 20)
+                - recency_filter: Time filter ('day', 'week', 'month', 'year').
+                    Cannot be combined with date filters.
+                - domain_filter: List of domains to include (max 20). Prefix with
+                    '-' to exclude (e.g., ['-example.com'] excludes example.com).
                 - country: Geographic filter ('US', 'GB', etc.)
                 - sub_query_id: SubQuery ID for source tracking
                 - include_raw_content: If True, map snippet to content field
+                - search_context_size: Context size for search results
+                    ('low', 'medium', 'high'). Default: 'medium'
+                - max_tokens: Maximum total tokens for response (default: 50000)
+                - max_tokens_per_page: Maximum tokens per page (default: 2048)
+                - search_after_date: Filter results after this date (MM/DD/YYYY format)
+                - search_before_date: Filter results before this date (MM/DD/YYYY format)
+                - last_updated_after_filter: Filter by content modified after this date
+                    (MM/DD/YYYY format). Filters by modification date, not publication.
+                - last_updated_before_filter: Filter by content modified before this date
+                    (MM/DD/YYYY format). Filters by modification date, not publication.
 
         Returns:
             List of ResearchSource objects
@@ -132,6 +267,9 @@ class PerplexitySearchProvider(SearchProvider):
             AuthenticationError: If API key is invalid
             RateLimitError: If rate limit exceeded after all retries
             SearchProviderError: For other API errors
+            ValueError: If parameter validation fails (invalid search_context_size,
+                non-positive max_tokens/max_tokens_per_page, invalid recency_filter,
+                invalid date format, or conflicting filters)
         """
         # Extract Perplexity-specific options
         recency_filter = kwargs.get("recency_filter")
@@ -140,6 +278,27 @@ class PerplexitySearchProvider(SearchProvider):
         sub_query_id = kwargs.get("sub_query_id")
         include_raw_content = kwargs.get("include_raw_content", False)
 
+        # Extract new configurable parameters with defaults
+        search_context_size = kwargs.get("search_context_size", "medium")
+        max_tokens = kwargs.get("max_tokens", 50000)
+        max_tokens_per_page = kwargs.get("max_tokens_per_page", 2048)
+        search_after_date = kwargs.get("search_after_date")
+        search_before_date = kwargs.get("search_before_date")
+        last_updated_after_filter = kwargs.get("last_updated_after_filter")
+        last_updated_before_filter = kwargs.get("last_updated_before_filter")
+
+        # Validate parameters
+        _validate_search_params(
+            search_context_size=search_context_size,
+            max_tokens=max_tokens,
+            max_tokens_per_page=max_tokens_per_page,
+            search_after_date=search_after_date,
+            search_before_date=search_before_date,
+            recency_filter=recency_filter,
+            last_updated_after_filter=last_updated_after_filter,
+            last_updated_before_filter=last_updated_before_filter,
+        )
+
         # Clamp max_results to Perplexity's limit (1-20)
         max_results = max(1, min(max_results, 20))
 
@@ -147,8 +306,9 @@ class PerplexitySearchProvider(SearchProvider):
         payload: dict[str, Any] = {
             "query": query,
             "max_results": max_results,
-            "max_tokens": 50000,  # Total content budget
-            "max_tokens_per_page": 2048,  # Per-page content
+            "max_tokens": max_tokens,
+            "max_tokens_per_page": max_tokens_per_page,
+            "search_context_size": search_context_size,
         }
 
         if recency_filter and recency_filter in ("day", "week", "month", "year"):
@@ -158,6 +318,14 @@ class PerplexitySearchProvider(SearchProvider):
             payload["search_domain_filter"] = domain_filter[:20]
         if country:
             payload["country"] = country
+        if search_after_date:
+            payload["search_after_date"] = search_after_date
+        if search_before_date:
+            payload["search_before_date"] = search_before_date
+        if last_updated_after_filter:
+            payload["last_updated_after_filter"] = last_updated_after_filter
+        if last_updated_before_filter:
+            payload["last_updated_before_filter"] = last_updated_before_filter
 
         # Execute with retry logic
         response_data = await self._execute_with_retry(payload)

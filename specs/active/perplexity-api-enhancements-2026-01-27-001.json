@@ -1,0 +1,996 @@
+{
+  "spec_id": "perplexity-api-enhancements-2026-01-27-001",
+  "title": "perplexity-api-enhancements",
+  "generated": "2026-01-27T11:45:40.635437Z",
+  "last_updated": "2026-01-27T13:30:16.990062Z",
+  "metadata": {
+    "description": "",
+    "mission": "Enhance the Perplexity search provider with additional configurable parameters (search_context_size, max_tokens, date filters), following patterns established by the Tavily provider enhancement.",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 0,
+    "assumptions": [
+      "Perplexity Search API endpoints remain stable",
+      "Date format %m/%d/%Y is acceptable (matches Perplexity API)",
+      "Default search_context_size='medium' provides reasonable cost/quality balance"
+    ],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 100,
+  "status": "completed",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "perplexity-api-enhancements",
+      "status": "completed",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4"
+      ],
+      "total_tasks": 21,
+      "completed_tasks": 21,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Enhanced Search Parameters",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5",
+        "task-1-6",
+        "verify-1-1"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 7,
+      "metadata": {
+        "purpose": "",
+        "description": "Add configurable parameters to existing Perplexity search provider",
+        "needs_journaling": true,
+        "completed_at": "2026-01-27T13:17:33.351513Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add validation constants",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add VALID_SEARCH_CONTEXT_SIZES frozenset constant",
+        "file_path": "src/foundry_mcp/core/research/providers/perplexity.py",
+        "acceptance_criteria": [
+          "VALID_SEARCH_CONTEXT_SIZES = frozenset(['low', 'medium', 'high']) defined at module level"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:07:53.961366Z",
+        "completed_at": "2026-01-27T13:08:12.980633Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:08:12.980702Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Add _validate_search_params function",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add validation function for search parameters following Tavily pattern. Validates search_context_size, max_tokens, date formats, date range logic, and recency_filter exclusivity.",
+        "file_path": "src/foundry_mcp/core/research/providers/perplexity.py",
+        "acceptance_criteria": [
+          "Function raises ValueError for invalid search_context_size",
+          "Function raises ValueError for non-positive max_tokens",
+          "Function validates date format as %m/%d/%Y",
+          "Function validates search_after_date < search_before_date",
+          "Function raises error when recency_filter combined with date filters"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:08:27.121612Z",
+        "completed_at": "2026-01-27T13:08:51.422451Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:08:51.422518Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Extract new parameters in search method",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Update search() method to extract new kwargs: search_context_size (default 'medium'), max_tokens (default 50000), max_tokens_per_page (default 2048), search_after_date, search_before_date",
+        "file_path": "src/foundry_mcp/core/research/providers/perplexity.py",
+        "acceptance_criteria": [
+          "All 5 new parameters extracted from kwargs",
+          "Default values match current behavior",
+          "Backward compatible with existing callers"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:08:59.529889Z",
+        "completed_at": "2026-01-27T13:09:24.467075Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:09:24.467135Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "Update payload construction",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Update API request payload to include new parameters when provided",
+        "file_path": "src/foundry_mcp/core/research/providers/perplexity.py",
+        "acceptance_criteria": [
+          "search_context_size included in payload",
+          "max_tokens uses configurable value instead of hard-coded 50000",
+          "max_tokens_per_page uses configurable value instead of hard-coded 2048",
+          "Date filters included when provided"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:09:30.799508Z",
+        "completed_at": "2026-01-27T13:09:51.628660Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:09:51.628737Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "Update docstrings",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Update search() method docstring to document all new parameters and the domain filter '-' prefix for exclusion",
+        "file_path": "src/foundry_mcp/core/research/providers/perplexity.py",
+        "acceptance_criteria": [
+          "All new parameters documented in kwargs section",
+          "Domain filter exclusion with '-' prefix documented",
+          "Date format %m/%d/%Y documented"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:09:57.588605Z",
+        "completed_at": "2026-01-27T13:10:20.197218Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:10:20.197280Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Configuration Support",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "verify-2-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 4,
+      "metadata": {
+        "purpose": "",
+        "description": "Add configurable Perplexity settings to ResearchConfig",
+        "needs_journaling": true,
+        "completed_at": "2026-01-27T13:21:31.945770Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Add Perplexity config fields to ResearchConfig",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add 5 new fields to ResearchConfig dataclass following tavily_ prefix pattern: perplexity_search_context_size, perplexity_max_tokens, perplexity_max_tokens_per_page, perplexity_recency_filter, perplexity_country",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "All 5 fields added with correct types and defaults",
+          "Fields documented in class docstring",
+          "Follows tavily_ naming pattern"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:17:45.224005Z",
+        "completed_at": "2026-01-27T13:18:38.220119Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:18:38.220180Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Update from_toml_dict parsing",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Update ResearchConfig.from_toml_dict() to parse new Perplexity fields from TOML",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "All 5 fields parsed from TOML dict",
+          "Type conversion applied correctly",
+          "Missing values use defaults"
+        ],
+        "task_category": "implementation",
+        "completed_at": "2026-01-27T13:19:02.133972Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-27T13:19:02.134030Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "Add _validate_perplexity_config method",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add validation method for Perplexity config fields following _validate_tavily_config pattern. Call from __post_init__.",
+        "file_path": "src/foundry_mcp/config.py",
+        "acceptance_criteria": [
+          "search_context_size validated against low/medium/high",
+          "max_tokens validated as positive integer",
+          "recency_filter validated against day/week/month/year/None",
+          "country validated as ISO 3166-1 alpha-2 or None",
+          "Clear error messages on validation failure"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:19:13.063062Z",
+        "completed_at": "2026-01-27T13:19:47.240852Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:19:47.240912Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Deep Research Integration",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "verify-3-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 3,
+      "metadata": {
+        "purpose": "",
+        "description": "Pass Perplexity config to the search provider in deep research workflow",
+        "needs_journaling": true,
+        "completed_at": "2026-01-27T13:25:27.086389Z"
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Add _get_perplexity_search_kwargs helper",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add _get_perplexity_search_kwargs(state: DeepResearchState) -> dict[str, Any] method following the _get_tavily_search_kwargs pattern at line 1060. Read config via self.config.research to access perplexity_* fields.",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Method returns dict with search_context_size, max_tokens, max_tokens_per_page, country, recency_filter",
+          "Only includes non-None values",
+          "Follows same structure as _get_tavily_search_kwargs"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:21:42.712766Z",
+        "completed_at": "2026-01-27T13:22:16.989984Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:22:16.990047Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Update provider selection logic",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Update the provider selection logic around line 2755 to call _get_perplexity_search_kwargs() when provider_name == 'perplexity'",
+        "file_path": "src/foundry_mcp/core/research/workflows/deep_research.py",
+        "acceptance_criteria": [
+          "Perplexity kwargs merged into search_kwargs when provider is perplexity",
+          "include_raw_content still set correctly",
+          "Other providers unaffected"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:22:27.665131Z",
+        "completed_at": "2026-01-27T13:22:44.121807Z",
+        "needs_journaling": false,
+        "actual_hours": 0.0,
+        "journaled_at": "2026-01-27T13:22:44.121887Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Testing",
+      "status": "completed",
+      "parent": "spec-root",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "task-4-5",
+        "verify-4-1",
+        "task-4-6"
+      ],
+      "total_tasks": 7,
+      "completed_tasks": 7,
+      "metadata": {
+        "purpose": "",
+        "description": "Comprehensive test coverage for all changes",
+        "needs_journaling": true,
+        "completed_at": "2026-01-27T13:30:16.989195Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Create Perplexity config test file",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Create new test file following tests/unit/test_config_tavily.py pattern with test classes: TestPerplexityConfigParsing, TestPerplexityConfigDefaults, TestPerplexityConfigValidation",
+        "file_path": "tests/unit/test_config_perplexity.py",
+        "acceptance_criteria": [
+          "Test file created with proper structure",
+          "Tests TOML parsing for all 5 fields",
+          "Tests default value preservation",
+          "Tests validation errors for invalid values"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:25:37.013349Z",
+        "completed_at": "2026-01-27T13:26:21.128116Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:26:21.128177Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Add search_context_size parameter tests",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add tests for search_context_size parameter in payload construction",
+        "file_path": "tests/core/research/providers/test_perplexity.py",
+        "acceptance_criteria": [
+          "Test default value 'medium' used when not specified",
+          "Test all valid values: low, medium, high",
+          "Test invalid value raises ValueError"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:26:30.521485Z",
+        "completed_at": "2026-01-27T13:27:05.127106Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:27:05.127169Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Add max_tokens override tests",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add tests for configurable max_tokens and max_tokens_per_page",
+        "file_path": "tests/core/research/providers/test_perplexity.py",
+        "acceptance_criteria": [
+          "Test custom max_tokens included in payload",
+          "Test custom max_tokens_per_page included in payload",
+          "Test defaults used when not specified"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:27:25.535258Z",
+        "completed_at": "2026-01-27T13:27:37.436656Z",
+        "needs_journaling": false,
+        "actual_hours": 0.0,
+        "journaled_at": "2026-01-27T13:27:37.436718Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Add date filter tests",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add tests for date filter parameters and validation",
+        "file_path": "tests/core/research/providers/test_perplexity.py",
+        "acceptance_criteria": [
+          "Test valid date format accepted",
+          "Test invalid date format raises ValueError",
+          "Test date range validation (after < before)",
+          "Test recency_filter exclusivity with date filters"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:28:02.307051Z",
+        "completed_at": "2026-01-27T13:28:15.506846Z",
+        "needs_journaling": false,
+        "actual_hours": 0.0,
+        "journaled_at": "2026-01-27T13:28:15.506907Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "Create Perplexity response fixtures",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Create fixture file following tests/fixtures/tavily_responses.py pattern with mock responses for new parameter scenarios",
+        "file_path": "tests/fixtures/perplexity_responses.py",
+        "acceptance_criteria": [
+          "Mock responses for basic search",
+          "Mock responses with new parameters",
+          "FIXTURE_METADATA with version and freshness tracking"
+        ],
+        "task_category": "implementation",
+        "started_at": "2026-01-27T13:28:25.151916Z",
+        "completed_at": "2026-01-27T13:29:14.854025Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-27T13:29:14.854087Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Run all Perplexity tests",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Verify all tests pass",
+        "verification_type": "run-tests",
+        "started_at": "2026-01-27T13:30:04.713135Z",
+        "completed_at": "2026-01-27T13:30:16.989155Z",
+        "needs_journaling": false,
+        "actual_hours": 0.0,
+        "journaled_at": "2026-01-27T13:30:16.989221Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-6": {
+      "type": "task",
+      "title": "Add last_updated date filter parameters",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add last_updated_after_filter and last_updated_before_filter parameters to search() method. These filter by content modification date rather than publication date.",
+        "file_path": "src/foundry_mcp/core/research/providers/perplexity.py",
+        "started_at": "2026-01-27T13:10:27.080234Z",
+        "completed_at": "2026-01-27T13:11:27.455418Z",
+        "needs_journaling": false,
+        "actual_hours": 0.02,
+        "journaled_at": "2026-01-27T13:11:27.455496Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Phase 1 fidelity review",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Review implementation against spec requirements for Phase 1. Verify all parameters added, validation working, payload construction correct.",
+        "verification_type": "fidelity",
+        "started_at": "2026-01-27T13:14:25.838916Z",
+        "completed_at": "2026-01-27T13:17:33.351470Z",
+        "needs_journaling": false,
+        "actual_hours": 0.05,
+        "journaled_at": "2026-01-27T13:17:33.351541Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Phase 2 fidelity review",
+      "status": "completed",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Review implementation against spec requirements for Phase 2. Verify config fields, TOML parsing, and validation working correctly.",
+        "verification_type": "fidelity",
+        "started_at": "2026-01-27T13:19:57.970200Z",
+        "completed_at": "2026-01-27T13:21:31.945711Z",
+        "needs_journaling": false,
+        "actual_hours": 0.03,
+        "journaled_at": "2026-01-27T13:21:31.945797Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Phase 3 fidelity review",
+      "status": "completed",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Review implementation against spec requirements for Phase 3. Verify deep research integration passes Perplexity config correctly.",
+        "verification_type": "fidelity",
+        "started_at": "2026-01-27T13:22:52.812498Z",
+        "completed_at": "2026-01-27T13:25:27.086345Z",
+        "needs_journaling": false,
+        "actual_hours": 0.04,
+        "journaled_at": "2026-01-27T13:25:27.086421Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-6": {
+      "type": "task",
+      "title": "Add last_updated filter tests",
+      "status": "completed",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "Add tests for last_updated_after_filter and last_updated_before_filter parameters",
+        "file_path": "tests/core/research/providers/test_perplexity.py",
+        "started_at": "2026-01-27T13:29:40.355549Z",
+        "completed_at": "2026-01-27T13:29:52.380534Z",
+        "needs_journaling": false,
+        "actual_hours": 0.0,
+        "journaled_at": "2026-01-27T13:29:52.380599Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": [
+    {
+      "timestamp": "2026-01-27T13:07:53.961427Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding VALID_SEARCH_CONTEXT_SIZES frozenset constant at module level",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:08:12.980702Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add validation constants",
+      "content": "Added VALID_SEARCH_CONTEXT_SIZES = frozenset(['low', 'medium', 'high']) at module level (line 40). Basic verification: import succeeds. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:08:27.121654Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding _validate_search_params function following Tavily pattern",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2026-01-27T13:08:51.422518Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add _validate_search_params function",
+      "content": "Added _validate_search_params function (lines 43-111). All 5 acceptance criteria verified: (1) ValueError for invalid search_context_size, (2) ValueError for non-positive max_tokens, (3) Date format validation as MM/DD/YYYY, (4) Date range logic search_after < search_before, (5) Recency filter exclusivity with date filters. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2026-01-27T13:08:59.529930Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Extracting new parameters in search method with defaults",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-3"
+    },
+    {
+      "timestamp": "2026-01-27T13:09:24.467135Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Extract new parameters in search method",
+      "content": "Extracted 5 new parameters in search method (lines 217-231): search_context_size (default 'medium'), max_tokens (default 50000), max_tokens_per_page (default 2048), search_after_date, search_before_date. Added validation call. Backward compatible - signature unchanged. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-3"
+    },
+    {
+      "timestamp": "2026-01-27T13:09:30.799549Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Updating payload construction to use configurable parameters",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-4"
+    },
+    {
+      "timestamp": "2026-01-27T13:09:51.628737Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update payload construction",
+      "content": "Updated payload construction (lines 236-255): search_context_size always included, max_tokens/max_tokens_per_page use configurable values instead of hard-coded, date filters conditionally added. All 4 acceptance criteria verified. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-4"
+    },
+    {
+      "timestamp": "2026-01-27T13:09:57.588647Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Updating search() method docstring with new parameters",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-5"
+    },
+    {
+      "timestamp": "2026-01-27T13:10:20.197280Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update docstrings",
+      "content": "Updated search() docstring (lines 190-219): documented all 5 new parameters (search_context_size, max_tokens, max_tokens_per_page, search_after_date, search_before_date), domain filter '-' prefix exclusion, MM/DD/YYYY date format, and added ValueError to Raises section. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-5"
+    },
+    {
+      "timestamp": "2026-01-27T13:10:27.080276Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Adding last_updated_after_filter and last_updated_before_filter parameters",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-6"
+    },
+    {
+      "timestamp": "2026-01-27T13:11:27.455496Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add last_updated date filter parameters",
+      "content": "Added last_updated_after_filter and last_updated_before_filter parameters: (1) Updated _validate_search_params with new params and validation (lines 49-50, 109-137), (2) Added extraction in search() (lines 267-268), (3) Added to validation call (lines 277-278), (4) Added to payload (lines 304-307), (5) Documented in docstring (lines 243-246). Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-6"
+    },
+    {
+      "timestamp": "2026-01-27T13:11:37.802474Z",
+      "entry_type": "status_change",
+      "title": "Status changed to in_progress",
+      "content": "Running fidelity review for Phase 1",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:17:33.351541Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Phase 1 fidelity review",
+      "content": "Phase 1 fidelity review PASSED. Verified all 6 implementation tasks via LSP structural analysis and MCP AI review. Findings: (1) VALID_SEARCH_CONTEXT_SIZES constant at line 40, (2) _validate_search_params function lines 43-146 with comprehensive validation, (3) Parameter extraction lines 266-272, (4) Payload construction lines 289-311, (5) Docstrings updated lines 224-257, (6) last_updated filters fully implemented. MCP review returned 'partial' due to no test evidence, but testing is correctly deferred to Phase 4 per spec design. Mutual exclusivity between recency_filter and search dates enforced; last_updated filters intentionally allowed with recency_filter per API semantics.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:18:38.220180Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add Perplexity config fields to ResearchConfig",
+      "content": "Added 5 Perplexity config fields to ResearchConfig following tavily_ prefix pattern: (1) perplexity_search_context_size (str, default 'medium'), (2) perplexity_max_tokens (int, default 50000), (3) perplexity_max_tokens_per_page (int, default 2048), (4) perplexity_recency_filter (Optional[str]), (5) perplexity_country (Optional[str]). Updated: class docstring (lines 440-444), field definitions (lines 553-558), from_toml_dict parsing (lines 686-691). Basic verification passed - imports work, no syntax errors. Full testing deferred to verify-2-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:19:02.134030Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update from_toml_dict parsing",
+      "content": "from_toml_dict parsing already implemented in task-2-1 (lines 686-691). Verified: all 5 fields parse correctly from TOML dict, type conversions work (str, int), missing values use defaults. Test: parsed {perplexity_search_context_size: 'high', perplexity_max_tokens: 100000, ...} correctly from dict input. Full testing deferred to verify-2-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-2"
+    },
+    {
+      "timestamp": "2026-01-27T13:19:47.240912Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add _validate_perplexity_config method",
+      "content": "Added _validate_perplexity_config method (lines 785-830) following _validate_tavily_config pattern. Called from __post_init__ (line 726). Validates: search_context_size (low/medium/high), max_tokens (positive int), max_tokens_per_page (positive int), recency_filter (day/week/month/year/None), country (ISO 3166-1 alpha-2 or None). All 6 validation tests pass with clear error messages. Full testing deferred to verify-2-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-2-3"
+    },
+    {
+      "timestamp": "2026-01-27T13:21:31.945797Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Phase 2 fidelity review",
+      "content": "Phase 2 fidelity review PASSED. Structural verification confirms: (1) All 5 Perplexity config fields present with correct defaults (search_context_size='medium', max_tokens=50000, max_tokens_per_page=2048, recency_filter=None, country=None), (2) TOML parsing works with type conversion (int, str), (3) All 4 validation paths working (search_context_size, max_tokens, recency_filter, country). MCP AI review returned 'partial' requesting test evidence - formal tests deferred to Phase 4 per spec design.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-2-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:22:16.990047Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add _get_perplexity_search_kwargs helper",
+      "content": "Added _get_perplexity_search_kwargs method (lines 1253-1286) following _get_tavily_search_kwargs pattern. Returns dict with: search_context_size, max_tokens, max_tokens_per_page (when non-default), and recency_filter, country (when non-None). Reads config via self.config.perplexity_* fields. Syntax verified with py_compile. Full testing deferred to verify-3-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:22:44.121887Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update provider selection logic",
+      "content": "Updated provider selection logic (lines 3222-3233) to call _get_perplexity_search_kwargs when provider_name == 'perplexity'. Perplexity kwargs merged into search_kwargs. include_raw_content set correctly for Perplexity (state.follow_links). Other providers unaffected (still use generic branch). Syntax verified with py_compile. Full testing deferred to verify-3-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-3-2"
+    },
+    {
+      "timestamp": "2026-01-27T13:25:27.086421Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Phase 3 fidelity review",
+      "content": "Phase 3 fidelity review PASSED with clarifications. Deviations assessed: (1) self.config access is CORRECT - DeepResearchWorkflow.__init__ takes ResearchConfig directly (line 873), so self.config IS the ResearchConfig. (2) Default-elision pattern follows _get_tavily_search_kwargs exactly as required by acceptance criteria 'Follows same structure as _get_tavily_search_kwargs'. This is intentional - allows provider to use its own defaults when config unchanged. Both tasks verified: _get_perplexity_search_kwargs method at lines 1253-1286, provider selection logic at lines 3222-3233. Formal tests deferred to Phase 4.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-3-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:26:21.128177Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create Perplexity config test file",
+      "content": "Created tests/unit/test_config_perplexity.py with 26 tests following test_config_tavily.py pattern. Test classes: TestPerplexityConfigParsing (10 tests), TestPerplexityConfigDefaults (5 tests), TestPerplexityConfigValidation (8 tests), TestPerplexityConfigPrecedence (3 tests). All tests pass covering TOML parsing, defaults, validation errors, and precedence. Full test run deferred to verify-4-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-1"
+    },
+    {
+      "timestamp": "2026-01-27T13:27:05.127169Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add search_context_size parameter tests",
+      "content": "Added TestPerplexitySearchContextSize class with 5 tests: test_search_context_size_default_medium, test_search_context_size_low, test_search_context_size_medium, test_search_context_size_high, test_search_context_size_invalid_raises_error. All tests pass. Covers default 'medium' value, all valid values (low/medium/high), and validation error for invalid values.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-2"
+    },
+    {
+      "timestamp": "2026-01-27T13:27:37.436718Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add max_tokens override tests",
+      "content": "Added TestPerplexityMaxTokens class with 5 tests: test_max_tokens_default, test_max_tokens_custom, test_max_tokens_per_page_default, test_max_tokens_per_page_custom, test_max_tokens_invalid_raises_error. All tests pass. Covers default values (50000, 2048), custom values, and validation.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-3"
+    },
+    {
+      "timestamp": "2026-01-27T13:28:15.506907Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add date filter tests",
+      "content": "Added TestPerplexityDateFilters class with 8 tests covering: valid date formats (MM/DD/YYYY), invalid date format errors, date range validation (after < before), and recency_filter exclusivity with date filters. All tests pass.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-4"
+    },
+    {
+      "timestamp": "2026-01-27T13:29:14.854087Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Create Perplexity response fixtures",
+      "content": "Created tests/fixtures/perplexity_responses.py following tavily_responses.py pattern. Contains 8 search fixtures (basic, context_size_high, recency_filter, date_filters, last_updated, country, empty, raw_content) and 5 error fixtures (401, 429, 400_invalid_context_size, 400_invalid_date, 500). FIXTURE_METADATA with version 1.0.0 and freshness tracking. File loads and freshness check passes.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-5"
+    },
+    {
+      "timestamp": "2026-01-27T13:29:52.380599Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add last_updated filter tests",
+      "content": "Added TestPerplexityLastUpdatedFilters class with 7 tests covering: valid last_updated_after_filter, valid last_updated_before_filter, invalid format errors, date range validation, both filters together, and confirming last_updated CAN combine with recency_filter (different semantics from search_after/before_date). All tests pass.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-4-6"
+    },
+    {
+      "timestamp": "2026-01-27T13:30:16.989221Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Run all Perplexity tests",
+      "content": "All 85 Perplexity tests pass in 3.63s. Test breakdown: Config tests (26): TestPerplexityConfigParsing, TestPerplexityConfigDefaults, TestPerplexityConfigValidation, TestPerplexityConfigPrecedence. Provider tests (59): TestPerplexitySearchProviderInit, TestPerplexitySearchProviderBasics, TestPerplexitySearchProviderSearch, TestPerplexitySearchProviderErrorHandling, TestPerplexitySearchProviderResponseParsing, TestPerplexitySearchProviderDateParsing, TestPerplexitySearchProviderDomainExtraction, TestPerplexitySearchProviderHealthCheck, TestPerplexitySearchContextSize, TestPerplexityMaxTokens, TestPerplexityDateFilters, TestPerplexityLastUpdatedFilters.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-4-1"
+    }
+  ]
+}

@@ -1250,6 +1250,41 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
 
         return kwargs
 
+    def _get_perplexity_search_kwargs(self, state: "DeepResearchState") -> dict[str, Any]:
+        """Build Perplexity search kwargs based on config.
+
+        Applies config values for Perplexity-specific parameters.
+        Only includes non-None values to allow provider defaults.
+
+        Args:
+            state: Current deep research state (for potential future mode-based defaults)
+
+        Returns:
+            Dict of kwargs to pass to PerplexitySearchProvider.search()
+        """
+        config = self.config
+        kwargs: dict[str, Any] = {}
+
+        # Always include non-default values
+        default_search_context_size = "medium"
+        default_max_tokens = 50000
+        default_max_tokens_per_page = 2048
+
+        if config.perplexity_search_context_size != default_search_context_size:
+            kwargs["search_context_size"] = config.perplexity_search_context_size
+        if config.perplexity_max_tokens != default_max_tokens:
+            kwargs["max_tokens"] = config.perplexity_max_tokens
+        if config.perplexity_max_tokens_per_page != default_max_tokens_per_page:
+            kwargs["max_tokens_per_page"] = config.perplexity_max_tokens_per_page
+
+        # Only include optional parameters when explicitly set (non-None)
+        if config.perplexity_recency_filter is not None:
+            kwargs["recency_filter"] = config.perplexity_recency_filter
+        if config.perplexity_country is not None:
+            kwargs["country"] = config.perplexity_country
+
+        return kwargs
+
     def _record_workflow_error(
         self,
         error: Exception,
@@ -3184,12 +3219,17 @@ Generate the research plan as JSON."""
                                 "sub_query_id": sub_query.id,
                             }
 
-                            # Add Tavily-specific kwargs for Tavily provider
+                            # Add provider-specific kwargs
                             if provider_name == "tavily":
                                 tavily_kwargs = self._get_tavily_search_kwargs(state)
                                 search_kwargs.update(tavily_kwargs)
+                            elif provider_name == "perplexity":
+                                perplexity_kwargs = self._get_perplexity_search_kwargs(state)
+                                search_kwargs.update(perplexity_kwargs)
+                                # Perplexity also needs include_raw_content for link following
+                                search_kwargs["include_raw_content"] = state.follow_links
                             else:
-                                # Non-Tavily providers just get include_raw_content
+                                # Other providers just get include_raw_content
                                 search_kwargs["include_raw_content"] = state.follow_links
 
                             sources = await asyncio.wait_for(

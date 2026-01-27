@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0b8] - 2026-01-27
+
+### Added
+
+- **Perplexity API Enhancements**: Extended Perplexity search provider with all parameters from the Perplexity Sonar API spec
+  - **Search Context Size**: `search_context_size` parameter (`"low"`, `"medium"`, `"high"`) controls result context depth
+  - **Token Limits**: `max_tokens` (default: 50000) and `max_tokens_per_page` (default: 2048) for response control
+  - **Recency Filtering**: `recency_filter` parameter (`"day"`, `"week"`, `"month"`, `"year"`) for time-based filtering
+  - **Date Range Filters**: `search_after_date` and `search_before_date` for precise date range queries (MM/DD/YYYY format)
+  - **Content Modification Filters**: `last_updated_after_filter` and `last_updated_before_filter` for filtering by modification date
+  - **Geographic Filtering**: `country` parameter (ISO 3166-1 alpha-2 code, e.g., `"US"`)
+  - **Configuration Fields**: New `[research]` TOML config options:
+    - `perplexity_search_context_size`, `perplexity_max_tokens`, `perplexity_max_tokens_per_page`
+    - `perplexity_recency_filter`, `perplexity_country`
+  - **Deep Research Integration**: Parameters automatically propagated from config to Perplexity search calls
+  - **Parameter Validation**: Comprehensive validation with clear error messages for all new parameters
+
+### Migration
+
+**Default behavior unchanged**: All new config fields have defaults that preserve existing behavior. Users not configuring Perplexity options will see no change.
+
 ### Fixed
 
 - **Environment get-config Lookup**: Fixed `environment(action="get-config")` to use the full config lookup hierarchy (matching `ServerConfig.from_env()`), instead of only checking the current working directory
