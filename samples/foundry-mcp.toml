@@ -587,6 +587,30 @@ tavily_extract_in_deep_research = false
 tavily_extract_max_urls = 5
 
 # -----------------------------------------------------------------------------
+# Perplexity Search Provider Configuration
+# -----------------------------------------------------------------------------
+# Perplexity provides AI-powered search with citations.
+# Get API key at https://www.perplexity.ai/settings/api
+
+# Search context size: affects result depth and API cost
+# - "low"    : Minimal context, fastest responses
+# - "medium" : Balanced context (default)
+# - "high"   : Maximum context, most comprehensive
+perplexity_search_context_size = "medium"
+
+# Maximum tokens for response
+perplexity_max_tokens = 50000
+
+# Maximum tokens per page
+perplexity_max_tokens_per_page = 2048
+
+# Time filter for results: "day", "week", "month", "year"
+# perplexity_recency_filter = "week"
+
+# ISO 3166-1 alpha-2 country code to boost results (e.g., "US", "GB", "DE")
+# perplexity_country = "US"
+
+# -----------------------------------------------------------------------------
 # Model Context Overrides (per-model token limits)
 # -----------------------------------------------------------------------------
 # Override default context/output limits for specific models.
