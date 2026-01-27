@@ -1,6 +1,21 @@
-# Deep Research Example: LLM Judges
+# Deep Research Examples
 
-This directory contains an example output from the `deep-research` workflow, demonstrating how foundry-mcp conducts automated, multi-phase research on a topic.
+This directory contains example outputs from the `deep-research` workflow, demonstrating how foundry-mcp conducts automated, multi-phase research on topics.
+
+## Available Examples
+
+| Example | Report | Audit | Description |
+|---------|--------|-------|-------------|
+| **LLM Judges** | `llm-judges-report.md` | `llm-judges-audit.jsonl` | Techniques, architectures, and evaluation methods for LLM-as-a-Judge *(earlier iteration)* |
+| **Conversation-Based Assessment** | `cba-report.md` | `cba-audit.jsonl` | Methodologies, frameworks, and AI applications in educational/professional assessment |
+
+---
+
+# Example 1: LLM Judges
+
+> **Note:** This example is from an earlier iteration of the deep research workflow (v0.8.0). The current workflow has additional phases, improved source gathering, and enhanced synthesis capabilities.
+
+This section documents the LLM Judges research output.
 
 ## Research Query
 
@@ -142,3 +157,67 @@ The research drew from 64 unique domains including:
 - Industry blogs: cameronrwolfe.substack.com, eugeneyan.com, wandb.ai
 - Documentation: docs.ragas.io, langchain-opentutorial.gitbook.io
 - Research tools: semantic scholar, google scholar references
+
+---
+
+# Example 2: Conversation-Based Assessment
+
+This section documents the Conversation-Based Assessment (CBA) research output.
+
+## Research Query
+
+> "Conversation based assessment: methodologies, frameworks, applications in education and professional settings, AI-powered conversational assessment tools, validity and reliability considerations, best practices for design and implementation"
+
+## Workflow Overview
+
+The research explored conversation-based assessment across multiple dimensions:
+
+### Phase 1: Planning
+The system generated 4 targeted sub-queries covering:
+- Core methodologies and frameworks (ORID, Caring Assessments)
+- AI applications in recruitment and healthcare
+- Educational efficacy and validity considerations
+- Best practices for implementation
+
+### Phase 2: Gathering
+Sub-queries executed across search providers, yielding 27 unique sources.
+
+### Phase 3-5: Analysis, Synthesis, Refinement
+Findings synthesized across healthcare, education, and professional domains with gap analysis.
+
+## Statistics
+
+| Metric | Value |
+|--------|-------|
+| Total Iterations | 2 |
+| Sub-queries Generated | 4 |
+| Sources Examined | 44 |
+| Key Findings | 4 |
+| Knowledge Gaps | 2 |
+| Total Tokens Used | ~275,000 |
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `cba-report.md` | The final synthesized research report |
+| `cba-audit.jsonl` | Detailed audit trail of every operation |
+| `cba-session.json` | Full session state including all sources and findings |
+
+## Key Takeaways
+
+1. **Structured Frameworks Matter**: ORID (Objective, Reflective, Interpretive, Decisional) ensures cognitive depth beyond simple recall
+2. **AI Validity Varies by Domain**:
+   - **Healthcare**: High validity for screening (depression scales, medical Q&A)
+   - **Recruitment**: Strong market validation for technical skill assessment
+   - **Education**: Engagement ≠ Learning - positive feedback doesn't guarantee improved outcomes
+3. **Critical Biases**: Insufficient data on linguistic diversity and neurodiverse populations
+4. **Hybrid Approaches Recommended**: AI for initial screening; human oversight for complex pedagogical goals
+
+## Source Diversity
+
+The research drew from diverse domains:
+- Healthcare: JAMA Network, ScienceDirect, PubMed Central
+- Education: SAGE Journals, ETS Research, ResearchGate
+- Professional: Gartner, iMocha, Testlify, Metaview
+- Frameworks: Better Evaluation, SFJ Awards
