@@ -40,7 +40,7 @@ from uuid import uuid4
 from foundry_mcp.config import ResearchConfig
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core import task_registry
-from foundry_mcp.core.observability import get_metrics
+from foundry_mcp.core.observability import audit_log, get_metrics
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models import (
     ConfidenceLevel,
@@ -64,6 +64,7 @@ from foundry_mcp.core.research.providers import (
     TavilySearchProvider,
     TavilyExtractProvider,
 )
+from foundry_mcp.core.research.providers.resilience import get_resilience_manager
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 from foundry_mcp.core.research.token_management import (
     get_model_limits,
@@ -3200,15 +3201,74 @@ Generate the research plan as JSON."""
                 continue
             available_providers.append(provider)
 
-        if not available_providers:
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=(
-                    "No search providers available. Configure API keys for "
-                    "Tavily, Google, or Semantic Scholar."
-                ),
+        configured_providers = list(available_providers)
+        configured_provider_names = [
+            provider.get_provider_name() for provider in configured_providers
+        ]
+
+        # Filter out providers with OPEN circuit breakers
+        # HALF_OPEN providers are allowed to enable recovery probes
+        resilience_manager = get_resilience_manager()
+        circuit_breaker_filtered: list[str] = []
+        filtered_providers: list[SearchProvider] = []
+        for provider in available_providers:
+            provider_name = provider.get_provider_name()
+            if resilience_manager.is_provider_available(provider_name):
+                filtered_providers.append(provider)
+            else:
+                circuit_breaker_filtered.append(provider_name)
+
+        if circuit_breaker_filtered:
+            logger.warning(
+                f"Filtered {len(circuit_breaker_filtered)} provider(s) due to open "
+                f"circuit breaker: {circuit_breaker_filtered}"
             )
+
+        available_providers = filtered_providers
+
+        if not available_providers:
+            # Determine if failure is due to circuit breakers or missing configuration
+            if circuit_breaker_filtered:
+                # All configured providers have open circuit breakers
+                breaker_states = {
+                    name: resilience_manager.get_breaker_state(name).value
+                    for name in configured_provider_names
+                }
+                audit_log(
+                    "all_providers_circuit_open",
+                    provider_names=circuit_breaker_filtered,
+                    breaker_states=breaker_states,
+                    configured_providers=configured_provider_names,
+                    unavailable_providers=unavailable_providers,
+                )
+                logger.error(
+                    f"All providers have open circuit breakers: {breaker_states}"
+                )
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=(
+                        f"All search providers temporarily unavailable due to repeated failures. "
+                        f"Circuit breakers open for: {', '.join(circuit_breaker_filtered)}. "
+                        "Please wait for automatic recovery or check provider health."
+                    ),
+                )
+            else:
+                # No providers configured/available
+                return WorkflowResult(
+                    success=False,
+                    content="",
+                    error=(
+                        "No search providers available. Configure API keys for "
+                        "Tavily, Google, or Semantic Scholar."
+                    ),
+                )
+
+        # Capture circuit breaker states at start of gathering
+        circuit_breaker_states_start = {
+            name: resilience_manager.get_breaker_state(name).value
+            for name in configured_provider_names
+        }
 
         # Semaphore for concurrency control
         semaphore = asyncio.Semaphore(max_concurrent)
@@ -3242,6 +3302,16 @@ Generate the research plan as JSON."""
 
                     for provider in available_providers:
                         provider_name = provider.get_provider_name()
+
+                        # Check if circuit breaker opened mid-gathering (graceful degradation)
+                        if not resilience_manager.is_provider_available(provider_name):
+                            logger.warning(
+                                f"Provider {provider_name} circuit breaker opened mid-gathering, "
+                                "skipping for remaining sub-queries"
+                            )
+                            provider_errors.append(f"{provider_name}: circuit breaker open")
+                            continue
+
                         try:
                             # Check for cancellation before making search provider call
                             self._check_cancellation(state)
@@ -3429,6 +3499,12 @@ Generate the research plan as JSON."""
             # Ensure state timestamp is updated on any exit
             state.updated_at = datetime.now(timezone.utc)
 
+        # Capture circuit breaker states at end of gathering
+        circuit_breaker_states_end = {
+            name: resilience_manager.get_breaker_state(name).value
+            for name in configured_provider_names
+        }
+
         # Save state (normal execution path after finally block)
         self.memory.save_deep_research(state)
         self._write_audit_event(
@@ -3441,6 +3517,8 @@ Generate the research plan as JSON."""
                 "unique_urls": len(seen_urls),
                 "providers_used": [p.get_provider_name() for p in available_providers],
                 "providers_unavailable": unavailable_providers,
+                "circuit_breaker_states_start": circuit_breaker_states_start,
+                "circuit_breaker_states_end": circuit_breaker_states_end,
             },
         )
 
@@ -3475,6 +3553,7 @@ Generate the research plan as JSON."""
                 "iteration": state.iteration,
                 "task_id": state.id,
                 "duration_ms": phase_duration_ms,
+                "circuit_breaker_states": circuit_breaker_states_end,
             },
         )
 
@@ -3497,6 +3576,10 @@ Generate the research plan as JSON."""
                 "unique_urls": len(seen_urls),
                 "providers_used": [p.get_provider_name() for p in available_providers],
                 "providers_unavailable": unavailable_providers,
+                "circuit_breaker_states": {
+                    "start": circuit_breaker_states_start,
+                    "end": circuit_breaker_states_end,
+                },
             },
         )
 

@@ -780,3 +780,266 @@ class TestTavilyAPIContractCompatibility:
         assert results[0].snippet is not None
         # Snippet should be truncated version of content
         assert len(results[0].snippet) <= len(long_content)
+
+
+# =============================================================================
+# Resilience Integration Tests
+# =============================================================================
+
+
+class TestTavilyResilienceIntegration:
+    """Tests for Tavily provider integration with resilience stack.
+
+    These tests verify the integration between TavilySearchProvider and
+    the shared resilience layer (circuit breaker, rate limiter).
+    """
+
+    @pytest.fixture(autouse=True)
+    def reset_resilience(self):
+        """Reset resilience manager before each test for isolation."""
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+        reset_resilience_manager_for_testing()
+        yield
+        reset_resilience_manager_for_testing()
+
+    @pytest.fixture
+    def provider(self):
+        """Create provider instance for tests."""
+        return TavilySearchProvider(api_key="tvly-test-key")
+
+    def test_resilience_config_property_returns_tavily_config(self, provider):
+        """Test resilience_config returns Tavily-specific config."""
+        from foundry_mcp.core.research.providers.resilience import (
+            ProviderResilienceConfig,
+            get_provider_config,
+        )
+        config = provider.resilience_config
+        assert isinstance(config, ProviderResilienceConfig)
+        assert config == get_provider_config("tavily")
+
+    def test_resilience_config_custom_override(self):
+        """Test custom resilience_config via constructor."""
+        from foundry_mcp.core.research.providers.resilience import (
+            ProviderResilienceConfig,
+        )
+        custom = ProviderResilienceConfig(
+            requests_per_second=0.5,
+            max_retries=5,
+        )
+        provider = TavilySearchProvider(
+            api_key="tvly-test",
+            resilience_config=custom,
+        )
+        assert provider.resilience_config.requests_per_second == 0.5
+        assert provider.resilience_config.max_retries == 5
+
+    def test_classify_error_authentication(self, provider):
+        """Test classify_error for authentication errors."""
+        from foundry_mcp.core.research.providers.resilience import ErrorType
+        error = AuthenticationError(provider="tavily", message="Invalid API key")
+        classification = provider.classify_error(error)
+        assert classification.retryable is False
+        assert classification.trips_breaker is False
+        assert classification.error_type == ErrorType.AUTHENTICATION
+
+    def test_classify_error_rate_limit(self, provider):
+        """Test classify_error for rate limit errors."""
+        from foundry_mcp.core.research.providers.resilience import ErrorType
+        error = RateLimitError(provider="tavily", retry_after=5.0)
+        classification = provider.classify_error(error)
+        assert classification.retryable is True
+        assert classification.trips_breaker is False
+        assert classification.backoff_seconds == 5.0
+        assert classification.error_type == ErrorType.RATE_LIMIT
+
+    def test_classify_error_server_error(self, provider):
+        """Test classify_error for 5xx server errors."""
+        from foundry_mcp.core.research.providers.resilience import ErrorType
+        error = SearchProviderError(
+            provider="tavily",
+            message="API error 503: Service Unavailable",
+            retryable=True,
+        )
+        classification = provider.classify_error(error)
+        assert classification.retryable is True
+        assert classification.trips_breaker is True
+        assert classification.error_type == ErrorType.SERVER_ERROR
+
+    def test_classify_error_bad_request(self, provider):
+        """Test classify_error for 400 bad request."""
+        from foundry_mcp.core.research.providers.resilience import ErrorType
+        error = SearchProviderError(
+            provider="tavily",
+            message="API error 400: Bad Request",
+            retryable=False,
+        )
+        classification = provider.classify_error(error)
+        assert classification.retryable is False
+        assert classification.trips_breaker is False
+        assert classification.error_type == ErrorType.INVALID_REQUEST
+
+    def test_classify_error_timeout(self, provider):
+        """Test classify_error for timeout errors."""
+        from foundry_mcp.core.research.providers.resilience import ErrorType
+        error = httpx.TimeoutException("Request timed out")
+        classification = provider.classify_error(error)
+        assert classification.retryable is True
+        assert classification.trips_breaker is True
+        assert classification.error_type == ErrorType.TIMEOUT
+
+    def test_classify_error_network(self, provider):
+        """Test classify_error for network errors."""
+        from foundry_mcp.core.research.providers.resilience import ErrorType
+        error = httpx.ConnectError("Connection refused")
+        classification = provider.classify_error(error)
+        assert classification.retryable is True
+        assert classification.trips_breaker is True
+        assert classification.error_type == ErrorType.NETWORK
+
+
+class TestTavilyCircuitBreakerIntegration:
+    """Tests for Tavily provider circuit breaker integration."""
+
+    @pytest.fixture(autouse=True)
+    def reset_resilience(self):
+        """Reset resilience manager before each test for isolation."""
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+        reset_resilience_manager_for_testing()
+        yield
+        reset_resilience_manager_for_testing()
+
+    @pytest.fixture
+    def provider(self):
+        """Create provider instance for tests."""
+        return TavilySearchProvider(api_key="tvly-test-key")
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_open_raises_provider_error(self, provider):
+        """Test that open circuit breaker raises SearchProviderError."""
+        from foundry_mcp.core.research.providers.resilience import (
+            get_resilience_manager,
+        )
+
+        mgr = get_resilience_manager()
+        breaker = mgr._get_or_create_circuit_breaker("tavily")
+
+        # Trip the circuit breaker
+        for _ in range(10):
+            breaker.record_failure()
+
+        # Attempt to search should raise SearchProviderError
+        with pytest.raises(SearchProviderError) as exc_info:
+            await provider.search("test query")
+
+        assert "Circuit breaker open" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_successful_request_resets_circuit_breaker(self, provider):
+        """Test that successful requests reset circuit breaker failures."""
+        from foundry_mcp.core.research.providers.resilience import (
+            get_resilience_manager,
+        )
+
+        mgr = get_resilience_manager()
+        breaker = mgr._get_or_create_circuit_breaker("tavily")
+
+        # Add some failures (but not enough to trip)
+        breaker.record_failure()
+        breaker.record_failure()
+        assert breaker.failure_count == 2
+
+        # Mock successful API call
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"results": []}
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+            await provider.search("test query")
+
+        # Success should reset failure count
+        assert breaker.failure_count == 0
+
+
+class TestTavilyRateLimiterIntegration:
+    """Tests for Tavily provider rate limiter integration."""
+
+    @pytest.fixture(autouse=True)
+    def reset_resilience(self):
+        """Reset resilience manager before each test for isolation."""
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+        reset_resilience_manager_for_testing()
+        yield
+        reset_resilience_manager_for_testing()
+
+    @pytest.fixture
+    def provider(self):
+        """Create provider instance for tests."""
+        return TavilySearchProvider(api_key="tvly-test-key")
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_exhaustion_raises_error(self, provider):
+        """Test that rate limit exhaustion raises RateLimitError.
+
+        When rate limit wait time exceeds max_wait_seconds (5.0 default),
+        the resilience layer raises RateLimitWaitError which is converted
+        to RateLimitError by _execute_with_retry.
+        """
+        from foundry_mcp.core.research.providers.resilience import (
+            get_resilience_manager,
+            RateLimitWaitError,
+            execute_with_resilience,
+        )
+
+        mgr = get_resilience_manager()
+        limiter = mgr._get_or_create_rate_limiter("tavily")
+
+        # Exhaust all tokens
+        for _ in range(10):
+            limiter.acquire()
+
+        # Direct call to execute_with_resilience with very low max_wait
+        # should raise RateLimitWaitError
+        async def dummy_func():
+            return "result"
+
+        with pytest.raises(RateLimitWaitError):
+            await execute_with_resilience(
+                dummy_func,
+                "tavily",
+                max_wait_seconds=0.001,  # Very low to trigger error
+                manager=mgr,
+            )
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_uses_provider_config(self):
+        """Test that rate limiter uses Tavily's provider config."""
+        from foundry_mcp.core.research.providers.resilience import (
+            get_resilience_manager,
+            get_provider_config,
+        )
+
+        mgr = get_resilience_manager()
+        limiter = mgr._get_or_create_rate_limiter("tavily")
+        config = get_provider_config("tavily")
+
+        # Burst limit should match config
+        # Tavily config has burst_limit=3
+        assert config.burst_limit == 3
+
+        # Should be able to make burst_limit requests
+        for i in range(config.burst_limit):
+            result = limiter.acquire()
+            assert result.allowed is True, f"Request {i+1} should be allowed"
+
+        # Next request should be throttled
+        result = limiter.acquire()
+        assert result.allowed is False

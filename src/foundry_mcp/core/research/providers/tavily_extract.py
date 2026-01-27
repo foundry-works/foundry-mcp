@@ -5,17 +5,27 @@ to provide URL content extraction capabilities for the deep research workflow.
 
 Tavily API documentation: https://docs.tavily.com/documentation/api-reference/endpoint/extract
 
+Resilience Configuration:
+    - Rate Limit: 1 RPS with burst limit of 3
+    - Circuit Breaker: Opens after 5 failures, 30s recovery timeout
+    - Retry: Up to 3 retries with exponential backoff (1-60s)
+    - Error Handling:
+        - 429: Retryable, does NOT trip circuit breaker
+        - 401: Not retryable, does NOT trip circuit breaker
+        - 5xx: Retryable, trips circuit breaker
+        - Timeouts: Retryable, trips circuit breaker
+
 Example usage:
     provider = TavilyExtractProvider(api_key="tvly-...")
     sources = await provider.extract(["https://example.com/article"])
 """
 
-import asyncio
 import ipaddress
 import logging
 import os
 import re
 import socket
+from dataclasses import replace
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -27,6 +37,17 @@ from foundry_mcp.core.research.providers.base import (
     RateLimitError,
     SearchProviderError,
 )
+from foundry_mcp.core.research.providers.resilience import (
+    ErrorClassification,
+    ErrorType,
+    ProviderResilienceConfig,
+    execute_with_resilience,
+    get_provider_config,
+    get_resilience_manager,
+    RateLimitWaitError,
+    TimeBudgetExceededError,
+)
+from foundry_mcp.core.resilience import CircuitBreakerError
 
 logger = logging.getLogger(__name__)
 
@@ -305,6 +326,7 @@ class TavilyExtractProvider:
         base_url: str = TAVILY_API_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
+        resilience_config: Optional[ProviderResilienceConfig] = None,
     ):
         """Initialize Tavily extract provider.
 
@@ -313,6 +335,8 @@ class TavilyExtractProvider:
             base_url: API base URL (default: https://api.tavily.com)
             timeout: Request timeout in seconds (default: 30.0)
             max_retries: Maximum retry attempts for rate limits (default: 3)
+            resilience_config: Custom resilience configuration. If None, uses
+                defaults from PROVIDER_CONFIGS["tavily_extract"].
 
         Raises:
             ValueError: If no API key is provided or found in environment
@@ -328,6 +352,13 @@ class TavilyExtractProvider:
         self._timeout = timeout
         self._max_retries = max_retries
         self._rate_limit_value = DEFAULT_RATE_LIMIT
+        if resilience_config is None:
+            self._resilience_config = replace(
+                get_provider_config("tavily_extract"),
+                max_retries=max_retries,
+            )
+        else:
+            self._resilience_config = resilience_config
 
     def get_provider_name(self) -> str:
         """Return the provider identifier.
@@ -345,6 +376,32 @@ class TavilyExtractProvider:
             1.0 (one request per second)
         """
         return self._rate_limit_value
+
+    @property
+    def resilience_config(self) -> ProviderResilienceConfig:
+        """Return the resilience configuration for this provider."""
+        if self._resilience_config is not None:
+            return self._resilience_config
+        return get_provider_config("tavily_extract")
+
+    def classify_error(self, error: Exception) -> ErrorClassification:
+        """Classify an error for resilience decisions."""
+        if isinstance(error, AuthenticationError):
+            return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.AUTHENTICATION)
+        if isinstance(error, RateLimitError):
+            return ErrorClassification(retryable=True, trips_breaker=False, backoff_seconds=error.retry_after, error_type=ErrorType.RATE_LIMIT)
+        if isinstance(error, SearchProviderError):
+            error_str = str(error).lower()
+            if any(code in error_str for code in ["500", "502", "503", "504"]):
+                return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.SERVER_ERROR)
+            if "400" in error_str:
+                return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.INVALID_REQUEST)
+            return ErrorClassification(retryable=error.retryable, trips_breaker=error.retryable, error_type=ErrorType.UNKNOWN)
+        if isinstance(error, httpx.TimeoutException):
+            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.TIMEOUT)
+        if isinstance(error, httpx.RequestError):
+            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.NETWORK)
+        return ErrorClassification(retryable=False, trips_breaker=True, error_type=ErrorType.UNKNOWN)
 
     async def extract(
         self,
@@ -427,93 +484,46 @@ class TavilyExtractProvider:
         self,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute API request with exponential backoff retry.
-
-        Args:
-            payload: Request payload
-
-        Returns:
-            Parsed JSON response
-
-        Raises:
-            AuthenticationError: If API key is invalid
-            RateLimitError: If rate limit exceeded after all retries
-            SearchProviderError: For other API errors
-        """
+        """Execute API request with resilience stack."""
         url = f"{self._base_url}{TAVILY_EXTRACT_ENDPOINT}"
-        last_error: Optional[Exception] = None
 
-        for attempt in range(self._max_retries):
-            try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    response = await client.post(url, json=payload)
+        async def make_request() -> dict[str, Any]:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(url, json=payload)
+                if response.status_code == 401:
+                    raise AuthenticationError(provider="tavily_extract", message="Invalid API key")
+                if response.status_code == 429:
+                    raise RateLimitError(provider="tavily_extract", retry_after=self._parse_retry_after(response))
+                if response.status_code >= 400:
+                    raise SearchProviderError(provider="tavily_extract", message=f"API error {response.status_code}: {self._extract_error_message(response)}", retryable=response.status_code >= 500)
+                return response.json()
 
-                    # Handle authentication errors (not retryable)
-                    if response.status_code == 401:
-                        raise AuthenticationError(
-                            provider="tavily_extract",
-                            message="Invalid API key",
-                        )
-
-                    # Handle rate limiting
-                    if response.status_code == 429:
-                        retry_after = self._parse_retry_after(response)
-                        if attempt < self._max_retries - 1:
-                            wait_time = retry_after or (2**attempt)
-                            logger.warning(
-                                f"Tavily extract rate limit hit, waiting {wait_time}s "
-                                f"(attempt {attempt + 1}/{self._max_retries})"
-                            )
-                            await asyncio.sleep(wait_time)
-                            continue
-                        raise RateLimitError(
-                            provider="tavily_extract",
-                            retry_after=retry_after,
-                        )
-
-                    # Handle other errors
-                    if response.status_code >= 400:
-                        error_msg = self._extract_error_message(response)
-                        raise SearchProviderError(
-                            provider="tavily_extract",
-                            message=f"API error {response.status_code}: {error_msg}",
-                            retryable=response.status_code >= 500,
-                        )
-
-                    return response.json()
-
-            except httpx.TimeoutException as e:
-                last_error = e
-                if attempt < self._max_retries - 1:
-                    wait_time = 2**attempt
-                    logger.warning(
-                        f"Tavily extract request timeout, retrying in {wait_time}s "
-                        f"(attempt {attempt + 1}/{self._max_retries})"
-                    )
-                    await asyncio.sleep(wait_time)
-                    continue
-
-            except httpx.RequestError as e:
-                last_error = e
-                if attempt < self._max_retries - 1:
-                    wait_time = 2**attempt
-                    logger.warning(
-                        f"Tavily extract request error: {e}, retrying in {wait_time}s "
-                        f"(attempt {attempt + 1}/{self._max_retries})"
-                    )
-                    await asyncio.sleep(wait_time)
-                    continue
-
-            except (AuthenticationError, RateLimitError, SearchProviderError):
-                raise
-
-        # All retries exhausted
-        raise SearchProviderError(
-            provider="tavily_extract",
-            message=f"Request failed after {self._max_retries} attempts",
-            retryable=False,
-            original_error=last_error,
-        )
+        try:
+            time_budget = self._timeout * (self.resilience_config.max_retries + 1)
+            return await execute_with_resilience(
+                make_request,
+                provider_name="tavily_extract",
+                time_budget=time_budget,
+                classify_error=self.classify_error,
+                manager=get_resilience_manager(),
+                resilience_config=self.resilience_config,
+            )
+        except CircuitBreakerError as e:
+            raise SearchProviderError(provider="tavily_extract", message=f"Circuit breaker open: {e}", retryable=False)
+        except RateLimitWaitError as e:
+            raise RateLimitError(provider="tavily_extract", retry_after=e.wait_needed)
+        except TimeBudgetExceededError as e:
+            raise SearchProviderError(provider="tavily_extract", message=f"Request timed out: {e}", retryable=True)
+        except SearchProviderError:
+            raise
+        except Exception as e:
+            classification = self.classify_error(e)
+            raise SearchProviderError(
+                provider="tavily_extract",
+                message=f"Request failed after retries: {e}",
+                retryable=classification.retryable,
+                original_error=e,
+            )
 
     def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
         """Parse Retry-After header from response.

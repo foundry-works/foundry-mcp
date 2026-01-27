@@ -19,6 +19,20 @@ from foundry_mcp.core.research.providers.base import (
 )
 from foundry_mcp.core.research.providers.google import GoogleSearchProvider
 from foundry_mcp.core.research.providers.perplexity import PerplexitySearchProvider
+from foundry_mcp.core.research.providers.resilience import (
+    ErrorClassification,
+    ErrorType,
+    ProviderResilienceConfig,
+    ProviderResilienceManager,
+    ProviderStatus,
+    RateLimitWaitError,
+    TimeBudgetExceededError,
+    async_retry_with_backoff,
+    execute_with_resilience,
+    get_provider_config,
+    get_resilience_manager,
+    reset_resilience_manager_for_testing,
+)
 from foundry_mcp.core.research.providers.semantic_scholar import (
     SemanticScholarProvider,
 )
@@ -43,4 +57,17 @@ __all__ = [
     "RateLimitError",
     "AuthenticationError",
     "UrlValidationError",
+    "RateLimitWaitError",
+    "TimeBudgetExceededError",
+    # Resilience
+    "ErrorClassification",
+    "ErrorType",
+    "ProviderResilienceConfig",
+    "ProviderResilienceManager",
+    "ProviderStatus",
+    "async_retry_with_backoff",
+    "execute_with_resilience",
+    "get_provider_config",
+    "get_resilience_manager",
+    "reset_resilience_manager_for_testing",
 ]

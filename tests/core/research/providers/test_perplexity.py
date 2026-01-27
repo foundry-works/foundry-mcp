@@ -26,6 +26,21 @@ from foundry_mcp.core.research.providers.base import (
     RateLimitError,
     SearchProviderError,
 )
+from foundry_mcp.core.research.providers.resilience import (
+    reset_resilience_manager_for_testing,
+)
+
+
+@pytest.fixture(autouse=True)
+def reset_resilience_state():
+    """Reset resilience manager before and after each test.
+
+    This ensures test isolation - circuit breaker state, rate limiters, etc.
+    don't leak between tests.
+    """
+    reset_resilience_manager_for_testing()
+    yield
+    reset_resilience_manager_for_testing()
 
 
 class TestPerplexitySearchProviderInit:
@@ -315,7 +330,7 @@ class TestPerplexitySearchProviderErrorHandling:
                 await provider.search("test query")
 
             assert exc_info.value.provider == "perplexity"
-            assert "failed after" in exc_info.value.message
+            assert exc_info.value.retryable is True
 
     @pytest.mark.asyncio
     async def test_request_error(self, provider):
@@ -329,6 +344,7 @@ class TestPerplexitySearchProviderErrorHandling:
                 await provider.search("test query")
 
             assert exc_info.value.provider == "perplexity"
+            assert exc_info.value.retryable is True
 
 
 class TestPerplexitySearchProviderResponseParsing:
