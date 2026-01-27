@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0b9] - 2026-01-27
+
+### Added
+
+- **Semantic Scholar API Enhancements**: Extended Semantic Scholar search provider with TLDR support and new filtering/sorting capabilities
+  - **TLDR Summaries**: Auto-generated paper summaries now used as snippet when available, with abstract fallback
+  - **Extended Metadata**: New fields in search results: `venue`, `influential_citation_count`, `reference_count`, `fields_of_study`, `tldr`
+  - **Publication Type Filtering**: `publication_types` parameter to filter by paper type (JournalArticle, Conference, Review, etc.)
+  - **Sorting**: `sort_by` parameter (citationCount, publicationDate, paperId) with `sort_order` (asc/desc, default: desc)
+  - **Extended Fields Toggle**: `use_extended_fields` parameter (default: True) to control metadata verbosity
+  - **Parameter Validation**: Comprehensive validation with clear error messages for all new parameters
+  - **Configuration Fields**: New `[research]` TOML config options:
+    - `semantic_scholar_publication_types`, `semantic_scholar_sort_by`, `semantic_scholar_sort_order`
+    - `semantic_scholar_use_extended_fields`
+  - **Deep Research Integration**: Parameters automatically propagated from config to Semantic Scholar search calls
+
+### Changed
+
+- **Semantic Scholar Endpoint**: Switched from `/paper/search/bulk` to `/paper/search` (relevance search) to enable TLDR support
+  - **Breaking**: Maximum results per query reduced from 1000 to 100 (API limit for /paper/search endpoint)
+  - Results are now relevance-ranked by default
+- **Semantic Scholar Sorting**: `sort_order` without `sort_by` now defaults to `publicationDate`
+
 ## [0.9.0b8] - 2026-01-27
 
 ### Added

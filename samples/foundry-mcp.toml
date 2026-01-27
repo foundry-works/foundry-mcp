@@ -608,6 +608,28 @@ tavily_extract_max_urls = 5
 # context_window = 500000     # Provider-wide override for all Gemini models
 
 # -----------------------------------------------------------------------------
+# Semantic Scholar Search Provider Configuration
+# -----------------------------------------------------------------------------
+# Semantic Scholar provides academic paper search with TLDR summaries.
+# API key is optional but recommended for higher rate limits.
+
+# Filter by publication types (list of types)
+# Valid types: Review, JournalArticle, Conference, CaseReport, ClinicalTrial,
+#              Dataset, Editorial, LettersAndComments, MetaAnalysis, News,
+#              Study, Book, BookSection
+# semantic_scholar_publication_types = ["JournalArticle", "Conference"]
+
+# Sort results by field: citationCount, publicationDate, paperId
+# semantic_scholar_sort_by = "citationCount"
+
+# Sort direction: asc or desc (default: desc)
+# semantic_scholar_sort_order = "desc"
+
+# Include TLDR and extended metadata (default: true)
+# Set to false for faster responses with less metadata
+# semantic_scholar_use_extended_fields = true
+
+# -----------------------------------------------------------------------------
 # Search Provider Credentials (optional, prefer env vars)
 # -----------------------------------------------------------------------------
 # API keys can be set here or via environment variables (preferred):

@@ -1285,6 +1285,40 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
 
         return kwargs
 
+    def _get_semantic_scholar_search_kwargs(self, state: "DeepResearchState") -> dict[str, Any]:
+        """Build Semantic Scholar search kwargs based on config.
+
+        Applies config values for Semantic Scholar-specific parameters.
+        Only includes non-default values to allow provider defaults.
+
+        Args:
+            state: Current deep research state (for potential future mode-based defaults)
+
+        Returns:
+            Dict of kwargs to pass to SemanticScholarProvider.search()
+        """
+        config = self.config
+        kwargs: dict[str, Any] = {}
+
+        # Only include publication_types when explicitly set (non-None)
+        if config.semantic_scholar_publication_types is not None:
+            kwargs["publication_types"] = config.semantic_scholar_publication_types
+
+        # Only include sort_by when explicitly set (non-None)
+        if config.semantic_scholar_sort_by is not None:
+            kwargs["sort_by"] = config.semantic_scholar_sort_by
+
+        # Include sort_order only when sort_by is also set (or non-default)
+        default_sort_order = "desc"
+        if config.semantic_scholar_sort_by is not None or config.semantic_scholar_sort_order != default_sort_order:
+            kwargs["sort_order"] = config.semantic_scholar_sort_order
+
+        # Include use_extended_fields only when False (True is the default)
+        if not config.semantic_scholar_use_extended_fields:
+            kwargs["use_extended_fields"] = False
+
+        return kwargs
+
     def _record_workflow_error(
         self,
         error: Exception,
@@ -3227,6 +3261,11 @@ Generate the research plan as JSON."""
                                 perplexity_kwargs = self._get_perplexity_search_kwargs(state)
                                 search_kwargs.update(perplexity_kwargs)
                                 # Perplexity also needs include_raw_content for link following
+                                search_kwargs["include_raw_content"] = state.follow_links
+                            elif provider_name == "semantic_scholar":
+                                semantic_scholar_kwargs = self._get_semantic_scholar_search_kwargs(state)
+                                search_kwargs.update(semantic_scholar_kwargs)
+                                # Semantic Scholar also gets include_raw_content for consistency
                                 search_kwargs["include_raw_content"] = state.follow_links
                             else:
                                 # Other providers just get include_raw_content

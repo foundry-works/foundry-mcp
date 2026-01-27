@@ -557,6 +557,12 @@ class ResearchConfig:
     perplexity_recency_filter: Optional[str] = None  # "day", "week", "month", "year"
     perplexity_country: Optional[str] = None  # ISO 3166-1 alpha-2 code (e.g., "US")
 
+    # Semantic Scholar search configuration
+    semantic_scholar_publication_types: Optional[List[str]] = None  # Filter by publication types
+    semantic_scholar_sort_by: Optional[str] = None  # Sort field: citationCount, publicationDate, paperId
+    semantic_scholar_sort_order: str = "desc"  # Sort direction: asc or desc
+    semantic_scholar_use_extended_fields: bool = True  # Include TLDR and extended metadata
+
     # Status persistence throttling (reduces disk I/O during deep research)
     status_persistence_throttle_seconds: int = 5  # Minimum seconds between status saves (0 = always persist)
 
@@ -689,6 +695,13 @@ class ResearchConfig:
             perplexity_max_tokens_per_page=int(data.get("perplexity_max_tokens_per_page", 2048)),
             perplexity_recency_filter=data.get("perplexity_recency_filter"),  # None or str
             perplexity_country=data.get("perplexity_country"),  # None or str
+            # Semantic Scholar search configuration
+            semantic_scholar_publication_types=data.get("semantic_scholar_publication_types"),  # None or list
+            semantic_scholar_sort_by=data.get("semantic_scholar_sort_by"),  # None or str
+            semantic_scholar_sort_order=str(data.get("semantic_scholar_sort_order", "desc")),
+            semantic_scholar_use_extended_fields=_parse_bool(
+                data.get("semantic_scholar_use_extended_fields", True)
+            ),
             # Token management configuration
             token_management_enabled=_parse_bool(
                 data.get("token_management_enabled", True)
@@ -724,6 +737,7 @@ class ResearchConfig:
         """Validate configuration fields after initialization."""
         self._validate_tavily_config()
         self._validate_perplexity_config()
+        self._validate_semantic_scholar_config()
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
 
@@ -828,6 +842,52 @@ class ResearchConfig:
                     f"Invalid perplexity_country: {self.perplexity_country!r}. "
                     "Must be a 2-letter uppercase ISO 3166-1 alpha-2 code (e.g., 'US', 'GB')."
                 )
+
+    def _validate_semantic_scholar_config(self) -> None:
+        """Validate all Semantic Scholar configuration fields.
+
+        Raises:
+            ValueError: If any Semantic Scholar config field has an invalid value.
+        """
+        # Valid publication types from Semantic Scholar API
+        valid_publication_types = {
+            "Review", "JournalArticle", "Conference", "CaseReport", "ClinicalTrial",
+            "Dataset", "Editorial", "LettersAndComments", "MetaAnalysis", "News",
+            "Study", "Book", "BookSection",
+        }
+
+        # Validate publication_types (list of valid types or None)
+        if self.semantic_scholar_publication_types is not None:
+            if not isinstance(self.semantic_scholar_publication_types, list):
+                raise ValueError(
+                    f"Invalid semantic_scholar_publication_types: {self.semantic_scholar_publication_types!r}. "
+                    "Must be a list of publication types or None."
+                )
+            invalid_types = set(self.semantic_scholar_publication_types) - valid_publication_types
+            if invalid_types:
+                raise ValueError(
+                    f"Invalid semantic_scholar_publication_types: {sorted(invalid_types)}. "
+                    f"Must be from: {sorted(valid_publication_types)}"
+                )
+
+        # Valid sort fields
+        valid_sort_fields = {"paperId", "publicationDate", "citationCount"}
+
+        # Validate sort_by (valid field or None)
+        if self.semantic_scholar_sort_by is not None:
+            if self.semantic_scholar_sort_by not in valid_sort_fields:
+                raise ValueError(
+                    f"Invalid semantic_scholar_sort_by: {self.semantic_scholar_sort_by!r}. "
+                    f"Must be one of: {sorted(valid_sort_fields)} or None."
+                )
+
+        # Validate sort_order (asc or desc)
+        valid_sort_orders = {"asc", "desc"}
+        if self.semantic_scholar_sort_order not in valid_sort_orders:
+            raise ValueError(
+                f"Invalid semantic_scholar_sort_order: {self.semantic_scholar_sort_order!r}. "
+                f"Must be one of: {sorted(valid_sort_orders)}"
+            )
 
     def _validate_status_persistence_config(self) -> None:
         """Validate status persistence configuration fields.

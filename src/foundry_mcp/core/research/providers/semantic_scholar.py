@@ -33,27 +33,109 @@ logger = logging.getLogger(__name__)
 
 # Semantic Scholar API constants
 SEMANTIC_SCHOLAR_BASE_URL = "https://api.semanticscholar.org/graph/v1"
-PAPER_SEARCH_ENDPOINT = "/paper/search/bulk"
+PAPER_SEARCH_ENDPOINT = "/paper/search"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RATE_LIMIT = 1.0  # requests per second
 
 # Fields to request from the API
-# See: https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data/operation/post_graph_get_papers
+# See: https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data/operation/get_graph_paper_relevance_search
 DEFAULT_FIELDS = (
     "paperId,title,abstract,authors,citationCount,year,"
     "externalIds,url,openAccessPdf,publicationDate"
 )
+
+# Extended fields including TLDR and additional metadata
+EXTENDED_FIELDS = (
+    "paperId,title,abstract,authors,citationCount,year,"
+    "externalIds,url,openAccessPdf,publicationDate,"
+    "tldr,influentialCitationCount,referenceCount,venue,fieldsOfStudy"
+)
+
+# Valid publication types for filtering
+# See: https://api.semanticscholar.org/api-docs/graph#tag/Paper-Data
+VALID_PUBLICATION_TYPES = frozenset({
+    "Review",
+    "JournalArticle",
+    "Conference",
+    "CaseReport",
+    "ClinicalTrial",
+    "Dataset",
+    "Editorial",
+    "LettersAndComments",
+    "MetaAnalysis",
+    "News",
+    "Study",
+    "Book",
+    "BookSection",
+})
+
+# Valid sort fields for search results
+VALID_SORT_FIELDS = frozenset({
+    "paperId",
+    "publicationDate",
+    "citationCount",
+})
+
+# Default sorting when sort_order is provided without sort_by
+DEFAULT_SORT_BY = "publicationDate"
+DEFAULT_SORT_ORDER = "desc"
+
+
+def _validate_search_params(
+    publication_types: list[str] | None,
+    sort_by: str | None,
+    sort_order: str | None,
+) -> None:
+    """Validate Semantic Scholar search parameters.
+
+    Args:
+        publication_types: Filter by publication types.
+        sort_by: Field to sort results by.
+        sort_order: Sort direction ('asc' or 'desc').
+
+    Raises:
+        ValueError: If any parameter is invalid.
+    """
+    if publication_types is not None:
+        invalid_types = set(publication_types) - VALID_PUBLICATION_TYPES
+        if invalid_types:
+            raise ValueError(
+                f"Invalid publication_types: {sorted(invalid_types)}. "
+                f"Must be from: {sorted(VALID_PUBLICATION_TYPES)}"
+            )
+
+    if sort_by is not None:
+        if sort_by not in VALID_SORT_FIELDS:
+            raise ValueError(
+                f"Invalid sort_by: {sort_by!r}. "
+                f"Must be one of: {sorted(VALID_SORT_FIELDS)}"
+            )
+
+    if sort_order is not None and sort_order not in ("asc", "desc"):
+        raise ValueError(
+            f"Invalid sort_order: {sort_order!r}. Must be 'asc' or 'desc'"
+        )
 
 
 class SemanticScholarProvider(SearchProvider):
     """Semantic Scholar Academic Graph API provider for paper search.
 
     Wraps the Semantic Scholar API to provide academic paper search capabilities.
+    Uses the /paper/search endpoint (relevance search) which supports TLDR summaries
+    and extended metadata fields.
+
     API keys are optional but recommended for higher rate limits.
 
     Without API key: Shared rate limit among all unauthenticated users
     With API key: 1 request per second guaranteed
+
+    Features:
+        - TLDR summaries (auto-generated paper summaries, used as snippet when available)
+        - Extended metadata: venue, influential citations, reference count, fields of study
+        - Publication type filtering (JournalArticle, Conference, Review, etc.)
+        - Sorting by citation count, publication date, or paper ID
+        - Max 100 results per query (API limit for /paper/search endpoint)
 
     Attributes:
         api_key: Semantic Scholar API key (optional)
@@ -67,6 +149,8 @@ class SemanticScholarProvider(SearchProvider):
             "deep learning for NLP",
             max_results=10,
             year="2020-2024",
+            publication_types=["JournalArticle", "Conference"],
+            sort_by="citationCount",
         )
     """
 
@@ -120,13 +204,20 @@ class SemanticScholarProvider(SearchProvider):
 
         Args:
             query: The search query string. Supports quoted phrases for exact match.
-            max_results: Maximum number of results to return (default: 10, max: 1000)
+            max_results: Maximum number of results to return (default: 10, max: 100)
             **kwargs: Additional Semantic Scholar options:
                 - year: Filter by year range (e.g., "2020-2024", "2020-", "-2024")
                 - fields_of_study: Filter by fields (e.g., ["Computer Science", "Medicine"])
                 - open_access_pdf: Only include papers with free PDFs (bool)
                 - min_citation_count: Minimum citation count filter
                 - sub_query_id: SubQuery ID for source tracking
+                - publication_types: Filter by publication types (e.g., ["JournalArticle", "Conference"]).
+                    Valid types: Review, JournalArticle, Conference, CaseReport, ClinicalTrial,
+                    Dataset, Editorial, LettersAndComments, MetaAnalysis, News, Study, Book, BookSection
+                - sort_by: Sort results by field. Valid fields: paperId, publicationDate, citationCount
+                - sort_order: Sort direction, 'asc' or 'desc' (default: 'desc').
+                    If provided without sort_by, defaults to publicationDate.
+                - use_extended_fields: Include TLDR and additional metadata (default: True)
 
         Returns:
             List of ResearchSource objects with source_type='academic'
@@ -143,11 +234,27 @@ class SemanticScholarProvider(SearchProvider):
         min_citation_count = kwargs.get("min_citation_count")
         sub_query_id = kwargs.get("sub_query_id")
 
+        # New search parameters
+        publication_types = kwargs.get("publication_types")
+        sort_by = kwargs.get("sort_by")
+        sort_order = kwargs.get("sort_order")
+        if sort_by is None and sort_order is not None:
+            sort_by = DEFAULT_SORT_BY
+        if sort_by and sort_order is None:
+            sort_order = DEFAULT_SORT_ORDER
+        use_extended_fields = kwargs.get("use_extended_fields", True)
+
+        # Validate new parameters
+        _validate_search_params(publication_types, sort_by, sort_order)
+
+        # Select fields based on use_extended_fields
+        fields = EXTENDED_FIELDS if use_extended_fields else DEFAULT_FIELDS
+
         # Build query parameters
         params: dict[str, Any] = {
             "query": query,
-            "limit": min(max_results, 1000),  # API max is 1000
-            "fields": DEFAULT_FIELDS,
+            "limit": min(max_results, 100),  # API max is 100 for /paper/search
+            "fields": fields,
         }
 
         if year:
@@ -158,6 +265,10 @@ class SemanticScholarProvider(SearchProvider):
             params["openAccessPdf"] = ""  # Empty string means filter to only open access
         if min_citation_count:
             params["minCitationCount"] = min_citation_count
+        if publication_types:
+            params["publicationTypes"] = ",".join(publication_types)
+        if sort_by:
+            params["sort"] = f"{sort_by}:{sort_order}"
 
         # Execute with retry logic
         response_data = await self._execute_with_retry(params)
@@ -310,10 +421,11 @@ class SemanticScholarProvider(SearchProvider):
     ) -> list[ResearchSource]:
         """Parse Semantic Scholar API response into ResearchSource objects.
 
-        Semantic Scholar response structure:
+        Semantic Scholar /paper/search response structure:
         {
             "total": 12345,
-            "token": "...",  # pagination token
+            "offset": 0,  # current offset for pagination
+            "next": 10,   # next offset (absent on last page)
             "data": [
                 {
                     "paperId": "abc123",
@@ -354,16 +466,22 @@ class SemanticScholarProvider(SearchProvider):
             # Parse publication date
             pub_date = self._parse_date(paper.get("publicationDate"))
 
+            # Extract TLDR text if available
+            tldr_obj = paper.get("tldr")
+            tldr_text = tldr_obj.get("text") if isinstance(tldr_obj, dict) else None
+
             # Build the primary URL (prefer DOI link if available)
             primary_url = self._get_primary_url(paper, external_ids)
 
             # Create SearchResult from Semantic Scholar response
+            # Use TLDR for snippet if available, fallback to truncated abstract
+            snippet = tldr_text if tldr_text else self._truncate_abstract(paper.get("abstract"))
             search_result = SearchResult(
                 url=primary_url,
                 title=paper.get("title", "Untitled"),
-                snippet=self._truncate_abstract(paper.get("abstract")),
+                snippet=snippet,
                 content=paper.get("abstract"),  # Full abstract as content
-                score=None,  # Semantic Scholar doesn't provide relevance scores in bulk search
+                score=None,  # Results are relevance-ranked but no numeric score provided
                 published_date=pub_date,
                 source="Semantic Scholar",
                 metadata={
@@ -375,6 +493,11 @@ class SemanticScholarProvider(SearchProvider):
                     "arxiv_id": external_ids.get("arxiv"),
                     "pdf_url": pdf_url,
                     "semantic_scholar_url": paper.get("url"),
+                    "venue": paper.get("venue"),
+                    "influential_citation_count": paper.get("influentialCitationCount"),
+                    "reference_count": paper.get("referenceCount"),
+                    "fields_of_study": paper.get("fieldsOfStudy"),
+                    "tldr": tldr_text,
                     **{k: v for k, v in external_ids.items() if k not in ("doi", "arxiv")},
                 },
             )
