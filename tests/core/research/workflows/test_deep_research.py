@@ -1916,3 +1916,488 @@ class TestAuditVerbosity:
 
         # Original should be unchanged
         assert sample_audit_data == original_copy
+
+
+# =============================================================================
+# Deep Research Failover Integration Tests
+# =============================================================================
+
+
+class TestDeepResearchProviderFailover:
+    """Integration tests for deep research provider failover with circuit breakers.
+
+    Tests the gathering phase's ability to handle provider failures gracefully:
+    - Skipping providers with OPEN circuit breakers
+    - Allowing HALF_OPEN recovery probes
+    - Handling all_providers_circuit_open scenario
+    - Graceful degradation when provider trips mid-gathering
+
+    All tests use reset_resilience_manager_for_testing() for proper isolation.
+    """
+
+    @pytest.fixture(autouse=True)
+    def reset_resilience_state(self):
+        """Reset resilience manager before and after each test for isolation."""
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+        reset_resilience_manager_for_testing()
+        yield
+        reset_resilience_manager_for_testing()
+
+    @pytest.fixture
+    def workflow_with_providers(self, mock_config, mock_memory):
+        """Create workflow instance with configured providers."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+        mock_config.deep_research_providers = ["tavily", "google"]
+        workflow = DeepResearchWorkflow(config=mock_config, memory=mock_memory)
+        return workflow
+
+    @pytest.fixture
+    def state_with_pending_queries(self):
+        """Create state with pending sub-queries for gathering phase."""
+        state = DeepResearchState(
+            id="test-failover-001",
+            original_query="Test query for failover",
+            research_brief="Testing provider failover",
+            phase=DeepResearchPhase.GATHERING,
+            iteration=1,
+            max_iterations=3,
+            max_sources_per_query=5,
+        )
+        # Add pending sub-queries
+        state.add_sub_query(
+            query="Sub-query 1",
+            rationale="Test rationale",
+            priority=1,
+        )
+        state.add_sub_query(
+            query="Sub-query 2",
+            rationale="Test rationale 2",
+            priority=2,
+        )
+        return state
+
+    @pytest.mark.asyncio
+    async def test_skips_open_circuit_breaker_providers(
+        self, workflow_with_providers, state_with_pending_queries, mock_memory
+    ):
+        """Providers with OPEN circuit breakers should be skipped during gathering."""
+        from foundry_mcp.core.research.providers.resilience import get_resilience_manager
+        from foundry_mcp.core.resilience import CircuitState
+
+        mgr = get_resilience_manager()
+
+        # Trip tavily's circuit breaker
+        tavily_breaker = mgr._get_or_create_circuit_breaker("tavily")
+        for _ in range(10):
+            tavily_breaker.record_failure()
+        assert tavily_breaker.state == CircuitState.OPEN
+
+        # Google should still be available
+        assert mgr.is_provider_available("google") is True
+        assert mgr.is_provider_available("tavily") is False
+
+        # Mock the search providers
+        mock_google_sources = [
+            ResearchSource(
+                url="https://google-result.com/1",
+                title="Google Result 1",
+                source_type=SourceType.WEB,
+            )
+        ]
+
+        with patch.object(
+            workflow_with_providers,
+            "_get_search_provider",
+            side_effect=lambda name: (
+                self._create_mock_provider(name, mock_google_sources)
+                if name == "google"
+                else self._create_mock_provider(name, [])
+            ),
+        ):
+            result = await workflow_with_providers._execute_gathering_async(
+                state=state_with_pending_queries,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=2,
+            )
+
+        # Should succeed with google results
+        assert result.success is True
+        # Tavily should have been filtered out
+        assert "tavily" not in result.metadata.get("providers_used", [])
+
+    @pytest.mark.asyncio
+    async def test_allows_half_open_recovery_probes(
+        self, workflow_with_providers, state_with_pending_queries, mock_memory
+    ):
+        """HALF_OPEN providers should be allowed to enable recovery probes."""
+        from foundry_mcp.core.research.providers.resilience import get_resilience_manager
+        from foundry_mcp.core.resilience import CircuitState
+
+        mgr = get_resilience_manager()
+
+        # Trip tavily's circuit breaker
+        tavily_breaker = mgr._get_or_create_circuit_breaker("tavily")
+        tavily_breaker.recovery_timeout = 0.01  # Very short for testing
+        for _ in range(10):
+            tavily_breaker.record_failure()
+        assert tavily_breaker.state == CircuitState.OPEN
+
+        # Wait for recovery timeout to allow HALF_OPEN transition
+        await asyncio.sleep(0.02)
+
+        # Trigger HALF_OPEN transition
+        assert tavily_breaker.can_execute() is True
+        assert tavily_breaker.state == CircuitState.HALF_OPEN
+
+        # Both should now be available (tavily in HALF_OPEN, google in CLOSED)
+        assert mgr.is_provider_available("tavily") is True
+        assert mgr.is_provider_available("google") is True
+
+        # Mock providers to return results
+        mock_sources = [
+            ResearchSource(
+                url="https://example.com/1",
+                title="Test Result",
+                source_type=SourceType.WEB,
+            )
+        ]
+
+        with patch.object(
+            workflow_with_providers,
+            "_get_search_provider",
+            side_effect=lambda name: self._create_mock_provider(name, mock_sources),
+        ):
+            result = await workflow_with_providers._execute_gathering_async(
+                state=state_with_pending_queries,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=2,
+            )
+
+        assert result.success is True
+        # Both providers should have been used
+        providers_used = result.metadata.get("providers_used", [])
+        assert "tavily" in providers_used or "google" in providers_used
+
+    @pytest.mark.asyncio
+    async def test_all_providers_circuit_open_returns_error(
+        self, workflow_with_providers, state_with_pending_queries, mock_memory
+    ):
+        """All providers having OPEN circuits should return descriptive error."""
+        from foundry_mcp.core.research.providers.resilience import get_resilience_manager
+        from foundry_mcp.core.resilience import CircuitState
+
+        mgr = get_resilience_manager()
+
+        # Trip both circuit breakers
+        for provider_name in ["tavily", "google"]:
+            breaker = mgr._get_or_create_circuit_breaker(provider_name)
+            for _ in range(10):
+                breaker.record_failure()
+            assert breaker.state == CircuitState.OPEN
+
+        # Both should be unavailable
+        assert mgr.is_provider_available("tavily") is False
+        assert mgr.is_provider_available("google") is False
+
+        # Mock providers to return valid objects (though they won't be used)
+        with patch.object(
+            workflow_with_providers,
+            "_get_search_provider",
+            side_effect=lambda name: self._create_mock_provider(name, []),
+        ):
+            result = await workflow_with_providers._execute_gathering_async(
+                state=state_with_pending_queries,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=2,
+            )
+
+        # Should fail with circuit breaker error
+        assert result.success is False
+        assert result.error is not None
+        assert "circuit breaker" in result.error.lower()
+        assert "temporarily unavailable" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_graceful_degradation_when_provider_trips_mid_gathering(
+        self, workflow_with_providers, state_with_pending_queries, mock_memory
+    ):
+        """Provider tripping mid-gathering should skip remaining calls gracefully."""
+        from foundry_mcp.core.research.providers.resilience import get_resilience_manager
+        from foundry_mcp.core.resilience import CircuitState
+
+        mgr = get_resilience_manager()
+        call_count = {"tavily": 0, "google": 0}
+
+        # Tavily will succeed first time, then we trip its breaker
+        async def tavily_search(*args, **kwargs):
+            call_count["tavily"] += 1
+            if call_count["tavily"] == 1:
+                # First call succeeds, then trip the breaker
+                breaker = mgr._get_or_create_circuit_breaker("tavily")
+                for _ in range(10):
+                    breaker.record_failure()
+                return [
+                    ResearchSource(
+                        url=f"https://tavily.com/{call_count['tavily']}",
+                        title=f"Tavily Result {call_count['tavily']}",
+                        source_type=SourceType.WEB,
+                    )
+                ]
+            # Subsequent calls would not be made due to circuit open
+            return []
+
+        async def google_search(*args, **kwargs):
+            call_count["google"] += 1
+            return [
+                ResearchSource(
+                    url=f"https://google.com/{call_count['google']}",
+                    title=f"Google Result {call_count['google']}",
+                    source_type=SourceType.WEB,
+                )
+            ]
+
+        def create_provider(name):
+            mock_provider = MagicMock()
+            mock_provider.get_provider_name.return_value = name
+            if name == "tavily":
+                mock_provider.search = AsyncMock(side_effect=tavily_search)
+            else:
+                mock_provider.search = AsyncMock(side_effect=google_search)
+            return mock_provider
+
+        with patch.object(
+            workflow_with_providers,
+            "_get_search_provider",
+            side_effect=create_provider,
+        ):
+            result = await workflow_with_providers._execute_gathering_async(
+                state=state_with_pending_queries,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=1,  # Sequential to control ordering
+            )
+
+        # Should succeed overall
+        assert result.success is True
+
+        # Tavily should have only been called once (before circuit opened)
+        # due to graceful degradation checking circuit state mid-gathering
+        assert call_count["tavily"] >= 1
+        # Google should have been called for both sub-queries
+        assert call_count["google"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_resilience_state_isolation_between_tests(self, mock_config, mock_memory):
+        """Verify reset_resilience_manager_for_testing provides proper isolation."""
+        from foundry_mcp.core.research.providers.resilience import (
+            get_resilience_manager,
+            reset_resilience_manager_for_testing,
+        )
+        from foundry_mcp.core.resilience import CircuitState
+
+        # First: trip a breaker
+        mgr1 = get_resilience_manager()
+        breaker1 = mgr1._get_or_create_circuit_breaker("tavily")
+        for _ in range(10):
+            breaker1.record_failure()
+        assert breaker1.state == CircuitState.OPEN
+
+        # Reset manager
+        reset_resilience_manager_for_testing()
+
+        # After reset: new manager should have fresh state
+        mgr2 = get_resilience_manager()
+        assert mgr2 is not mgr1  # Different instance
+        breaker2 = mgr2._get_or_create_circuit_breaker("tavily")
+        assert breaker2.state == CircuitState.CLOSED  # Fresh state
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_states_captured_in_metadata(
+        self, workflow_with_providers, state_with_pending_queries, mock_memory
+    ):
+        """Circuit breaker states should be captured in result metadata."""
+        from foundry_mcp.core.research.providers.resilience import get_resilience_manager
+
+        mgr = get_resilience_manager()
+
+        # Add some failures to tavily (but not enough to trip)
+        tavily_breaker = mgr._get_or_create_circuit_breaker("tavily")
+        tavily_breaker.record_failure()
+        tavily_breaker.record_failure()
+
+        mock_sources = [
+            ResearchSource(
+                url="https://example.com/1",
+                title="Test Result",
+                source_type=SourceType.WEB,
+            )
+        ]
+
+        with patch.object(
+            workflow_with_providers,
+            "_get_search_provider",
+            side_effect=lambda name: self._create_mock_provider(name, mock_sources),
+        ):
+            result = await workflow_with_providers._execute_gathering_async(
+                state=state_with_pending_queries,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=2,
+            )
+
+        assert result.success is True
+        # Verify circuit breaker states are captured
+        assert "circuit_breaker_states" in result.metadata
+        cb_states = result.metadata["circuit_breaker_states"]
+        assert "start" in cb_states
+        assert "end" in cb_states
+
+    def _create_mock_provider(self, name: str, sources: list) -> MagicMock:
+        """Helper to create mock search provider."""
+        mock_provider = MagicMock()
+        mock_provider.get_provider_name.return_value = name
+        mock_provider.search = AsyncMock(return_value=sources)
+        return mock_provider
+
+
+class TestDeepResearchProviderFailoverEdgeCases:
+    """Edge case tests for provider failover scenarios."""
+
+    @pytest.fixture(autouse=True)
+    def reset_resilience_state(self):
+        """Reset resilience manager before and after each test."""
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+        reset_resilience_manager_for_testing()
+        yield
+        reset_resilience_manager_for_testing()
+
+    @pytest.fixture
+    def workflow_three_providers(self, mock_config, mock_memory):
+        """Workflow with three providers for more complex failover scenarios."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+        mock_config.deep_research_providers = ["tavily", "google", "semantic_scholar"]
+        return DeepResearchWorkflow(config=mock_config, memory=mock_memory)
+
+    @pytest.fixture
+    def state_single_query(self):
+        """State with single sub-query."""
+        state = DeepResearchState(
+            id="test-edge-001",
+            original_query="Edge case test",
+            research_brief="Testing edge cases",
+            phase=DeepResearchPhase.GATHERING,
+            iteration=1,
+            max_iterations=3,
+            max_sources_per_query=5,
+        )
+        state.add_sub_query(query="Single query", rationale="Test", priority=1)
+        return state
+
+    @pytest.mark.asyncio
+    async def test_partial_provider_failure_continues_with_available(
+        self, workflow_three_providers, state_single_query, mock_memory
+    ):
+        """When some providers fail, gathering continues with available ones."""
+        from foundry_mcp.core.research.providers.resilience import get_resilience_manager
+        from foundry_mcp.core.resilience import CircuitState
+
+        mgr = get_resilience_manager()
+
+        # Trip tavily and semantic_scholar, leave google available
+        for name in ["tavily", "semantic_scholar"]:
+            breaker = mgr._get_or_create_circuit_breaker(name)
+            for _ in range(10):
+                breaker.record_failure()
+            assert breaker.state == CircuitState.OPEN
+
+        assert mgr.is_provider_available("google") is True
+
+        mock_sources = [
+            ResearchSource(
+                url="https://google.com/result",
+                title="Google Only Result",
+                source_type=SourceType.WEB,
+            )
+        ]
+
+        def create_provider(name):
+            if name == "google":
+                mock_provider = MagicMock()
+                mock_provider.get_provider_name.return_value = name
+                mock_provider.search = AsyncMock(return_value=mock_sources)
+                return mock_provider
+            elif name in ["tavily", "semantic_scholar"]:
+                mock_provider = MagicMock()
+                mock_provider.get_provider_name.return_value = name
+                mock_provider.search = AsyncMock(return_value=[])
+                return mock_provider
+            return None
+
+        with patch.object(
+            workflow_three_providers,
+            "_get_search_provider",
+            side_effect=create_provider,
+        ):
+            result = await workflow_three_providers._execute_gathering_async(
+                state=state_single_query,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=3,
+            )
+
+        # Should succeed with just google
+        assert result.success is True
+        providers_used = result.metadata.get("providers_used", [])
+        assert "google" in providers_used
+        assert "tavily" not in providers_used
+        assert "semantic_scholar" not in providers_used
+
+    @pytest.mark.asyncio
+    async def test_no_configured_providers_returns_configuration_error(
+        self, mock_config, mock_memory
+    ):
+        """No configured providers should return configuration error, not circuit error."""
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+        reset_resilience_manager_for_testing()
+
+        # Configure with providers that won't be instantiated
+        mock_config.deep_research_providers = ["nonexistent_provider"]
+        workflow = DeepResearchWorkflow(config=mock_config, memory=mock_memory)
+
+        state = DeepResearchState(
+            id="test-no-providers",
+            original_query="Test",
+            research_brief="Test",
+            phase=DeepResearchPhase.GATHERING,
+            iteration=1,
+        )
+        state.add_sub_query(query="Test query", rationale="Test", priority=1)
+
+        # Provider lookup returns None for nonexistent
+        with patch.object(
+            workflow,
+            "_get_search_provider",
+            return_value=None,
+        ):
+            result = await workflow._execute_gathering_async(
+                state=state,
+                provider_id=None,
+                timeout=30.0,
+                max_concurrent=2,
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        # Should mention configuration, not circuit breakers
+        assert "no search providers available" in result.error.lower()
+        assert "configure api keys" in result.error.lower()

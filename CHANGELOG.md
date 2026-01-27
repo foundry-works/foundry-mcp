@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0b10] - 2026-01-27
+
+### Added
+
+- **Provider Rate Limit Resilience**: Unified resilience layer for all search providers with circuit breakers, rate limiting, and retry with backoff
+  - **Circuit Breakers**: Per-provider circuit breakers with CLOSED → OPEN → HALF_OPEN state transitions
+    - Opens after 5 consecutive failures, 30s recovery timeout
+    - HALF_OPEN allows recovery probes before fully closing
+    - Deep research skips providers with OPEN circuits, enabling graceful failover
+  - **Rate Limiting**: Token bucket rate limiting per provider
+    - Default: 1 RPS with burst limit of 3
+    - Semantic Scholar: 0.9 RPS with burst limit of 2 (conservative for academic API)
+    - Configurable `max_wait_seconds` for rate limit queue timeout
+  - **Retry with Jitter**: Exponential backoff with deterministic jitter (seeded RNG for testing)
+    - 50-150% jitter range prevents thundering herd
+    - Respects time budget constraints during retry delays
+  - **Error Classification**: Provider-specific error handling via `classify_error()` hook
+    - 429 errors: Retryable, does NOT trip circuit breaker
+    - 401/403 errors: Not retryable, does NOT trip circuit breaker
+    - 5xx errors: Retryable, trips circuit breaker
+    - Timeouts/network errors: Retryable, trips circuit breaker
+  - **Time Budget Enforcement**: Operations cancelled when exceeding time budget
+  - **Graceful Degradation**: Providers that trip mid-gathering are skipped for remaining sub-queries
+  - **Observability**: Circuit breaker state changes and rate limit waits logged via audit_log
+  - **Testing Support**: `reset_resilience_manager_for_testing()` for test isolation
+
+- **New Exceptions**:
+  - `RateLimitWaitError`: Raised when rate limit wait would exceed `max_wait_seconds`
+  - `TimeBudgetExceededError`: Raised when operation exceeds time budget
+
+### Changed
+
+- Deep research gathering phase now filters providers by circuit breaker state before execution
+- Provider docstrings updated with resilience configuration details
+
 ## [0.9.0b9] - 2026-01-27
 
 ### Added
