@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Environment get-config Lookup**: Fixed `environment(action="get-config")` to use the full config lookup hierarchy (matching `ServerConfig.from_env()`), instead of only checking the current working directory
+  - Added `path` parameter for explicit config file specification
+  - Now searches: explicit path → `FOUNDRY_MCP_CONFIG_FILE` env var → project dir → `~/.foundry-mcp.toml` → XDG config
+  - Error response includes `searched_paths` for debugging
+
 ## [0.9.0b7] - 2026-01-26
 
 ### Added
