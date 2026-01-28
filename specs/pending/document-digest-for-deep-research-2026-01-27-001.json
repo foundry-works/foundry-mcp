@@ -2,7 +2,7 @@
   "spec_id": "document-digest-for-deep-research-2026-01-27-001",
   "title": "document-digest-for-deep-research",
   "generated": "2026-01-27T18:06:11.985068Z",
-  "last_updated": "2026-01-27T18:21:59.092088Z",
+  "last_updated": "2026-01-28T00:27:58.538802Z",
   "metadata": {
     "description": "",
     "mission": "Add an internal, provider-agnostic document digest step for deep research that compresses large HTML/PDF content into structured JSON summaries with evidence snippets, preventing context budget overflow.",
@@ -19,14 +19,14 @@
     "category": "implementation",
     "template": "empty"
   },
-  "progress_percentage": 0,
-  "status": "pending",
-  "current_phase": null,
+  "progress_percentage": 15,
+  "status": "in_progress",
+  "current_phase": "phase-2",
   "hierarchy": {
     "spec-root": {
       "type": "spec",
       "title": "document-digest-for-deep-research",
-      "status": "pending",
+      "status": "in_progress",
       "parent": null,
       "children": [
         "phase-1",
@@ -38,8 +38,8 @@
         "phase-7",
         "phase-8"
       ],
-      "total_tasks": 64,
-      "completed_tasks": 0,
+      "total_tasks": 65,
+      "completed_tasks": 10,
       "metadata": {
         "purpose": "",
         "category": "implementation"
@@ -53,7 +53,7 @@
     "phase-1": {
       "type": "phase",
       "title": "Foundation - Models and Configuration",
-      "status": "pending",
+      "status": "completed",
       "parent": "spec-root",
       "children": [
         "task-1-1",
@@ -64,13 +64,16 @@
         "task-1-6",
         "task-1-7",
         "verify-1-1",
-        "task-1-8"
+        "task-1-8",
+        "task-1-9"
       ],
-      "total_tasks": 9,
-      "completed_tasks": 0,
+      "total_tasks": 10,
+      "completed_tasks": 10,
       "metadata": {
         "purpose": "",
-        "description": "Establish data structures, schemas, and configuration without changing existing behavior"
+        "description": "Establish data structures, schemas, and configuration without changing existing behavior",
+        "needs_journaling": true,
+        "completed_at": "2026-01-28T00:27:58.538677Z"
       },
       "dependencies": {
         "blocks": [
@@ -83,11 +86,11 @@
     "task-1-1": {
       "type": "task",
       "title": "Define DigestPayload dataclass",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Create DigestPayload dataclass matching JSON schema v1.0 with version, content_type, query_hash, summary, key_points, evidence_snippets, original_chars, digest_chars, compression_ratio, source_text_hash fields. Include content_type and query_hash for self-describing portability.",
         "file_path": "src/foundry_mcp/core/research/models.py",
@@ -96,7 +99,12 @@
           "Fields match JSON schema types and constraints",
           "Payload is self-describing (can be validated without surrounding metadata)"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2026-01-28T00:00:17.137659Z",
+        "completed_at": "2026-01-28T00:01:09.322563Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-28T00:01:09.322684Z"
       },
       "dependencies": {
         "blocks": [],
@@ -107,11 +115,11 @@
     "task-1-2": {
       "type": "task",
       "title": "Define EvidenceSnippet dataclass",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Create EvidenceSnippet dataclass with text, locator, relevance_score fields",
         "file_path": "src/foundry_mcp/core/research/models.py",
@@ -119,7 +127,10 @@
           "EvidenceSnippet dataclass exists",
           "locator field supports char:{start}-{end} and page:{n}:char:{start}-{end} formats"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "completed_at": "2026-01-28T00:01:20.007321Z",
+        "needs_journaling": false,
+        "journaled_at": "2026-01-28T00:01:20.007420Z"
       },
       "dependencies": {
         "blocks": [],
@@ -130,11 +141,11 @@
     "task-1-3": {
       "type": "task",
       "title": "Add FidelityLevel.DIGEST enum value",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Add DIGEST to FidelityLevel enum after KEY_POINTS, before TRUNCATED",
         "file_path": "src/foundry_mcp/core/research/models.py",
@@ -142,7 +153,12 @@
           "FidelityLevel.DIGEST exists",
           "Enum ordering is correct"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2026-01-28T00:01:27.224607Z",
+        "completed_at": "2026-01-28T00:01:58.622830Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-28T00:01:58.622953Z"
       },
       "dependencies": {
         "blocks": [],
@@ -153,11 +169,11 @@
     "task-1-4": {
       "type": "task",
       "title": "Add content_type field to ResearchSource",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Add content_type: str = 'text/plain' field and is_digest property returning content_type == 'digest/v1'",
         "file_path": "src/foundry_mcp/core/research/models.py",
@@ -165,7 +181,12 @@
           "content_type field exists with default 'text/plain'",
           "is_digest property works correctly"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2026-01-28T00:02:05.120925Z",
+        "completed_at": "2026-01-28T00:02:25.759387Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-28T00:02:25.759477Z"
       },
       "dependencies": {
         "blocks": [],
@@ -176,11 +197,11 @@
     "task-1-5": {
       "type": "task",
       "title": "Add digest configuration fields to ResearchConfig",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Add deep_research_digest_policy, deep_research_digest_min_chars, deep_research_digest_max_sources, deep_research_digest_timeout, deep_research_digest_max_concurrent, deep_research_digest_include_evidence, deep_research_digest_evidence_max_chars, deep_research_digest_max_evidence_snippets, deep_research_digest_fetch_pdfs fields",
         "file_path": "src/foundry_mcp/config.py",
@@ -188,7 +209,12 @@
           "All digest config fields exist with correct defaults",
           "Fields are parsed from TOML correctly"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2026-01-28T00:02:32.685445Z",
+        "completed_at": "2026-01-28T00:03:17.439569Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-28T00:03:17.439663Z"
       },
       "dependencies": {
         "blocks": [],
@@ -199,11 +225,11 @@
     "task-1-6": {
       "type": "task",
       "title": "Add digest config validation",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Add _validate_digest_config() method to validate digest policy values and numeric ranges",
         "file_path": "src/foundry_mcp/config.py",
@@ -211,7 +237,12 @@
           "Invalid policy values raise ValueError",
           "Negative numeric values raise ValueError"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2026-01-28T00:03:24.030129Z",
+        "completed_at": "2026-01-28T00:04:00.238220Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-28T00:04:00.238310Z"
       },
       "dependencies": {
         "blocks": [],
@@ -222,11 +253,11 @@
     "task-1-7": {
       "type": "task",
       "title": "Update ResearchSource.to_dict() to filter internal keys",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Ensure to_dict() filters out _raw_content and _digest_* metadata keys",
         "file_path": "src/foundry_mcp/core/research/models.py",
@@ -234,7 +265,12 @@
           "_raw_content never appears in to_dict() output",
           "_digest_archive_hash and similar filtered"
         ],
-        "task_category": "implementation"
+        "task_category": "implementation",
+        "started_at": "2026-01-28T00:04:08.239589Z",
+        "completed_at": "2026-01-28T00:04:35.831695Z",
+        "needs_journaling": false,
+        "actual_hours": 0.01,
+        "journaled_at": "2026-01-28T00:04:35.831792Z"
       },
       "dependencies": {
         "blocks": [],
@@ -245,14 +281,29 @@
     "verify-1-1": {
       "type": "verify",
       "title": "Verify Phase 1 implementation fidelity",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Verify DigestPayload matches JSON schema, EvidenceSnippet has all fields, config validation rejects invalid values, _raw_content filtered from serialization",
-        "verification_type": "fidelity"
+        "verification_type": "fidelity",
+        "started_at": "2026-01-28T00:25:23.766395Z",
+        "resolved_blockers": [
+          {
+            "blocked_at": "2026-01-28T00:20:00.263621Z",
+            "blocker_type": "dependency",
+            "description": "Fidelity review found MEDIUM severity deviation: key_points lacks per-item max_length validation. Blocked pending task-1-9 completion.",
+            "ticket": null,
+            "resolved_at": "2026-01-28T00:25:16.796398Z",
+            "resolution": "task-1-9 completed: Added field_validator to enforce per-item max_length=500 for key_points"
+          }
+        ],
+        "completed_at": "2026-01-28T00:27:58.538607Z",
+        "needs_journaling": false,
+        "actual_hours": 0.04,
+        "journaled_at": "2026-01-28T00:27:58.538746Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1751,14 +1802,41 @@
     "task-1-8": {
       "type": "task",
       "title": "Define archival contract for canonical text",
-      "status": "pending",
+      "status": "completed",
       "parent": "phase-1",
       "children": [],
       "total_tasks": 1,
-      "completed_tasks": 0,
+      "completed_tasks": 1,
       "metadata": {
         "description": "Define archival contract: When deep_research_archive_content=true, canonical text is stored at {archive_dir}/{source_id}/{source_text_hash}.txt. Retention: 30 days default (configurable). source_text_hash computed BEFORE archival, archived text is the canonical form. Locator offsets reference archived canonical text.",
-        "file_path": "src/foundry_mcp/core/research/models.py"
+        "file_path": "src/foundry_mcp/core/research/models.py",
+        "started_at": "2026-01-28T00:04:45.021330Z",
+        "completed_at": "2026-01-28T00:05:00.494801Z",
+        "needs_journaling": false,
+        "actual_hours": 0.0,
+        "journaled_at": "2026-01-28T00:05:00.494902Z"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-9": {
+      "type": "task",
+      "title": "Enforce per-item max_length=500 for DigestPayload.key_points",
+      "status": "completed",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 1,
+      "metadata": {
+        "description": "The fidelity review identified that DigestPayload.key_points only constrains list length (max 10 items) but does not enforce the per-item maximum of 500 characters specified in the schema documentation. Add validation using Pydantic's constrained types or a field_validator to ensure each key point string does not exceed 500 characters.",
+        "started_at": "2026-01-28T00:24:17.478053Z",
+        "completed_at": "2026-01-28T00:25:13.377868Z",
+        "needs_journaling": false,
+        "actual_hours": 0.02,
+        "journaled_at": "2026-01-28T00:25:13.377959Z"
       },
       "dependencies": {
         "blocks": [],
@@ -1767,5 +1845,123 @@
       }
     }
   },
-  "journal": []
+  "journal": [
+    {
+      "timestamp": "2026-01-28T00:01:09.322684Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define DigestPayload dataclass",
+      "content": "Implemented DigestPayload and EvidenceSnippet dataclasses in models.py. DigestPayload includes all v1.0 schema fields: version, content_type, query_hash, summary, key_points, evidence_snippets, original_chars, digest_chars, compression_ratio, source_text_hash. Added validation constraints matching JSON schema (pattern validation for query_hash and source_text_hash, range constraints for compression_ratio and relevance_score). Added helper methods: is_valid_digest property, to_json(), from_json(). Basic verification passed (imports work, instantiation works, validation rejects invalid inputs). Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-1"
+    },
+    {
+      "timestamp": "2026-01-28T00:01:20.007420Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define EvidenceSnippet dataclass",
+      "content": "EvidenceSnippet was already implemented as part of task-1-1 (DigestPayload requires it). The dataclass includes: text field (max 500 chars), locator field (supports both char:{start}-{end} and page:{n}:char:{start}-{end} formats), relevance_score field (0.0-1.0 range). Comprehensive docstring documents locator formats and indexing semantics. Validation confirmed working in task-1-1 tests.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-2"
+    },
+    {
+      "timestamp": "2026-01-28T00:01:58.622953Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add FidelityLevel.DIGEST enum value",
+      "content": "Added FidelityLevel.DIGEST enum value to models.py after KEY_POINTS and before HEADLINE. Updated docstring to include DIGEST level description (~15-30% of original). Verified ordering: KEY_POINTS(2) < DIGEST(3) < HEADLINE(4). Basic verification passed. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-3"
+    },
+    {
+      "timestamp": "2026-01-28T00:02:25.759477Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add content_type field to ResearchSource",
+      "content": "Added content_type field to ResearchSource with default 'text/plain'. Added is_digest property that returns True when content_type == 'digest/v1'. Verified: default content_type is 'text/plain', is_digest returns False by default, is_digest returns True when content_type is 'digest/v1'. Basic verification passed. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-4"
+    },
+    {
+      "timestamp": "2026-01-28T00:03:17.439663Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add digest configuration fields to ResearchConfig",
+      "content": "Added all 9 digest configuration fields to ResearchConfig: deep_research_digest_policy (off|auto|always, default: auto), deep_research_digest_min_chars (default: 10000), deep_research_digest_max_sources (default: 8), deep_research_digest_timeout (default: 60.0), deep_research_digest_max_concurrent (default: 3), deep_research_digest_include_evidence (default: True), deep_research_digest_evidence_max_chars (default: 400), deep_research_digest_max_evidence_snippets (default: 5), deep_research_digest_fetch_pdfs (default: False). Added TOML parsing in from_toml_dict(). Verified defaults and TOML parsing work correctly. Basic verification passed. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-5"
+    },
+    {
+      "timestamp": "2026-01-28T00:04:00.238310Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Add digest config validation",
+      "content": "Added _validate_digest_config() method to ResearchConfig. Validates: digest_policy must be off|auto|always, min_chars >= 0, max_sources >= 1, timeout > 0, max_concurrent >= 1, evidence_max_chars >= 1, max_evidence_snippets >= 1. Added call to __post_init__. Verified validation rejects invalid values and accepts valid configs. Basic verification passed. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-6"
+    },
+    {
+      "timestamp": "2026-01-28T00:04:35.831792Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Update ResearchSource.to_dict() to filter internal keys",
+      "content": "Added to_dict() method to ResearchSource that calls model_dump() and replaces metadata with filtered version via public_metadata(). Verified: _raw_content, _token_cache, _digest_archive_hash filtered from to_dict() output; public metadata (author, quality_score) preserved; model_dump() still includes internal fields for persistence. Basic verification passed. Full testing deferred to verify-1-1.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-7"
+    },
+    {
+      "timestamp": "2026-01-28T00:05:00.494902Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Define archival contract for canonical text",
+      "content": "Added archival contract documentation to DigestPayload docstring. Documents: storage path ({archive_dir}/{source_id}/{source_text_hash}.txt), archive dir default (~/.foundry-mcp/research_archives/), format (UTF-8 canonical text), retention (30 days default), source_text_hash computation timing, evidence locator traceability guarantee, and _digest_archive_hash metadata linkage. Basic verification passed.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-8"
+    },
+    {
+      "timestamp": "2026-01-28T00:20:00.263662Z",
+      "entry_type": "blocker",
+      "title": "Task Blocked: verify-1-1",
+      "content": "Blocker (dependency): Fidelity review found MEDIUM severity deviation: key_points lacks per-item max_length validation. Blocked pending task-1-9 completion.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-28T00:20:17.494120Z",
+      "entry_type": "deviation",
+      "title": "Fidelity review completed with partial verdict",
+      "content": "## Phase 1 Fidelity Review Results\n\n**Verdict:** PARTIAL\n\n### Deviations Found\n\n| Severity | Deviation | Identified By |\n|----------|-----------|---------------|\n| MEDIUM | DigestPayload.key_points does not enforce per-item maxLength=500 | codex, cursor-agent |\n| MEDIUM | Unable to fully verify some Phase 1 changes from excerpts | codex |\n| LOW | Pydantic BaseModel used instead of dataclass (acceptable) | cursor-agent |\n\n### Actions Taken\n\n1. Created remediation task **task-1-9**: \"Enforce per-item max_length=500 for DigestPayload.key_points\"\n2. Blocked verify-1-1 pending remediation task completion\n3. Full review report saved to: `/workspace/specs/.fidelity-reviews/document-digest-for-deep-research-2026-01-27-001-phase-phase-1.md`\n\n### Next Steps\n\n- Complete task-1-9 to add per-item validation\n- Re-run fidelity review to confirm fix\n- Complete verify-1-1 once validation passes",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-28T00:25:13.377959Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Enforce per-item max_length=500 for DigestPayload.key_points",
+      "content": "Added field_validator to DigestPayload.key_points to enforce per-item max_length=500 chars. Changes: (1) Added field_validator import to pydantic imports (line 14); (2) Added validate_key_points_length validator method that iterates key_points and raises ValueError if any item exceeds 500 chars. Verified: validator accepts valid points, rejects >500 chars with clear error message, accepts boundary case of exactly 500 chars.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "task-1-9"
+    },
+    {
+      "timestamp": "2026-01-28T00:25:16.796443Z",
+      "entry_type": "note",
+      "title": "Task Unblocked: verify-1-1",
+      "content": "Resolved: task-1-9 completed: Added field_validator to enforce per-item max_length=500 for key_points",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    },
+    {
+      "timestamp": "2026-01-28T00:27:58.538746Z",
+      "entry_type": "status_change",
+      "title": "Task Completed: Verify Phase 1 implementation fidelity",
+      "content": "Phase 1 fidelity verification complete. All 8 implementation tasks verified:\n1. DigestPayload: \u2713 Created with version=1.0, content_type=digest/v1, is_valid_digest works\n2. EvidenceSnippet: \u2713 All fields present (text, locator, relevance_score)\n3. FidelityLevel.DIGEST: \u2713 Enum value exists, is_degraded=True\n4. ResearchSource.content_type: \u2713 Field present, is_digest() returns True for digest/v1\n5. ResearchConfig digest fields: \u2713 All 9 digest config fields present with defaults\n6. Config validation: \u2713 Rejects invalid digest_policy values\n7. ResearchSource.to_dict(): \u2713 Filters _raw_content, preserves public metadata\n8. key_points validation (task-1-9): \u2713 Rejects items exceeding 500 chars\n\nInitial fidelity review found MEDIUM deviation (missing key_points validation), remediated via task-1-9. Re-verification confirms all Phase 1 requirements now satisfied.",
+      "author": "foundry-mcp",
+      "metadata": {},
+      "task_id": "verify-1-1"
+    }
+  ]
 }

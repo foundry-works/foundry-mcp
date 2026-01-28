@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # =============================================================================
@@ -113,6 +113,182 @@ def get_base_id(item_id: str) -> str:
     """
     base_id, _ = parse_fragment_id(item_id)
     return base_id
+
+
+# =============================================================================
+# Digest Models (Document compression for deep research)
+# =============================================================================
+
+
+class EvidenceSnippet(BaseModel):
+    """A text snippet extracted from source content for citation support.
+
+    Evidence snippets preserve exact substrings from the canonical text
+    along with locators that enable verification and citation generation.
+    The locator format varies by content type (HTML/text vs PDF).
+
+    Locator Formats:
+        - HTML/Text: "char:{start}-{end}" (e.g., "char:1500-1800")
+        - PDF: "page:{n}:char:{start}-{end}" (e.g., "page:3:char:200-450")
+        - PDF (no page): "char:{start}-{end}" (fallback if page detection fails)
+
+    Indexing Semantics:
+        - Start/end are 0-based character positions
+        - End boundary is exclusive (Python slice semantics)
+        - Page numbers are 1-based
+        - Offsets reference canonical (normalized) text
+
+    Attributes:
+        text: Exact substring from canonical text (max 500 chars).
+              No truncation markers - display formatting applied at render time.
+        locator: Position reference in format appropriate to content type.
+        relevance_score: Query relevance score from 0.0 (irrelevant) to 1.0 (highly relevant).
+    """
+
+    text: str = Field(
+        ...,
+        max_length=500,
+        description="Exact substring from canonical text for citation",
+    )
+    locator: str = Field(
+        ...,
+        description="Position reference (e.g., 'char:1500-1800' or 'page:3:char:200-450')",
+    )
+    relevance_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Query relevance score from 0.0 to 1.0",
+    )
+
+
+class DigestPayload(BaseModel):
+    """Structured digest of document content for deep research.
+
+    DigestPayload v1.0 is the on-wire format for compressed document content.
+    It replaces raw source text with a structured summary, key points, and
+    evidence snippets while preserving citation traceability.
+
+    The payload is self-describing via `content_type` and `query_hash` fields,
+    allowing consumers to validate and process it without surrounding metadata.
+
+    Query Conditioning:
+        Digests are query-conditioned - the summary focus and evidence selection
+        depend on the research query. The `query_hash` field (8-char hex) enables
+        cache invalidation when the query changes.
+
+    Storage:
+        - Serialized as JSON string in `source.content`
+        - `source.content_type` set to "digest/v1"
+        - When archival enabled, `source_text_hash` matches archived canonical text
+
+    Archival Contract (when deep_research_archive_content=true):
+        - Path: `{archive_dir}/{source_id}/{source_text_hash}.txt`
+        - Archive dir default: `~/.foundry-mcp/research_archives/`
+        - Format: UTF-8 encoded canonical text (post-normalization)
+        - Retention: 30 days default (configurable via deep_research_archive_retention_days)
+        - `source_text_hash` is computed BEFORE archival from canonical text
+        - Evidence snippet locators reference offsets in the archived canonical text
+        - Traceability: `archived_text[start:end] == snippet.text` when archive exists
+        - `source.metadata["_digest_archive_hash"]` tracks linkage to archive
+
+    Consumer Rules:
+        1. Detect via `source.content_type == "digest/v1"`
+        2. Parse `source.content` as JSON, validate against schema
+        3. SKIP further summarization (already compressed)
+        4. Use `evidence_snippets` for citations
+        5. Use `digest_chars` for token budget estimation
+
+    Attributes:
+        version: Schema version, always "1.0" for this version.
+        content_type: Self-describing type identifier, always "digest/v1".
+        query_hash: 8-character hex hash of the research query for cache keying.
+        summary: Condensed summary of source content (max 2000 chars).
+        key_points: Extracted key points as bullet items (max 10, each max 500 chars).
+        evidence_snippets: Relevant text excerpts with locators (max 10).
+        original_chars: Character count of original source before digest.
+        digest_chars: Character count of digest output (for budget estimation).
+        compression_ratio: Ratio of digest_chars to original_chars (0.0 to 1.0).
+        source_text_hash: SHA256 hash of canonical text, prefixed with "sha256:".
+    """
+
+    version: str = Field(
+        default="1.0",
+        description="Schema version",
+    )
+    content_type: str = Field(
+        default="digest/v1",
+        description="Self-describing content type identifier",
+    )
+    query_hash: str = Field(
+        ...,
+        min_length=8,
+        max_length=8,
+        pattern=r"^[a-f0-9]{8}$",
+        description="8-character hex hash of the research query",
+    )
+    summary: str = Field(
+        ...,
+        max_length=2000,
+        description="Condensed summary of source content",
+    )
+    key_points: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Extracted key points (max 10 items, each max 500 chars)",
+    )
+    evidence_snippets: list[EvidenceSnippet] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Relevant text excerpts with locators for citation (max 10)",
+    )
+    original_chars: int = Field(
+        ...,
+        ge=0,
+        description="Character count of original source before digest",
+    )
+    digest_chars: int = Field(
+        ...,
+        ge=0,
+        description="Character count of digest output",
+    )
+    compression_ratio: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Ratio of digest_chars to original_chars",
+    )
+    source_text_hash: str = Field(
+        ...,
+        pattern=r"^sha256:[a-f0-9]{64}$",
+        description="SHA256 hash of canonical text, prefixed with 'sha256:'",
+    )
+
+    @field_validator("key_points")
+    @classmethod
+    def validate_key_points_length(cls, v: list[str]) -> list[str]:
+        """Validate each key point does not exceed 500 characters."""
+        for i, point in enumerate(v):
+            if len(point) > 500:
+                raise ValueError(
+                    f"key_points[{i}] exceeds maximum length of 500 characters "
+                    f"(got {len(point)})"
+                )
+        return v
+
+    @property
+    def is_valid_digest(self) -> bool:
+        """Check if this is a valid v1.0 digest payload."""
+        return self.version == "1.0" and self.content_type == "digest/v1"
+
+    def to_json(self) -> str:
+        """Serialize to JSON string for storage in source.content."""
+        return self.model_dump_json()
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "DigestPayload":
+        """Deserialize from JSON string stored in source.content."""
+        return cls.model_validate_json(json_str)
 
 
 # =============================================================================
@@ -649,6 +825,7 @@ class FidelityLevel(str, Enum):
         FULL: Content unchanged - original content preserved
         CONDENSED: Light summarization (~50-70% of original)
         KEY_POINTS: Bullet point extraction (~20-40% of original)
+        DIGEST: Structured digest with evidence snippets (~15-30% of original)
         HEADLINE: Single sentence summary (~5-10% of original)
         TRUNCATED: Hard cut with marker (arbitrary %)
         DROPPED: Content completely removed (0%)
@@ -657,6 +834,7 @@ class FidelityLevel(str, Enum):
     FULL = "full"
     CONDENSED = "condensed"
     KEY_POINTS = "key_points"
+    DIGEST = "digest"
     HEADLINE = "headline"
     TRUNCATED = "truncated"
     DROPPED = "dropped"
@@ -1163,12 +1341,29 @@ class ResearchSource(BaseModel):
         default=None,
         description="Full extracted content (if follow_links enabled)",
     )
+    content_type: str = Field(
+        default="text/plain",
+        description="Content type identifier (e.g., 'text/plain', 'digest/v1')",
+    )
     sub_query_id: Optional[str] = Field(
         default=None,
         description="ID of the SubQuery that discovered this source",
     )
     discovered_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def is_digest(self) -> bool:
+        """Check if this source contains a DigestPayload.
+
+        Returns True if content_type is 'digest/v1', indicating the content
+        field contains a serialized DigestPayload JSON string rather than
+        raw text.
+
+        Consumers should check this property before processing content to
+        determine whether to parse as DigestPayload or treat as raw text.
+        """
+        return self.content_type == "digest/v1"
 
     def _content_hash(self) -> str:
         """Generate a hash of the source content for cache keying.
@@ -1257,6 +1452,24 @@ class ResearchSource(BaseModel):
             Dict with internal fields (underscore-prefixed keys) removed.
         """
         return {k: v for k, v in self.metadata.items() if not k.startswith("_")}
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dict with internal fields filtered out.
+
+        Returns a dict suitable for API responses and external consumption.
+        Filters out:
+        - Internal metadata keys (underscore-prefixed, e.g., _raw_content,
+          _token_cache, _digest_archive_hash)
+
+        For full serialization including internal fields, use model_dump().
+
+        Returns:
+            Dict with internal metadata fields removed.
+        """
+        data = self.model_dump()
+        # Replace metadata with filtered version
+        data["metadata"] = self.public_metadata()
+        return data
 
 
 class ResearchFinding(BaseModel):

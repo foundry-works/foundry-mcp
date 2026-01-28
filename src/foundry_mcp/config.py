@@ -569,6 +569,17 @@ class ResearchConfig:
     # Audit verbosity level for deep research artifact writes
     audit_verbosity: str = "full"  # "full" or "minimal" - controls JSONL audit payload size
 
+    # Document digest configuration (for large content compression in deep research)
+    deep_research_digest_policy: str = "auto"  # "off", "auto", "always"
+    deep_research_digest_min_chars: int = 10000  # Minimum chars before digest is applied
+    deep_research_digest_max_sources: int = 8  # Max sources to digest per batch
+    deep_research_digest_timeout: float = 60.0  # Timeout per digest operation (seconds)
+    deep_research_digest_max_concurrent: int = 3  # Max concurrent digest operations
+    deep_research_digest_include_evidence: bool = True  # Include evidence snippets
+    deep_research_digest_evidence_max_chars: int = 400  # Max chars per evidence snippet
+    deep_research_digest_max_evidence_snippets: int = 5  # Max evidence snippets per digest
+    deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
+
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
         """Create config from TOML dict (typically [research] section).
@@ -731,6 +742,24 @@ class ResearchConfig:
             ),
             # Audit verbosity
             audit_verbosity=str(data.get("audit_verbosity", "full")),
+            # Document digest configuration
+            deep_research_digest_policy=str(data.get("deep_research_digest_policy", "auto")),
+            deep_research_digest_min_chars=int(data.get("deep_research_digest_min_chars", 10000)),
+            deep_research_digest_max_sources=int(data.get("deep_research_digest_max_sources", 8)),
+            deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 60.0)),
+            deep_research_digest_max_concurrent=int(data.get("deep_research_digest_max_concurrent", 3)),
+            deep_research_digest_include_evidence=_parse_bool(
+                data.get("deep_research_digest_include_evidence", True)
+            ),
+            deep_research_digest_evidence_max_chars=int(
+                data.get("deep_research_digest_evidence_max_chars", 400)
+            ),
+            deep_research_digest_max_evidence_snippets=int(
+                data.get("deep_research_digest_max_evidence_snippets", 5)
+            ),
+            deep_research_digest_fetch_pdfs=_parse_bool(
+                data.get("deep_research_digest_fetch_pdfs", False)
+            ),
         )
 
     def __post_init__(self) -> None:
@@ -740,6 +769,7 @@ class ResearchConfig:
         self._validate_semantic_scholar_config()
         self._validate_status_persistence_config()
         self._validate_audit_verbosity_config()
+        self._validate_digest_config()
 
     def _validate_tavily_config(self) -> None:
         """Validate all Tavily configuration fields.
@@ -914,6 +944,62 @@ class ResearchConfig:
             raise ValueError(
                 f"Invalid audit_verbosity: {self.audit_verbosity!r}. "
                 f"Must be one of: {sorted(valid_verbosity_levels)}"
+            )
+
+    def _validate_digest_config(self) -> None:
+        """Validate document digest configuration fields.
+
+        Raises:
+            ValueError: If any digest config field has an invalid value.
+        """
+        # Validate digest_policy
+        valid_policies = {"off", "auto", "always"}
+        if self.deep_research_digest_policy not in valid_policies:
+            raise ValueError(
+                f"Invalid deep_research_digest_policy: {self.deep_research_digest_policy!r}. "
+                f"Must be one of: {sorted(valid_policies)}"
+            )
+
+        # Validate min_chars (must be positive)
+        if self.deep_research_digest_min_chars < 0:
+            raise ValueError(
+                f"Invalid deep_research_digest_min_chars: {self.deep_research_digest_min_chars!r}. "
+                "Must be >= 0."
+            )
+
+        # Validate max_sources (must be positive)
+        if self.deep_research_digest_max_sources < 1:
+            raise ValueError(
+                f"Invalid deep_research_digest_max_sources: {self.deep_research_digest_max_sources!r}. "
+                "Must be >= 1."
+            )
+
+        # Validate timeout (must be positive)
+        if self.deep_research_digest_timeout <= 0:
+            raise ValueError(
+                f"Invalid deep_research_digest_timeout: {self.deep_research_digest_timeout!r}. "
+                "Must be > 0."
+            )
+
+        # Validate max_concurrent (must be positive)
+        if self.deep_research_digest_max_concurrent < 1:
+            raise ValueError(
+                f"Invalid deep_research_digest_max_concurrent: {self.deep_research_digest_max_concurrent!r}. "
+                "Must be >= 1."
+            )
+
+        # Validate evidence_max_chars (must be positive)
+        if self.deep_research_digest_evidence_max_chars < 1:
+            raise ValueError(
+                f"Invalid deep_research_digest_evidence_max_chars: {self.deep_research_digest_evidence_max_chars!r}. "
+                "Must be >= 1."
+            )
+
+        # Validate max_evidence_snippets (must be positive)
+        if self.deep_research_digest_max_evidence_snippets < 1:
+            raise ValueError(
+                f"Invalid deep_research_digest_max_evidence_snippets: {self.deep_research_digest_max_evidence_snippets!r}. "
+                "Must be >= 1."
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:
