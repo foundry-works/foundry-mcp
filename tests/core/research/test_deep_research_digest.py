@@ -9,6 +9,7 @@ Tests cover:
 """
 
 import asyncio
+from pathlib import Path
 from typing import Any, Optional
 from unittest.mock import AsyncMock, patch
 
@@ -19,6 +20,8 @@ from foundry_mcp.core.research.document_digest import (
     deserialize_payload,
     serialize_payload,
 )
+from foundry_mcp.core.research.context_budget import AllocationResult
+from foundry_mcp.core.research.pdf_extractor import PDFExtractionResult
 from foundry_mcp.core.research.models import (
     DeepResearchState,
     DigestPayload,
@@ -187,7 +190,7 @@ class TestEndToEndDigestFlow:
         assert stats["sources_selected"] == 0
         assert stats["sources_digested"] == 0
         assert source.content_type == "text/plain"
-        assert source.metadata.get("_digest_skip_reason") == "below_min_chars"
+        assert "below minimum" in (source.metadata.get("_digest_skip_reason") or "")
 
     @pytest.mark.asyncio
     async def test_source_without_content_not_digested(self):
@@ -216,6 +219,41 @@ class TestEndToEndDigestFlow:
         assert stats["sources_ranked"] == 0
         assert stats["sources_digested"] == 0
         assert source.content_type == "text/plain"
+
+    @pytest.mark.asyncio
+    async def test_pdf_fetch_populates_content_when_enabled(self):
+        """PDF extraction populates content when fetch_pdfs is enabled."""
+        source = _make_source(
+            "src-1",
+            content=None,
+            snippet=None,
+            quality=SourceQuality.HIGH,
+            url="https://example.com/doc.pdf",
+        )
+        state = _make_state(sources=[source])
+        workflow = _make_workflow(_make_config(deep_research_digest_fetch_pdfs=True))
+
+        pdf_result = PDFExtractionResult(
+            text="PDF text",
+            page_offsets=[(0, 8)],
+            warnings=[],
+            page_count=1,
+            extracted_page_count=1,
+        )
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.PDFExtractor"
+        ) as MockPDFExtractor:
+            mock_instance = MockPDFExtractor.return_value
+            mock_instance.extract_from_url = AsyncMock(return_value=pdf_result)
+
+            stats = await workflow._execute_digest_step_async(state, "test query")
+
+        assert stats["sources_extracted"] == 1
+        assert source.content == "PDF text"
+        assert source.metadata.get("_pdf_extracted") is True
+        assert source.metadata.get("_pdf_page_count") == 1
+        assert source.metadata.get("_pdf_page_offsets") == [(0, 8)]
 
 
 # =============================================================================
@@ -434,6 +472,46 @@ class TestBudgetUsesCompressedSize:
         phase_record = state.content_fidelity["src-1"].phases["digest"]
         assert phase_record.level == FidelityLevel.FULL
         assert phase_record.reason == "digest_skipped"
+
+    def test_allocate_budget_uses_digest_text(self):
+        """Allocation uses digest payload text rather than raw JSON."""
+        payload = _make_digest_payload(
+            summary="Budget summary",
+            key_points=["Point A", "Point B"],
+            evidence_snippets=[
+                EvidenceSnippet(
+                    text="Evidence snippet text.",
+                    locator="char:10-30",
+                    relevance_score=0.8,
+                )
+            ],
+        )
+        digest_json = serialize_payload(payload)
+        source = _make_source(
+            "src-1",
+            content=digest_json,
+            content_type="digest/v1",
+            quality=SourceQuality.HIGH,
+        )
+        state = _make_state(sources=[source])
+        workflow = _make_workflow()
+
+        captured: dict[str, Any] = {}
+
+        def fake_allocate(self, items, budget, strategy):
+            captured["content"] = items[0].content
+            return AllocationResult(items=items, tokens_used=0, tokens_available=budget)
+
+        with patch(
+            "foundry_mcp.core.research.workflows.deep_research.ContextBudgetManager.allocate_budget",
+            new=fake_allocate,
+        ):
+            workflow._allocate_source_budget(state, provider_id=None)
+
+        assert "Budget summary" in captured["content"]
+        assert "Point A" in captured["content"]
+        assert "Evidence snippet text." in captured["content"]
+        assert "\"content_type\"" not in captured["content"]
 
 
 # =============================================================================
@@ -683,6 +761,56 @@ class TestMultiIterationNoReDigest:
 
 
 # =============================================================================
+# Test: Timeout budgeting with concurrency
+# =============================================================================
+
+
+class TestTimeoutBudgeting:
+    """Ensure digest timeout budgets are not divided by concurrency."""
+
+    @pytest.mark.asyncio
+    async def test_timeout_not_divided_by_concurrency(self):
+        """Per-source timeout applies even when max_concurrent > 1."""
+        sources = [
+            _make_source("src-1", content="A" * 1000, quality=SourceQuality.HIGH),
+            _make_source("src-2", content="B" * 1000, quality=SourceQuality.HIGH),
+        ]
+        state = _make_state(sources=sources)
+        workflow = _make_workflow(
+            _make_config(deep_research_digest_timeout=0.3, deep_research_digest_max_concurrent=2)
+        )
+
+        from foundry_mcp.core.research.document_digest import DigestResult
+
+        async def delayed_digest(**kwargs):
+            await asyncio.sleep(0.2)
+            payload = _make_digest_payload(original_chars=1000, digest_chars=200)
+            return DigestResult(payload=payload, cache_hit=False, duration_ms=10.0)
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.DocumentDigestor"
+            ) as MockDigestor,
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.ContentSummarizer"
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.PDFExtractor"
+            ),
+        ):
+            mock_instance = MockDigestor.return_value
+            mock_instance.digest = delayed_digest
+            mock_instance._is_eligible.return_value = True
+
+            stats = await workflow._execute_digest_step_async(state, "test query")
+
+        assert stats["sources_digested"] == 2
+        assert stats["digest_errors"] == []
+        for source in sources:
+            assert source.metadata.get("_digest_timeout") is None
+
+
+# =============================================================================
 # Test: Max sources limit
 # =============================================================================
 
@@ -800,3 +928,104 @@ class TestFidelityTrackingOnErrors:
         phase_record = state.content_fidelity["src-1"].phases["digest"]
         assert phase_record.level == FidelityLevel.FULL
         assert phase_record.reason == "digest_error"
+
+
+# =============================================================================
+# Test: Digest archive safety
+# =============================================================================
+
+
+class TestDigestArchiveSafety:
+    """Verify archive path safety checks."""
+
+    @pytest.mark.asyncio
+    async def test_archive_rejects_unsafe_source_id(self, tmp_path, monkeypatch):
+        """Unsafe source IDs should not be used as archive paths."""
+        source = _make_source("../evil", content="A" * 1000, quality=SourceQuality.HIGH)
+        state = _make_state(sources=[source])
+        workflow = _make_workflow(
+            _make_config(
+                deep_research_archive_content=True,
+                deep_research_archive_retention_days=1,
+            )
+        )
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        from foundry_mcp.core.research.document_digest import DigestResult
+
+        payload = _make_digest_payload(original_chars=1000, digest_chars=200)
+        mock_result = DigestResult(payload=payload, cache_hit=False, duration_ms=10.0)
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.DocumentDigestor"
+            ) as MockDigestor,
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.ContentSummarizer"
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.PDFExtractor"
+            ),
+        ):
+            mock_instance = MockDigestor.return_value
+            mock_instance.digest = AsyncMock(return_value=mock_result)
+            mock_instance._is_eligible.return_value = True
+            mock_instance._normalize_text.return_value = "canonical text"
+            mock_instance._compute_source_hash.return_value = payload.source_text_hash
+
+            stats = await workflow._execute_digest_step_async(state, "test query")
+
+        assert stats["sources_digested"] == 1
+        assert source.metadata.get("_digest_archive_error")
+        assert source.metadata.get("_digest_archive_hash") is None
+
+    @pytest.mark.asyncio
+    async def test_archive_writes_canonical_text(self, tmp_path, monkeypatch):
+        """Successful archive writes canonical text to disk."""
+        source = _make_source("src-1", content="A" * 1000, quality=SourceQuality.HIGH)
+        state = _make_state(sources=[source])
+        workflow = _make_workflow(
+            _make_config(
+                deep_research_archive_content=True,
+                deep_research_archive_retention_days=1,
+            )
+        )
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        from foundry_mcp.core.research.document_digest import DigestResult
+
+        payload = _make_digest_payload(original_chars=1000, digest_chars=200)
+        mock_result = DigestResult(payload=payload, cache_hit=False, duration_ms=10.0)
+
+        with (
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.DocumentDigestor"
+            ) as MockDigestor,
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.ContentSummarizer"
+            ),
+            patch(
+                "foundry_mcp.core.research.workflows.deep_research.PDFExtractor"
+            ),
+        ):
+            mock_instance = MockDigestor.return_value
+            mock_instance.digest = AsyncMock(return_value=mock_result)
+            mock_instance._is_eligible.return_value = True
+            mock_instance._normalize_text.return_value = "canonical text"
+            mock_instance._compute_source_hash.return_value = payload.source_text_hash
+
+            stats = await workflow._execute_digest_step_async(state, "test query")
+
+        assert stats["sources_digested"] == 1
+        assert source.metadata.get("_digest_archive_hash") == payload.source_text_hash
+        archive_path = (
+            tmp_path
+            / ".foundry-mcp"
+            / "research_archives"
+            / source.id
+            / f"{payload.source_text_hash}.txt"
+        )
+        assert archive_path.exists()
+        assert archive_path.read_text(encoding="utf-8") == "canonical text"

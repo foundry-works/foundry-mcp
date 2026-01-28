@@ -259,6 +259,12 @@ class TestSSRFProtection:
             validate_url_for_ssrf("http://[::1]/admin")
         assert "localhost" in str(exc_info.value).lower() or "::1" in str(exc_info.value)
 
+    def test_ipv6_private_literal_blocked(self):
+        """Test IPv6 private literal is blocked."""
+        with pytest.raises(SSRFError) as exc_info:
+            validate_url_for_ssrf("http://[fc00::1]/admin")
+        assert "fc00" in str(exc_info.value).lower()
+
     def test_0_0_0_0_blocked(self):
         """Test 0.0.0.0 is blocked."""
         with pytest.raises(SSRFError) as exc_info:
@@ -312,6 +318,232 @@ class TestSSRFProtection:
     def test_url_with_query_params_accepted(self):
         """Test URL with query parameters is accepted."""
         validate_url_for_ssrf("https://example.com/doc.pdf?token=abc&version=1")
+
+
+class TestRedirectSSRFProtection:
+    """Tests for SSRF protection across redirect chains."""
+
+    # Minimal valid PDF for testing
+    MINIMAL_PDF = b"""%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >> endobj
+xref
+0 4
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+trailer << /Size 4 /Root 1 0 R >>
+startxref
+196
+%%EOF
+"""
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_internal_blocked(self, monkeypatch):
+        """Redirects to internal hosts should be blocked."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        def handler(request):
+            if str(request.url) == "https://example.com/doc.pdf":
+                return httpx.Response(
+                    302, headers={"Location": "http://127.0.0.1/internal.pdf"}
+                )
+            return httpx.Response(
+                200,
+                content=b"%PDF-1.4\nx",
+                headers={"Content-Type": "application/pdf"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+
+        def _client_factory(**kwargs):
+            return real_async_client(transport=transport, **kwargs)
+
+        monkeypatch.setattr(httpx, "AsyncClient", _client_factory)
+
+        with pytest.raises(SSRFError):
+            await extractor.extract_from_url("https://example.com/doc.pdf")
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_private_ip_blocked(self, monkeypatch):
+        """Redirects to private IP ranges (10.x, 192.168.x) should be blocked."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        def handler(request):
+            if str(request.url) == "https://example.com/doc.pdf":
+                return httpx.Response(
+                    302, headers={"Location": "http://10.0.0.1/internal.pdf"}
+                )
+            return httpx.Response(
+                200,
+                content=self.MINIMAL_PDF,
+                headers={"Content-Type": "application/pdf"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+        monkeypatch.setattr(
+            httpx, "AsyncClient",
+            lambda **kwargs: real_async_client(transport=transport, **kwargs)
+        )
+
+        with pytest.raises(SSRFError) as exc_info:
+            await extractor.extract_from_url("https://example.com/doc.pdf")
+        assert "10.0.0.1" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_localhost_blocked(self, monkeypatch):
+        """Redirects to localhost hostname should be blocked."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        def handler(request):
+            if str(request.url) == "https://example.com/doc.pdf":
+                return httpx.Response(
+                    302, headers={"Location": "http://localhost/internal.pdf"}
+                )
+            return httpx.Response(
+                200,
+                content=self.MINIMAL_PDF,
+                headers={"Content-Type": "application/pdf"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+        monkeypatch.setattr(
+            httpx, "AsyncClient",
+            lambda **kwargs: real_async_client(transport=transport, **kwargs)
+        )
+
+        with pytest.raises(SSRFError) as exc_info:
+            await extractor.extract_from_url("https://example.com/doc.pdf")
+        assert "localhost" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_valid_redirect_succeeds(self, monkeypatch):
+        """Redirects to valid external hosts should succeed."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        def handler(request):
+            url = str(request.url)
+            if url == "https://example.com/doc.pdf":
+                return httpx.Response(
+                    302, headers={"Location": "https://cdn.example.com/actual.pdf"}
+                )
+            if "cdn.example.com" in url:
+                return httpx.Response(
+                    200,
+                    content=self.MINIMAL_PDF,
+                    headers={"Content-Type": "application/pdf"},
+                )
+            return httpx.Response(404)
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+        monkeypatch.setattr(
+            httpx, "AsyncClient",
+            lambda **kwargs: real_async_client(transport=transport, **kwargs)
+        )
+
+        result = await extractor.extract_from_url("https://example.com/doc.pdf")
+        assert result.page_count == 1
+
+    @pytest.mark.asyncio
+    async def test_redirect_loop_detected(self, monkeypatch):
+        """Redirect loops should be detected and blocked."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        def handler(request):
+            url = str(request.url)
+            if "page1" in url:
+                return httpx.Response(
+                    302, headers={"Location": "https://example.com/page2.pdf"}
+                )
+            if "page2" in url:
+                return httpx.Response(
+                    302, headers={"Location": "https://example.com/page1.pdf"}
+                )
+            return httpx.Response(
+                302, headers={"Location": "https://example.com/page1.pdf"}
+            )
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+        monkeypatch.setattr(
+            httpx, "AsyncClient",
+            lambda **kwargs: real_async_client(transport=transport, **kwargs)
+        )
+
+        with pytest.raises(SSRFError) as exc_info:
+            await extractor.extract_from_url("https://example.com/doc.pdf")
+        assert "loop" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_too_many_redirects_blocked(self, monkeypatch):
+        """More than MAX_PDF_REDIRECTS should be blocked."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        redirect_count = [0]
+
+        def handler(_request):
+            redirect_count[0] += 1
+            if redirect_count[0] <= 10:
+                return httpx.Response(
+                    302,
+                    headers={"Location": f"https://example.com/r{redirect_count[0]}.pdf"}
+                )
+            return httpx.Response(
+                200,
+                content=self.MINIMAL_PDF,
+                headers={"Content-Type": "application/pdf"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+        monkeypatch.setattr(
+            httpx, "AsyncClient",
+            lambda **kwargs: real_async_client(transport=transport, **kwargs)
+        )
+
+        with pytest.raises(InvalidPDFError) as exc_info:
+            await extractor.extract_from_url("https://example.com/doc.pdf")
+        assert "redirect" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_ipv6_loopback_blocked(self, monkeypatch):
+        """Redirects to IPv6 loopback should be blocked."""
+        httpx = pytest.importorskip("httpx")
+        extractor = PDFExtractor()
+
+        def handler(request):
+            if str(request.url) == "https://example.com/doc.pdf":
+                return httpx.Response(
+                    302, headers={"Location": "http://[::1]/internal.pdf"}
+                )
+            return httpx.Response(
+                200,
+                content=self.MINIMAL_PDF,
+                headers={"Content-Type": "application/pdf"},
+            )
+
+        transport = httpx.MockTransport(handler)
+        real_async_client = httpx.AsyncClient
+        monkeypatch.setattr(
+            httpx, "AsyncClient",
+            lambda **kwargs: real_async_client(transport=transport, **kwargs)
+        )
+
+        with pytest.raises(SSRFError) as exc_info:
+            await extractor.extract_from_url("https://example.com/doc.pdf")
+        assert "::1" in str(exc_info.value)
 
 
 class TestIsInternalIP:

@@ -43,7 +43,7 @@ import socket
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional, Union
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from pypdf import PdfReader
 
@@ -172,6 +172,9 @@ DEFAULT_MAX_PAGES = 500
 DEFAULT_FETCH_TIMEOUT = 30.0
 """Default timeout for URL fetches in seconds."""
 
+MAX_PDF_REDIRECTS = 5
+"""Maximum number of redirects to follow when fetching PDFs."""
+
 
 # =============================================================================
 # Security Exceptions
@@ -271,11 +274,24 @@ def validate_url_for_ssrf(url: str) -> None:
         if pattern in hostname:
             raise SSRFError(f"Blocked internal hostname pattern: {hostname}")
 
-    # Try to resolve hostname and check if it resolves to internal IP
+    # Block internal IP literals directly (IPv4 or IPv6)
     try:
-        # Get all IP addresses for the hostname
-        _, _, ip_list = socket.gethostbyname_ex(hostname)
-        for ip in ip_list:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        ip_literal = None
+    else:
+        ip_literal = hostname
+
+    if ip_literal is not None:
+        if is_internal_ip(ip_literal):
+            raise SSRFError(f"Blocked internal IP literal: {ip_literal}")
+        return
+
+    # Resolve hostname (IPv4 + IPv6) and block if any internal IPs found
+    try:
+        addrinfo = socket.getaddrinfo(hostname, None)
+        for _, _, _, _, sockaddr in addrinfo:
+            ip = sockaddr[0]
             if is_internal_ip(ip):
                 raise SSRFError(
                     f"Hostname {hostname} resolves to internal IP: {ip}"
@@ -357,6 +373,11 @@ class PDFExtractionResult:
     def has_warnings(self) -> bool:
         """Check if extraction produced any warnings."""
         return len(self.warnings) > 0
+
+    @property
+    def success(self) -> bool:
+        """Check if extraction produced any text."""
+        return self.extracted_page_count > 0
 
     @property
     def is_complete(self) -> bool:
@@ -463,6 +484,7 @@ class PDFExtractor:
         elif isinstance(source, io.BytesIO):
             # Read bytes for validation, then reset
             pdf_bytes = source.getvalue()
+            source.seek(0)
         else:
             raise ValueError(
                 f"source must be bytes or BytesIO, got {type(source).__name__}"
@@ -794,45 +816,64 @@ class PDFExtractor:
 
         logger.debug(f"Fetching PDF from URL: {url}")
 
+        current_url = url
+        visited: set[str] = set()
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            # Use streaming to enforce size limit during download
-            async with client.stream(
-                "GET",
-                url,
-                follow_redirects=True,
-                headers={"User-Agent": "foundry-mcp/1.0 PDFExtractor"},
-            ) as response:
-                response.raise_for_status()
+            for redirect_index in range(MAX_PDF_REDIRECTS + 1):
+                if current_url in visited:
+                    raise SSRFError(f"Redirect loop detected for {current_url}")
+                visited.add(current_url)
 
-                # CRITICAL: Re-validate final URL after redirects for SSRF protection
-                final_url = str(response.url)
-                if final_url != url:
-                    logger.debug(f"Redirect detected: {url} -> {final_url}")
-                    validate_url_for_ssrf(final_url)
+                # Validate URL for SSRF before any network request
+                validate_url_for_ssrf(current_url)
 
-                # Validate content-type
-                content_type = response.headers.get("content-type")
-                validate_content_type(content_type)
+                async with client.stream(
+                    "GET",
+                    current_url,
+                    follow_redirects=False,
+                    headers={"User-Agent": "foundry-mcp/1.0 PDFExtractor"},
+                ) as response:
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("location")
+                        if not location:
+                            raise InvalidPDFError(
+                                f"Redirect response missing Location header: {current_url}"
+                            )
+                        next_url = urljoin(current_url, location)
+                        logger.debug("Redirect detected: %s -> %s", current_url, next_url)
+                        current_url = next_url
+                        continue
 
-                # Stream content with size limit enforcement
-                chunks: list[bytes] = []
-                total_size = 0
+                    response.raise_for_status()
 
-                async for chunk in response.aiter_bytes(chunk_size=65536):
-                    total_size += len(chunk)
-                    if total_size > self.max_size:
-                        raise PDFSizeError(
-                            f"PDF size exceeds limit ({self.max_size} bytes), "
-                            f"download aborted at {total_size} bytes"
-                        )
-                    chunks.append(chunk)
+                    # Validate content-type
+                    content_type = response.headers.get("content-type")
+                    validate_content_type(content_type)
 
-                pdf_bytes = b"".join(chunks)
+                    # Stream content with size limit enforcement
+                    chunks: list[bytes] = []
+                    total_size = 0
 
-            # Validate magic bytes
-            validate_pdf_magic_bytes(pdf_bytes)
+                    async for chunk in response.aiter_bytes(chunk_size=65536):
+                        total_size += len(chunk)
+                        if total_size > self.max_size:
+                            raise PDFSizeError(
+                                f"PDF size exceeds limit ({self.max_size} bytes), "
+                                f"download aborted at {total_size} bytes"
+                            )
+                        chunks.append(chunk)
 
-            logger.debug(f"Downloaded {len(pdf_bytes)} bytes from {url}")
+                    pdf_bytes = b"".join(chunks)
 
-        # Extract text
-        return await self.extract(pdf_bytes, validate_magic=False)  # Already validated
+                # Validate magic bytes
+                validate_pdf_magic_bytes(pdf_bytes)
+
+                logger.debug(f"Downloaded {len(pdf_bytes)} bytes from {current_url}")
+
+                # Extract text
+                return await self.extract(pdf_bytes, validate_magic=False)  # Already validated
+
+        raise InvalidPDFError(
+            f"Too many redirects while fetching PDF (max {MAX_PDF_REDIRECTS})"
+        )

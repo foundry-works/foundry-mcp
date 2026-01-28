@@ -542,6 +542,9 @@ class ResearchConfig:
     tavily_country: Optional[str] = None  # ISO 3166-1 alpha-2 code (e.g., "US")
     tavily_chunks_per_source: int = 3  # 1-5, only for advanced search
     tavily_auto_parameters: bool = False  # Let Tavily auto-configure based on query
+    # Internal flags to track explicit config overrides
+    tavily_search_depth_configured: bool = field(default=False, init=False, repr=False)
+    tavily_chunks_per_source_configured: bool = field(default=False, init=False, repr=False)
 
     # Tavily extract configuration
     tavily_extract_depth: str = "basic"  # "basic", "advanced"
@@ -579,6 +582,8 @@ class ResearchConfig:
     deep_research_digest_evidence_max_chars: int = 400  # Max chars per evidence snippet
     deep_research_digest_max_evidence_snippets: int = 5  # Max evidence snippets per digest
     deep_research_digest_fetch_pdfs: bool = False  # Whether to fetch and extract PDF content
+    deep_research_archive_content: bool = False  # Archive canonical text for digested sources
+    deep_research_archive_retention_days: int = 30  # Days to retain archived digest content (0 = keep indefinitely)
 
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "ResearchConfig":
@@ -636,7 +641,7 @@ class ResearchConfig:
                 k: int(v) for k, v in per_provider_rate_limits.items()
             }
 
-        return cls(
+        config = cls(
             enabled=_parse_bool(data.get("enabled", True)),
             ttl_hours=int(data.get("ttl_hours", 24)),
             max_messages_per_thread=int(data.get("max_messages_per_thread", 100)),
@@ -760,7 +765,16 @@ class ResearchConfig:
             deep_research_digest_fetch_pdfs=_parse_bool(
                 data.get("deep_research_digest_fetch_pdfs", False)
             ),
+            deep_research_archive_content=_parse_bool(
+                data.get("deep_research_archive_content", False)
+            ),
+            deep_research_archive_retention_days=int(
+                data.get("deep_research_archive_retention_days", 30)
+            ),
         )
+        config.tavily_search_depth_configured = "tavily_search_depth" in data
+        config.tavily_chunks_per_source_configured = "tavily_chunks_per_source" in data
+        return config
 
     def __post_init__(self) -> None:
         """Validate configuration fields after initialization."""
@@ -1000,6 +1014,13 @@ class ResearchConfig:
             raise ValueError(
                 f"Invalid deep_research_digest_max_evidence_snippets: {self.deep_research_digest_max_evidence_snippets!r}. "
                 "Must be >= 1."
+            )
+
+        # Validate retention days (0 means keep indefinitely)
+        if self.deep_research_archive_retention_days < 0:
+            raise ValueError(
+                f"Invalid deep_research_archive_retention_days: {self.deep_research_archive_retention_days!r}. "
+                "Must be >= 0."
             )
 
     def get_provider_rate_limit(self, provider: str) -> int:

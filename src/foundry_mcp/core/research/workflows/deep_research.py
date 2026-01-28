@@ -24,10 +24,13 @@ from __future__ import annotations
 import asyncio
 import atexit
 import hashlib
+import math
 import json
 import logging
+import os
 import re
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -93,6 +96,7 @@ from foundry_mcp.core.research.document_digest import (
     DigestConfig,
     DigestPolicy,
     DigestResult,
+    deserialize_payload,
     serialize_payload,
 )
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor
@@ -1233,11 +1237,12 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
 
         # Override with config values (if explicitly set/non-default)
         config = self.config
-        default_search_depth = "basic"
         default_topic = "general"
-        default_chunks_per_source = 3
 
-        if config.tavily_search_depth != default_search_depth:
+        if (
+            getattr(config, "tavily_search_depth_configured", False)
+            or config.tavily_search_depth != "basic"
+        ):
             kwargs["search_depth"] = config.tavily_search_depth
         if config.tavily_topic != default_topic or config.tavily_news_days is not None:
             kwargs["topic"] = config.tavily_topic
@@ -1246,7 +1251,10 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
         kwargs["include_favicon"] = False  # Not typically needed for research
         if config.tavily_auto_parameters:
             kwargs["auto_parameters"] = True
-        if config.tavily_chunks_per_source != default_chunks_per_source:
+        if (
+            getattr(config, "tavily_chunks_per_source_configured", False)
+            or config.tavily_chunks_per_source != 3
+        ):
             kwargs["chunks_per_source"] = config.tavily_chunks_per_source
 
         # Only include optional parameters when explicitly set
@@ -1654,6 +1662,17 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 # Unregister from active sessions (under lock)
                 with _active_sessions_lock:
                     _active_research_sessions.pop(state.id, None)
+                # Ensure final state is persisted for completed/cancelled/failed workflows
+                try:
+                    workflow._flush_state(state)
+                except Exception:
+                    pass
+                # Remove completed task from registries to avoid leaks
+                try:
+                    workflow._cleanup_completed_task(state.id)
+                    task_registry.remove(state.id)
+                except Exception:
+                    pass
 
         # Create and start the daemon thread
         thread = threading.Thread(
@@ -2020,6 +2039,13 @@ class DeepResearchWorkflow(ResearchWorkflowBase):
                 content = "\n".join(status_lines)
             else:
                 content = f"Task status: {bg_task.status.value}"
+            # Cleanup registries for completed tasks to prevent leaks.
+            if not is_active:
+                try:
+                    self._cleanup_completed_task(research_id)
+                    task_registry.remove(research_id)
+                except Exception:
+                    pass
             return WorkflowResult(
                 success=True,
                 content=content,
@@ -4344,17 +4370,18 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             return stats
 
         # Digest each eligible source with timeout budgets
-        # Overall batch timeout is the configured digest_timeout
-        batch_timeout = self.config.deep_research_digest_timeout
+        # Configured timeout is per-source; batch scales with concurrency
+        per_source_timeout = self.config.deep_research_digest_timeout
         max_concurrent = self.config.deep_research_digest_max_concurrent
 
-        # Per-source timeout = batch_timeout / max_concurrent
-        # This ensures all concurrent operations fit within the batch budget
-        per_source_timeout = batch_timeout / max_concurrent
+        # Batch timeout = per_source_timeout * number of concurrent batches
+        batch_count = max(1, math.ceil(len(eligible_sources) / max_concurrent))
+        batch_timeout = per_source_timeout * batch_count
         logger.debug(
-            "Digest timeout budgets: batch=%.1fs, per_source=%.1fs (max_concurrent=%d)",
-            batch_timeout,
+            "Digest timeout budgets: per_source=%.1fs, batch=%.1fs (batches=%d, max_concurrent=%d)",
             per_source_timeout,
+            batch_timeout,
+            batch_count,
             max_concurrent,
         )
 
@@ -4393,14 +4420,16 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
                 try:
                     # Use per-source timeout with cancellation propagation
-                    async with asyncio.timeout(per_source_timeout):
-                        result: DigestResult = await digestor.digest(
+                    result: DigestResult = await asyncio.wait_for(
+                        digestor.digest(
                             source=source.metadata["_raw_content"] or "",
                             query=query,
                             source_id=source.id,
                             quality=source.quality,
                             page_boundaries=page_boundaries,
-                        )
+                        ),
+                        timeout=per_source_timeout,
+                    )
 
                     if result.success and result.payload:
                         # Update source with digest payload
@@ -4410,6 +4439,26 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                         source.metadata["_digest_duration_ms"] = result.duration_ms
                         async with stats_lock:
                             stats["sources_digested"] += 1
+                        if self.config.deep_research_archive_content:
+                            try:
+                                await asyncio.to_thread(
+                                    self._archive_digest_source,
+                                    source=source,
+                                    digestor=digestor,
+                                    raw_content=source.metadata.get("_raw_content") or "",
+                                    page_boundaries=page_boundaries,
+                                    source_text_hash=result.payload.source_text_hash,
+                                )
+                            except Exception as archive_error:
+                                error_msg = str(archive_error)
+                                if len(error_msg) > 200:
+                                    error_msg = error_msg[:200] + "...[truncated]"
+                                source.metadata["_digest_archive_error"] = error_msg
+                                logger.warning(
+                                    "Digest archive failed for source %s: %s",
+                                    source.id,
+                                    error_msg,
+                                )
 
                         # Record fidelity for digested source
                         # Estimate tokens: ~4 chars per token is a reasonable approximation
@@ -4584,8 +4633,10 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         tasks = [asyncio.create_task(_digest_source(source)) for source in eligible_sources]
         try:
-            async with asyncio.timeout(batch_timeout):
-                await asyncio.gather(*tasks)
+            await asyncio.wait_for(
+                asyncio.gather(*tasks),
+                timeout=batch_timeout,
+            )
         except asyncio.TimeoutError:
             logger.warning(
                 "Batch timeout exceeded (%.1fs), cancelling remaining %d sources",
@@ -4605,6 +4656,115 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         )
 
         return stats
+
+    def _archive_digest_source(
+        self,
+        *,
+        source: ResearchSource,
+        digestor: DocumentDigestor,
+        raw_content: str,
+        page_boundaries: Optional[list[tuple[int, int, int]]],
+        source_text_hash: str,
+    ) -> None:
+        """Archive canonical text for a digested source.
+
+        Raises ValueError if canonical text is empty or hashes do not match.
+        """
+        if not raw_content:
+            raise ValueError("No raw content available for digest archival")
+
+        if page_boundaries:
+            canonical_text, _ = digestor._canonicalize_pages(raw_content, page_boundaries)
+        else:
+            canonical_text = digestor._normalize_text(raw_content)
+
+        if not canonical_text.strip():
+            raise ValueError("Canonical text is empty after normalization")
+
+        computed_hash = digestor._compute_source_hash(canonical_text)
+        if computed_hash != source_text_hash:
+            raise ValueError(
+                "Canonical text hash mismatch: "
+                f"computed={computed_hash}, payload={source_text_hash}"
+            )
+
+        archive_path = self._write_digest_archive(
+            source_id=source.id,
+            source_text_hash=source_text_hash,
+            canonical_text=canonical_text,
+            retention_days=self.config.deep_research_archive_retention_days,
+        )
+        source.metadata["_digest_archive_hash"] = source_text_hash
+        logger.debug("Archived digest source %s to %s", source.id, archive_path)
+
+    def _write_digest_archive(
+        self,
+        *,
+        source_id: str,
+        source_text_hash: str,
+        canonical_text: str,
+        retention_days: int,
+    ) -> Path:
+        """Write canonical text to the digest archive directory."""
+        archive_root = Path.home() / ".foundry-mcp" / "research_archives"
+        self._ensure_private_dir(archive_root)
+
+        self._validate_archive_source_id(source_id)
+        source_dir = archive_root / source_id
+        self._ensure_private_dir(source_dir)
+
+        target_path = source_dir / f"{source_text_hash}.txt"
+        if not target_path.exists():
+            fd, tmp_path = tempfile.mkstemp(dir=source_dir, prefix="tmp-", suffix=".txt")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+                    tmp_file.write(canonical_text)
+                os.replace(tmp_path, target_path)
+                try:
+                    os.chmod(target_path, 0o600)
+                except OSError:
+                    pass
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+        else:
+            try:
+                os.utime(target_path, None)
+            except OSError:
+                pass
+
+        if retention_days > 0:
+            self._cleanup_digest_archives(source_dir, retention_days)
+
+        return target_path
+
+    def _validate_archive_source_id(self, source_id: str) -> None:
+        """Validate source_id is safe to use as an archive path component."""
+        if not source_id or not source_id.strip():
+            raise ValueError("Invalid source_id for digest archive (empty)")
+        source_path = Path(source_id)
+        if source_path.is_absolute() or source_path.drive:
+            raise ValueError("Invalid source_id for digest archive (absolute path)")
+        if ".." in source_path.parts or len(source_path.parts) != 1:
+            raise ValueError("Invalid source_id for digest archive (path traversal)")
+
+    def _cleanup_digest_archives(self, source_dir: Path, retention_days: int) -> None:
+        """Remove archived digest files older than retention_days."""
+        cutoff = time.time() - (retention_days * 86400)
+        for path in source_dir.glob("*.txt"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+            except OSError:
+                continue
+
+    def _ensure_private_dir(self, path: Path) -> None:
+        """Ensure directory exists with owner-only permissions."""
+        path.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(path, 0o700)
+        except OSError:
+            pass
 
     def _allocate_source_budget(
         self,
@@ -4669,6 +4829,18 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
             # Build content for token estimation
             content = source.content or source.snippet or ""
+            if source.is_digest and source.content:
+                try:
+                    payload = deserialize_payload(source.content)
+                    digest_parts = [
+                        payload.summary,
+                        *payload.key_points,
+                        *[ev.text for ev in payload.evidence_snippets],
+                    ]
+                    content = "\n".join(part for part in digest_parts if part)
+                except Exception:
+                    # Fallback to raw digest JSON if parsing fails
+                    content = source.content or source.snippet or ""
 
             content_items.append(ContentItem(
                 id=source.id,
@@ -5188,7 +5360,6 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 if source.is_digest:
                     # Parse digest and use evidence snippets for citations
                     try:
-                        from foundry_mcp.core.research.document_digest import deserialize_payload
                         payload = deserialize_payload(source.content)
                         prompt_parts.append(f"  Summary: {payload.summary[:content_limit]}")
                         if payload.key_points:

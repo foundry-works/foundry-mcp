@@ -298,6 +298,16 @@ class BackgroundTask:
             result: Result object from task completion (None if failed).
             error: Error message if task failed (None if successful).
         """
+        # Preserve terminal TIMEOUT/CANCELLED status even if the task finishes later.
+        if self.status in (TaskStatus.TIMEOUT, TaskStatus.CANCELLED):
+            if error is not None:
+                self.error = error
+            else:
+                self.result = result
+            if self.completed_at is None:
+                self.completed_at = time.time()
+            return
+
         if error is not None:
             self.status = TaskStatus.FAILED
             self.error = error

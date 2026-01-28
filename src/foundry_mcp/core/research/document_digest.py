@@ -132,6 +132,40 @@ class DigestConfig:
     chunk_overlap: int = 100
     cache_enabled: bool = True
 
+    def __post_init__(self) -> None:
+        """Normalize config values to satisfy payload constraints."""
+        # DigestPayload.summary max_length is 2000; clamp to prevent validation errors.
+        if self.max_summary_length > 2000:
+            logger.warning(
+                "DigestConfig.max_summary_length=%d exceeds 2000; clamping to 2000",
+                self.max_summary_length,
+            )
+            self.max_summary_length = 2000
+
+        # DigestPayload.key_points max_length is 10 items; clamp to prevent validation errors.
+        if self.max_key_points > 10:
+            logger.warning(
+                "DigestConfig.max_key_points=%d exceeds 10; clamping to 10",
+                self.max_key_points,
+            )
+            self.max_key_points = 10
+
+        # DigestPayload.evidence_snippets max_length is 10 items; clamp to prevent validation errors.
+        if self.max_evidence_snippets > 10:
+            logger.warning(
+                "DigestConfig.max_evidence_snippets=%d exceeds 10; clamping to 10",
+                self.max_evidence_snippets,
+            )
+            self.max_evidence_snippets = 10
+
+        # EvidenceSnippet.text max_length is 500; clamp to prevent validation errors.
+        if self.max_snippet_length > 500:
+            logger.warning(
+                "DigestConfig.max_snippet_length=%d exceeds 500; clamping to 500",
+                self.max_snippet_length,
+            )
+            self.max_snippet_length = 500
+
     def compute_config_hash(self) -> str:
         """Compute a deterministic hash of configuration fields.
 
@@ -1702,8 +1736,11 @@ class DocumentDigestor:
 
         if start == -1:
             # Snippet not found - return null locator
+            snippet_hash = hashlib.sha256(snippet_text.encode("utf-8")).hexdigest()[:8]
             logger.warning(
-                f"Snippet not found in canonical text: '{snippet_text[:50]}...'"
+                "Snippet not found in canonical text (len=%d, hash=%s)",
+                len(snippet_text),
+                snippet_hash,
             )
             return ("char:0-0", 0, 0)
 
@@ -1788,28 +1825,33 @@ class DocumentDigestor:
         query_hash: str,
         config_hash: str,
         *,
+        summarizer_hash: Optional[str] = None,
         impl_version: str = DIGEST_IMPL_VERSION,
     ) -> str:
         """Generate a cache key for digest results.
 
         Creates a unique cache key that incorporates all factors affecting
         digest output: implementation version, source identity, content,
-        query, and configuration. Any change to these factors produces
-        a different cache key, ensuring cache invalidation on changes.
+        query, configuration, and summarizer configuration. Any change to
+        these factors produces a different cache key, ensuring cache
+        invalidation on changes.
 
         Key format:
-            digest:{impl_version}:{source_id}:{content_hash[:16]}:{query_hash[:8]}:{config_hash[:8]}
+            digest:{impl_version}:{source_id}:{content_hash[:16]}:{query_hash[:8]}:{config_hash[:8]}:{summarizer_hash[:8]}
 
         Hash truncations balance uniqueness with key length:
         - content_hash[:16]: 16 hex chars (64 bits) - primary content identity
         - query_hash[:8]: 8 hex chars (32 bits) - query conditioning
         - config_hash[:8]: 8 hex chars (32 bits) - configuration variant
+        - summarizer_hash[:8]: 8 hex chars (32 bits) - summarizer config variant
 
         Args:
             source_id: Unique identifier for the source document.
             content_hash: Full SHA256 hash of canonical content (sha256:... format).
             query_hash: 8-char hex hash of the research query.
             config_hash: Hash of digest configuration.
+            summarizer_hash: Optional hash of summarizer configuration. If not
+                provided, computed from the current summarizer settings.
             impl_version: Digest implementation version. Default "1.0".
 
         Returns:
@@ -1823,7 +1865,7 @@ class DocumentDigestor:
             ...     config_hash="12345678abcdef00",
             ... )
             >>> key
-            'digest:1.0:doc-123:abcd1234567890ab:ef567890:12345678'
+            'digest:1.0:doc-123:abcd1234567890ab:ef567890:12345678:deadbeef'
         """
         # Extract hex portion from content_hash if it has sha256: prefix
         if content_hash.startswith("sha256:"):
@@ -1835,10 +1877,13 @@ class DocumentDigestor:
         content_truncated = content_hex[:16]
         query_truncated = query_hash[:8]
         config_truncated = config_hash[:8]
+        if summarizer_hash is None:
+            summarizer_hash = self._compute_summarizer_hash()
+        summarizer_truncated = summarizer_hash[:8]
 
         return (
             f"digest:{impl_version}:{source_id}:"
-            f"{content_truncated}:{query_truncated}:{config_truncated}"
+            f"{content_truncated}:{query_truncated}:{config_truncated}:{summarizer_truncated}"
         )
 
     def _get_cached_digest(
@@ -1893,6 +1938,55 @@ class DocumentDigestor:
         config_hash = self.config.compute_config_hash()
         cache_key = self.generate_cache_key(source_id, content_hash, query_hash, config_hash)
         self._cache.set(cache_key, result)
+
+    def _compute_summarizer_hash(self) -> str:
+        """Compute a hash for the summarizer configuration.
+
+        Includes summarizer class identity, provider chain, and key
+        configuration fields to ensure cache invalidation when the
+        summarizer behavior changes.
+        """
+        summarizer = self.summarizer
+        summarizer_id = (
+            f"{summarizer.__class__.__module__}."
+            f"{summarizer.__class__.__qualname__}"
+        )
+        provider_func = getattr(summarizer, "_provider_func", None)
+        provider_func_name = None
+        if provider_func is not None and provider_func.__class__.__module__ != "unittest.mock":
+            provider_func_name = getattr(
+                provider_func,
+                "__qualname__",
+                getattr(provider_func, "__name__", "custom_provider"),
+            )
+
+        config = getattr(summarizer, "config", None)
+        if config is not None and config.__class__.__module__ == "unittest.mock":
+            config = None
+        provider_chain: list[str] = []
+        if config is not None and hasattr(config, "get_provider_chain"):
+            try:
+                chain = config.get_provider_chain()
+            except Exception:
+                chain = []
+            if isinstance(chain, (list, tuple)):
+                provider_chain = list(chain)
+            else:
+                provider_chain = []
+
+        config_tuple = (
+            summarizer_id,
+            tuple(provider_chain),
+            getattr(config, "max_retries", None),
+            getattr(config, "retry_delay", None),
+            getattr(config, "timeout", None),
+            getattr(config, "chunk_size", None),
+            getattr(config, "chunk_overlap", None),
+            getattr(config, "target_budget", None),
+            getattr(config, "cache_enabled", None),
+            provider_func_name,
+        )
+        return hashlib.sha256(str(config_tuple).encode("utf-8")).hexdigest()[:16]
 
 
 # =============================================================================

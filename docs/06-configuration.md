@@ -199,6 +199,69 @@ deep_research_max_retries = 2
 deep_research_retry_delay = 5.0
 ```
 
+### Document Digest
+
+The document digest feature compresses source content into structured summaries
+with evidence snippets for citation traceability. This reduces context usage
+while preserving key information.
+
+#### Digest Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `deep_research_digest_policy` | string | `"auto"` | When to digest: `"off"`, `"auto"`, `"always"` |
+| `deep_research_digest_min_chars` | int | `500` | Minimum content length to trigger digest |
+| `deep_research_digest_max_sources` | int | `50` | Maximum sources to digest per iteration |
+| `deep_research_digest_timeout` | float | `60.0` | Timeout per digest operation (seconds) |
+| `deep_research_digest_max_concurrent` | int | `3` | Maximum concurrent digest operations |
+| `deep_research_digest_include_evidence` | bool | `true` | Include evidence snippets in output |
+| `deep_research_digest_evidence_max_chars` | int | `400` | Maximum characters per evidence snippet (1-500) |
+| `deep_research_digest_max_evidence_snippets` | int | `5` | Maximum evidence snippets per digest (1-10) |
+| `deep_research_digest_fetch_pdfs` | bool | `false` | Fetch and extract PDF content |
+
+**Digest Policies:**
+
+| Policy | Behavior |
+|--------|----------|
+| `off` | Never digest - all sources pass through unchanged |
+| `auto` | Digest HIGH/MEDIUM quality sources above size threshold |
+| `always` | Always digest sources with content |
+
+#### Content Archival
+
+When archival is enabled, canonical (normalized) text is stored before compression,
+enabling verification of evidence snippet locators against original content.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `deep_research_archive_content` | bool | `false` | Archive canonical text before digest |
+| `deep_research_archive_retention_days` | int | `30` | Days to retain archived content (0 = keep indefinitely) |
+
+**Archive Location:**
+
+Archives are stored at:
+```
+~/.foundry-mcp/research_archives/{source_id}/{content_hash}.txt
+```
+
+- Files are created with owner-only permissions (0600)
+- Directories are created with owner-only permissions (0700)
+- Old archives are automatically cleaned based on `retention_days`
+
+#### Example Configuration
+
+```toml
+[research]
+# Digest settings
+deep_research_digest_policy = "auto"
+deep_research_digest_min_chars = 500
+deep_research_digest_fetch_pdfs = true
+
+# Archival (for citation verification)
+deep_research_archive_content = true
+deep_research_archive_retention_days = 60
+```
+
 ### Audit Verbosity
 
 The `audit_verbosity` setting controls the size of JSONL audit payloads written during deep research workflows. This can reduce CPU spent on large audit writes while maintaining schema stability for downstream analysis tools.

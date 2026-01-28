@@ -1092,11 +1092,12 @@ def _handle_extract(
     from foundry_mcp.core.research.providers.tavily_extract import (
         TavilyExtractProvider,
         UrlValidationError,
-        validate_extract_url,
+        validate_extract_url_async,
     )
     from foundry_mcp.core.research.providers.base import (
         RateLimitError,
         AuthenticationError,
+        SearchProviderError,
     )
 
     # Validate required parameter
@@ -1132,22 +1133,35 @@ def _handle_extract(
             )
         )
 
-    # Pre-validate URLs and track validation failures
-    valid_urls: list[str] = []
-    failed_urls: list[str] = []
-    error_details: list[dict[str, Any]] = []
-
-    for url in urls:
+    def _run_async(coro: Any) -> Any:
         try:
-            validate_extract_url(url, resolve_dns=False)  # Skip DNS in validation
-            valid_urls.append(url)
-        except UrlValidationError as e:
-            failed_urls.append(url)
-            error_details.append({
-                "url": url,
-                "error": e.reason,
-                "error_code": e.error_code,
-            })
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+        # Avoid blocking a running loop by executing in a worker thread.
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result()
+
+    # Pre-validate URLs and track validation failures (async DNS checks)
+    async def _validate_urls_async(url_list: list[str]) -> tuple[list[str], list[str], list[dict[str, Any]]]:
+        valid: list[str] = []
+        failed: list[str] = []
+        details: list[dict[str, Any]] = []
+        for url in url_list:
+            try:
+                await validate_extract_url_async(url)
+                valid.append(url)
+            except UrlValidationError as e:
+                failed.append(url)
+                details.append({
+                    "url": url,
+                    "error": e.reason,
+                    "error_code": e.error_code,
+                })
+        return valid, failed, details
+
+    valid_urls, failed_urls, error_details = _run_async(_validate_urls_async(urls))
 
     # If all URLs failed validation, return total failure
     if not valid_urls:
@@ -1178,17 +1192,8 @@ def _handle_extract(
         if chunks_per_source is not None:
             extract_kwargs["chunks_per_source"] = chunks_per_source
 
-        def _run_async(coro: Any) -> Any:
-            try:
-                asyncio.get_running_loop()
-            except RuntimeError:
-                return asyncio.run(coro)
-            # Avoid blocking a running loop by executing in a worker thread.
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result()
-
         # Execute extraction for valid URLs only
+        extract_kwargs["validate_urls"] = False
         sources = _run_async(provider.extract(valid_urls, **extract_kwargs))
 
         # Convert ResearchSource objects to dicts
@@ -1303,6 +1308,50 @@ def _handle_extract(
                         "url": None,
                         "error": str(e),
                         "error_code": "RATE_LIMIT_EXCEEDED",
+                    }],
+                },
+            )
+        )
+    except SearchProviderError as e:
+        message = str(e)
+        original = getattr(e, "original_error", None)
+        timeout_detected = "timeout" in e.message.lower() or "timed out" in e.message.lower()
+        if original is not None:
+            if isinstance(original, asyncio.TimeoutError):
+                timeout_detected = True
+            elif "timeout" in type(original).__name__.lower():
+                timeout_detected = True
+
+        if timeout_detected:
+            return asdict(
+                error_response(
+                    f"Extract request timed out: {message}",
+                    error_code="TIMEOUT",
+                    error_type=ErrorType.UNAVAILABLE,
+                    remediation="Try with fewer URLs or increase timeout",
+                    details={
+                        "failed_urls": urls,
+                        "error_details": [{
+                            "url": None,
+                            "error": message,
+                            "error_code": "TIMEOUT",
+                        }],
+                    },
+                )
+            )
+
+        return asdict(
+            error_response(
+                f"Extract failed: {message}",
+                error_code="EXTRACT_FAILED",
+                error_type=ErrorType.INTERNAL,
+                remediation="Check logs for details or try with different URLs",
+                details={
+                    "failed_urls": urls if urls else [],
+                    "error_details": [{
+                        "url": None,
+                        "error": message,
+                        "error_code": "EXTRACT_FAILED",
                     }],
                 },
             )

@@ -1336,7 +1336,7 @@ class TestCacheKeyGeneration:
             query_hash="ef567890",
             config_hash="12345678abcdef00",
         )
-        # Format: digest:{version}:{source_id}:{content[:16]}:{query[:8]}:{config[:8]}
+        # Format: digest:{version}:{source_id}:{content[:16]}:{query[:8]}:{config[:8]}:{summarizer[:8]}
         parts = key.split(":")
         assert parts[0] == "digest"
         assert parts[1] == "1.0"  # impl version
@@ -1344,6 +1344,7 @@ class TestCacheKeyGeneration:
         assert parts[3] == "a" * 16  # content hash truncated to 16
         assert parts[4] == "ef567890"  # query hash truncated to 8
         assert parts[5] == "12345678"  # config hash truncated to 8
+        assert len(parts[6]) == 8  # summarizer hash truncated to 8
 
     def test_cache_key_strips_sha256_prefix(self, digestor):
         """Test cache key strips sha256: prefix from content hash."""
@@ -1378,6 +1379,7 @@ class TestCacheKeyGeneration:
         assert len(parts[3]) == 16  # content hash: 16 chars
         assert len(parts[4]) == 8   # query hash: 8 chars
         assert len(parts[5]) == 8   # config hash: 8 chars
+        assert len(parts[6]) == 8   # summarizer hash: 8 chars
 
     def test_cache_key_deterministic(self, digestor):
         """Test same inputs produce same cache key."""
@@ -1480,6 +1482,28 @@ class TestCacheKeyInvalidation:
 
         assert key1 != key2
 
+    def test_summarizer_change_invalidates(self):
+        """Test different summarizer configs produce different cache keys."""
+        from foundry_mcp.core.research.document_digest import DocumentDigestor, DigestConfig
+        from foundry_mcp.core.research.pdf_extractor import PDFExtractor
+        from foundry_mcp.core.research.summarization import ContentSummarizer
+
+        digestor_a = DocumentDigestor(
+            summarizer=ContentSummarizer(summarization_provider="claude"),
+            pdf_extractor=PDFExtractor(),
+            config=DigestConfig(),
+        )
+        digestor_b = DocumentDigestor(
+            summarizer=ContentSummarizer(summarization_provider="gemini"),
+            pdf_extractor=PDFExtractor(),
+            config=DigestConfig(),
+        )
+        base = self._base_args()
+        key1 = digestor_a.generate_cache_key(**base)
+        key2 = digestor_b.generate_cache_key(**base)
+
+        assert key1 != key2
+
 
 class TestConfigHash:
     """Tests for DigestConfig.compute_config_hash()."""
@@ -1563,6 +1587,26 @@ class TestConfigHash:
         config1 = DigestConfig(cache_enabled=True)
         config2 = DigestConfig(cache_enabled=False)
         assert config1.compute_config_hash() == config2.compute_config_hash()
+
+
+class TestConfigNormalization:
+    """Tests for DigestConfig normalization to schema limits."""
+
+    def test_config_clamps_to_schema_caps(self):
+        """Config values above schema limits are clamped."""
+        from foundry_mcp.core.research.document_digest import DigestConfig
+
+        config = DigestConfig(
+            max_summary_length=5000,
+            max_key_points=25,
+            max_evidence_snippets=50,
+            max_snippet_length=2000,
+        )
+
+        assert config.max_summary_length == 2000
+        assert config.max_key_points == 10
+        assert config.max_evidence_snippets == 10
+        assert config.max_snippet_length == 500
 
 
 class TestQueryAndSourceHash:

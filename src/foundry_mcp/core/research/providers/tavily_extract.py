@@ -20,6 +20,7 @@ Example usage:
     sources = await provider.extract(["https://example.com/article"])
 """
 
+import asyncio
 import ipaddress
 import logging
 import os
@@ -129,7 +130,7 @@ def _is_private_ip(ip_str: str) -> bool:
 
 
 def _resolve_hostname(hostname: str, timeout: float = DNS_TIMEOUT) -> list[str]:
-    """Resolve hostname to IP addresses with timeout.
+    """Resolve hostname to IP addresses (sync).
 
     Args:
         hostname: Hostname to resolve.
@@ -141,53 +142,81 @@ def _resolve_hostname(hostname: str, timeout: float = DNS_TIMEOUT) -> list[str]:
     Raises:
         UrlValidationError: If DNS resolution fails.
     """
-    # Set socket timeout for DNS resolution
     old_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout)
-        # Get all addresses (both IPv4 and IPv6)
         addr_info = socket.getaddrinfo(
             hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
         )
-        # Extract unique IP addresses (info[4][0] is always str for IP)
         return list({str(info[4][0]) for info in addr_info})
-    except socket.gaierror as e:
-        raise UrlValidationError(
-            hostname,
-            f"DNS resolution failed: {e}",
-            error_code="INVALID_URL",
-        )
     except socket.timeout:
         raise UrlValidationError(
             hostname,
             f"DNS resolution timed out after {timeout}s",
             error_code="INVALID_URL",
         )
+    except socket.gaierror as e:
+        raise UrlValidationError(
+            hostname,
+            f"DNS resolution failed: {e}",
+            error_code="INVALID_URL",
+        )
+    except OSError as e:
+        raise UrlValidationError(
+            hostname,
+            f"DNS resolution failed: {e}",
+            error_code="INVALID_URL",
+        )
     finally:
         socket.setdefaulttimeout(old_timeout)
 
 
-def validate_extract_url(url: str, resolve_dns: bool = True) -> None:
-    """Validate URL for safe extraction (SSRF protection).
+async def _resolve_hostname_async(
+    hostname: str,
+    timeout: float = DNS_TIMEOUT,
+) -> list[str]:
+    """Resolve hostname to IP addresses (async)."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return _resolve_hostname(hostname, timeout=timeout)
 
-    Performs comprehensive validation:
-    1. URL length check
-    2. Scheme validation (http/https only)
-    3. Hostname validation against blocklists
-    4. IDN/punycode normalization
-    5. DNS resolution with timeout
-    6. IP address validation against private ranges
+    try:
+        addr_info = await asyncio.wait_for(
+            loop.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM),
+            timeout=timeout,
+        )
+        return list({str(info[4][0]) for info in addr_info})
+    except asyncio.TimeoutError:
+        raise UrlValidationError(
+            hostname,
+            f"DNS resolution timed out after {timeout}s",
+            error_code="INVALID_URL",
+        )
+    except socket.gaierror as e:
+        raise UrlValidationError(
+            hostname,
+            f"DNS resolution failed: {e}",
+            error_code="INVALID_URL",
+        )
+    except OSError as e:
+        raise UrlValidationError(
+            hostname,
+            f"DNS resolution failed: {e}",
+            error_code="INVALID_URL",
+        )
 
-    Args:
-        url: The URL to validate.
-        resolve_dns: Whether to perform DNS resolution (default: True).
-            Set to False for testing without network access.
 
-    Raises:
-        UrlValidationError: If URL fails validation with error_code:
-            - INVALID_URL: URL parsing, scheme, or DNS failure
-            - BLOCKED_HOST: Private/internal network detected
-    """
+def _normalize_hostname(hostname: str) -> str:
+    """Normalize hostname for validation (IDN/punycode)."""
+    try:
+        return hostname.encode("idna").decode("ascii").lower()
+    except (UnicodeError, UnicodeDecodeError):
+        return hostname.lower()
+
+
+def _validate_extract_url_base(url: str) -> Optional[str]:
+    """Validate URL structure and return hostname for DNS resolution if needed."""
     # Check URL length
     if len(url) > MAX_URL_LENGTH:
         raise UrlValidationError(
@@ -213,12 +242,7 @@ def validate_extract_url(url: str, resolve_dns: bool = True) -> None:
     if not hostname:
         raise UrlValidationError(url, "No hostname in URL", error_code="INVALID_URL")
 
-    # Normalize IDN/punycode hostname
-    try:
-        hostname = hostname.encode("idna").decode("ascii").lower()
-    except (UnicodeError, UnicodeDecodeError):
-        # If IDN encoding fails, use original hostname
-        hostname = hostname.lower()
+    hostname = _normalize_hostname(hostname)
 
     # Block known localhost/loopback addresses
     if hostname in BLOCKED_HOSTS:
@@ -239,8 +263,7 @@ def validate_extract_url(url: str, resolve_dns: bool = True) -> None:
     try:
         ip = ipaddress.ip_address(hostname)
     except ValueError:
-        # Not an IP address, continue to DNS resolution below
-        pass
+        return hostname
     else:
         # Successfully parsed as IP address - validate it
         if _is_private_ip(str(ip)):
@@ -249,11 +272,38 @@ def validate_extract_url(url: str, resolve_dns: bool = True) -> None:
                 f"Blocked private IP address: {hostname}",
                 error_code="BLOCKED_HOST",
             )
-        return  # Valid public IP, skip DNS resolution
+        return None
 
-    # DNS resolution to validate all resolved IPs
-    if resolve_dns:
+
+def validate_extract_url(url: str, resolve_dns: bool = True) -> None:
+    """Validate URL for safe extraction (SSRF protection).
+
+    Args:
+        url: The URL to validate.
+        resolve_dns: Whether to resolve hostname and validate resolved IPs.
+    """
+    hostname = _validate_extract_url_base(url)
+    if resolve_dns and hostname:
         resolved_ips = _resolve_hostname(hostname)
+        for ip_str in resolved_ips:
+            if _is_private_ip(ip_str):
+                raise UrlValidationError(
+                    url,
+                    f"Hostname {hostname} resolves to blocked private IP: {ip_str}",
+                    error_code="BLOCKED_HOST",
+                )
+
+
+async def validate_extract_url_async(url: str, resolve_dns: bool = True) -> None:
+    """Async URL validation for safe extraction (SSRF protection).
+
+    Args:
+        url: The URL to validate.
+        resolve_dns: Whether to resolve hostname and validate resolved IPs.
+    """
+    hostname = _validate_extract_url_base(url)
+    if resolve_dns and hostname:
+        resolved_ips = await _resolve_hostname_async(hostname)
         for ip_str in resolved_ips:
             if _is_private_ip(ip_str):
                 raise UrlValidationError(
@@ -412,6 +462,7 @@ class TavilyExtractProvider:
         format: str = "markdown",
         query: str | None = None,
         chunks_per_source: int | None = None,
+        validate_urls: bool = True,
     ) -> list[ResearchSource]:
         """Extract content from URLs via Tavily Extract API.
 
@@ -429,6 +480,8 @@ class TavilyExtractProvider:
                 When provided, chunks are ordered by relevance to this query.
             chunks_per_source: Number of content chunks per URL (1-5).
                 Default: 3 (Tavily default).
+            validate_urls: Whether to validate URLs for SSRF protection.
+                Disable only if URLs have already been validated.
 
         Returns:
             List of ResearchSource objects containing extracted content.
@@ -449,8 +502,9 @@ class TavilyExtractProvider:
             )
 
         # Validate each URL for SSRF protection
-        for url in urls:
-            validate_extract_url(url)
+        if validate_urls:
+            for url in urls:
+                await validate_extract_url_async(url)
 
         # Validate other parameters
         _validate_extract_params(

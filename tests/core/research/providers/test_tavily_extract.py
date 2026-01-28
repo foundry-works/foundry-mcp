@@ -270,7 +270,7 @@ class TestExtractMethod:
         """Test extract with default parameters."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(["https://example.com"])
 
             mock_exec.assert_called_once()
@@ -286,7 +286,7 @@ class TestExtractMethod:
         """Test extract with advanced depth."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(
                     ["https://example.com"],
                     extract_depth="advanced",
@@ -300,7 +300,7 @@ class TestExtractMethod:
         """Test extract with format parameter."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(
                     ["https://example.com"],
                     format="text",
@@ -314,7 +314,7 @@ class TestExtractMethod:
         """Test extract with include_images parameter."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(
                     ["https://example.com"],
                     include_images=True,
@@ -328,7 +328,7 @@ class TestExtractMethod:
         """Test extract with query parameter for chunk reranking."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(
                     ["https://example.com"],
                     query="important topic",
@@ -342,7 +342,7 @@ class TestExtractMethod:
         """Test extract with chunks_per_source parameter."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(
                     ["https://example.com"],
                     chunks_per_source=3,
@@ -361,7 +361,7 @@ class TestExtractMethod:
         ]
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(urls)
 
             payload = mock_exec.call_args[0][0]
@@ -372,7 +372,7 @@ class TestExtractMethod:
         """Test extract enforces max 10 URLs per request."""
         urls = [f"https://example.com/page{i}" for i in range(15)]
         with pytest.raises(ValueError, match="Too many URLs.*Maximum is 10"):
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 await provider.extract(urls)
 
 
@@ -410,7 +410,7 @@ class TestResponseParsing:
         """Test response parsing returns list of ResearchSource."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response_data
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/page1", "https://example.com/page2"])
 
             assert len(results) == 2
@@ -421,7 +421,7 @@ class TestResponseParsing:
         """Test response fields are correctly mapped to ResearchSource."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response_data
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/page1"])
 
             assert results[0].url == "https://example.com/page1"
@@ -433,7 +433,7 @@ class TestResponseParsing:
         """Test snippet is first 500 chars of content."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response_data
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/page1"])
 
             # Snippet should be first 500 chars of raw_content
@@ -445,7 +445,7 @@ class TestResponseParsing:
         """Test chunks are joined for content."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response_data
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/page2"])
 
             # Content should be chunks joined
@@ -457,7 +457,7 @@ class TestResponseParsing:
         """Test metadata includes extract_depth, chunk_count, format, images, favicon."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response_data
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/page1"])
 
             metadata = results[0].metadata
@@ -472,7 +472,7 @@ class TestResponseParsing:
         """Test empty results returns empty list."""
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = {"results": []}
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com"])
 
             assert results == []
@@ -508,7 +508,7 @@ class TestRetryLogic:
 
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value.__aenter__.return_value.post = mock_post
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 with patch("asyncio.sleep", new_callable=AsyncMock):
                     results = await provider.extract(["https://example.com"])
 
@@ -526,7 +526,7 @@ class TestRetryLogic:
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response_429
             )
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 with patch("asyncio.sleep", new_callable=AsyncMock):
                     with pytest.raises(RateLimitError):
                         await provider.extract(["https://example.com"])
@@ -551,7 +551,7 @@ class TestErrorHandling:
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response
             )
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 with pytest.raises(AuthenticationError):
                     await provider.extract(["https://example.com"])
 
@@ -567,7 +567,7 @@ class TestErrorHandling:
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response
             )
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 with pytest.raises(SearchProviderError):
                     await provider.extract(["https://example.com"])
 
@@ -759,7 +759,7 @@ class TestPartialFailureHandling:
 
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract([
                     "https://example.com/page1",
                     "https://example.com/page2",
@@ -778,7 +778,7 @@ class TestPartialFailureHandling:
 
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/page1"])
 
         assert results == []
@@ -833,7 +833,7 @@ class TestPartialFailureHandling:
 
         with patch.object(provider, "_execute_with_retry", new_callable=AsyncMock) as mock_exec:
             mock_exec.return_value = mock_response
-            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+            with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                 results = await provider.extract(["https://example.com/article"])
 
         assert len(results) == 1
@@ -872,7 +872,7 @@ class TestExtractHandlerPartialFailure:
                 ])
                 MockProvider.return_value = mock_provider
 
-                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                     result = _handle_extract(urls=["https://example.com"])
 
         assert result["success"] is True
@@ -897,7 +897,7 @@ class TestExtractHandlerPartialFailure:
                 mock_provider.extract = AsyncMock(return_value=[])  # No results
                 MockProvider.return_value = mock_provider
 
-                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                     result = _handle_extract(urls=["https://example.com"])
 
         assert result["success"] is False
@@ -930,7 +930,7 @@ class TestExtractHandlerPartialFailure:
                 ])
                 MockProvider.return_value = mock_provider
 
-                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                     result = _handle_extract(urls=[
                         "https://example.com/page1",
                         "https://example.com/page2",  # This one "fails"
@@ -945,6 +945,57 @@ class TestExtractHandlerPartialFailure:
         # Partial success has warnings
         assert result["meta"].get("warnings") is not None
         assert len(result["meta"]["warnings"]) > 0
+
+    def test_partial_success_includes_validation_failures(self):
+        """Validation failures should be reported alongside successful extracts."""
+        from foundry_mcp.tools.unified.research import _handle_extract
+
+        valid_url = "https://example.com/page1"
+        invalid_url = "http://localhost/admin"
+
+        async def _validate(url: str) -> None:
+            if url == invalid_url:
+                raise UrlValidationError(
+                    url,
+                    "Blocked host: localhost",
+                    error_code="BLOCKED_HOST",
+                )
+
+        with patch("foundry_mcp.tools.unified.research._get_config") as mock_config:
+            mock_cfg = MagicMock()
+            mock_cfg.research.tavily_api_key = "tvly-test"
+            mock_config.return_value = mock_cfg
+
+            with patch("foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider") as MockProvider:
+                mock_provider = MagicMock()
+                mock_provider.extract = AsyncMock(return_value=[
+                    MagicMock(
+                        url=valid_url,
+                        title="Test",
+                        source_type=MagicMock(value="web"),
+                        snippet="Test snippet",
+                        content="Test content",
+                        metadata={},
+                    )
+                ])
+                MockProvider.return_value = mock_provider
+
+                with patch(
+                    "foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async",
+                    new_callable=AsyncMock,
+                ) as mock_validate:
+                    mock_validate.side_effect = _validate
+                    result = _handle_extract(urls=[valid_url, invalid_url])
+
+        assert result["success"] is True
+        assert invalid_url in result["data"]["failed_urls"]
+        assert result["data"]["stats"]["succeeded"] == 1
+        assert result["data"]["stats"]["failed"] == 1
+        assert result["meta"].get("warnings")
+        mock_provider.extract.assert_called_once()
+        call_args = mock_provider.extract.call_args
+        assert call_args.args[0] == [valid_url]
+        assert call_args.kwargs.get("validate_urls") is False
 
     def test_validation_failure_returns_error_with_details(self):
         """URL validation failure returns error with failed_urls and error_details."""
@@ -963,6 +1014,36 @@ class TestExtractHandlerPartialFailure:
         assert "failed_urls" in result["data"]["details"]
         assert "error_details" in result["data"]["details"]
         assert result["data"]["details"]["failed_urls"] == ["http://localhost/admin"]
+
+    def test_timeout_maps_to_timeout_error_code(self):
+        """Provider timeouts should return TIMEOUT error_code."""
+        from foundry_mcp.tools.unified.research import _handle_extract
+        from foundry_mcp.core.research.providers.base import SearchProviderError
+
+        with patch("foundry_mcp.tools.unified.research._get_config") as mock_config:
+            mock_cfg = MagicMock()
+            mock_cfg.research.tavily_api_key = "tvly-test"
+            mock_config.return_value = mock_cfg
+
+            with patch("foundry_mcp.core.research.providers.tavily_extract.TavilyExtractProvider") as MockProvider:
+                mock_provider = MagicMock()
+                mock_provider.extract = AsyncMock(
+                    side_effect=SearchProviderError(
+                        provider="tavily_extract",
+                        message="Request timed out: budget exceeded",
+                        retryable=True,
+                    )
+                )
+                MockProvider.return_value = mock_provider
+
+                with patch(
+                    "foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async",
+                    new_callable=AsyncMock,
+                ):
+                    result = _handle_extract(urls=["https://example.com"])
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "TIMEOUT"
 
     def test_error_response_includes_error_code(self):
         """Error responses include error_code field."""
@@ -1002,7 +1083,7 @@ class TestExtractHandlerPartialFailure:
                 ])
                 MockProvider.return_value = mock_provider
 
-                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url"):
+                with patch("foundry_mcp.core.research.providers.tavily_extract.validate_extract_url_async", new_callable=AsyncMock):
                     success_result = _handle_extract(urls=["https://example.com"])
 
             # Error case

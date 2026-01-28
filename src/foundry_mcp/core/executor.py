@@ -4,10 +4,11 @@ Provides a dedicated thread pool executor for blocking provider operations
 (subprocess calls, sync file I/O) to prevent event loop starvation.
 
 Usage:
-    from foundry_mcp.core.executor import provider_executor
+    from foundry_mcp.core.executor import get_provider_executor
 
     # Run blocking operation in executor
-    result = await provider_executor.run_blocking(
+    executor = get_provider_executor()
+    result = await executor.run_blocking(
         subprocess.run,
         ["claude", "--version"],
         timeout=30.0,
@@ -212,11 +213,16 @@ class ProviderExecutor:
             self.start()
 
         # Check queue limit
+        use_fallback = False
         with self._lock:
             if self._queued_tasks >= self._queue_limit:
-                # Try fallback executor
-                return await self._run_with_fallback(func, args, kwargs, timeout)
-            self._queued_tasks += 1
+                use_fallback = True
+            else:
+                self._queued_tasks += 1
+
+        if use_fallback:
+            # Try fallback executor outside the lock to avoid deadlocks
+            return await self._run_with_fallback(func, args, kwargs, timeout)
 
         try:
             loop = asyncio.get_running_loop()

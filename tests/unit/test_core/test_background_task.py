@@ -231,6 +231,32 @@ class TestBackgroundTaskMarkMethods:
         assert task.status == TaskStatus.TIMEOUT
         assert task.completed_at is not None
 
+    def test_mark_completed_does_not_override_timeout(self):
+        """mark_completed preserves TIMEOUT status when already timed out."""
+        task = BackgroundTask(research_id="test-1")
+
+        task.mark_timeout()
+        completed_at = task.completed_at
+
+        task.mark_completed(result="late result")
+
+        assert task.status == TaskStatus.TIMEOUT
+        assert task.completed_at == completed_at
+        assert task.result == "late result"
+
+    def test_mark_completed_does_not_override_cancelled(self):
+        """mark_completed preserves CANCELLED status when already cancelled."""
+        task = BackgroundTask(research_id="test-1")
+        task.status = TaskStatus.CANCELLED
+        task.completed_at = time.time()
+        completed_at = task.completed_at
+
+        task.mark_completed(result="late result")
+
+        assert task.status == TaskStatus.CANCELLED
+        assert task.completed_at == completed_at
+        assert task.result == "late result"
+
 
 class TestBackgroundTaskProperties:
     """Tests for BackgroundTask property methods."""

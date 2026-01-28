@@ -259,6 +259,37 @@ class TestTavilySearchParameterPropagation:
         assert "days" not in kwargs
         assert "country" not in kwargs
 
+    @pytest.mark.asyncio
+    async def test_get_tavily_search_kwargs_respects_basic_override(
+        self, mock_memory
+    ):
+        """Explicit config should override mode defaults even when matching base defaults."""
+        config = ResearchConfig(
+            enabled=True,
+            tavily_api_key="tvly-test-key-12345",
+            deep_research_providers=["tavily"],
+            deep_research_max_iterations=1,
+            deep_research_max_sub_queries=2,
+            deep_research_max_sources=3,
+            tavily_search_depth="basic",
+            tavily_chunks_per_source=3,
+        )
+        config.tavily_search_depth_configured = True
+        config.tavily_chunks_per_source_configured = True
+
+        workflow = DeepResearchWorkflow(config=config, memory=mock_memory)
+
+        state = DeepResearchState(
+            original_query="test query",
+            research_mode=ResearchMode.ACADEMIC,
+            follow_links=False,
+        )
+
+        kwargs = workflow._get_tavily_search_kwargs(state)
+
+        assert kwargs["search_depth"] == "basic"
+        assert kwargs["chunks_per_source"] == 3
+
 
 # =============================================================================
 # Extract Follow-up Integration Tests
