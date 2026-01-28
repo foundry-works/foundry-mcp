@@ -28,6 +28,7 @@ dependencies = [
     "click>=8.0.0",
     "tomli>=2.0.0; python_version < '3.11'",
     "filelock>=3.20.1",
+    "pypdf>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +45,9 @@ tracing = [
 ]
 metrics = [
     "prometheus-client>=0.17.0",
+]
+pdf = [
+    "pdfminer.six>=20221105",
 ]
 observability = [
     "foundry-mcp[tracing,metrics]",
