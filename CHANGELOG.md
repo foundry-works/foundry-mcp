@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0b12] - 2026-02-01
+
+### Added
+
+- **Claude ZAI Provider**: New CLI provider for users with custom `claude-zai` alias configurations
+  - Separate provider from `claude` for custom alias settings (e.g., custom MCP servers, system prompts)
+  - Read-only tool restrictions for security: allows Read, Grep, Glob, read-only git commands
+  - Blocks write operations, web operations (data exfiltration risk), and destructive commands
+  - Detector registration with `FOUNDRY_CLAUDE_ZAI_AVAILABLE_OVERRIDE` and `FOUNDRY_CLAUDE_ZAI_BINARY` env vars
+  - Sample config updated with claude-zai provider examples
+
 ## [0.9.0b11] - 2026-01-28
 
 ### Added
