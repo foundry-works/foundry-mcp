@@ -335,6 +335,13 @@ _DEFAULT_DETECTORS: tuple[ProviderDetector, ...] = (
         binary_env="FOUNDRY_OPENCODE_BINARY",
         probe_args=("--version",),
     ),
+    ProviderDetector(
+        provider_id="claude-zai",
+        binary_name="claude-zai",
+        override_env="FOUNDRY_CLAUDE_ZAI_AVAILABLE_OVERRIDE",
+        binary_env="FOUNDRY_CLAUDE_ZAI_BINARY",
+        probe_args=("--version",),
+    ),
 )
 
 # Global detector registry

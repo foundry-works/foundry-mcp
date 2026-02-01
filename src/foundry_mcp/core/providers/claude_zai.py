@@ -1,0 +1,477 @@
+"""
+Claude ZAI CLI provider implementation.
+
+Bridges the `claude-zai` command-line interface (user's alias) to the ProviderContext
+contract by handling availability checks, safe command construction, response parsing,
+and token usage normalization. Restricts to read-only operations for security.
+
+This is a separate provider from `claude` for users who have configured a `claude-zai`
+alias with custom settings.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import subprocess
+from typing import Any, Dict, List, Optional, Protocol, Sequence
+
+from .base import (
+    ProviderCapability,
+    ProviderContext,
+    ProviderExecutionError,
+    ProviderHooks,
+    ProviderMetadata,
+    ProviderRequest,
+    ProviderResult,
+    ProviderStatus,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+    StreamChunk,
+    TokenUsage,
+)
+from .detectors import detect_provider_availability
+from .registry import register_provider
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_BINARY = "claude-zai"
+DEFAULT_TIMEOUT_SECONDS = 360
+AVAILABILITY_OVERRIDE_ENV = "CLAUDE_ZAI_CLI_AVAILABLE_OVERRIDE"
+CUSTOM_BINARY_ENV = "CLAUDE_ZAI_CLI_BINARY"
+
+# Read-only tools allowed for Claude ZAI provider
+# Core tools
+ALLOWED_TOOLS = [
+    # File operations (read-only)
+    "Read",
+    "Grep",
+    "Glob",
+    # Task delegation
+    "Task",
+    # Bash commands - file viewing
+    "Bash(cat)",
+    "Bash(head:*)",
+    "Bash(tail:*)",
+    "Bash(bat:*)",
+    # Bash commands - directory listing/navigation
+    "Bash(ls:*)",
+    "Bash(tree:*)",
+    "Bash(pwd)",
+    "Bash(which:*)",
+    "Bash(whereis:*)",
+    # Bash commands - search/find
+    "Bash(grep:*)",
+    "Bash(rg:*)",
+    "Bash(ag:*)",
+    "Bash(find:*)",
+    "Bash(fd:*)",
+    # Bash commands - git operations (read-only)
+    "Bash(git log:*)",
+    "Bash(git show:*)",
+    "Bash(git diff:*)",
+    "Bash(git status:*)",
+    "Bash(git grep:*)",
+    "Bash(git blame:*)",
+    "Bash(git branch:*)",
+    "Bash(git rev-parse:*)",
+    "Bash(git describe:*)",
+    "Bash(git ls-tree:*)",
+    # Bash commands - text processing
+    "Bash(wc:*)",
+    "Bash(cut:*)",
+    "Bash(paste:*)",
+    "Bash(column:*)",
+    "Bash(sort:*)",
+    "Bash(uniq:*)",
+    # Bash commands - data formats
+    "Bash(jq:*)",
+    "Bash(yq:*)",
+    # Bash commands - file analysis
+    "Bash(file:*)",
+    "Bash(stat:*)",
+    "Bash(du:*)",
+    "Bash(df:*)",
+    # Bash commands - checksums/hashing
+    "Bash(md5sum:*)",
+    "Bash(shasum:*)",
+    "Bash(sha256sum:*)",
+    "Bash(sha512sum:*)",
+]
+
+# Tools that should be explicitly blocked
+DISALLOWED_TOOLS = [
+    "Write",
+    "Edit",
+    # Web operations (data exfiltration risk)
+    "WebSearch",
+    "WebFetch",
+    # Dangerous file operations
+    "Bash(rm:*)",
+    "Bash(rmdir:*)",
+    "Bash(dd:*)",
+    "Bash(mkfs:*)",
+    "Bash(fdisk:*)",
+    # File modifications
+    "Bash(touch:*)",
+    "Bash(mkdir:*)",
+    "Bash(mv:*)",
+    "Bash(cp:*)",
+    "Bash(chmod:*)",
+    "Bash(chown:*)",
+    "Bash(sed:*)",
+    "Bash(awk:*)",
+    # Git write operations
+    "Bash(git add:*)",
+    "Bash(git commit:*)",
+    "Bash(git push:*)",
+    "Bash(git pull:*)",
+    "Bash(git merge:*)",
+    "Bash(git rebase:*)",
+    "Bash(git reset:*)",
+    "Bash(git checkout:*)",
+    # Package installations
+    "Bash(npm install:*)",
+    "Bash(pip install:*)",
+    "Bash(apt install:*)",
+    "Bash(brew install:*)",
+    # System operations
+    "Bash(sudo:*)",
+    "Bash(halt:*)",
+    "Bash(reboot:*)",
+    "Bash(shutdown:*)",
+]
+
+# System prompt warning about shell command limitations
+SHELL_COMMAND_WARNING = """
+IMPORTANT SECURITY NOTE: When using shell commands, be aware of the following restrictions:
+1. Only specific read-only commands are allowed (cat, grep, git log, etc.)
+2. Write operations, file modifications, and destructive commands are blocked
+3. Avoid using piped commands as they may bypass some security checks
+4. Use sequential commands or alternative approaches when possible
+"""
+
+
+class RunnerProtocol(Protocol):
+    """Callable signature used for executing Claude ZAI CLI commands."""
+
+    def __call__(
+        self,
+        command: Sequence[str],
+        *,
+        timeout: Optional[int] = None,
+        env: Optional[Dict[str, str]] = None,
+        input_data: Optional[str] = None,
+    ) -> subprocess.CompletedProcess[str]:
+        raise NotImplementedError
+
+
+def _default_runner(
+    command: Sequence[str],
+    *,
+    timeout: Optional[int] = None,
+    env: Optional[Dict[str, str]] = None,
+    input_data: Optional[str] = None,
+) -> subprocess.CompletedProcess[str]:
+    """Invoke the Claude ZAI CLI via subprocess."""
+    return subprocess.run(  # noqa: S603,S607 - intentional CLI invocation
+        list(command),
+        capture_output=True,
+        text=True,
+        input=input_data,
+        timeout=timeout,
+        env=env,
+        check=False,
+    )
+
+
+CLAUDE_ZAI_METADATA = ProviderMetadata(
+    provider_id="claude-zai",
+    display_name="Claude ZAI CLI",
+    models=[],  # Model validation delegated to CLI
+    default_model="opus",
+    capabilities={
+        ProviderCapability.TEXT,
+        ProviderCapability.STREAMING,
+        ProviderCapability.VISION,
+        ProviderCapability.THINKING,
+    },
+    security_flags={"writes_allowed": False, "read_only": True},
+    extra={"cli": "claude-zai", "output_format": "json", "allowed_tools": ALLOWED_TOOLS},
+)
+
+
+class ClaudeZAIProvider(ProviderContext):
+    """ProviderContext implementation backed by the Claude ZAI CLI with read-only restrictions."""
+
+    def __init__(
+        self,
+        metadata: ProviderMetadata,
+        hooks: ProviderHooks,
+        *,
+        model: Optional[str] = None,
+        binary: Optional[str] = None,
+        runner: Optional[RunnerProtocol] = None,
+        env: Optional[Dict[str, str]] = None,
+        timeout: Optional[int] = None,
+    ):
+        super().__init__(metadata, hooks)
+        self._runner = runner or _default_runner
+        self._binary = binary or os.environ.get(CUSTOM_BINARY_ENV, DEFAULT_BINARY)
+        self._env = env
+        self._timeout = timeout or DEFAULT_TIMEOUT_SECONDS
+        self._model = model or metadata.default_model or "opus"
+
+    def _validate_request(self, request: ProviderRequest) -> None:
+        """Validate and normalize request, ignoring unsupported parameters."""
+        unsupported: List[str] = []
+        # Note: Claude CLI may not support these parameters via flags
+        if request.temperature is not None:
+            unsupported.append("temperature")
+        if request.max_tokens is not None:
+            unsupported.append("max_tokens")
+        if request.attachments:
+            unsupported.append("attachments")
+        if unsupported:
+            # Log warning but continue - ignore unsupported parameters
+            logger.warning(
+                f"Claude ZAI CLI ignoring unsupported parameters: {', '.join(unsupported)}"
+            )
+
+    def _build_command(
+        self, model: str, system_prompt: Optional[str] = None
+    ) -> List[str]:
+        """
+        Build Claude ZAI CLI command with read-only tool restrictions.
+
+        Command structure:
+            claude-zai --print --output-format json --allowed-tools Read Grep ... --disallowed-tools Write Edit Bash
+            (prompt is passed via stdin to avoid CLI argument length limits)
+        """
+        command = [self._binary, "--print", "--output-format", "json"]
+
+        # Add read-only tool restrictions
+        command.extend(["--allowed-tools"] + ALLOWED_TOOLS)
+        command.extend(["--disallowed-tools"] + DISALLOWED_TOOLS)
+
+        # Build system prompt with security warning
+        full_system_prompt = system_prompt or ""
+        if full_system_prompt:
+            full_system_prompt = f"{full_system_prompt.strip()}\n\n{SHELL_COMMAND_WARNING.strip()}"
+        else:
+            full_system_prompt = SHELL_COMMAND_WARNING.strip()
+
+        # Add system prompt
+        command.extend(["--system-prompt", full_system_prompt])
+
+        # Add model if specified and not default
+        if model and model != self.metadata.default_model:
+            command.extend(["--model", model])
+
+        return command
+
+    def _run(
+        self, command: Sequence[str], timeout: Optional[float], input_data: Optional[str] = None
+    ) -> subprocess.CompletedProcess[str]:
+        try:
+            return self._runner(
+                command, timeout=int(timeout) if timeout else None, env=self._env, input_data=input_data
+            )
+        except FileNotFoundError as exc:
+            raise ProviderUnavailableError(
+                f"Claude ZAI CLI '{self._binary}' is not available on PATH.",
+                provider=self.metadata.provider_id,
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ProviderTimeoutError(
+                f"Command timed out after {exc.timeout} seconds",
+                provider=self.metadata.provider_id,
+                elapsed=float(exc.timeout) if exc.timeout else None,
+                timeout=float(exc.timeout) if exc.timeout else None,
+            ) from exc
+
+    def _parse_output(self, raw: str) -> Dict[str, Any]:
+        text = raw.strip()
+        if not text:
+            raise ProviderExecutionError(
+                "Claude ZAI CLI returned empty output.",
+                provider=self.metadata.provider_id,
+            )
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            logger.debug(f"Claude ZAI CLI JSON parse error: {exc}")
+            raise ProviderExecutionError(
+                "Claude ZAI CLI returned invalid JSON response",
+                provider=self.metadata.provider_id,
+            ) from exc
+
+    def _extract_usage(self, payload: Dict[str, Any]) -> TokenUsage:
+        """
+        Extract token usage from Claude ZAI CLI JSON response.
+
+        Expected structure:
+        {
+            "usage": {"input_tokens": 10, "output_tokens": 50, ...},
+            "modelUsage": {"claude-sonnet-4-5-20250929": {...}},
+            ...
+        }
+        """
+        usage = payload.get("usage") or {}
+        return TokenUsage(
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+            cached_input_tokens=int(usage.get("cached_input_tokens") or 0),
+            total_tokens=int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0),
+        )
+
+    def _resolve_model(self, request: ProviderRequest) -> str:
+        # 1. Check request.model first (from ProviderRequest constructor)
+        if request.model:
+            return str(request.model)
+        # 2. Fallback to metadata override (alternate path)
+        model_override = request.metadata.get("model") if request.metadata else None
+        if model_override:
+            return str(model_override)
+        # 3. Fallback to instance default
+        return self._model
+
+    def _emit_stream_if_requested(self, content: str, *, stream: bool) -> None:
+        if not stream or not content:
+            return
+        self._emit_stream_chunk(StreamChunk(content=content, index=0))
+
+    def _extract_error_from_json(self, stdout: str) -> Optional[str]:
+        """
+        Extract error message from Claude ZAI CLI JSON output.
+
+        Claude CLI outputs errors as JSON with is_error: true and error in 'result' field.
+        Example: {"type":"result","is_error":true,"result":"API Error: 404 {...}"}
+        """
+        if not stdout:
+            return None
+
+        try:
+            payload = json.loads(stdout.strip())
+        except json.JSONDecodeError:
+            return None
+
+        # Check for error indicator
+        if payload.get("is_error"):
+            result = payload.get("result", "")
+            if result:
+                return str(result)
+
+        # Also check for explicit error field
+        error = payload.get("error")
+        if error:
+            if isinstance(error, dict):
+                return error.get("message") or str(error)
+            return str(error)
+
+        return None
+
+    def _execute(self, request: ProviderRequest) -> ProviderResult:
+        self._validate_request(request)
+        model = self._resolve_model(request)
+        command = self._build_command(model, system_prompt=request.system_prompt)
+        timeout = request.timeout or self._timeout
+        # Pass prompt via stdin to avoid CLI argument length limits
+        completed = self._run(command, timeout=timeout, input_data=request.prompt)
+
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            logger.debug(f"Claude ZAI CLI stderr: {stderr or 'no stderr'}")
+
+            # Extract error from JSON stdout (Claude outputs errors there with is_error: true)
+            json_error = self._extract_error_from_json(completed.stdout)
+
+            error_msg = f"Claude ZAI CLI exited with code {completed.returncode}"
+            if json_error:
+                error_msg += f": {json_error[:500]}"
+            elif stderr:
+                error_msg += f": {stderr[:500]}"
+            raise ProviderExecutionError(
+                error_msg,
+                provider=self.metadata.provider_id,
+            )
+
+        payload = self._parse_output(completed.stdout)
+
+        # Extract content from "result" field (as per claude-model-chorus pattern)
+        content = str(payload.get("result") or payload.get("content") or "").strip()
+
+        # Extract model from modelUsage if available
+        model_usage = payload.get("modelUsage") or {}
+        reported_model = list(model_usage.keys())[0] if model_usage else model
+
+        usage = self._extract_usage(payload)
+
+        self._emit_stream_if_requested(content, stream=request.stream)
+
+        return ProviderResult(
+            content=content,
+            provider_id=self.metadata.provider_id,
+            model_used=f"{self.metadata.provider_id}:{reported_model}",
+            status=ProviderStatus.SUCCESS,
+            tokens=usage,
+            stderr=(completed.stderr or "").strip() or None,
+            raw_payload=payload,
+        )
+
+
+def is_claude_zai_available() -> bool:
+    """Claude ZAI CLI availability check."""
+    return detect_provider_availability("claude-zai")
+
+
+def create_provider(
+    *,
+    hooks: ProviderHooks,
+    model: Optional[str] = None,
+    dependencies: Optional[Dict[str, object]] = None,
+    overrides: Optional[Dict[str, object]] = None,
+) -> ClaudeZAIProvider:
+    """
+    Factory used by the provider registry.
+
+    dependencies/overrides allow callers (or tests) to inject runner/env/binary.
+    """
+    dependencies = dependencies or {}
+    overrides = overrides or {}
+    runner = dependencies.get("runner")
+    env = dependencies.get("env")
+    binary = overrides.get("binary") or dependencies.get("binary")
+    timeout = overrides.get("timeout")
+    selected_model = overrides.get("model") if overrides.get("model") else model
+
+    return ClaudeZAIProvider(
+        metadata=CLAUDE_ZAI_METADATA,
+        hooks=hooks,
+        model=selected_model,  # type: ignore[arg-type]
+        binary=binary,  # type: ignore[arg-type]
+        runner=runner if runner is not None else None,  # type: ignore[arg-type]
+        env=env if env is not None else None,  # type: ignore[arg-type]
+        timeout=timeout if timeout is not None else None,  # type: ignore[arg-type]
+    )
+
+
+# Register the provider immediately so consumers can resolve it by id.
+register_provider(
+    "claude-zai",
+    factory=create_provider,
+    metadata=CLAUDE_ZAI_METADATA,
+    availability_check=is_claude_zai_available,
+    description="Claude ZAI CLI adapter with read-only tool restrictions",
+    tags=("cli", "text", "vision", "thinking", "read-only"),
+    replace=True,
+)
+
+
+__all__ = [
+    "ClaudeZAIProvider",
+    "create_provider",
+    "is_claude_zai_available",
+    "CLAUDE_ZAI_METADATA",
+]
