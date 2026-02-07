@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.pagination import (
@@ -34,7 +33,7 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
+from foundry_mcp.core.spec import load_spec, save_spec
 from foundry_mcp.core.journal import (
     add_journal_entry,
     get_blocker_info,
@@ -72,10 +71,16 @@ from foundry_mcp.cli.context import (
 )
 from foundry_mcp.core.llm_config import get_workflow_config, WorkflowMode
 from foundry_mcp.core.validation import VALID_VERIFICATION_TYPES
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+    make_metric_name,
+    make_validation_error_fn,
+    resolve_specs_dir,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,73 +93,36 @@ _ALLOWED_STATUS = {"pending", "in_progress", "completed", "blocked"}
 
 
 def _request_id() -> str:
-    return get_correlation_id() or generate_correlation_id(prefix="task")
+    return build_request_id("task")
 
 
 def _metric(action: str) -> str:
-    return f"unified_tools.task.{action.replace('-', '_')}"
+    return make_metric_name("unified_tools.task", action)
 
 
-def _specs_dir_missing_error(request_id: str) -> dict:
-    return asdict(
-        error_response(
-            "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            remediation="Set SDD_SPECS_DIR or invoke with --specs-dir",
-            request_id=request_id,
-        )
-    )
-
-
-def _validation_error(
-    *,
-    field: str,
-    action: str,
-    message: str,
-    request_id: str,
-    code: ErrorCode = ErrorCode.MISSING_REQUIRED,
-    remediation: Optional[str] = None,
-) -> dict:
-    effective_remediation = remediation or f"Provide a valid '{field}' value"
-    return asdict(
-        error_response(
-            f"Invalid field '{field}' for task.{action}: {message}",
-            error_code=code,
-            error_type=ErrorType.VALIDATION,
-            remediation=effective_remediation,
-            details={"field": field, "action": f"task.{action}"},
-            request_id=request_id,
-        )
-    )
+_validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
 
 
 def _resolve_specs_dir(
     config: ServerConfig, workspace: Optional[str]
-) -> Optional[Path]:
-    try:
-        if workspace:
-            return find_specs_directory(workspace)
-
-        candidate = getattr(config, "specs_dir", None)
-        if isinstance(candidate, Path):
-            return candidate
-        if isinstance(candidate, str) and candidate.strip():
-            return Path(candidate)
-
-        return find_specs_directory()
-    except Exception:  # pragma: no cover - defensive guard
-        logger.exception(
-            "Failed to resolve specs directory", extra={"workspace": workspace}
-        )
-        return None
+) -> tuple[Optional[Path], Optional[dict]]:
+    """Thin wrapper around the shared helper preserving the local call convention."""
+    return resolve_specs_dir(config, workspace)
 
 
 def _load_spec_data(
     spec_id: str, specs_dir: Optional[Path], request_id: str
 ) -> Tuple[Optional[Dict[str, Any]], Optional[dict]]:
     if specs_dir is None:
-        return None, _specs_dir_missing_error(request_id)
+        return None, asdict(
+            error_response(
+                "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Set SDD_SPECS_DIR or invoke with --specs-dir",
+                request_id=request_id,
+            )
+        )
 
     spec_data = load_spec(spec_id, specs_dir)
     if spec_data is None:
@@ -255,9 +223,9 @@ def _handle_prepare(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     result = core_prepare_task(
@@ -308,9 +276,9 @@ def _handle_prepare_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> d
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     result, error = prepare_batch_context(
@@ -396,9 +364,9 @@ def _handle_start_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
             )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     result, error = start_batch(
@@ -448,9 +416,9 @@ def _handle_complete_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
         return _validation_error(field="completions", action=action, message="Provide a non-empty list of completions", request_id=request_id)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     result, error = complete_batch(spec_id=spec_id.strip(), completions=completions, specs_dir=specs_dir)
@@ -526,9 +494,9 @@ def _handle_reset_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     result, error = reset_batch(
@@ -578,7 +546,7 @@ def _handle_next(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             request_id=request_id,
         )
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -647,7 +615,7 @@ def _handle_info(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -696,7 +664,7 @@ def _handle_check_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -747,7 +715,7 @@ def _handle_progress(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -821,7 +789,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -946,7 +914,7 @@ def _handle_query(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1068,7 +1036,7 @@ def _handle_hierarchy(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1162,7 +1130,7 @@ def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> d
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1261,7 +1229,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1369,7 +1337,7 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1547,7 +1515,7 @@ def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1642,7 +1610,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1750,7 +1718,7 @@ def _handle_list_blocked(*, config: ServerConfig, payload: Dict[str, Any]) -> di
             )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -1936,9 +1904,9 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     if dry_run_bool:
@@ -2078,9 +2046,9 @@ def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     if dry_run_bool:
@@ -2222,9 +2190,9 @@ def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) ->
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     if dry_run_bool:
@@ -2390,9 +2358,9 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     if dry_run_bool:
@@ -2568,9 +2536,9 @@ def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
 
@@ -2700,9 +2668,9 @@ def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> 
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
 
@@ -2827,9 +2795,9 @@ def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) 
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
 
@@ -2962,9 +2930,9 @@ def _handle_add_requirement(*, config: ServerConfig, payload: Dict[str, Any]) ->
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
 
@@ -3281,9 +3249,9 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
 
     # Resolve specs directory
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if specs_dir is None:
-        return _specs_dir_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     # Delegate to core helper
     result, error = batch_update_tasks(
@@ -3409,7 +3377,7 @@ def _handle_fix_verification_types(
 
     # Load spec
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
+    specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
         return error
@@ -3734,32 +3702,9 @@ _TASK_ROUTER = ActionRouter(tool_name="task", actions=_ACTION_DEFINITIONS)
 def _dispatch_task_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _TASK_ROUTER.dispatch(action=action, config=config, payload=payload)
-    except ActionRouterError as exc:
-        request_id = _request_id()
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported task action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                request_id=request_id,
-            )
-        )
-    except Exception as exc:
-        logger.exception("Task action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Task action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _TASK_ROUTER, "task", action, config=config, payload=payload
+    )
 
 
 def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:

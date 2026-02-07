@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.intake import IntakeStore, LockAcquisitionError, INTAKE_ID_PATTERN
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
@@ -47,10 +46,16 @@ from foundry_mcp.core.spec import (
 )
 from foundry_mcp.core.task import TASK_TYPES
 from foundry_mcp.core.validation import validate_spec
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+    make_metric_name,
+    make_validation_error_fn,
+    resolve_specs_dir,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,54 +83,21 @@ _ACTION_SUMMARY = {
 
 
 def _metric_name(action: str) -> str:
-    return f"authoring.{action.replace('-', '_')}"
+    return make_metric_name("authoring", action)
 
 
 def _request_id() -> str:
-    return get_correlation_id() or generate_correlation_id(prefix="authoring")
+    return build_request_id("authoring")
 
 
-def _validation_error(
-    *,
-    field: str,
-    action: str,
-    message: str,
-    request_id: str,
-    code: ErrorCode = ErrorCode.VALIDATION_ERROR,
-    remediation: Optional[str] = None,
-) -> dict:
-    return asdict(
-        error_response(
-            f"Invalid field '{field}' for authoring.{action}: {message}",
-            error_code=code,
-            error_type=ErrorType.VALIDATION,
-            remediation=remediation,
-            details={"field": field, "action": f"authoring.{action}"},
-            request_id=request_id,
-        )
-    )
+_validation_error = make_validation_error_fn("authoring")
 
 
-def _specs_directory_missing_error(request_id: str) -> dict:
-    return asdict(
-        error_response(
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            remediation="Use --specs-dir or set SDD_SPECS_DIR",
-            request_id=request_id,
-        )
-    )
-
-
-def _resolve_specs_dir(config: ServerConfig, path: Optional[str]) -> Optional[Path]:
-    try:
-        if path:
-            return find_specs_directory(path)
-        return config.specs_dir or find_specs_directory()
-    except Exception:  # pragma: no cover - defensive guard
-        logger.exception("Failed to resolve specs directory", extra={"path": path})
-        return None
+def _resolve_specs_dir(
+    config: ServerConfig, path: Optional[str]
+) -> tuple[Optional[Path], Optional[dict]]:
+    """Thin wrapper around the shared helper preserving the local call convention."""
+    return resolve_specs_dir(config, path)
 
 
 def _phase_exists(spec_id: str, specs_dir: Path, title: str) -> bool:
@@ -248,9 +220,9 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     if dry_run:
         # Generate spec data for preflight validation
@@ -503,9 +475,9 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     if dry_run:
         return asdict(
@@ -696,9 +668,9 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -831,9 +803,9 @@ def _handle_spec_rollback(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -1006,9 +978,9 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     warnings: List[str] = []
     if _phase_exists(spec_id, specs_dir, title):
@@ -1214,9 +1186,9 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -1553,9 +1525,9 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     # Check for duplicate phase title (warning only)
     warnings: List[str] = []
@@ -1860,9 +1832,9 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
                 request_id=request_id,
             )
 
-        specs_dir = _resolve_specs_dir(config, path)
-        if specs_dir is None:
-            return _specs_directory_missing_error(request_id)
+        specs_dir, specs_err = _resolve_specs_dir(config, path)
+        if specs_err:
+            return specs_err
 
         audit_log(
             "tool_invocation",
@@ -2058,9 +2030,9 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -2222,9 +2194,9 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -2398,9 +2370,9 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     warnings: List[str] = []
     if _assumption_exists(spec_id, specs_dir, text):
@@ -2533,9 +2505,9 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -2672,9 +2644,9 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -3011,9 +2983,9 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     # Resolve specs directory
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     # Audit log
     audit_log(
@@ -3149,9 +3121,9 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     # Resolve specs directory
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     # Audit log
     audit_log(
@@ -3308,9 +3280,9 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     # Resolve specs directory
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _specs_directory_missing_error(request_id)
+    specs_dir, specs_err = _resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     # Audit log
     audit_log(
@@ -3514,32 +3486,9 @@ _AUTHORING_ROUTER = ActionRouter(
 def _dispatch_authoring_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _AUTHORING_ROUTER.dispatch(action=action, config=config, **payload)
-    except ActionRouterError as exc:
-        request_id = _request_id()
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported authoring action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                request_id=request_id,
-            )
-        )
-    except Exception as exc:
-        logger.exception("Authoring action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Authoring action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _AUTHORING_ROUTER, "authoring", action, config=config, **payload
+    )
 
 
 def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:

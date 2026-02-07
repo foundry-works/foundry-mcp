@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
 from foundry_mcp.core.responses import (
@@ -22,10 +21,15 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
 from foundry_mcp.core.validation import add_verification, execute_verification
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+    make_metric_name,
+    make_validation_error_fn,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,32 +42,14 @@ _ACTION_SUMMARY = {
 
 
 def _metric_name(action: str) -> str:
-    return f"verification.{action}"
+    return make_metric_name("verification", action)
 
 
 def _request_id() -> str:
-    return get_correlation_id() or generate_correlation_id(prefix="verification")
+    return build_request_id("verification")
 
 
-def _validation_error(
-    *,
-    action: str,
-    field: str,
-    message: str,
-    request_id: str,
-    remediation: Optional[str] = None,
-    code: ErrorCode = ErrorCode.VALIDATION_ERROR,
-) -> dict:
-    return asdict(
-        error_response(
-            f"Invalid field '{field}' for verification.{action}: {message}",
-            error_code=code,
-            error_type=ErrorType.VALIDATION,
-            remediation=remediation,
-            details={"field": field, "action": f"verification.{action}"},
-            request_id=request_id,
-        )
-    )
+_validation_error = make_validation_error_fn("verification")
 
 
 def _handle_add(
@@ -462,32 +448,9 @@ _VERIFICATION_ROUTER = ActionRouter(
 def _dispatch_verification_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _VERIFICATION_ROUTER.dispatch(action=action, config=config, **payload)
-    except ActionRouterError as exc:
-        request_id = _request_id()
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported verification action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                request_id=request_id,
-            )
-        )
-    except Exception as exc:
-        logger.exception("Verification action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Verification action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _VERIFICATION_ROUTER, "verification", action, config=config, **payload
+    )
 
 
 def register_unified_verification_tool(mcp: FastMCP, config: ServerConfig) -> None:

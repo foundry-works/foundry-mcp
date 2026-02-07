@@ -26,8 +26,8 @@ from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spe
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
@@ -235,30 +235,9 @@ _PR_ROUTER = ActionRouter(
 
 
 def _dispatch_pr_action(action: str, payload: Dict[str, Any]) -> dict:
-    try:
-        return _PR_ROUTER.dispatch(action=action, **payload)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported pr action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-            )
-        )
-    except Exception as exc:
-        logger.exception("PR action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"PR action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _PR_ROUTER, "pr", action, **payload
+    )
 
 
 def register_unified_pr_tool(mcp: FastMCP, config: ServerConfig) -> None:

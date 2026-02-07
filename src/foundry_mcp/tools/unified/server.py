@@ -16,7 +16,6 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.discovery import get_capabilities, get_tool_registry
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (
@@ -38,6 +37,11 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+    make_metric_name,
+)
 from foundry_mcp.tools.unified.context_helpers import (
     build_llm_status_response,
     build_server_context_response,
@@ -45,7 +49,6 @@ from foundry_mcp.tools.unified.context_helpers import (
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,11 +56,27 @@ _metrics = get_metrics()
 
 
 def _request_id() -> str:
-    return get_correlation_id() or generate_correlation_id(prefix="server")
+    return build_request_id("server")
 
 
 def _metric(action: str) -> str:
-    return f"unified_tools.server.{action.replace('-', '_')}"
+    return make_metric_name("unified_tools.server", action)
+
+
+# NOTE: _validation_error is kept local to server.py because it has a unique
+# signature (no field/action params) different from the common helper.
+def _validation_error(
+    *, message: str, request_id: str, remediation: Optional[str] = None
+) -> dict:
+    return asdict(
+        error_response(
+            message,
+            error_code=ErrorCode.VALIDATION_ERROR,
+            error_type=ErrorType.VALIDATION,
+            remediation=remediation,
+            request_id=request_id,
+        )
+    )
 
 
 MANIFEST_TOKEN_BUDGET = 16_000
@@ -88,6 +107,8 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+# NOTE: _validation_error is kept local to server.py because it has a unique
+# signature (no field/action params) different from the common helper.
 def _validation_error(
     *, message: str, request_id: str, remediation: Optional[str] = None
 ) -> dict:
@@ -505,32 +526,9 @@ _SERVER_ROUTER = _build_router()
 def _dispatch_server_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _SERVER_ROUTER.dispatch(action, config=config, payload=payload)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        request_id = _request_id()
-        return asdict(
-            error_response(
-                f"Unsupported server action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                request_id=request_id,
-            )
-        )
-    except Exception as exc:
-        logger.exception("Server action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Server action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _SERVER_ROUTER, "server", action, config=config, payload=payload
+    )
 
 
 def register_unified_server_tool(mcp: FastMCP, config: ServerConfig) -> None:

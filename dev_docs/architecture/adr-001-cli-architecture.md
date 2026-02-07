@@ -56,7 +56,12 @@ The foundry-mcp project provides MCP (Model Context Protocol) tools for spec-dri
 foundry_mcp/
 ├── core/                    # Shared business logic (UNCHANGED)
 │   ├── spec.py              # Spec file operations
-│   ├── task.py              # Task operations
+│   ├── task/                # Task operations (package)
+│   │   ├── __init__.py      # Public API re-exports
+│   │   ├── _helpers.py      # Shared constants and utilities
+│   │   ├── queries.py       # Read-only query functions
+│   │   ├── mutations.py     # Task mutation operations
+│   │   └── batch.py         # Batch update operations
 │   ├── journal.py           # Journal operations
 │   ├── lifecycle.py         # Lifecycle state machine
 │   ├── validation.py        # Input validation

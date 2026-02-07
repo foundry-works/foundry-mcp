@@ -26,8 +26,8 @@ from foundry_mcp.core.responses import (
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 
@@ -408,30 +408,9 @@ _ERROR_ROUTER = ActionRouter(
 def _dispatch_error_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _ERROR_ROUTER.dispatch(action=action, config=config, **payload)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported error action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-            )
-        )
-    except Exception as exc:
-        logger.exception("Error action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Error action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _ERROR_ROUTER, "error", action, config=config, **payload
+    )
 
 
 def register_unified_error_tool(mcp: FastMCP, config: ServerConfig) -> None:

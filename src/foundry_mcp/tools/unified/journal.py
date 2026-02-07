@@ -28,11 +28,14 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
+from foundry_mcp.core.spec import load_spec, save_spec
+from foundry_mcp.tools.unified.common import (
+    dispatch_with_standard_errors,
+    resolve_specs_dir,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,39 +111,6 @@ def _missing_field(field: str, action: str) -> dict:
         code=ErrorCode.MISSING_REQUIRED,
         remediation=f"Provide '{field}' when calling journal.{action}",
     )
-
-
-def _resolve_specs_dir(
-    config: ServerConfig, workspace: Optional[str]
-) -> Tuple[Optional[Path], Optional[dict]]:
-    try:
-        specs_dir: Optional[Path] = (
-            find_specs_directory(workspace)
-            if workspace
-            else (config.specs_dir or find_specs_directory())
-        )
-    except Exception as exc:  # pragma: no cover - defensive guard
-        logger.exception("Failed to resolve specs directory")
-        return None, asdict(
-            error_response(
-                f"Failed to resolve specs directory: {exc}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Verify specs_dir configuration or pass a workspace path",
-            )
-        )
-
-    if not specs_dir:
-        return None, asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Set SDD_SPECS_DIR or provide a workspace path",
-            )
-        )
-
-    return specs_dir, None
 
 
 def _load_spec_data(
@@ -469,7 +439,7 @@ def perform_journal_add(
     task_id: Optional[str],
     workspace: Optional[str],
 ) -> dict:
-    specs_dir, error = _resolve_specs_dir(config, workspace)
+    specs_dir, error = resolve_specs_dir(config, workspace)
     if error:
         return error
     assert specs_dir is not None
@@ -528,7 +498,7 @@ def perform_journal_list(
     limit: Optional[int],
     workspace: Optional[str],
 ) -> dict:
-    specs_dir, error = _resolve_specs_dir(config, workspace)
+    specs_dir, error = resolve_specs_dir(config, workspace)
     if error:
         return error
     assert specs_dir is not None
@@ -629,7 +599,7 @@ def perform_journal_list_unjournaled(
     limit: Optional[int],
     workspace: Optional[str],
 ) -> dict:
-    specs_dir, error = _resolve_specs_dir(config, workspace)
+    specs_dir, error = resolve_specs_dir(config, workspace)
     if error:
         return error
     assert specs_dir is not None
@@ -789,30 +759,9 @@ _JOURNAL_ROUTER = ActionRouter(
 def _dispatch_journal_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _JOURNAL_ROUTER.dispatch(action=action, config=config, **payload)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported journal action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-            )
-        )
-    except Exception as exc:
-        logger.exception("Journal action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Journal action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _JOURNAL_ROUTER, "journal", action, config=config, **payload
+    )
 
 
 def register_unified_journal_tool(mcp: FastMCP, config: ServerConfig) -> None:

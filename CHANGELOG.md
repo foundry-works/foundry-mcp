@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Task Module Split**: Refactored `core/task.py` (2,463 lines) into a `core/task/` package with focused sub-modules:
+  - `_helpers.py` — shared constants and utilities
+  - `queries.py` — read-only query and context functions
+  - `mutations.py` — task mutation operations (add, remove, update, move)
+  - `batch.py` — batch update operations
+  - `__init__.py` re-exports all public symbols for backward compatibility
+
 ## [0.9.0b12] - 2026-02-01
 
 ### Added

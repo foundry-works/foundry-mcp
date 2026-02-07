@@ -163,7 +163,12 @@ src/foundry_mcp/
 │
 ├── core/                  # Business logic (transport-agnostic)
 │   ├── spec.py            # Spec file operations
-│   ├── task.py            # Task operations
+│   ├── task/              # Task operations (package)
+│   │   ├── __init__.py    # Public API re-exports
+│   │   ├── _helpers.py    # Shared constants and utilities
+│   │   ├── queries.py     # Read-only query functions
+│   │   ├── mutations.py   # Task mutation operations
+│   │   └── batch.py       # Batch update operations
 │   ├── journal.py         # Journal management
 │   ├── lifecycle.py       # Spec lifecycle transitions
 │   ├── validation.py      # Spec validation

@@ -24,10 +24,10 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,34 +182,14 @@ _HEALTH_ROUTER = _build_router()
 
 
 def _dispatch_health_action(action: str, *, include_details: bool = True) -> dict:
-    try:
-        kwargs: Dict[str, Any] = {}
-        if action.lower() == "check":
-            kwargs["include_details"] = include_details
-        return _HEALTH_ROUTER.dispatch(action=action, **kwargs)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported health action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                details={"action": action, "allowed_actions": exc.allowed_actions},
-            )
-        )
-    except Exception as exc:
-        logger.exception("Health action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Health action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    kwargs: Dict[str, Any] = {}
+    if action.lower() == "check":
+        kwargs["include_details"] = include_details
+    return dispatch_with_standard_errors(
+        _HEALTH_ROUTER, "health", action,
+        include_details_in_router_error=True,
+        **kwargs,
+    )
 
 
 def register_unified_health_tool(mcp: FastMCP, config: ServerConfig) -> None:

@@ -5,13 +5,11 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
 from foundry_mcp.core.responses import (
@@ -21,7 +19,6 @@ from foundry_mcp.core.responses import (
     sanitize_error_message,
     success_response,
 )
-from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.lifecycle import (
     VALID_FOLDERS,
     MoveResult,
@@ -32,10 +29,16 @@ from foundry_mcp.core.lifecycle import (
     get_lifecycle_state,
     move_spec,
 )
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+    make_metric_name,
+    make_validation_error_fn,
+    resolve_specs_dir,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,54 +54,14 @@ _ACTION_SUMMARY = {
 
 
 def _metric_name(action: str) -> str:
-    return f"lifecycle.{action.replace('-', '_')}"
+    return make_metric_name("lifecycle", action)
 
 
 def _request_id() -> str:
-    return get_correlation_id() or generate_correlation_id(prefix="lifecycle")
+    return build_request_id("lifecycle")
 
 
-def _missing_specs_dir_response(request_id: str) -> dict:
-    return asdict(
-        error_response(
-            "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            remediation="Pass a workspace path via the 'path' parameter or configure SDD_SPECS_DIR",
-            request_id=request_id,
-        )
-    )
-
-
-def _validation_error(
-    *,
-    action: str,
-    field: str,
-    message: str,
-    request_id: str,
-    remediation: Optional[str] = None,
-    code: ErrorCode = ErrorCode.VALIDATION_ERROR,
-) -> dict:
-    return asdict(
-        error_response(
-            f"Invalid field '{field}' for lifecycle.{action}: {message}",
-            error_code=code,
-            error_type=ErrorType.VALIDATION,
-            remediation=remediation,
-            details={"field": field, "action": f"lifecycle.{action}"},
-            request_id=request_id,
-        )
-    )
-
-
-def _resolve_specs_dir(config: ServerConfig, path: Optional[str]) -> Optional[Path]:
-    try:
-        if path:
-            return find_specs_directory(path)
-        return config.specs_dir or find_specs_directory()
-    except Exception:  # pragma: no cover - defensive resolution guard
-        logger.exception("Failed to resolve specs directory", extra={"path": path})
-        return None
+_validation_error = make_validation_error_fn("lifecycle")
 
 
 def _classify_error(error_message: str) -> tuple[ErrorCode, ErrorType, str]:
@@ -253,9 +216,9 @@ def _handle_move(
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _missing_specs_dir_response(request_id)
+    specs_dir, specs_err = resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -319,9 +282,9 @@ def _handle_activate(
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _missing_specs_dir_response(request_id)
+    specs_dir, specs_err = resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -392,9 +355,9 @@ def _handle_complete(
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _missing_specs_dir_response(request_id)
+    specs_dir, specs_err = resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -458,9 +421,9 @@ def _handle_archive(
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _missing_specs_dir_response(request_id)
+    specs_dir, specs_err = resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -523,9 +486,9 @@ def _handle_state(
             request_id=request_id,
         )
 
-    specs_dir = _resolve_specs_dir(config, path)
-    if specs_dir is None:
-        return _missing_specs_dir_response(request_id)
+    specs_dir, specs_err = resolve_specs_dir(config, path)
+    if specs_err:
+        return specs_err
 
     start = time.perf_counter()
     try:
@@ -596,32 +559,9 @@ _LIFECYCLE_ROUTER = ActionRouter(
 def _dispatch_lifecycle_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _LIFECYCLE_ROUTER.dispatch(action=action, config=config, **payload)
-    except ActionRouterError as exc:
-        request_id = _request_id()
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported lifecycle action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                request_id=request_id,
-            )
-        )
-    except Exception as exc:
-        logger.exception("Lifecycle action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Lifecycle action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _LIFECYCLE_ROUTER, "lifecycle", action, config=config, **payload
+    )
 
 
 def register_unified_lifecycle_tool(mcp: FastMCP, config: ServerConfig) -> None:
