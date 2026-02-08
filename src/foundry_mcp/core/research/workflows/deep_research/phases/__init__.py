@@ -7,9 +7,11 @@ They are combined via multiple inheritance in the main DeepResearchWorkflow clas
 from .planning import PlanningPhaseMixin
 from .gathering import GatheringPhaseMixin
 from .analysis import AnalysisPhaseMixin
+from .synthesis import SynthesisPhaseMixin
 
 __all__ = [
     "PlanningPhaseMixin",
     "GatheringPhaseMixin",
     "AnalysisPhaseMixin",
+    "SynthesisPhaseMixin",
 ]

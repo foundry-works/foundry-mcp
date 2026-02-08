@@ -436,23 +436,20 @@ class TestFidelityMetadataAccuracy:
 
     def test_fidelity_level_conversion(self):
         """Test fidelity score to level string conversion."""
-        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
-
-        # Create minimal workflow to test private method
-        from foundry_mcp.config import ResearchConfig
-        config = ResearchConfig()
-        workflow = DeepResearchWorkflow(config)
+        from foundry_mcp.core.research.workflows.deep_research._helpers import (
+            fidelity_level_from_score,
+        )
 
         # Test thresholds
-        assert workflow._fidelity_level_from_score(1.0) == "full"
-        assert workflow._fidelity_level_from_score(0.95) == "full"
-        assert workflow._fidelity_level_from_score(0.9) == "full"
-        assert workflow._fidelity_level_from_score(0.89) == "condensed"
-        assert workflow._fidelity_level_from_score(0.6) == "condensed"
-        assert workflow._fidelity_level_from_score(0.59) == "compressed"
-        assert workflow._fidelity_level_from_score(0.3) == "compressed"
-        assert workflow._fidelity_level_from_score(0.29) == "minimal"
-        assert workflow._fidelity_level_from_score(0.0) == "minimal"
+        assert fidelity_level_from_score(1.0) == "full"
+        assert fidelity_level_from_score(0.95) == "full"
+        assert fidelity_level_from_score(0.9) == "full"
+        assert fidelity_level_from_score(0.89) == "condensed"
+        assert fidelity_level_from_score(0.6) == "condensed"
+        assert fidelity_level_from_score(0.59) == "compressed"
+        assert fidelity_level_from_score(0.3) == "compressed"
+        assert fidelity_level_from_score(0.29) == "minimal"
+        assert fidelity_level_from_score(0.0) == "minimal"
 
     def test_to_dict_includes_all_fidelity_fields(self, fixed_token_manager):
         """Test AllocationResult.to_dict includes all fidelity metadata."""
