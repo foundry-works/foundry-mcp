@@ -15,8 +15,8 @@
 | Stage 4a: PlanningPhaseMixin | DONE | dff4d3c | 4 methods → phases/planning.py (421 lines) |
 | Stage 4b: GatheringPhaseMixin | DONE | f843f5e | 6 methods → phases/gathering.py (824 lines). __init__.py imports from canonical modules |
 | Stage 4c: AnalysisPhaseMixin | DONE | — | 5 methods + digest pipeline → phases/analysis.py (1203 lines). Test patches updated to phases.analysis/budgeting |
-| Stage 4d: SynthesisPhaseMixin | TODO | — | Next: synthesis phase |
-| Stage 4e: RefinementPhaseMixin | TODO | — | |
+| Stage 4d: SynthesisPhaseMixin | DONE | ef925fa | 5 methods → phases/synthesis.py (619 lines). Removed thin delegates for _fidelity_level_from_score, _allocate_synthesis_budget |
+| Stage 4e: RefinementPhaseMixin | DONE | a55f8a6 | 5 methods → phases/refinement.py (660 lines). Removed ALL remaining thin delegates + unused imports. All 5 phases extracted |
 | Stage 5: Remaining mixins | TODO | — | BackgroundTaskMixin, SessionManagementMixin |
 | Stage 6: Finalize | TODO | — | Rename _monolith→core.py, contract tests |
 
@@ -24,7 +24,7 @@
 ```
 src/foundry_mcp/core/research/workflows/deep_research/
 ├── __init__.py          # Re-export shim (imports from canonical modules, not just _monolith)
-├── _monolith.py         # 3371 lines (down from 6994)
+├── _monolith.py         # 2130 lines (down from 6994)
 ├── _constants.py         # Budget allocation constants
 ├── _helpers.py           # extract_json, fidelity_level_from_score, truncate_at_boundary
 ├── _budgeting.py         # Budget allocation, validation, digest archives (~540 lines)
@@ -35,18 +35,20 @@ src/foundry_mcp/core/research/workflows/deep_research/
     ├── __init__.py       # Re-exports all phase mixins
     ├── planning.py       # PlanningPhaseMixin (421 lines)
     ├── gathering.py      # GatheringPhaseMixin (824 lines)
-    └── analysis.py       # AnalysisPhaseMixin (1203 lines)
+    ├── analysis.py       # AnalysisPhaseMixin (1203 lines)
+    ├── synthesis.py      # SynthesisPhaseMixin (619 lines)
+    └── refinement.py     # RefinementPhaseMixin (660 lines)
 ```
 
 ### Resumption Notes
-- `_monolith.py` has `DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhaseMixin, ResearchWorkflowBase)`
-- Planning and analysis mixins call standalone functions from `_helpers`/`_budgeting` directly (not via `self._*` delegates)
-- Thin delegates remain on `_monolith` for synthesis/refinement: `_fidelity_level_from_score`, `_allocate_synthesis_budget`, `_compute_refinement_budget`, `_summarize_report_for_refinement`, `_extract_report_summary`, `_final_fit_validate`, `_truncate_at_boundary`, `_extract_json`
+- `_monolith.py` has `DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhaseMixin, SynthesisPhaseMixin, RefinementPhaseMixin, ResearchWorkflowBase)`
+- All 5 phase mixins call standalone functions from `_helpers`/`_budgeting` directly (no thin delegates remain)
+- All thin delegates removed from `_monolith` — no `_standalone` import aliases remain
+- Unused imports cleaned: `ContextWindowError`, `PhaseMetrics`, all `token_management` functions, all `_constants`, `AllocationResult`, `_helpers`/`_budgeting` imports
 - `__init__.py` imports `ContentSummarizer`, `DocumentDigestor`, `PDFExtractor` from `phases.analysis`; `ContextBudgetManager` from `_budgeting`
-- `test_deep_research_digest.py` patch targets updated: `DocumentDigestor`/`ContentSummarizer`/`PDFExtractor` → `phases.analysis`, `ContextBudgetManager` → `_budgeting`
-- One test (`test_allocate_budget_uses_digest_text`) updated to call `allocate_source_budget` standalone instead of removed `self._allocate_source_budget` delegate
-- Unused imports cleaned from `_monolith`: `hashlib`, `math`, `ConfidenceLevel`, `FidelityLevel`, `SourceQuality`, `AllocationStrategy`, `ContentItem`, `compute_priority`, `compute_recency_score`, `DigestConfig`, `DigestPolicy`, `DigestResult`, `serialize_payload`, `ANALYSIS_PHASE_BUDGET_FRACTION`, `ANALYSIS_OUTPUT_RESERVED`, and 6 `_budgeting` aliases
-- Next step: Stage 4d — extract SynthesisPhaseMixin
+- `test_deep_research_token_integration.py` updated: `test_fidelity_level_conversion` calls standalone `fidelity_level_from_score` directly
+- Remaining in `_monolith.py` (~2130 lines): `__init__`, `execute()`, orchestration loop, action handlers, audit/persistence/cancellation, session management, background tasks
+- Next step: Stage 5 — extract BackgroundTaskMixin + SessionManagementMixin
 
 ---
 
