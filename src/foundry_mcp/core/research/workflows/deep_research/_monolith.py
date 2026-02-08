@@ -22,7 +22,6 @@ Inspired by:
 from __future__ import annotations
 
 import asyncio
-import atexit
 import hashlib
 import math
 import json
@@ -101,8 +100,20 @@ from foundry_mcp.core.research.document_digest import (
 )
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor
 from foundry_mcp.core.research.summarization import ContentSummarizer
+from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
+    _active_research_sessions,
+    _active_sessions_lock,
+    _active_research_memory,
+    _persist_active_sessions,
+    _crash_handler,
+    _cleanup_on_exit,
+    install_crash_handler,
+)
 
 logger = logging.getLogger(__name__)
+
+# Install crash handler on import (matches original side-effect behavior)
+install_crash_handler()
 
 # Budget allocation constants
 ANALYSIS_PHASE_BUDGET_FRACTION = 0.80  # 80% of effective context for analysis
@@ -117,111 +128,6 @@ REFINEMENT_REPORT_BUDGET_FRACTION = 0.50  # 50% of phase budget for report summa
 FINAL_FIT_MAX_ITERATIONS = 2  # Max attempts to fit payload within budget
 FINAL_FIT_COMPRESSION_FACTOR = 0.85  # Reduce budget target by 15% on retry
 FINAL_FIT_SAFETY_MARGIN = 0.10  # 10% safety margin for token estimation uncertainty
-
-
-# =============================================================================
-# Crash Handler Infrastructure
-# =============================================================================
-
-# Track active research sessions for crash recovery
-# Protected by _active_sessions_lock to prevent race conditions during iteration
-_active_research_sessions: dict[str, "DeepResearchState"] = {}
-_active_sessions_lock = threading.Lock()
-_active_research_memory: Optional[ResearchMemory] = None
-
-
-def _persist_active_sessions() -> None:
-    """Best-effort persistence for active research sessions.
-
-    Note: Caller should hold _active_sessions_lock or call during shutdown
-    when no other threads are modifying the dict.
-    """
-    memory = _active_research_memory
-    if memory is None:
-        try:
-            memory = ResearchMemory()
-        except Exception as exc:
-            print(
-                f"Failed to initialize ResearchMemory for persistence: {exc}",
-                file=sys.stderr,
-            )
-            return
-
-    # Copy values while holding lock to avoid iteration issues
-    with _active_sessions_lock:
-        sessions_snapshot = list(_active_research_sessions.values())
-
-    for state in sessions_snapshot:
-        try:
-            memory.save_deep_research(state)
-        except Exception:
-            pass
-
-
-def _crash_handler(exc_type: type, exc_value: BaseException, exc_tb: Any) -> None:
-    """Handle uncaught exceptions by logging to stderr and writing crash markers.
-
-    This handler catches process-level crashes that escape normal exception handling
-    and ensures we have visibility into what went wrong.
-    """
-    tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-
-    # Take a snapshot of sessions under lock to avoid race conditions
-    with _active_sessions_lock:
-        session_keys = list(_active_research_sessions.keys())
-        sessions_snapshot = list(_active_research_sessions.items())
-
-    # Always write to stderr for visibility
-    print(
-        f"\n{'='*60}\n"
-        f"DEEP RESEARCH CRASH HANDLER\n"
-        f"{'='*60}\n"
-        f"Exception: {exc_type.__name__}: {exc_value}\n"
-        f"Active sessions: {session_keys}\n"
-        f"Traceback:\n{tb_str}"
-        f"{'='*60}\n",
-        file=sys.stderr,
-        flush=True,
-    )
-
-    # Try to save crash markers for active research sessions
-    for research_id, state in sessions_snapshot:
-        try:
-            state.metadata["crash"] = True
-            state.metadata["crash_error"] = str(exc_value)
-            # Write crash marker file
-            crash_path = (
-                Path.home()
-                / ".foundry-mcp"
-                / "research"
-                / "deep_research"
-                / f"{research_id}.crash"
-            )
-            crash_path.parent.mkdir(parents=True, exist_ok=True)
-            crash_path.write_text(tb_str)
-        except Exception:
-            pass  # Best effort - don't fail the crash handler
-    _persist_active_sessions()
-
-    # Call original handler
-    sys.__excepthook__(exc_type, exc_value, exc_tb)
-
-
-# Install crash handler
-sys.excepthook = _crash_handler
-
-
-@atexit.register
-def _cleanup_on_exit() -> None:
-    """Mark any active sessions as interrupted on normal exit."""
-    # Take snapshot under lock to avoid race conditions
-    with _active_sessions_lock:
-        sessions_snapshot = list(_active_research_sessions.items())
-
-    for _research_id, state in sessions_snapshot:
-        if state.completed_at is None:
-            state.metadata["interrupted"] = True
-    _persist_active_sessions()
 
 
 # =============================================================================
