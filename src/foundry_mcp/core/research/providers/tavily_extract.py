@@ -185,7 +185,7 @@ async def _resolve_hostname_async(
 
     try:
         addr_info = await asyncio.wait_for(
-            loop.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM),
+            loop.getaddrinfo(hostname, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM),
             timeout=timeout,
         )
         return list({str(info[4][0]) for info in addr_info})
