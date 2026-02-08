@@ -14,8 +14,8 @@
 | **CHECKPOINT 2** | **PASSED** | — | 56/56 budget+digest tests pass. Monolith: 6994→5692 lines |
 | Stage 4a: PlanningPhaseMixin | DONE | dff4d3c | 4 methods → phases/planning.py (421 lines) |
 | Stage 4b: GatheringPhaseMixin | DONE | f843f5e | 6 methods → phases/gathering.py (824 lines). __init__.py imports from canonical modules |
-| Stage 4c: AnalysisPhaseMixin | TODO | — | Next: analysis + digest pipeline |
-| Stage 4d: SynthesisPhaseMixin | TODO | — | |
+| Stage 4c: AnalysisPhaseMixin | DONE | — | 5 methods + digest pipeline → phases/analysis.py (1203 lines). Test patches updated to phases.analysis/budgeting |
+| Stage 4d: SynthesisPhaseMixin | TODO | — | Next: synthesis phase |
 | Stage 4e: RefinementPhaseMixin | TODO | — | |
 | Stage 5: Remaining mixins | TODO | — | BackgroundTaskMixin, SessionManagementMixin |
 | Stage 6: Finalize | TODO | — | Rename _monolith→core.py, contract tests |
@@ -24,7 +24,7 @@
 ```
 src/foundry_mcp/core/research/workflows/deep_research/
 ├── __init__.py          # Re-export shim (imports from canonical modules, not just _monolith)
-├── _monolith.py         # 4563 lines (down from 6994)
+├── _monolith.py         # 3371 lines (down from 6994)
 ├── _constants.py         # Budget allocation constants
 ├── _helpers.py           # extract_json, fidelity_level_from_score, truncate_at_boundary
 ├── _budgeting.py         # Budget allocation, validation, digest archives (~540 lines)
@@ -34,17 +34,19 @@ src/foundry_mcp/core/research/workflows/deep_research/
 └── phases/
     ├── __init__.py       # Re-exports all phase mixins
     ├── planning.py       # PlanningPhaseMixin (421 lines)
-    └── gathering.py      # GatheringPhaseMixin (824 lines)
+    ├── gathering.py      # GatheringPhaseMixin (824 lines)
+    └── analysis.py       # AnalysisPhaseMixin (1203 lines)
 ```
 
 ### Resumption Notes
-- `_monolith.py` has `DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, ResearchWorkflowBase)`
-- Planning mixin calls `extract_json()` from `_helpers` directly (not via `self._extract_json` delegate)
-- The `self._extract_json` delegate remains on `_monolith` for analysis/refinement until those are extracted
-- `__init__.py` now imports re-exported symbols from their canonical modules (orchestration, infrastructure, source_quality, _constants) rather than from _monolith
-- Unused imports cleaned from `_monolith` (search providers, resilience manager, audit_log, source_quality functions)
-- `test_deep_research_digest.py` patch targets still point at `_monolith` namespace (analysis phase extraction will need to address this)
-- Next step: Stage 4c — extract AnalysisPhaseMixin (largest phase, ~1400 lines, includes digest pipeline)
+- `_monolith.py` has `DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhaseMixin, ResearchWorkflowBase)`
+- Planning and analysis mixins call standalone functions from `_helpers`/`_budgeting` directly (not via `self._*` delegates)
+- Thin delegates remain on `_monolith` for synthesis/refinement: `_fidelity_level_from_score`, `_allocate_synthesis_budget`, `_compute_refinement_budget`, `_summarize_report_for_refinement`, `_extract_report_summary`, `_final_fit_validate`, `_truncate_at_boundary`, `_extract_json`
+- `__init__.py` imports `ContentSummarizer`, `DocumentDigestor`, `PDFExtractor` from `phases.analysis`; `ContextBudgetManager` from `_budgeting`
+- `test_deep_research_digest.py` patch targets updated: `DocumentDigestor`/`ContentSummarizer`/`PDFExtractor` → `phases.analysis`, `ContextBudgetManager` → `_budgeting`
+- One test (`test_allocate_budget_uses_digest_text`) updated to call `allocate_source_budget` standalone instead of removed `self._allocate_source_budget` delegate
+- Unused imports cleaned from `_monolith`: `hashlib`, `math`, `ConfidenceLevel`, `FidelityLevel`, `SourceQuality`, `AllocationStrategy`, `ContentItem`, `compute_priority`, `compute_recency_score`, `DigestConfig`, `DigestPolicy`, `DigestResult`, `serialize_payload`, `ANALYSIS_PHASE_BUDGET_FRACTION`, `ANALYSIS_OUTPUT_RESERVED`, and 6 `_budgeting` aliases
+- Next step: Stage 4d — extract SynthesisPhaseMixin
 
 ---
 

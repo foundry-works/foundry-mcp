@@ -13,10 +13,15 @@ from foundry_mcp.core.research.workflows.deep_research._monolith import *  # noq
 from foundry_mcp.core.research.workflows.deep_research._monolith import (  # noqa: F401
     # Core workflow
     DeepResearchWorkflow,
-    # Classes patched at this module path by tests (test_deep_research_digest.py)
+)
+# Classes patched at module paths by tests (test_deep_research_digest.py).
+# Now live in phases.analysis / _budgeting after extraction from _monolith.
+from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (  # noqa: F401
     ContentSummarizer,
     DocumentDigestor,
     PDFExtractor,
+)
+from foundry_mcp.core.research.workflows.deep_research._budgeting import (  # noqa: F401
     ContextBudgetManager,
 )
 from foundry_mcp.core.research.workflows.deep_research.orchestration import (  # noqa: F401
