@@ -5,7 +5,9 @@ They are combined via multiple inheritance in the main DeepResearchWorkflow clas
 """
 
 from .planning import PlanningPhaseMixin
+from .gathering import GatheringPhaseMixin
 
 __all__ = [
     "PlanningPhaseMixin",
+    "GatheringPhaseMixin",
 ]
