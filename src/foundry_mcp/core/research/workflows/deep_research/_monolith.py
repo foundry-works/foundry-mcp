@@ -108,174 +108,42 @@ from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     install_crash_handler,
 )
 
-logger = logging.getLogger(__name__)
-
-# Install crash handler on import (matches original side-effect behavior)
-install_crash_handler()
-
-# Budget allocation constants
-ANALYSIS_PHASE_BUDGET_FRACTION = 0.80  # 80% of effective context for analysis
-ANALYSIS_OUTPUT_RESERVED = 4000  # Reserve tokens for findings/gaps JSON output
-SYNTHESIS_PHASE_BUDGET_FRACTION = 0.85  # 85% of effective context for synthesis
-SYNTHESIS_OUTPUT_RESERVED = 8000  # Reserve tokens for comprehensive markdown report
-REFINEMENT_PHASE_BUDGET_FRACTION = 0.70  # 70% of effective context for refinement
-REFINEMENT_OUTPUT_RESERVED = 2000  # Reserve tokens for follow-up queries JSON
-REFINEMENT_REPORT_BUDGET_FRACTION = 0.50  # 50% of phase budget for report summary
-
-# Final-fit validation constants
-FINAL_FIT_MAX_ITERATIONS = 2  # Max attempts to fit payload within budget
-FINAL_FIT_COMPRESSION_FACTOR = 0.85  # Reduce budget target by 15% on retry
-FINAL_FIT_SAFETY_MARGIN = 0.10  # 10% safety margin for token estimation uncertainty
-
-
-# =============================================================================
-# Domain-Based Source Quality Assessment
-# =============================================================================
-
-
-def _extract_domain(url: str) -> Optional[str]:
-    """Extract domain from URL.
-
-    Args:
-        url: Full URL string
-
-    Returns:
-        Domain string (e.g., "arxiv.org") or None if extraction fails
-    """
-    if not url:
-        return None
-    try:
-        # Handle URLs without scheme
-        if "://" not in url:
-            url = "https://" + url
-        # Extract domain using simple parsing
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-        # Remove www. prefix
-        if domain.startswith("www."):
-            domain = domain[4:]
-        return domain if domain else None
-    except Exception:
-        return None
-
-
-def _extract_hostname(url: str) -> Optional[str]:
-    """Extract full hostname from URL (preserves subdomains like www.).
-
-    Args:
-        url: Full URL string
-
-    Returns:
-        Full hostname (e.g., "www.arxiv.org", "docs.python.org") or None
-    """
-    if not url:
-        return None
-    try:
-        # Handle URLs without scheme
-        if "://" not in url:
-            url = "https://" + url
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        return parsed.netloc.lower() if parsed.netloc else None
-    except Exception:
-        return None
-
-
-def _domain_matches_pattern(domain: str, pattern: str) -> bool:
-    """Check if domain matches a pattern (supports wildcards).
-
-    Patterns:
-    - "arxiv.org" - exact match
-    - "*.edu" - matches stanford.edu, mit.edu, etc.
-    - "docs.*" - matches docs.python.org, docs.microsoft.com, etc.
-
-    Args:
-        domain: Domain to check (e.g., "stanford.edu")
-        pattern: Pattern to match (e.g., "*.edu")
-
-    Returns:
-        True if domain matches pattern
-    """
-    pattern = pattern.lower()
-    domain = domain.lower()
-
-    if "*" not in pattern:
-        # Exact match or subdomain match
-        return domain == pattern or domain.endswith("." + pattern)
-
-    if pattern.startswith("*."):
-        # Suffix pattern: *.edu matches stanford.edu
-        suffix = pattern[2:]
-        return domain == suffix or domain.endswith("." + suffix)
-
-    if pattern.endswith(".*"):
-        # Prefix pattern: docs.* matches docs.python.org
-        prefix = pattern[:-2]
-        return domain == prefix or domain.startswith(prefix + ".")
-
-    # General wildcard (treat as contains)
-    return pattern.replace("*", "") in domain
-
-
-def get_domain_quality(url: str, mode: ResearchMode) -> SourceQuality:
-    """Determine source quality based on domain and research mode.
-
-    Args:
-        url: Source URL
-        mode: Research mode (general, academic, technical)
-
-    Returns:
-        SourceQuality based on domain tier matching
-    """
-    domain = _extract_domain(url)
-    if not domain:
-        return SourceQuality.UNKNOWN
-
-    tiers = DOMAIN_TIERS.get(mode.value, DOMAIN_TIERS["general"])
-
-    # Check high-priority domains first
-    for pattern in tiers.get("high", []):
-        if _domain_matches_pattern(domain, pattern):
-            return SourceQuality.HIGH
-
-    # Check low-priority domains
-    for pattern in tiers.get("low", []):
-        if _domain_matches_pattern(domain, pattern):
-            return SourceQuality.LOW
-
-    # Default to medium for unmatched domains
-    return SourceQuality.MEDIUM
-
-
-def _normalize_title(title: str) -> str:
-    """Normalize title for deduplication matching.
-
-    Converts to lowercase, removes punctuation, and collapses whitespace
-    to enable matching the same paper from different sources (e.g., arXiv vs OpenReview).
-
-    Args:
-        title: Source title to normalize
-
-    Returns:
-        Normalized title string for comparison
-    """
-    if not title:
-        return ""
-    # Lowercase, remove punctuation, collapse whitespace
-    normalized = title.lower()
-    normalized = re.sub(r"[^\w\s]", "", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
-
-
-from foundry_mcp.core.research.workflows.deep_research.orchestration import (  # noqa: E402
+from foundry_mcp.core.research.workflows.deep_research._constants import (
+    ANALYSIS_PHASE_BUDGET_FRACTION,
+    ANALYSIS_OUTPUT_RESERVED,
+    SYNTHESIS_PHASE_BUDGET_FRACTION,
+    SYNTHESIS_OUTPUT_RESERVED,
+    REFINEMENT_PHASE_BUDGET_FRACTION,
+    REFINEMENT_OUTPUT_RESERVED,
+    REFINEMENT_REPORT_BUDGET_FRACTION,
+    FINAL_FIT_MAX_ITERATIONS,
+    FINAL_FIT_COMPRESSION_FACTOR,
+    FINAL_FIT_SAFETY_MARGIN,
+)
+from foundry_mcp.core.research.workflows.deep_research._helpers import (
+    extract_json as _extract_json_standalone,
+    fidelity_level_from_score as _fidelity_level_from_score_standalone,
+    truncate_at_boundary as _truncate_at_boundary_standalone,
+)
+from foundry_mcp.core.research.workflows.deep_research.source_quality import (
+    _extract_domain,
+    _extract_hostname,
+    _domain_matches_pattern,
+    get_domain_quality,
+    _normalize_title,
+)
+from foundry_mcp.core.research.workflows.deep_research.orchestration import (
     AgentRole,
     PHASE_TO_AGENT,
     AgentDecision,
     SupervisorHooks,
     SupervisorOrchestrator,
 )
+
+logger = logging.getLogger(__name__)
+
+# Install crash handler on import (matches original side-effect behavior)
+install_crash_handler()
 
 
 # =============================================================================
@@ -2556,42 +2424,8 @@ Generate the research plan as JSON."""
         return result
 
     def _extract_json(self, content: str) -> Optional[str]:
-        """Extract JSON object from content that may contain other text.
-
-        Handles cases where JSON is wrapped in markdown code blocks
-        or mixed with explanatory text.
-
-        Args:
-            content: Raw content that may contain JSON
-
-        Returns:
-            Extracted JSON string or None if not found
-        """
-        # First, try to find JSON in code blocks
-        code_block_pattern = r'```(?:json)?\s*([\s\S]*?)```'
-        matches = re.findall(code_block_pattern, content)
-        for match in matches:
-            match = match.strip()
-            if match.startswith('{'):
-                return match
-
-        # Try to find raw JSON object
-        # Look for the outermost { ... } pair
-        brace_start = content.find('{')
-        if brace_start == -1:
-            return None
-
-        # Find matching closing brace
-        depth = 0
-        for i, char in enumerate(content[brace_start:], brace_start):
-            if char == '{':
-                depth += 1
-            elif char == '}':
-                depth -= 1
-                if depth == 0:
-                    return content[brace_start:i + 1]
-
-        return None
+        """Extract JSON object from content that may contain other text."""
+        return _extract_json_standalone(content)
 
     async def _execute_gathering_async(
         self,
@@ -4329,22 +4163,8 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         return result
 
     def _fidelity_level_from_score(self, fidelity_score: float) -> str:
-        """Convert fidelity score (0-1) to fidelity level string.
-
-        Args:
-            fidelity_score: Numeric fidelity from 0.0 to 1.0
-
-        Returns:
-            Fidelity level: 'full', 'condensed', 'compressed', or 'minimal'
-        """
-        if fidelity_score >= 0.9:
-            return "full"
-        elif fidelity_score >= 0.6:
-            return "condensed"
-        elif fidelity_score >= 0.3:
-            return "compressed"
-        else:
-            return "minimal"
+        """Convert fidelity score (0-1) to fidelity level string."""
+        return _fidelity_level_from_score_standalone(fidelity_score)
 
     def _allocate_synthesis_budget(
         self,
@@ -4728,32 +4548,8 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         return False, result, current_system, current_user
 
     def _truncate_at_boundary(self, content: str, target_length: int) -> str:
-        """Truncate content at a natural boundary (paragraph, sentence).
-
-        Args:
-            content: Content to truncate
-            target_length: Target length in characters
-
-        Returns:
-            Truncated content with ellipsis marker
-        """
-        if len(content) <= target_length:
-            return content
-
-        truncated = content[:target_length]
-
-        # Try to find paragraph boundary in last 20%
-        search_start = int(target_length * 0.8)
-        para_break = truncated.rfind("\n\n", search_start)
-        if para_break > search_start // 2:
-            truncated = truncated[:para_break]
-        else:
-            # Try sentence boundary
-            sentence_break = truncated.rfind(". ", search_start)
-            if sentence_break > search_start // 2:
-                truncated = truncated[:sentence_break + 1]
-
-        return truncated.strip() + "\n\n[... content truncated for context limits]"
+        """Truncate content at a natural boundary (paragraph, sentence)."""
+        return _truncate_at_boundary_standalone(content, target_length)
 
     def _build_analysis_user_prompt(
         self,
