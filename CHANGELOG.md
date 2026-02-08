@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0b13] - 2026-02-08
+
 ### Changed
+
+- **Deep Research Decomposition**: Refactored `core/research/workflows/deep_research.py` (6,994 lines) into a `deep_research/` package with 12 focused modules:
+  - `constants.py` — shared constants, enums, and configuration defaults
+  - `helpers.py` — utility functions (formatting, token estimation, ID generation)
+  - `source_quality.py` — source quality scoring and deduplication
+  - `budgeting.py` — token and source budget allocation
+  - `crash_handler.py` — crash recovery infrastructure and partial result persistence
+  - `orchestration.py` — `PhaseOrchestrator` and `PhaseContext` for phase lifecycle management
+  - Phase mixins: `PlanningPhaseMixin`, `GatheringPhaseMixin`, `AnalysisPhaseMixin`, `SynthesisPhaseMixin`, `RefinementPhaseMixin`
+  - `BackgroundTaskMixin` and `SessionManagementMixin` for async task and session lifecycle
+  - `core.py` — main `DeepResearchWorkflow` class composing all mixins (orchestration + cross-cutting concerns)
+  - 18 contract tests in `test_deep_research_public_api.py` verifying backward compatibility
 
 - **Spec Module Split**: Refactored `core/spec.py` (4,116 lines) into a `core/spec/` package with focused sub-modules:
   - `_constants.py` — shared constants (templates, categories, verification types)
@@ -24,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mutations.py` — task mutation operations (add, remove, update, move)
   - `batch.py` — batch update operations
   - `__init__.py` re-exports all public symbols for backward compatibility
+
+- **Shared Dispatch Helpers**: Extracted `ActionRouter` and `dispatch_with_standard_errors` into reusable pattern across all tool routers
+- **Claude CLI Base Class**: Extracted shared `_claude_base.py` for `claude` and `claude-zai` providers, reducing duplication
+- **Unified Handler Signatures**: Task handlers now use `**payload: Any` convention matching authoring handlers
+- **pypdf moved to optional deps**: `pypdf` is no longer a hard dependency; imported on demand with graceful fallback
 
 ## [0.9.0b12] - 2026-02-01
 
