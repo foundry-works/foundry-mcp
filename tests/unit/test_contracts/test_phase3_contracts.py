@@ -270,14 +270,14 @@ def call_task_handler(
 
     This simulates how the MCP tool would invoke the handlers.
     """
-    from foundry_mcp.tools.unified.task import _TASK_ROUTER
+    from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
     from foundry_mcp.config import ServerConfig
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)
 
-    # Use the action router to dispatch
-    return _TASK_ROUTER.dispatch(action=action, config=config, payload=payload)
+    # Use the action router to dispatch (handlers use **payload convention)
+    return _TASK_ROUTER.dispatch(action=action, config=config, **payload)
 
 
 # ---------------------------------------------------------------------------

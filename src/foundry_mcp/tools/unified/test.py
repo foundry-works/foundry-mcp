@@ -14,7 +14,6 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.responses import (
@@ -29,10 +28,14 @@ from foundry_mcp.core.testing import (
     get_runner,
     get_available_runners,
 )
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+    make_metric_name,
+)
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,11 +43,11 @@ _metrics = get_metrics()
 
 
 def _request_id() -> str:
-    return get_correlation_id() or generate_correlation_id(prefix="test")
+    return build_request_id("test")
 
 
 def _metric(action: str) -> str:
-    return f"unified_tools.test.{action.replace('-', '_')}"
+    return make_metric_name("unified_tools.test", action)
 
 
 def _get_test_runner(
@@ -375,32 +378,9 @@ _TEST_ROUTER = _build_router()
 def _dispatch_test_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _TEST_ROUTER.dispatch(action, config=config, payload=payload)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        request_id = _request_id()
-        return asdict(
-            error_response(
-                f"Unsupported test action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                request_id=request_id,
-            )
-        )
-    except Exception as exc:
-        logger.exception("Test action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Test action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _TEST_ROUTER, "test", action, config=config, payload=payload
+    )
 
 
 def register_unified_test_tool(mcp: FastMCP, config: ServerConfig) -> None:

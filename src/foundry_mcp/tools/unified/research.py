@@ -29,10 +29,10 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 if TYPE_CHECKING:
@@ -1532,35 +1532,13 @@ def _dispatch_research_action(action: str, **kwargs: Any) -> dict:
     Catches all exceptions to ensure graceful failure with error response
     instead of crashing the MCP server.
     """
-    try:
-        return _RESEARCH_ROUTER.dispatch(action=action, **kwargs)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported research action '{action}'. Allowed: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-                details={"action": action, "allowed_actions": exc.allowed_actions},
-            )
-        )
-    except Exception as exc:
-        # Catch all other exceptions to prevent MCP server crash
-        logger.exception("Research action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Research action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check provider availability and configuration. Review logs for details.",
-                details={
-                    "action": action,
-                    "error_type": exc.__class__.__name__,
-                },
-            )
-        )
+    return dispatch_with_standard_errors(
+        _RESEARCH_ROUTER,
+        "research",
+        action,
+        include_details_in_router_error=True,
+        **kwargs,
+    )
 
 
 # =============================================================================

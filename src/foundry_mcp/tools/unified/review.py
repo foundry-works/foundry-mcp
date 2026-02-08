@@ -55,8 +55,8 @@ from .review_helpers import (
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
@@ -968,30 +968,9 @@ _REVIEW_ROUTER = ActionRouter(tool_name="review", actions=_ACTIONS)
 def _dispatch_review_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _REVIEW_ROUTER.dispatch(action=action, payload=payload, config=config)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported review action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-            )
-        )
-    except Exception as exc:
-        logger.exception("Review action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Review action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _REVIEW_ROUTER, "review", action, payload=payload, config=config
+    )
 
 
 def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:

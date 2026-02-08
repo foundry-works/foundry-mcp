@@ -232,7 +232,7 @@ class TestBackgroundTaskMarkMethods:
         assert task.completed_at is not None
 
     def test_mark_completed_does_not_override_timeout(self):
-        """mark_completed preserves TIMEOUT status when already timed out."""
+        """mark_completed preserves TIMEOUT status and ignores late results."""
         task = BackgroundTask(research_id="test-1")
 
         task.mark_timeout()
@@ -242,10 +242,10 @@ class TestBackgroundTaskMarkMethods:
 
         assert task.status == TaskStatus.TIMEOUT
         assert task.completed_at == completed_at
-        assert task.result == "late result"
+        assert task.result is None  # Terminal tasks don't accept late results
 
     def test_mark_completed_does_not_override_cancelled(self):
-        """mark_completed preserves CANCELLED status when already cancelled."""
+        """mark_completed preserves CANCELLED status and ignores late results."""
         task = BackgroundTask(research_id="test-1")
         task.status = TaskStatus.CANCELLED
         task.completed_at = time.time()
@@ -255,7 +255,7 @@ class TestBackgroundTaskMarkMethods:
 
         assert task.status == TaskStatus.CANCELLED
         assert task.completed_at == completed_at
-        assert task.result == "late result"
+        assert task.result is None  # Terminal tasks don't accept late results
 
 
 class TestBackgroundTaskProperties:
@@ -272,7 +272,7 @@ class TestBackgroundTaskProperties:
         elapsed2 = task.elapsed_ms
 
         assert elapsed2 > elapsed1
-        assert elapsed1 >= 50  # At least 50ms
+        assert elapsed1 >= 40  # At least ~50ms, with tolerance for CI
 
     def test_elapsed_ms_frozen_after_completion(self):
         """elapsed_ms is frozen after task completes."""

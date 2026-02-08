@@ -55,8 +55,20 @@ The foundry-mcp project provides MCP (Model Context Protocol) tools for spec-dri
 ```
 foundry_mcp/
 ├── core/                    # Shared business logic (UNCHANGED)
-│   ├── spec.py              # Spec file operations
-│   ├── task.py              # Task operations
+│   ├── spec/                # Spec file operations (package)
+│   │   ├── __init__.py      # Public API re-exports
+│   │   ├── _constants.py    # Shared constants
+│   │   ├── io.py            # Find, load, save, backup, list, diff, rollback
+│   │   ├── hierarchy.py     # Get/update node, phase CRUD, recalculate hours
+│   │   ├── templates.py     # Spec creation, phase templates, assumptions
+│   │   ├── analysis.py      # Completeness checks, duplicate detection
+│   │   └── _monolith.py     # Find-replace (pending further extraction)
+│   ├── task/                # Task operations (package)
+│   │   ├── __init__.py      # Public API re-exports
+│   │   ├── _helpers.py      # Shared constants and utilities
+│   │   ├── queries.py       # Read-only query functions
+│   │   ├── mutations.py     # Task mutation operations
+│   │   └── batch.py         # Batch update operations
 │   ├── journal.py           # Journal operations
 │   ├── lifecycle.py         # Lifecycle state machine
 │   ├── validation.py        # Input validation

@@ -529,7 +529,7 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_rate_limit_error_on_429(self, provider):
-        """Test 429 response raises RateLimitError after retries."""
+        """Test 429 response raises SearchProviderError after retries exhaust budget."""
         mock_response = MagicMock()
         mock_response.status_code = 429
         mock_response.headers = {"Retry-After": "60"}
@@ -538,7 +538,7 @@ class TestErrorHandling:
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response
             )
-            with pytest.raises(RateLimitError):
+            with pytest.raises(SearchProviderError):
                 await provider.search("test query")
 
     @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .authoring import register_unified_authoring_tool
+from .authoring_handlers import register_unified_authoring_tool
 from .error import register_unified_error_tool
 from .health import register_unified_health_tool
 from .journal import register_unified_journal_tool
@@ -50,7 +50,7 @@ def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:
     from importlib import import_module
 
     if "task" not in disabled:
-        _task_router = import_module("foundry_mcp.tools.unified.task")
+        _task_router = import_module("foundry_mcp.tools.unified.task_handlers")
         _task_router.register_unified_task_tool(mcp, config)
     if "provider" not in disabled:
         register_unified_provider_tool(mcp, config)

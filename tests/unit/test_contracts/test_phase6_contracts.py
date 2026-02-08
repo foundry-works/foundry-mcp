@@ -347,7 +347,7 @@ def call_authoring_handler(
     config=None,
 ) -> Dict[str, Any]:
     """Call the authoring router handler and return response dict."""
-    from foundry_mcp.tools.unified.authoring import _AUTHORING_ROUTER
+    from foundry_mcp.tools.unified.authoring_handlers import _AUTHORING_ROUTER
     from foundry_mcp.config import ServerConfig
 
     if config is None:

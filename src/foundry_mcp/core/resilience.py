@@ -333,6 +333,25 @@ class CircuitBreaker:
     half_open_calls: int = field(default=0, init=False)
     _lock: Lock = field(default_factory=Lock, init=False)
 
+    def is_available(self) -> bool:
+        """Check if the breaker would allow execution, without mutating state.
+
+        Unlike ``can_execute``, this is a read-only probe suitable for
+        observability and routing decisions.
+
+        Returns:
+            True if the breaker would currently allow a request.
+        """
+        with self._lock:
+            if self.state == CircuitState.CLOSED:
+                return True
+            if self.state == CircuitState.OPEN:
+                elapsed = time.time() - self.last_failure_time
+                return elapsed >= self.recovery_timeout
+            if self.state == CircuitState.HALF_OPEN:
+                return self.half_open_calls < self.half_open_max_calls
+            return False
+
     def can_execute(self) -> bool:
         """Check if request should proceed.
 

@@ -167,7 +167,7 @@ class ProviderResilienceManager:
     """
 
     _instance: Optional["ProviderResilienceManager"] = None
-    _async_lock: asyncio.Lock
+    _async_lock: Optional[asyncio.Lock]
     _sync_lock: threading.Lock
 
     def __init__(self) -> None:
@@ -177,8 +177,17 @@ class ProviderResilienceManager:
         """
         self._rate_limiters: dict[str, TokenBucketLimiter] = {}
         self._circuit_breakers: dict[str, CircuitBreaker] = {}
-        self._async_lock = asyncio.Lock()
+        self._async_lock = None  # Lazy-init: created on first async use
         self._sync_lock = threading.Lock()
+
+    def _get_async_lock(self) -> asyncio.Lock:
+        """Get or lazily create the async lock.
+
+        Must be called from within a running event loop.
+        """
+        if self._async_lock is None:
+            self._async_lock = asyncio.Lock()
+        return self._async_lock
 
     def _get_or_create_rate_limiter(
         self,
@@ -232,15 +241,7 @@ class ProviderResilienceManager:
 
     def _is_breaker_available(self, breaker: CircuitBreaker) -> bool:
         """Check breaker availability without mutating probe counters."""
-        with breaker._lock:
-            if breaker.state == CircuitState.CLOSED:
-                return True
-            if breaker.state == CircuitState.OPEN:
-                elapsed = time.time() - breaker.last_failure_time
-                return elapsed >= breaker.recovery_timeout
-            if breaker.state == CircuitState.HALF_OPEN:
-                return breaker.half_open_calls < breaker.half_open_max_calls
-            return False
+        return breaker.is_available()
 
     async def get_rate_limiter(
         self,
@@ -255,7 +256,7 @@ class ProviderResilienceManager:
         Returns:
             TokenBucketLimiter for the provider
         """
-        async with self._async_lock:
+        async with self._get_async_lock():
             return self._get_or_create_rate_limiter(provider_name, config=config)
 
     async def get_circuit_breaker(
@@ -271,7 +272,7 @@ class ProviderResilienceManager:
         Returns:
             CircuitBreaker for the provider
         """
-        async with self._async_lock:
+        async with self._get_async_lock():
             return self._get_or_create_circuit_breaker(provider_name, config=config)
 
     def get_breaker_state(self, provider_name: str) -> CircuitState:
@@ -343,17 +344,22 @@ class ProviderResilienceManager:
 
 # Module-level singleton
 _resilience_manager: Optional[ProviderResilienceManager] = None
+_resilience_manager_lock = threading.Lock()
 
 
 def get_resilience_manager() -> ProviderResilienceManager:
     """Get the singleton ProviderResilienceManager instance.
+
+    Thread-safe via double-checked locking.
 
     Returns:
         The global ProviderResilienceManager instance
     """
     global _resilience_manager
     if _resilience_manager is None:
-        _resilience_manager = ProviderResilienceManager()
+        with _resilience_manager_lock:
+            if _resilience_manager is None:
+                _resilience_manager = ProviderResilienceManager()
     return _resilience_manager
 
 
@@ -363,7 +369,8 @@ def reset_resilience_manager_for_testing() -> None:
     Creates a fresh manager instance with no state.
     """
     global _resilience_manager
-    _resilience_manager = ProviderResilienceManager()
+    with _resilience_manager_lock:
+        _resilience_manager = ProviderResilienceManager()
 
 
 class SleepFunc(Protocol):

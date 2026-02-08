@@ -43,6 +43,10 @@ from foundry_mcp.core.spec import (
     recalculate_actual_hours,
     recalculate_estimated_hours,
 )
+from foundry_mcp.tools.unified.common import (
+    dispatch_with_standard_errors,
+    resolve_specs_dir,
+)
 from foundry_mcp.core.validation import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
@@ -61,7 +65,6 @@ from foundry_mcp.core.lifecycle import VALID_FOLDERS
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
-    ActionRouterError,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,10 +76,9 @@ _MAX_PAGE_SIZE = 1000
 
 def _resolve_specs_dir(
     config: ServerConfig, workspace: Optional[str]
-) -> Optional[Path]:
-    if workspace:
-        return find_specs_directory(workspace)
-    return config.specs_dir or find_specs_directory()
+) -> tuple[Optional[Path], Optional[dict]]:
+    """Thin wrapper around the shared helper preserving the local call convention."""
+    return resolve_specs_dir(config, workspace)
 
 
 def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
@@ -93,17 +95,9 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     spec_file = find_spec_file(spec_id, specs_dir)
     if spec_file:
@@ -136,17 +130,9 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     spec_data = load_spec(spec_id, specs_dir)
     if spec_data is None:
@@ -172,17 +158,9 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     limit = payload.get("limit")
     workspace = payload.get("workspace")
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     page_size = normalize_page_size(
         limit, default=_DEFAULT_PAGE_SIZE, maximum=_MAX_PAGE_SIZE
@@ -256,17 +234,9 @@ def _handle_validate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
@@ -348,17 +318,9 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
@@ -444,17 +406,9 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
@@ -525,17 +479,9 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory or pass workspace.",
-                details={"workspace": workspace},
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
@@ -825,16 +771,9 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     workspace = payload.get("workspace")
     max_results = payload.get("limit")
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory",
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     # If no target specified, diff against latest backup
     if not target:
@@ -904,16 +843,9 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     cursor = payload.get("cursor")
     limit = payload.get("limit")
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory",
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     # Get backups with pagination
     backups_result = list_spec_backups(
@@ -976,16 +908,9 @@ def _handle_completeness_check(
         )
 
     workspace = payload.get("workspace")
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory",
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     result, error = check_spec_completeness(spec_id, specs_dir=specs_dir)
     if error:
@@ -1032,16 +957,9 @@ def _handle_duplicate_detection(
             )
         )
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory",
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     result, error = detect_duplicate_tasks(
         spec_id,
@@ -1082,16 +1000,9 @@ def _handle_recalculate_hours(
     workspace = payload.get("workspace")
     dry_run = payload.get("dry_run", False)
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory",
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     result, error = recalculate_estimated_hours(
         spec_id,
@@ -1130,16 +1041,9 @@ def _handle_recalculate_actual_hours(
     workspace = payload.get("workspace")
     dry_run = payload.get("dry_run", False)
 
-    specs_dir = _resolve_specs_dir(config, workspace)
-    if not specs_dir:
-        return asdict(
-            error_response(
-                "No specs directory found",
-                error_code=ErrorCode.NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation="Ensure you're in a project with a specs/ directory",
-            )
-        )
+    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
+    if specs_err:
+        return specs_err
 
     result, error = recalculate_actual_hours(
         spec_id,
@@ -1225,30 +1129,9 @@ _SPEC_ROUTER = ActionRouter(tool_name="spec", actions=_ACTIONS)
 def _dispatch_spec_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    try:
-        return _SPEC_ROUTER.dispatch(action=action, payload=payload, config=config)
-    except ActionRouterError as exc:
-        allowed = ", ".join(exc.allowed_actions)
-        return asdict(
-            error_response(
-                f"Unsupported spec action '{action}'. Allowed actions: {allowed}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation=f"Use one of: {allowed}",
-            )
-        )
-    except Exception as exc:
-        logger.exception("Spec action '%s' failed with unexpected error: %s", action, exc)
-        error_msg = str(exc) if str(exc) else exc.__class__.__name__
-        return asdict(
-            error_response(
-                f"Spec action '{action}' failed: {error_msg}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                remediation="Check configuration and logs for details.",
-                details={"action": action, "error_type": exc.__class__.__name__},
-            )
-        )
+    return dispatch_with_standard_errors(
+        _SPEC_ROUTER, "spec", action, payload=payload, config=config
+    )
 
 
 def register_unified_spec_tool(mcp: FastMCP, config: ServerConfig) -> None:
