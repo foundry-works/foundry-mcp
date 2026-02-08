@@ -109,6 +109,7 @@ def dispatch_with_standard_errors(
     router: ActionRouter,
     tool_name: str,
     action: str,
+    /,
     *,
     request_id: Optional[str] = None,
     include_details_in_router_error: bool = False,

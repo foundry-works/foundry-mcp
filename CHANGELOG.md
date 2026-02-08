@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-02-08
+
+### Fixed
+
+- **Error tool completely broken**: All error tool actions (`list`, `get`, `stats`, `patterns`, `cleanup`) crashed with `dispatch_with_standard_errors() got multiple values for argument 'tool_name'`. The `tool_name` filter parameter in the error tool payload collided with the positional `tool_name` parameter in the shared dispatch function when unpacked via `**payload`.
+- **Hardened dispatch signature**: Made `router`, `tool_name`, and `action` positional-only (`/`) in `dispatch_with_standard_errors()` to prevent any future parameter name collisions from tool payloads.
+
 ## [0.10.0] - 2026-02-08
 
 ### Changed
