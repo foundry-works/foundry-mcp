@@ -12,29 +12,39 @@
 | **CHECKPOINT 1** | **PASSED** | — | 3993 passed, 12 skipped — identical to baseline |
 | Stage 3: _budgeting.py | DONE | 9ed8013 | 11 methods extracted as standalone functions, thin delegates remain |
 | **CHECKPOINT 2** | **PASSED** | — | 56/56 budget+digest tests pass. Monolith: 6994→5692 lines |
-| Stage 4: Phase mixins (5 commits) | TODO | — | Next: planning, gathering, analysis, synthesis, refinement |
+| Stage 4a: PlanningPhaseMixin | DONE | dff4d3c | 4 methods → phases/planning.py (421 lines) |
+| Stage 4b: GatheringPhaseMixin | DONE | f843f5e | 6 methods → phases/gathering.py (824 lines). __init__.py imports from canonical modules |
+| Stage 4c: AnalysisPhaseMixin | TODO | — | Next: analysis + digest pipeline |
+| Stage 4d: SynthesisPhaseMixin | TODO | — | |
+| Stage 4e: RefinementPhaseMixin | TODO | — | |
 | Stage 5: Remaining mixins | TODO | — | BackgroundTaskMixin, SessionManagementMixin |
 | Stage 6: Finalize | TODO | — | Rename _monolith→core.py, contract tests |
 
 ### Current Package Layout (as-built)
 ```
 src/foundry_mcp/core/research/workflows/deep_research/
-├── __init__.py          # Re-export shim (imports from _monolith)
-├── _monolith.py         # 5692 lines (down from 6994)
+├── __init__.py          # Re-export shim (imports from canonical modules, not just _monolith)
+├── _monolith.py         # 4563 lines (down from 6994)
 ├── _constants.py         # Budget allocation constants
 ├── _helpers.py           # extract_json, fidelity_level_from_score, truncate_at_boundary
 ├── _budgeting.py         # Budget allocation, validation, digest archives (~540 lines)
 ├── infrastructure.py     # Crash handler, active sessions, cleanup hooks
 ├── orchestration.py      # AgentRole, AgentDecision, SupervisorHooks, SupervisorOrchestrator
-└── source_quality.py     # Domain assessment, title normalization
+├── source_quality.py     # Domain assessment, title normalization
+└── phases/
+    ├── __init__.py       # Re-exports all phase mixins
+    ├── planning.py       # PlanningPhaseMixin (421 lines)
+    └── gathering.py      # GatheringPhaseMixin (824 lines)
 ```
 
 ### Resumption Notes
-- `_monolith.py` still contains `DeepResearchWorkflow` class with all phase methods, session management, and background tasks
-- Instance methods for budgeting/helpers are thin delegates to standalone functions
-- `__init__.py` re-exports everything from `_monolith` via star import — will be cleaned up in Stage 6
-- `test_deep_research_digest.py` patch targets already point at `_monolith` namespace
-- Next step: Stage 4 — extract phase mixins starting with PlanningPhaseMixin
+- `_monolith.py` has `DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, ResearchWorkflowBase)`
+- Planning mixin calls `extract_json()` from `_helpers` directly (not via `self._extract_json` delegate)
+- The `self._extract_json` delegate remains on `_monolith` for analysis/refinement until those are extracted
+- `__init__.py` now imports re-exported symbols from their canonical modules (orchestration, infrastructure, source_quality, _constants) rather than from _monolith
+- Unused imports cleaned from `_monolith` (search providers, resilience manager, audit_log, source_quality functions)
+- `test_deep_research_digest.py` patch targets still point at `_monolith` namespace (analysis phase extraction will need to address this)
+- Next step: Stage 4c — extract AnalysisPhaseMixin (largest phase, ~1400 lines, includes digest pipeline)
 
 ---
 
