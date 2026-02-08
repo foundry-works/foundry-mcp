@@ -8,10 +8,12 @@ from .planning import PlanningPhaseMixin
 from .gathering import GatheringPhaseMixin
 from .analysis import AnalysisPhaseMixin
 from .synthesis import SynthesisPhaseMixin
+from .refinement import RefinementPhaseMixin
 
 __all__ = [
     "PlanningPhaseMixin",
     "GatheringPhaseMixin",
     "AnalysisPhaseMixin",
     "SynthesisPhaseMixin",
+    "RefinementPhaseMixin",
 ]
