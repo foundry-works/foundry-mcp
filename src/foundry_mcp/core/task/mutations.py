@@ -262,58 +262,13 @@ def add_task(
     }, None
 
 
-def _collect_descendants(hierarchy: Dict[str, Any], node_id: str) -> List[str]:
-    """
-    Recursively collect all descendant node IDs for a given node.
-
-    Args:
-        hierarchy: The spec hierarchy dict
-        node_id: Starting node ID
-
-    Returns:
-        List of all descendant node IDs (not including the starting node)
-    """
-    descendants = []
-    node = hierarchy.get(node_id)
-    if not node:
-        return descendants
-
-    children = node.get("children", [])
-    if not isinstance(children, list):
-        return descendants
-
-    for child_id in children:
-        descendants.append(child_id)
-        descendants.extend(_collect_descendants(hierarchy, child_id))
-
-    return descendants
-
-
-def _count_tasks_in_subtree(hierarchy: Dict[str, Any], node_ids: List[str]) -> Tuple[int, int]:
-    """
-    Count total and completed tasks in a list of nodes.
-
-    Args:
-        hierarchy: The spec hierarchy dict
-        node_ids: List of node IDs to count
-
-    Returns:
-        Tuple of (total_count, completed_count)
-    """
-    total = 0
-    completed = 0
-
-    for node_id in node_ids:
-        node = hierarchy.get(node_id)
-        if not node:
-            continue
-        node_type = node.get("type")
-        if node_type in ("task", "subtask", "verify"):
-            total += 1
-            if node.get("status") == "completed":
-                completed += 1
-
-    return total, completed
+# Shared hierarchy traversal utilities — canonical implementations live in
+# hierarchy_helpers.py.  Private aliases kept for backwards compatibility
+# with callers that import from this module.
+from foundry_mcp.core.hierarchy_helpers import (  # noqa: F401
+    collect_descendants as _collect_descendants,
+    count_tasks_in_subtree as _count_tasks_in_subtree,
+)
 
 
 def _decrement_ancestor_counts(
@@ -353,25 +308,9 @@ def _decrement_ancestor_counts(
         current_id = node.get("parent")
 
 
-def _remove_dependency_references(hierarchy: Dict[str, Any], removed_ids: List[str]) -> None:
-    """
-    Remove references to deleted nodes from all dependency lists.
-
-    Args:
-        hierarchy: The spec hierarchy dict
-        removed_ids: List of node IDs being removed
-    """
-    removed_set = set(removed_ids)
-
-    for node_id, node in hierarchy.items():
-        deps = node.get("dependencies")
-        if not deps or not isinstance(deps, dict):
-            continue
-
-        for key in ("blocks", "blocked_by", "depends"):
-            dep_list = deps.get(key)
-            if isinstance(dep_list, list):
-                deps[key] = [d for d in dep_list if d not in removed_set]
+from foundry_mcp.core.hierarchy_helpers import (  # noqa: F401
+    remove_dependency_references as _remove_dependency_references,
+)
 
 
 def remove_task(

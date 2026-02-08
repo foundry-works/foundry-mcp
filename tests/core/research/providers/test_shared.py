@@ -39,7 +39,7 @@ class TestRedactValue:
         assert _redact_value("abcd") == "****"
 
     def test_longer_value(self):
-        assert _redact_value("tvly-abc123") == "tvly****"
+        assert _redact_value("tvly-abc123") == "****"
 
     def test_empty(self):
         assert _redact_value("") == "****"
@@ -50,7 +50,7 @@ class TestRedactSecrets:
         text = "Failed with api_key=tvly-secret-value-12345"
         result = redact_secrets(text)
         assert "tvly-secret-value-12345" not in result
-        assert "tvly****" in result
+        assert "****" in result
 
     def test_bearer_token(self):
         text = "Authorization: Bearer sk-long-secret-token-value"
@@ -90,7 +90,7 @@ class TestRedactHeaders:
         headers = {"X-API-Key": "tvly-secret-12345"}
         result = redact_headers(headers)
         assert "tvly-secret-12345" not in result["X-API-Key"]
-        assert result["X-API-Key"] == "tvly****"
+        assert result["X-API-Key"] == "****"
 
     def test_redacts_cookie(self):
         headers = {"Cookie": "session=abc12345"}
@@ -215,7 +215,7 @@ class TestExtractErrorMessage:
         resp = self._make_response({"error": "Invalid api_key=tvly-secret-real-key-12345"})
         result = extract_error_message(resp)
         assert "tvly-secret-real-key-12345" not in result
-        assert "tvly****" in result
+        assert "****" in result
 
 
 # ===========================================================================

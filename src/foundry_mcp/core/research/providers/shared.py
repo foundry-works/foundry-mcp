@@ -87,17 +87,15 @@ _SENSITIVE_HEADERS = frozenset(
 
 
 def _redact_value(value: str) -> str:
-    """Redact a secret value, keeping only the first 4 chars visible.
+    """Fully redact a secret value.
 
     Args:
         value: The secret string to redact.
 
     Returns:
-        Redacted string like ``"tvly-****"`` or ``"****"`` for short values.
+        Redacted string ``"****"``.
     """
-    if len(value) <= 4:
-        return "****"
-    return value[:4] + "****"
+    return "****"
 
 
 def redact_secrets(text: str) -> str:

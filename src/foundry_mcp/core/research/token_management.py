@@ -44,6 +44,7 @@ from functools import lru_cache
 from typing import Any, Callable, Optional
 import hashlib
 import logging
+import threading
 import warnings
 
 logger = logging.getLogger(__name__)
@@ -502,6 +503,7 @@ class TokenBudget:
 
 # Cache for token estimates: maps (content_hash, provider) -> token_count
 _TOKEN_ESTIMATE_CACHE: dict[tuple[str, str], int] = {}
+_TOKEN_CACHE_LOCK = threading.Lock()
 
 # Maximum cache size to prevent unbounded memory growth
 _MAX_CACHE_SIZE = 10_000
@@ -662,8 +664,10 @@ def estimate_tokens(
     cache_key = (_content_hash(content), provider_key)
 
     # Check cache first
-    if use_cache and cache_key in _TOKEN_ESTIMATE_CACHE:
-        return _TOKEN_ESTIMATE_CACHE[cache_key]
+    if use_cache:
+        with _TOKEN_CACHE_LOCK:
+            if cache_key in _TOKEN_ESTIMATE_CACHE:
+                return _TOKEN_ESTIMATE_CACHE[cache_key]
 
     estimate: Optional[int] = None
 
@@ -697,12 +701,13 @@ def estimate_tokens(
 
     # Update cache (with size limit)
     if use_cache:
-        if len(_TOKEN_ESTIMATE_CACHE) >= _MAX_CACHE_SIZE:
-            # Simple eviction: clear half the cache
-            keys_to_remove = list(_TOKEN_ESTIMATE_CACHE.keys())[: _MAX_CACHE_SIZE // 2]
-            for key in keys_to_remove:
-                del _TOKEN_ESTIMATE_CACHE[key]
-        _TOKEN_ESTIMATE_CACHE[cache_key] = estimate
+        with _TOKEN_CACHE_LOCK:
+            if len(_TOKEN_ESTIMATE_CACHE) >= _MAX_CACHE_SIZE:
+                # Simple eviction: clear half the cache
+                keys_to_remove = list(_TOKEN_ESTIMATE_CACHE.keys())[: _MAX_CACHE_SIZE // 2]
+                for key in keys_to_remove:
+                    del _TOKEN_ESTIMATE_CACHE[key]
+            _TOKEN_ESTIMATE_CACHE[cache_key] = estimate
 
     return estimate
 
@@ -717,8 +722,9 @@ def clear_token_cache() -> int:
         cleared = clear_token_cache()
         print(f"Cleared {cleared} cached estimates")
     """
-    count = len(_TOKEN_ESTIMATE_CACHE)
-    _TOKEN_ESTIMATE_CACHE.clear()
+    with _TOKEN_CACHE_LOCK:
+        count = len(_TOKEN_ESTIMATE_CACHE)
+        _TOKEN_ESTIMATE_CACHE.clear()
     return count
 
 
@@ -732,8 +738,10 @@ def get_cache_stats() -> dict[str, int]:
         stats = get_cache_stats()
         print(f"Cache: {stats['size']}/{stats['max_size']} entries")
     """
+    with _TOKEN_CACHE_LOCK:
+        size = len(_TOKEN_ESTIMATE_CACHE)
     return {
-        "size": len(_TOKEN_ESTIMATE_CACHE),
+        "size": size,
         "max_size": _MAX_CACHE_SIZE,
     }
 
