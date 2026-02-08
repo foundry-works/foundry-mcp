@@ -1,21 +1,15 @@
 """Deep Research workflow package.
 
-Backward-compatible re-export shim. All public symbols remain importable
-from ``foundry_mcp.core.research.workflows.deep_research`` exactly as before
-the monolith was decomposed into a package.
+All public symbols are re-exported here so that imports from
+``foundry_mcp.core.research.workflows.deep_research`` continue to work.
 """
 
-# Re-export everything from the monolith (transitional)
-from foundry_mcp.core.research.workflows.deep_research._monolith import *  # noqa: F401,F403
+# Re-export everything from the core module (includes DeepResearchWorkflow)
+from foundry_mcp.core.research.workflows.deep_research.core import *  # noqa: F401,F403
 
-# Explicit re-exports for symbols that tests/code import directly.
-# Some symbols now live in extracted modules rather than _monolith.
-from foundry_mcp.core.research.workflows.deep_research._monolith import (  # noqa: F401
-    # Core workflow
-    DeepResearchWorkflow,
-)
-# Classes patched at module paths by tests (test_deep_research_digest.py).
-# Now live in phases.analysis / _budgeting after extraction from _monolith.
+# Explicit re-exports for symbols from extracted modules.
+# These classes are patched at module paths by tests (test_deep_research_digest.py)
+# and now live in phases.analysis / _budgeting after extraction.
 from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (  # noqa: F401
     ContentSummarizer,
     DocumentDigestor,

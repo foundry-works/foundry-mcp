@@ -34,7 +34,7 @@ from foundry_mcp.core.research.workflows.deep_research.source_quality import (
 )
 
 if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research._monolith import (
+    from foundry_mcp.core.research.workflows.deep_research.core import (
         DeepResearchWorkflow,
     )
 

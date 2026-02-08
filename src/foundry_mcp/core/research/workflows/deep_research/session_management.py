@@ -13,7 +13,7 @@ from foundry_mcp.core.research.models import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research._monolith import (
+    from foundry_mcp.core.research.workflows.deep_research.core import (
         DeepResearchWorkflow,
     )
 

@@ -18,13 +18,14 @@
 | Stage 4d: SynthesisPhaseMixin | DONE | ef925fa | 5 methods → phases/synthesis.py (619 lines). Removed thin delegates for _fidelity_level_from_score, _allocate_synthesis_budget |
 | Stage 4e: RefinementPhaseMixin | DONE | a55f8a6 | 5 methods → phases/refinement.py (660 lines). Removed ALL remaining thin delegates + unused imports. All 5 phases extracted |
 | Stage 5: Remaining mixins | DONE | 00dc2a0 | 4 methods → background_tasks.py (268 lines), 5 methods → session_management.py (296 lines). Monolith: 2130→1639 lines |
-| Stage 6: Finalize | TODO | — | Rename _monolith→core.py, contract tests |
+| Stage 6: Finalize | DONE | — | Renamed _monolith→core.py, updated 7 TYPE_CHECKING imports, 18 contract tests added |
+| **CHECKPOINT 3 (Final)** | **PASSED** | — | 2767 unit/tools passed, 1250 core/research passed (6 skipped — tiktoken). Decomposition complete |
 
-### Current Package Layout (as-built)
+### Final Package Layout
 ```
 src/foundry_mcp/core/research/workflows/deep_research/
-├── __init__.py            # Re-export shim (imports from canonical modules, not just _monolith)
-├── _monolith.py           # 1639 lines (down from 6994) — will become core.py in Stage 6
+├── __init__.py            # Re-exports all public symbols
+├── core.py                # 1639 lines — DeepResearchWorkflow class, orchestration loop, cross-cutting methods
 ├── _constants.py          # Budget allocation constants
 ├── _helpers.py            # extract_json, fidelity_level_from_score, truncate_at_boundary
 ├── _budgeting.py          # Budget allocation, validation, digest archives (~540 lines)
@@ -41,14 +42,6 @@ src/foundry_mcp/core/research/workflows/deep_research/
     ├── synthesis.py       # SynthesisPhaseMixin (619 lines)
     └── refinement.py      # RefinementPhaseMixin (660 lines)
 ```
-
-### Resumption Notes
-- `_monolith.py` has `DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhaseMixin, SynthesisPhaseMixin, RefinementPhaseMixin, BackgroundTaskMixin, SessionManagementMixin, ResearchWorkflowBase)`
-- All 7 mixins call standalone functions from `_helpers`/`_budgeting` directly (no thin delegates remain)
-- Remaining in `_monolith.py` (~1639 lines): `__init__`, `execute()`, `_execute_workflow_async` orchestration loop, action handlers (`_start_research`, `_continue_research`, `_get_status`, `_get_report`, `_cancel_research`), cross-cutting methods (audit, persistence, cancellation, error recording), `_tasks`/`_tasks_lock` class variables
-- `__init__.py` imports `ContentSummarizer`, `DocumentDigestor`, `PDFExtractor` from `phases.analysis`; `ContextBudgetManager` from `_budgeting`
-- Tests updated: `test_fidelity_level_conversion` calls standalone function directly
-- Next step: Stage 6 — rename `_monolith.py` → `core.py`, update `__init__.py` re-exports, add contract tests, update TYPE_CHECKING imports in all mixins
 
 ---
 
