@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Spec Module Split**: Refactored `core/spec.py` (4,116 lines) into a `core/spec/` package with focused sub-modules:
+  - `_constants.py` — shared constants (templates, categories, verification types)
+  - `io.py` — I/O functions (find, load, save, backup, list, diff, rollback)
+  - `hierarchy.py` — hierarchy operations (get/update node, phase CRUD, recalculate hours)
+  - `templates.py` — spec creation, phase templates, assumptions, revisions, frontmatter
+  - `analysis.py` — read-only analysis (completeness checks, duplicate detection)
+  - `_monolith.py` — remaining operations (find-replace)
+  - `__init__.py` re-exports all public symbols for backward compatibility
+
 - **Task Module Split**: Refactored `core/task.py` (2,463 lines) into a `core/task/` package with focused sub-modules:
   - `_helpers.py` — shared constants and utilities
   - `queries.py` — read-only query and context functions

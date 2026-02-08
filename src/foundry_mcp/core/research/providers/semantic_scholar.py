@@ -27,7 +27,6 @@ Example usage:
 
 import logging
 import os
-from datetime import datetime
 from dataclasses import replace
 from typing import Any, Optional
 
@@ -43,15 +42,17 @@ from foundry_mcp.core.research.providers.base import (
 )
 from foundry_mcp.core.research.providers.resilience import (
     ErrorClassification,
-    ErrorType,
     ProviderResilienceConfig,
-    execute_with_resilience,
     get_provider_config,
-    get_resilience_manager,
-    RateLimitWaitError,
-    TimeBudgetExceededError,
 )
-from foundry_mcp.core.resilience import CircuitBreakerError
+from foundry_mcp.core.research.providers.shared import (
+    check_provider_health,
+    classify_http_error,
+    create_resilience_executor,
+    extract_error_message,
+    parse_iso_date,
+    parse_retry_after,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +322,7 @@ class SemanticScholarProvider(SearchProvider):
         self,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute API request with resilience stack."""
+        """Execute API request with shared resilience executor."""
         url = f"{self._base_url}{PAPER_SEARCH_ENDPOINT}"
         headers: dict[str, str] = {}
         if self._api_key:
@@ -335,70 +336,20 @@ class SemanticScholarProvider(SearchProvider):
                 if response.status_code == 403:
                     raise AuthenticationError(provider="semantic_scholar", message="Access forbidden - check API key")
                 if response.status_code == 429:
-                    raise RateLimitError(provider="semantic_scholar", retry_after=self._parse_retry_after(response))
+                    raise RateLimitError(provider="semantic_scholar", retry_after=parse_retry_after(response))
                 if response.status_code >= 400:
-                    raise SearchProviderError(provider="semantic_scholar", message=f"API error {response.status_code}: {self._parse_error_response(response)}", retryable=response.status_code >= 500)
+                    error_msg = extract_error_message(response)
+                    raise SearchProviderError(provider="semantic_scholar", message=f"API error {response.status_code}: {error_msg}", retryable=response.status_code >= 500)
                 return response.json()
 
-        try:
-            time_budget = self._timeout * (self.resilience_config.max_retries + 1)
-            return await execute_with_resilience(
-                make_request,
-                provider_name="semantic_scholar",
-                time_budget=time_budget,
-                classify_error=self.classify_error,
-                manager=get_resilience_manager(),
-                resilience_config=self.resilience_config,
-            )
-        except CircuitBreakerError as e:
-            raise SearchProviderError(provider="semantic_scholar", message=f"Circuit breaker open: {e}", retryable=False)
-        except RateLimitWaitError as e:
-            raise RateLimitError(provider="semantic_scholar", retry_after=e.wait_needed)
-        except TimeBudgetExceededError as e:
-            raise SearchProviderError(provider="semantic_scholar", message=f"Request timed out: {e}", retryable=True)
-        except SearchProviderError:
-            raise
-        except Exception as e:
-            classification = self.classify_error(e)
-            raise SearchProviderError(
-                provider="semantic_scholar",
-                message=f"Request failed after retries: {e}",
-                retryable=classification.retryable,
-                original_error=e,
-            )
+        executor = create_resilience_executor(
+            "semantic_scholar", self.resilience_config, self.classify_error,
+        )
+        return await executor(make_request, timeout=self._timeout)
 
     def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header from response.
-
-        Args:
-            response: HTTP response
-
-        Returns:
-            Seconds to wait, or None if not provided
-        """
-        retry_after = response.headers.get("Retry-After")
-        if retry_after:
-            try:
-                return float(retry_after)
-            except ValueError:
-                pass
-        return None
-
-    def _parse_error_response(self, response: httpx.Response) -> str:
-        """Extract error message from Semantic Scholar API error response.
-
-        Args:
-            response: HTTP response
-
-        Returns:
-            Error message string
-        """
-        try:
-            data = response.json()
-            # Semantic Scholar returns {"error": "message"} or {"message": "..."}
-            return data.get("error", data.get("message", str(data)))
-        except Exception:
-            return response.text[:200] if response.text else "Unknown error"
+        """Parse Retry-After header. Delegates to shared utility."""
+        return parse_retry_after(response)
 
     def _parse_response(
         self,
@@ -607,66 +558,19 @@ class SemanticScholarProvider(SearchProvider):
 
         return truncated + "..."
 
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
-        """Parse date string from Semantic Scholar response.
-
-        Args:
-            date_str: Date string in YYYY-MM-DD or YYYY format
-
-        Returns:
-            Parsed datetime or None
-        """
-        if not date_str:
-            return None
-
-        # Try full date format first
-        try:
-            return datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            pass
-
-        # Try year-only format
-        try:
-            return datetime.strptime(date_str, "%Y")
-        except ValueError:
-            pass
-
-        return None
+    def _parse_date(self, date_str: Optional[str]) -> Optional[Any]:
+        """Parse date string. Delegates to shared utility with extra year-only format."""
+        return parse_iso_date(date_str, extra_formats=("%Y",))
 
     async def health_check(self) -> bool:
-        """Check if Semantic Scholar API is accessible.
-
-        Performs a lightweight search to verify connectivity (and API key if set).
-
-        Returns:
-            True if provider is healthy, False otherwise
-        """
-        try:
-            # Perform minimal search to verify connectivity
-            await self.search("test", max_results=1)
-            return True
-        except AuthenticationError:
-            logger.error("Semantic Scholar health check failed: invalid API key")
-            return False
-        except Exception as e:
-            logger.warning(f"Semantic Scholar health check failed: {e}")
-            return False
+        """Check if Semantic Scholar API is accessible."""
+        return await check_provider_health(
+            "semantic_scholar",
+            self._api_key or "no-key-required",
+            self._base_url,
+            test_func=lambda: self.search("test", max_results=1),
+        )
 
     def classify_error(self, error: Exception) -> ErrorClassification:
         """Classify an error for resilience decisions."""
-        if isinstance(error, AuthenticationError):
-            return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.AUTHENTICATION)
-        if isinstance(error, RateLimitError):
-            return ErrorClassification(retryable=True, trips_breaker=False, backoff_seconds=error.retry_after, error_type=ErrorType.RATE_LIMIT)
-        if isinstance(error, SearchProviderError):
-            error_str = str(error).lower()
-            if any(code in error_str for code in ["500", "502", "503", "504"]):
-                return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.SERVER_ERROR)
-            if "400" in error_str:
-                return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.INVALID_REQUEST)
-            return ErrorClassification(retryable=error.retryable, trips_breaker=error.retryable, error_type=ErrorType.UNKNOWN)
-        if isinstance(error, httpx.TimeoutException):
-            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.TIMEOUT)
-        if isinstance(error, httpx.RequestError):
-            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.NETWORK)
-        return ErrorClassification(retryable=False, trips_breaker=True, error_type=ErrorType.UNKNOWN)
+        return classify_http_error(error, "semantic_scholar")

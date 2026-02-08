@@ -21,10 +21,10 @@ class TestTaskDispatchExceptionHandling:
 
     def test_dispatch_catches_exceptions(self, mock_config):
         """_dispatch_task_action should catch exceptions and return error response."""
-        from foundry_mcp.tools.unified.task import _dispatch_task_action
+        from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
         with patch(
-            "foundry_mcp.tools.unified.task._TASK_ROUTER"
+            "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
         ) as mock_router:
             mock_router.dispatch.side_effect = RuntimeError("Task storage failed")
 
@@ -43,10 +43,10 @@ class TestTaskDispatchExceptionHandling:
 
     def test_dispatch_handles_empty_exception_message(self, mock_config):
         """_dispatch_task_action should handle exceptions with empty messages."""
-        from foundry_mcp.tools.unified.task import _dispatch_task_action
+        from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
         with patch(
-            "foundry_mcp.tools.unified.task._TASK_ROUTER"
+            "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
         ) as mock_router:
             mock_router.dispatch.side_effect = RuntimeError()
 
@@ -64,11 +64,11 @@ class TestTaskDispatchExceptionHandling:
         """_dispatch_task_action should log exceptions."""
         import logging
 
-        from foundry_mcp.tools.unified.task import _dispatch_task_action
+        from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.task._TASK_ROUTER"
+                "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
             ) as mock_router:
                 mock_router.dispatch.side_effect = ValueError("test error")
 

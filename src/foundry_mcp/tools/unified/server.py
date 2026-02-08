@@ -124,9 +124,9 @@ def _validation_error(
 
 
 def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
-    """Return compact tool entries for the 15-tool unified manifest."""
+    """Return compact tool entries for the unified manifest."""
 
-    from foundry_mcp.tools.unified.authoring import _AUTHORING_ROUTER
+    from foundry_mcp.tools.unified.authoring_handlers import _AUTHORING_ROUTER
     from foundry_mcp.tools.unified.environment import _ENVIRONMENT_ROUTER
     from foundry_mcp.tools.unified.error import _ERROR_ROUTER
     from foundry_mcp.tools.unified.health import _HEALTH_ROUTER
@@ -137,7 +137,7 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
     from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
-    from foundry_mcp.tools.unified.task import _TASK_ROUTER
+    from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
     from foundry_mcp.tools.unified.test import _TEST_ROUTER
     from foundry_mcp.tools.unified.verification import _VERIFICATION_ROUTER
 

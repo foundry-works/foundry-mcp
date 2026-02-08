@@ -1,0 +1,201 @@
+"""Shared helpers for task handler modules."""
+
+from __future__ import annotations
+
+import logging
+import re
+import time
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.observability import get_metrics
+from foundry_mcp.core.pagination import (
+    CursorError,
+    decode_cursor,
+    encode_cursor,
+    normalize_page_size,
+)
+from foundry_mcp.core.responses import (
+    ErrorCode,
+    ErrorType,
+    error_response,
+)
+from foundry_mcp.core.spec import load_spec
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    make_metric_name,
+    make_validation_error_fn,
+    resolve_specs_dir,
+)
+
+logger = logging.getLogger(__name__)
+_metrics = get_metrics()
+
+_TASK_DEFAULT_PAGE_SIZE = 25
+_TASK_MAX_PAGE_SIZE = 100
+_TASK_WARNING_THRESHOLD = 75
+_ALLOWED_STATUS = {"pending", "in_progress", "completed", "blocked"}
+
+
+def _request_id() -> str:
+    return build_request_id("task")
+
+
+def _metric(action: str) -> str:
+    return make_metric_name("unified_tools.task", action)
+
+
+_validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
+
+
+def _resolve_specs_dir(
+    config: ServerConfig, workspace: Optional[str]
+) -> tuple[Optional[Path], Optional[dict]]:
+    """Thin wrapper around the shared helper preserving the local call convention."""
+    return resolve_specs_dir(config, workspace)
+
+
+def _load_spec_data(
+    spec_id: str, specs_dir: Optional[Path], request_id: str
+) -> Tuple[Optional[Dict[str, Any]], Optional[dict]]:
+    if specs_dir is None:
+        return None, asdict(
+            error_response(
+                "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Set SDD_SPECS_DIR or invoke with --specs-dir",
+                request_id=request_id,
+            )
+        )
+
+    spec_data = load_spec(spec_id, specs_dir)
+    if spec_data is None:
+        return None, asdict(
+            error_response(
+                f"Spec not found: {spec_id}",
+                error_code=ErrorCode.SPEC_NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation='Verify the spec ID via spec(action="list")',
+                request_id=request_id,
+            )
+        )
+    return spec_data, None
+
+
+def _attach_meta(
+    response: dict,
+    *,
+    request_id: str,
+    duration_ms: Optional[float] = None,
+    warnings: Optional[List[str]] = None,
+) -> dict:
+    meta = response.setdefault("meta", {"version": "response-v2"})
+    meta["request_id"] = request_id
+    if warnings:
+        existing = list(meta.get("warnings") or [])
+        existing.extend(warnings)
+        meta["warnings"] = existing
+    if duration_ms is not None:
+        telemetry = dict(meta.get("telemetry") or {})
+        telemetry["duration_ms"] = round(duration_ms, 2)
+        meta["telemetry"] = telemetry
+    return response
+
+
+def _filter_hierarchy(
+    hierarchy: Dict[str, Any],
+    max_depth: int,
+    include_metadata: bool,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+
+    for node_id, node_data in hierarchy.items():
+        node_depth = node_id.count("-") if node_id != "spec-root" else 0
+        if max_depth > 0 and node_depth > max_depth:
+            continue
+
+        filtered_node: Dict[str, Any] = {
+            "type": node_data.get("type"),
+            "title": node_data.get("title"),
+            "status": node_data.get("status"),
+        }
+        if "children" in node_data:
+            filtered_node["children"] = node_data["children"]
+        if "parent" in node_data:
+            filtered_node["parent"] = node_data["parent"]
+
+        if include_metadata:
+            if "metadata" in node_data:
+                filtered_node["metadata"] = node_data["metadata"]
+            if "dependencies" in node_data:
+                filtered_node["dependencies"] = node_data["dependencies"]
+
+        result[node_id] = filtered_node
+
+    return result
+
+
+def _pagination_warnings(total_count: int, has_more: bool) -> List[str]:
+    warnings: List[str] = []
+    if total_count > _TASK_WARNING_THRESHOLD:
+        warnings.append(
+            f"{total_count} results returned; consider using pagination to limit payload size."
+        )
+    if has_more:
+        warnings.append("Additional results available. Follow the cursor to continue.")
+    return warnings
+
+
+def _match_nodes_for_batch(
+    hierarchy: Dict[str, Any],
+    *,
+    phase_id: Optional[str] = None,
+    pattern: Optional[str] = None,
+    node_type: Optional[str] = None,
+) -> List[str]:
+    """Filter nodes by phase_id, regex pattern on title/id, and/or node_type.
+
+    All provided filters are combined with AND logic.
+    Returns list of matching node IDs.
+    """
+    matched: List[str] = []
+    compiled_pattern = None
+    if pattern:
+        try:
+            compiled_pattern = re.compile(pattern, re.IGNORECASE)
+        except re.error:
+            return []  # Invalid regex returns empty
+
+    for node_id, node_data in hierarchy.items():
+        if node_id == "spec-root":
+            continue
+
+        # Filter by node_type if specified
+        if node_type and node_data.get("type") != node_type:
+            continue
+
+        # Filter by phase_id if specified (must be under that phase)
+        if phase_id:
+            node_parent = node_data.get("parent")
+            # Direct children of the phase
+            if node_parent != phase_id:
+                # Check if it's a nested child (e.g., subtask under task under phase)
+                parent_node = hierarchy.get(node_parent, {})
+                if parent_node.get("parent") != phase_id:
+                    continue
+
+        # Filter by regex pattern on title or node_id
+        if compiled_pattern:
+            title = node_data.get("title", "")
+            if not (compiled_pattern.search(title) or compiled_pattern.search(node_id)):
+                continue
+
+        matched.append(node_id)
+
+    return sorted(matched)
+
+
+_VALID_NODE_TYPES = {"task", "verify", "phase", "subtask"}

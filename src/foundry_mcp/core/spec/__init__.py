@@ -7,7 +7,10 @@ Re-exports the full public API so that all existing imports continue to work::
 Sub-modules:
 - ``_constants``: Shared constants
 - ``io``: I/O functions (find, load, save, backup, list, diff, rollback)
-- ``_monolith``: Remaining spec operations (being split in later phases)
+- ``hierarchy``: Hierarchy operations (get/update node, phase CRUD, recalculate hours)
+- ``templates``: Spec creation, phase templates, assumptions, revisions, frontmatter
+- ``analysis``: Read-only analysis (completeness checks, duplicate detection)
+- ``_monolith``: Remaining spec operations (find-replace)
 """
 
 from foundry_mcp.core.spec._constants import (
@@ -37,33 +40,40 @@ from foundry_mcp.core.spec.io import (
     rollback_spec,
     save_spec,
 )
-from foundry_mcp.core.spec._monolith import (
+from foundry_mcp.core.spec.hierarchy import (
     # Hierarchy/node functions
     get_node,
     update_node,
+    # Phase operations
+    add_phase,
+    add_phase_bulk,
+    move_phase,
+    recalculate_actual_hours,
+    recalculate_estimated_hours,
+    remove_phase,
+    update_phase_metadata,
+)
+from foundry_mcp.core.spec.templates import (
     # Spec creation
     create_spec,
     generate_spec_data,
     get_template_structure,
-    # Phase operations
-    add_phase,
-    add_phase_bulk,
+    # Phase template operations
     apply_phase_template,
     get_phase_template_structure,
-    move_phase,
-    remove_phase,
-    update_phase_metadata,
     # Frontmatter and metadata
     update_frontmatter,
     # Assumptions and revisions
     add_assumption,
     add_revision,
     list_assumptions,
+)
+from foundry_mcp.core.spec.analysis import (
     # Analysis and validation
     check_spec_completeness,
     detect_duplicate_tasks,
-    recalculate_actual_hours,
-    recalculate_estimated_hours,
+)
+from foundry_mcp.core.spec._monolith import (
     # Find and replace
     find_replace_in_spec,
 )

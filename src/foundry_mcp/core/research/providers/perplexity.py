@@ -38,15 +38,18 @@ from foundry_mcp.core.research.providers.base import (
 )
 from foundry_mcp.core.research.providers.resilience import (
     ErrorClassification,
-    ErrorType,
     ProviderResilienceConfig,
-    execute_with_resilience,
     get_provider_config,
-    get_resilience_manager,
-    RateLimitWaitError,
-    TimeBudgetExceededError,
 )
-from foundry_mcp.core.resilience import CircuitBreakerError
+from foundry_mcp.core.research.providers.shared import (
+    check_provider_health,
+    classify_http_error,
+    create_resilience_executor,
+    extract_domain,
+    extract_error_message,
+    parse_iso_date,
+    parse_retry_after,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -387,10 +390,7 @@ class PerplexitySearchProvider(SearchProvider):
         self,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute API request with resilience stack.
-
-        Uses execute_with_resilience for circuit breaker, rate limiting,
-        and retry logic.
+        """Execute API request with shared resilience executor.
 
         Args:
             payload: Request payload
@@ -414,24 +414,21 @@ class PerplexitySearchProvider(SearchProvider):
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 response = await client.post(url, json=payload, headers=headers)
 
-                # Handle authentication errors (not retryable)
                 if response.status_code == 401:
                     raise AuthenticationError(
                         provider="perplexity",
                         message="Invalid API key",
                     )
 
-                # Handle rate limiting
                 if response.status_code == 429:
-                    retry_after = self._parse_retry_after(response)
+                    retry_after = parse_retry_after(response)
                     raise RateLimitError(
                         provider="perplexity",
                         retry_after=retry_after,
                     )
 
-                # Handle other errors
                 if response.status_code >= 400:
-                    error_msg = self._extract_error_message(response)
+                    error_msg = extract_error_message(response)
                     raise SearchProviderError(
                         provider="perplexity",
                         message=f"API error {response.status_code}: {error_msg}",
@@ -440,75 +437,22 @@ class PerplexitySearchProvider(SearchProvider):
 
                 return response.json()
 
-        try:
-            time_budget = self._timeout * (self.resilience_config.max_retries + 1)
-            return await execute_with_resilience(
-                make_request,
-                provider_name="perplexity",
-                time_budget=time_budget,
-                classify_error=self.classify_error,
-                manager=get_resilience_manager(),
-                resilience_config=self.resilience_config,
-            )
-        except CircuitBreakerError as e:
-            raise SearchProviderError(
-                provider="perplexity",
-                message=f"Circuit breaker open: {e}",
-                retryable=False,
-            )
-        except RateLimitWaitError as e:
-            raise RateLimitError(
-                provider="perplexity",
-                retry_after=e.wait_needed,
-            )
-        except TimeBudgetExceededError as e:
-            raise SearchProviderError(
-                provider="perplexity",
-                message=f"Request timed out: {e}",
-                retryable=True,
-            )
-        except SearchProviderError:
-            raise
-        except Exception as e:
-            classification = self.classify_error(e)
-            raise SearchProviderError(
-                provider="perplexity",
-                message=f"Request failed after retries: {e}",
-                retryable=classification.retryable,
-                original_error=e,
-            )
+        executor = create_resilience_executor(
+            "perplexity", self.resilience_config, self.classify_error,
+        )
+        return await executor(make_request, timeout=self._timeout)
 
     def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header from response.
+        """Parse Retry-After header. Delegates to shared utility."""
+        return parse_retry_after(response)
 
-        Args:
-            response: HTTP response
+    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
+        """Parse date string. Delegates to shared utility."""
+        return parse_iso_date(date_str)
 
-        Returns:
-            Seconds to wait, or None if not provided
-        """
-        retry_after = response.headers.get("Retry-After")
-        if retry_after:
-            try:
-                return float(retry_after)
-            except ValueError:
-                pass
-        return None
-
-    def _extract_error_message(self, response: httpx.Response) -> str:
-        """Extract error message from response.
-
-        Args:
-            response: HTTP response
-
-        Returns:
-            Error message string
-        """
-        try:
-            data = response.json()
-            return data.get("error", data.get("message", response.text[:200]))
-        except Exception:
-            return response.text[:200] if response.text else "Unknown error"
+    def _extract_domain(self, url: str) -> Optional[str]:
+        """Extract domain from URL. Delegates to shared utility."""
+        return extract_domain(url)
 
     def _parse_response(
         self,
@@ -544,7 +488,7 @@ class PerplexitySearchProvider(SearchProvider):
 
         for result in results:
             # Parse date - try both 'date' and 'last_updated' fields
-            published_date = self._parse_date(
+            published_date = parse_iso_date(
                 result.get("date") or result.get("last_updated")
             )
 
@@ -557,7 +501,7 @@ class PerplexitySearchProvider(SearchProvider):
                 content=result.get("snippet") if include_raw_content else None,
                 score=None,  # Perplexity doesn't provide relevance scores
                 published_date=published_date,
-                source=self._extract_domain(result.get("url", "")),
+                source=extract_domain(result.get("url", "")),
                 metadata={
                     "perplexity_date": result.get("date"),
                     "perplexity_last_updated": result.get("last_updated"),
@@ -573,157 +517,15 @@ class PerplexitySearchProvider(SearchProvider):
 
         return sources
 
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
-        """Parse date string from Perplexity response.
-
-        Args:
-            date_str: ISO format date string or other common formats
-
-        Returns:
-            Parsed datetime or None
-        """
-        if not date_str:
-            return None
-
-        # Try ISO format first
-        try:
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-
-        # Try common date formats
-        formats = [
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%d-%m-%Y",
-            "%d/%m/%Y",
-            "%B %d, %Y",
-            "%b %d, %Y",
-        ]
-
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
-
-        return None
-
-    def _extract_domain(self, url: str) -> Optional[str]:
-        """Extract domain from URL.
-
-        Args:
-            url: Full URL
-
-        Returns:
-            Domain name or None
-        """
-        if not url:
-            return None
-        try:
-            from urllib.parse import urlparse
-
-            parsed = urlparse(url)
-            return parsed.netloc or None
-        except Exception:
-            return None
-
     async def health_check(self) -> bool:
-        """Check if Perplexity API is accessible.
-
-        Performs a lightweight search to verify API key and connectivity.
-
-        Returns:
-            True if provider is healthy, False otherwise
-        """
-        try:
-            # Perform minimal search to verify connectivity
-            await self.search("test", max_results=1)
-            return True
-        except AuthenticationError:
-            logger.error("Perplexity health check failed: invalid API key")
-            return False
-        except Exception as e:
-            logger.warning(f"Perplexity health check failed: {e}")
-            return False
+        """Check if Perplexity API is accessible."""
+        return await check_provider_health(
+            "perplexity",
+            self._api_key,
+            self._base_url,
+            test_func=lambda: self.search("test", max_results=1),
+        )
 
     def classify_error(self, error: Exception) -> ErrorClassification:
-        """Classify an error for resilience decisions.
-
-        Maps Perplexity-specific errors to ErrorClassification for unified
-        retry and circuit breaker behavior.
-
-        Args:
-            error: The exception to classify
-
-        Returns:
-            ErrorClassification with retryable, trips_breaker, and error_type
-
-        Classification rules:
-            - 401 (AuthenticationError): not retryable, no breaker trip
-            - 429 (RateLimitError): retryable, no breaker trip, uses Retry-After
-            - 5xx (server errors): retryable, trips breaker
-            - 400 (bad request): not retryable, no breaker trip
-            - Timeout/connection: retryable, trips breaker
-        """
-        # Handle our custom exception types
-        if isinstance(error, AuthenticationError):
-            return ErrorClassification(
-                retryable=False,
-                trips_breaker=False,
-                error_type=ErrorType.AUTHENTICATION,
-            )
-
-        if isinstance(error, RateLimitError):
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=False,
-                backoff_seconds=error.retry_after,
-                error_type=ErrorType.RATE_LIMIT,
-            )
-
-        if isinstance(error, SearchProviderError):
-            # Check if it's a server error (5xx) based on message
-            error_str = str(error).lower()
-            if any(code in error_str for code in ["500", "502", "503", "504"]):
-                return ErrorClassification(
-                    retryable=True,
-                    trips_breaker=True,
-                    error_type=ErrorType.SERVER_ERROR,
-                )
-            # 400 bad request - not retryable, don't trip breaker
-            if "400" in error_str:
-                return ErrorClassification(
-                    retryable=False,
-                    trips_breaker=False,
-                    error_type=ErrorType.INVALID_REQUEST,
-                )
-            # Other SearchProviderError - use its retryable flag
-            return ErrorClassification(
-                retryable=error.retryable,
-                trips_breaker=error.retryable,  # Trip breaker if retryable (transient)
-                error_type=ErrorType.UNKNOWN,
-            )
-
-        # Handle httpx exceptions
-        if isinstance(error, httpx.TimeoutException):
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=True,
-                error_type=ErrorType.TIMEOUT,
-            )
-
-        if isinstance(error, httpx.RequestError):
-            # Network/connection errors
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=True,
-                error_type=ErrorType.NETWORK,
-            )
-
-        # Default: unknown error - not retryable, trips breaker
-        return ErrorClassification(
-            retryable=False,
-            trips_breaker=True,
-            error_type=ErrorType.UNKNOWN,
-        )
+        """Classify an error for resilience decisions."""
+        return classify_http_error(error, "perplexity")

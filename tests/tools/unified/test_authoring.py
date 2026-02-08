@@ -21,10 +21,10 @@ class TestAuthoringDispatchExceptionHandling:
 
     def test_dispatch_catches_exceptions(self, mock_config):
         """_dispatch_authoring_action should catch exceptions and return error response."""
-        from foundry_mcp.tools.unified.authoring import _dispatch_authoring_action
+        from foundry_mcp.tools.unified.authoring_handlers import _dispatch_authoring_action
 
         with patch(
-            "foundry_mcp.tools.unified.authoring._AUTHORING_ROUTER"
+            "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
         ) as mock_router:
             mock_router.dispatch.side_effect = RuntimeError("Database connection failed")
 
@@ -43,10 +43,10 @@ class TestAuthoringDispatchExceptionHandling:
 
     def test_dispatch_handles_empty_exception_message(self, mock_config):
         """_dispatch_authoring_action should handle exceptions with empty messages."""
-        from foundry_mcp.tools.unified.authoring import _dispatch_authoring_action
+        from foundry_mcp.tools.unified.authoring_handlers import _dispatch_authoring_action
 
         with patch(
-            "foundry_mcp.tools.unified.authoring._AUTHORING_ROUTER"
+            "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
         ) as mock_router:
             mock_router.dispatch.side_effect = RuntimeError()
 
@@ -64,11 +64,11 @@ class TestAuthoringDispatchExceptionHandling:
         """_dispatch_authoring_action should log exceptions."""
         import logging
 
-        from foundry_mcp.tools.unified.authoring import _dispatch_authoring_action
+        from foundry_mcp.tools.unified.authoring_handlers import _dispatch_authoring_action
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.authoring._AUTHORING_ROUTER"
+                "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
             ) as mock_router:
                 mock_router.dispatch.side_effect = ValueError("test error")
 

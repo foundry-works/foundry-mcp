@@ -270,7 +270,7 @@ def call_task_handler(
 
     This simulates how the MCP tool would invoke the handlers.
     """
-    from foundry_mcp.tools.unified.task import _TASK_ROUTER
+    from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
     from foundry_mcp.config import ServerConfig
 
     if config is None:

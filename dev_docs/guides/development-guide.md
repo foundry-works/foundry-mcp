@@ -162,7 +162,14 @@ src/foundry_mcp/
 ├── config.py              # Configuration management
 │
 ├── core/                  # Business logic (transport-agnostic)
-│   ├── spec.py            # Spec file operations
+│   ├── spec/              # Spec file operations (package)
+│   │   ├── __init__.py    # Public API re-exports
+│   │   ├── _constants.py  # Shared constants
+│   │   ├── io.py          # Find, load, save, backup, list, diff, rollback
+│   │   ├── hierarchy.py   # Get/update node, phase CRUD, recalculate hours
+│   │   ├── templates.py   # Spec creation, phase templates, assumptions
+│   │   ├── analysis.py    # Completeness checks, duplicate detection
+│   │   └── _monolith.py   # Find-replace (pending further extraction)
 │   ├── task/              # Task operations (package)
 │   │   ├── __init__.py    # Public API re-exports
 │   │   ├── _helpers.py    # Shared constants and utilities

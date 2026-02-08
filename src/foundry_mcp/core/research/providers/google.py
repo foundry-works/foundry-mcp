@@ -26,7 +26,6 @@ Example usage:
 
 import logging
 import os
-from datetime import datetime
 from dataclasses import replace
 from typing import Any, Optional
 
@@ -44,13 +43,16 @@ from foundry_mcp.core.research.providers.resilience import (
     ErrorClassification,
     ErrorType,
     ProviderResilienceConfig,
-    execute_with_resilience,
     get_provider_config,
-    get_resilience_manager,
-    RateLimitWaitError,
-    TimeBudgetExceededError,
 )
-from foundry_mcp.core.resilience import CircuitBreakerError
+from foundry_mcp.core.research.providers.shared import (
+    check_provider_health,
+    classify_http_error,
+    create_resilience_executor,
+    extract_error_message,
+    parse_iso_date,
+    parse_retry_after,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,44 @@ GOOGLE_API_BASE_URL = "https://www.googleapis.com/customsearch/v1"
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RATE_LIMIT = 1.0  # requests per second (Google CSE has daily quota limits)
+
+
+def _google_error_format(data: dict[str, Any]) -> str:
+    """Extract error message from Google's nested error dict format."""
+    error = data.get("error", {})
+    if isinstance(error, dict):
+        return error.get("message", str(error))
+    return str(error)
+
+
+def _google_quota_classifier(
+    error: Exception,
+) -> "Optional[ErrorClassification]":
+    """Custom classifier for Google's 403 quota errors.
+
+    Google uses RateLimitError with reason='quota' for daily quota exhaustion.
+    This must be classified as QUOTA_EXCEEDED (retryable, no breaker trip)
+    rather than a generic RATE_LIMIT.
+
+    Returns None to fall through to shared classification for non-quota errors.
+    """
+    if isinstance(error, RateLimitError):
+        if getattr(error, "reason", None) == "quota":
+            return ErrorClassification(
+                retryable=True,
+                trips_breaker=False,
+                backoff_seconds=error.retry_after,
+                error_type=ErrorType.QUOTA_EXCEEDED,
+            )
+        error_str = str(error).lower()
+        if "quota" in error_str or "limit" in error_str:
+            return ErrorClassification(
+                retryable=True,
+                trips_breaker=False,
+                backoff_seconds=error.retry_after,
+                error_type=ErrorType.QUOTA_EXCEEDED,
+            )
+    return None
 
 
 class GoogleSearchProvider(SearchProvider):
@@ -240,10 +280,7 @@ class GoogleSearchProvider(SearchProvider):
         self,
         params: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute API request with resilience stack.
-
-        Uses execute_with_resilience for circuit breaker, rate limiting,
-        and retry logic.
+        """Execute API request with shared resilience executor.
 
         Args:
             params: Query parameters
@@ -271,10 +308,12 @@ class GoogleSearchProvider(SearchProvider):
 
                 # Handle forbidden (invalid CSE ID or API not enabled)
                 if response.status_code == 403:
-                    error_data = self._parse_error_response(response)
+                    error_data = extract_error_message(
+                        response, provider_format=_google_error_format,
+                    )
                     # Check if it's a quota error (retryable) vs auth error (not retryable)
                     if "quota" in error_data.lower() or "limit" in error_data.lower():
-                        retry_after = self._parse_retry_after(response)
+                        retry_after = parse_retry_after(response)
                         raise RateLimitError(
                             provider="google",
                             retry_after=retry_after,
@@ -288,7 +327,7 @@ class GoogleSearchProvider(SearchProvider):
 
                 # Handle rate limiting (429)
                 if response.status_code == 429:
-                    retry_after = self._parse_retry_after(response)
+                    retry_after = parse_retry_after(response)
                     raise RateLimitError(
                         provider="google",
                         retry_after=retry_after,
@@ -296,7 +335,9 @@ class GoogleSearchProvider(SearchProvider):
 
                 # Handle other errors
                 if response.status_code >= 400:
-                    error_msg = self._parse_error_response(response)
+                    error_msg = extract_error_message(
+                        response, provider_format=_google_error_format,
+                    )
                     raise SearchProviderError(
                         provider="google",
                         message=f"API error {response.status_code}: {error_msg}",
@@ -305,87 +346,18 @@ class GoogleSearchProvider(SearchProvider):
 
                 return response.json()
 
-        try:
-            time_budget = self._timeout * (self.resilience_config.max_retries + 1)
-            return await execute_with_resilience(
-                make_request,
-                provider_name="google",
-                time_budget=time_budget,
-                classify_error=self.classify_error,
-                manager=get_resilience_manager(),
-                resilience_config=self.resilience_config,
-            )
-        except CircuitBreakerError as e:
-            raise SearchProviderError(
-                provider="google",
-                message=f"Circuit breaker open: {e}",
-                retryable=False,
-            )
-        except RateLimitWaitError as e:
-            raise RateLimitError(
-                provider="google",
-                retry_after=e.wait_needed,
-            )
-        except TimeBudgetExceededError as e:
-            raise SearchProviderError(
-                provider="google",
-                message=f"Request timed out: {e}",
-                retryable=True,
-            )
-        except SearchProviderError:
-            raise
-        except Exception as e:
-            classification = self.classify_error(e)
-            raise SearchProviderError(
-                provider="google",
-                message=f"Request failed after retries: {e}",
-                retryable=classification.retryable,
-                original_error=e,
-            )
+        executor = create_resilience_executor(
+            "google", self.resilience_config, self.classify_error,
+        )
+        return await executor(make_request, timeout=self._timeout)
 
     def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header from response.
+        """Parse Retry-After header. Delegates to shared utility."""
+        return parse_retry_after(response)
 
-        Args:
-            response: HTTP response
-
-        Returns:
-            Seconds to wait, or None if not provided
-        """
-        retry_after = response.headers.get("Retry-After")
-        if retry_after:
-            try:
-                return float(retry_after)
-            except ValueError:
-                pass
-        return None
-
-    def _parse_error_response(self, response: httpx.Response) -> str:
-        """Extract error message from Google API error response.
-
-        Google API returns errors in format:
-        {
-            "error": {
-                "code": 403,
-                "message": "...",
-                "errors": [...]
-            }
-        }
-
-        Args:
-            response: HTTP response
-
-        Returns:
-            Error message string
-        """
-        try:
-            data = response.json()
-            error = data.get("error", {})
-            if isinstance(error, dict):
-                return error.get("message", str(error))
-            return str(error)
-        except Exception:
-            return response.text[:200] if response.text else "Unknown error"
+    def _parse_date(self, date_str: Optional[str]) -> Optional[Any]:
+        """Parse date string. Delegates to shared utility."""
+        return parse_iso_date(date_str)
 
     def _parse_response(
         self,
@@ -451,7 +423,7 @@ class GoogleSearchProvider(SearchProvider):
 
         return sources
 
-    def _extract_published_date(self, item: dict[str, Any]) -> Optional[datetime]:
+    def _extract_published_date(self, item: dict[str, Any]) -> Optional[Any]:
         """Extract published date from Google CSE item pagemap.
 
         Looks for common metatag fields that contain publication dates:
@@ -487,164 +459,27 @@ class GoogleSearchProvider(SearchProvider):
         for field in date_fields:
             date_str = tags.get(field)
             if date_str:
-                parsed = self._parse_date(date_str)
+                parsed = parse_iso_date(date_str)
                 if parsed:
                     return parsed
 
         return None
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
-        """Parse date string from various formats.
-
-        Args:
-            date_str: Date string (ISO format or other common formats)
-
-        Returns:
-            Parsed datetime or None
-        """
-        if not date_str:
-            return None
-
-        # Try ISO format first
-        try:
-            return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except ValueError:
-            pass
-
-        # Try common date formats
-        formats = [
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%d-%m-%Y",
-            "%d/%m/%Y",
-            "%B %d, %Y",
-            "%b %d, %Y",
-        ]
-
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
-
-        return None
-
     async def health_check(self) -> bool:
-        """Check if Google Custom Search API is accessible.
-
-        Performs a lightweight search to verify API key, CSE ID, and connectivity.
-
-        Returns:
-            True if provider is healthy, False otherwise
-        """
-        try:
-            # Perform minimal search to verify connectivity
-            await self.search("test", max_results=1)
-            return True
-        except AuthenticationError:
-            logger.error("Google CSE health check failed: invalid API key or CSE ID")
-            return False
-        except Exception as e:
-            logger.warning(f"Google CSE health check failed: {e}")
-            return False
+        """Check if Google Custom Search API is accessible."""
+        return await check_provider_health(
+            "google",
+            self._api_key,
+            self._base_url,
+            test_func=lambda: self.search("test", max_results=1),
+        )
 
     def classify_error(self, error: Exception) -> ErrorClassification:
         """Classify an error for resilience decisions.
 
-        Maps Google-specific errors to ErrorClassification for unified
-        retry and circuit breaker behavior. Special handling for 403 errors
-        that may indicate quota exhaustion vs authentication issues.
-
-        Args:
-            error: The exception to classify
-
-        Returns:
-            ErrorClassification with retryable, trips_breaker, and error_type
-
-        Classification rules:
-            - 401 (AuthenticationError): not retryable, no breaker trip
-            - 403 with 'quota' or 'limit' in error: retryable as QUOTA_EXCEEDED, no breaker trip
-            - 403 without quota keywords: not retryable as AUTHENTICATION, no breaker trip
-            - 429 (RateLimitError): retryable, no breaker trip, uses Retry-After
-            - 5xx (server errors): retryable, trips breaker
-            - 400 (bad request): not retryable, no breaker trip
-            - Timeout/connection: retryable, trips breaker
+        Delegates to shared classify_http_error with a custom classifier
+        for Google-specific 403 quota detection.
         """
-        # Handle our custom exception types
-        if isinstance(error, AuthenticationError):
-            return ErrorClassification(
-                retryable=False,
-                trips_breaker=False,
-                error_type=ErrorType.AUTHENTICATION,
-            )
-
-        if isinstance(error, RateLimitError):
-            # RateLimitError is used for both 429 and 403 quota errors
-            # Prefer explicit reason when available, fallback to message parsing
-            if getattr(error, "reason", None) == "quota":
-                return ErrorClassification(
-                    retryable=True,
-                    trips_breaker=False,
-                    backoff_seconds=error.retry_after,
-                    error_type=ErrorType.QUOTA_EXCEEDED,
-                )
-            error_str = str(error).lower()
-            if "quota" in error_str or "limit" in error_str:
-                return ErrorClassification(
-                    retryable=True,
-                    trips_breaker=False,
-                    backoff_seconds=error.retry_after,
-                    error_type=ErrorType.QUOTA_EXCEEDED,
-                )
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=False,
-                backoff_seconds=error.retry_after,
-                error_type=ErrorType.RATE_LIMIT,
-            )
-
-        if isinstance(error, SearchProviderError):
-            # Check if it's a server error (5xx) based on message
-            error_str = str(error).lower()
-            if any(code in error_str for code in ["500", "502", "503", "504"]):
-                return ErrorClassification(
-                    retryable=True,
-                    trips_breaker=True,
-                    error_type=ErrorType.SERVER_ERROR,
-                )
-            # 400 bad request - not retryable, don't trip breaker
-            if "400" in error_str:
-                return ErrorClassification(
-                    retryable=False,
-                    trips_breaker=False,
-                    error_type=ErrorType.INVALID_REQUEST,
-                )
-            # Other SearchProviderError - use its retryable flag
-            return ErrorClassification(
-                retryable=error.retryable,
-                trips_breaker=error.retryable,  # Trip breaker if retryable (transient)
-                error_type=ErrorType.UNKNOWN,
-            )
-
-        # Handle httpx exceptions
-        if isinstance(error, httpx.TimeoutException):
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=True,
-                error_type=ErrorType.TIMEOUT,
-            )
-
-        if isinstance(error, httpx.RequestError):
-            # Network/connection errors
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=True,
-                error_type=ErrorType.NETWORK,
-            )
-
-        # Default: unknown error - not retryable, trips breaker
-        return ErrorClassification(
-            retryable=False,
-            trips_breaker=True,
-            error_type=ErrorType.UNKNOWN,
+        return classify_http_error(
+            error, "google", custom_classifier=_google_quota_classifier,
         )
