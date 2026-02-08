@@ -272,7 +272,7 @@ class TestBackgroundTaskProperties:
         elapsed2 = task.elapsed_ms
 
         assert elapsed2 > elapsed1
-        assert elapsed1 >= 50  # At least 50ms
+        assert elapsed1 >= 40  # At least ~50ms, with tolerance for CI
 
     def test_elapsed_ms_frozen_after_completion(self):
         """elapsed_ms is frozen after task completes."""

@@ -51,7 +51,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
 )
 
 
-def _handle_prepare(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_prepare(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "prepare"
     spec_id = payload.get("spec_id")
@@ -86,7 +86,7 @@ def _handle_prepare(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return _attach_meta(result, request_id=request_id, duration_ms=elapsed_ms)
 
 
-def _handle_next(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "next"
     spec_id = payload.get("spec_id")
@@ -146,7 +146,7 @@ def _handle_next(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_info(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_info(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "info"
     spec_id = payload.get("spec_id")
@@ -195,7 +195,7 @@ def _handle_info(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_check_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_check_deps(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "check-deps"
     spec_id = payload.get("spec_id")
@@ -236,7 +236,7 @@ def _handle_check_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> dict
     return asdict(response)
 
 
-def _handle_progress(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_progress(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "progress"
     spec_id = payload.get("spec_id")
@@ -285,7 +285,7 @@ def _handle_progress(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "list"
     spec_id = payload.get("spec_id")
@@ -410,7 +410,7 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return response
 
 
-def _handle_query(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "query"
     spec_id = payload.get("spec_id")
@@ -533,7 +533,7 @@ def _handle_query(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return response
 
 
-def _handle_hierarchy(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_hierarchy(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "hierarchy"
     spec_id = payload.get("spec_id")
@@ -642,7 +642,7 @@ def _handle_hierarchy(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return response
 
 
-def _handle_session_config(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_session_config(*, config: ServerConfig, **payload: Any) -> dict:
     """
     Handle session-config action: get/set autonomous mode preferences.
 

@@ -42,7 +42,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
 )
 
 
-def _handle_prepare_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_prepare_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
     Handle prepare-batch action for parallel task execution.
 
@@ -131,7 +131,7 @@ def _handle_prepare_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     )
 
 
-def _handle_start_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
     Handle start-batch action for atomically starting multiple tasks.
 
@@ -208,7 +208,7 @@ def _handle_start_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     return _attach_meta(asdict(response), request_id=request_id, duration_ms=elapsed_ms)
 
 
-def _handle_complete_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """Handle complete-batch action for completing multiple tasks with partial failure support."""
     request_id = _request_id()
     action = "complete-batch"
@@ -248,7 +248,7 @@ def _handle_complete_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
     return _attach_meta(asdict(response), request_id=request_id, duration_ms=elapsed_ms)
 
 
-def _handle_reset_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_reset_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
     Handle reset-batch action for resetting stale or specified in_progress tasks.
 
@@ -339,7 +339,7 @@ def _handle_reset_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
     return _attach_meta(asdict(response), request_id=request_id, duration_ms=elapsed_ms)
 
 
-def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """Batch update metadata across multiple tasks matching specified criteria.
 
     Filters (combined with AND logic):
@@ -628,7 +628,7 @@ def _handle_metadata_batch(*, config: ServerConfig, payload: Dict[str, Any]) -> 
 
 
 def _handle_fix_verification_types(
-    *, config: ServerConfig, payload: Dict[str, Any]
+    *, config: ServerConfig, **payload: Any
 ) -> dict:
     """Fix verification types across all verify nodes in a spec.
 

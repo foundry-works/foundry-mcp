@@ -343,17 +343,22 @@ class ProviderResilienceManager:
 
 # Module-level singleton
 _resilience_manager: Optional[ProviderResilienceManager] = None
+_resilience_manager_lock = threading.Lock()
 
 
 def get_resilience_manager() -> ProviderResilienceManager:
     """Get the singleton ProviderResilienceManager instance.
+
+    Thread-safe via double-checked locking.
 
     Returns:
         The global ProviderResilienceManager instance
     """
     global _resilience_manager
     if _resilience_manager is None:
-        _resilience_manager = ProviderResilienceManager()
+        with _resilience_manager_lock:
+            if _resilience_manager is None:
+                _resilience_manager = ProviderResilienceManager()
     return _resilience_manager
 
 
@@ -363,7 +368,8 @@ def reset_resilience_manager_for_testing() -> None:
     Creates a fresh manager instance with no state.
     """
     global _resilience_manager
-    _resilience_manager = ProviderResilienceManager()
+    with _resilience_manager_lock:
+        _resilience_manager = ProviderResilienceManager()
 
 
 class SleepFunc(Protocol):

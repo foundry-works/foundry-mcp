@@ -31,7 +31,7 @@ def _dispatch_task_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
     return dispatch_with_standard_errors(
-        _TASK_ROUTER, "task", action, config=config, payload=payload
+        _TASK_ROUTER, "task", action, config=config, **payload
     )
 
 

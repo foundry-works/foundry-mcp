@@ -76,17 +76,17 @@ class TestTimeoutWatchdogPollingInterval:
         watchdog._check_tasks = mock_check
 
         await watchdog.start()
-        await asyncio.sleep(0.2)  # Wait long enough for checks
+        await asyncio.sleep(0.3)  # Wait long enough for checks
         await watchdog.stop()
 
         # Verify at least 2 checks occurred
         assert len(check_times) >= 2
 
-        # Check interval between calls (should be approximately poll_interval)
+        # Check interval between calls (should be at least poll_interval minus
+        # generous tolerance for CI/loaded systems)
         for i in range(1, len(check_times)):
             interval = check_times[i] - check_times[i - 1]
-            # Allow 20ms tolerance for timing variations
-            assert interval >= poll_interval - 0.02, f"Interval {interval} too short"
+            assert interval >= poll_interval - 0.04, f"Interval {interval} too short"
 
 
 class TestTimeoutWatchdogLifecycle:

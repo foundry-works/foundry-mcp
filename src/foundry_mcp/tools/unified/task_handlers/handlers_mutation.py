@@ -34,7 +34,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
 )
 
 
-def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "add"
     spec_id = payload.get("spec_id")
@@ -269,7 +269,7 @@ def _handle_add(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "remove"
     spec_id = payload.get("spec_id")
@@ -390,7 +390,7 @@ def _handle_remove(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-estimate"
     spec_id = payload.get("spec_id")
@@ -545,7 +545,7 @@ def _handle_update_estimate(*, config: ServerConfig, payload: Dict[str, Any]) ->
     return asdict(response)
 
 
-def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-metadata"
     spec_id = payload.get("spec_id")
@@ -732,7 +732,7 @@ def _handle_update_metadata(*, config: ServerConfig, payload: Dict[str, Any]) ->
     return asdict(response)
 
 
-def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     """Move a task to a new position or parent."""
     request_id = _request_id()
     action = "move"
@@ -853,7 +853,7 @@ def _handle_move(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     """Add a dependency relationship between two tasks."""
     request_id = _request_id()
     action = "add-dependency"
@@ -970,7 +970,7 @@ def _handle_add_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> 
     return asdict(response)
 
 
-def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     """Remove a dependency relationship between two tasks."""
     request_id = _request_id()
     action = "remove-dependency"
@@ -1079,7 +1079,7 @@ def _handle_remove_dependency(*, config: ServerConfig, payload: Dict[str, Any]) 
     return asdict(response)
 
 
-def _handle_add_requirement(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
     """Add a structured requirement to a task's metadata."""
     request_id = _request_id()
     action = "add-requirement"

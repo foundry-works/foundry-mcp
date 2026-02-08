@@ -52,7 +52,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
 )
 
 
-def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-status"
     spec_id = payload.get("spec_id")
@@ -160,7 +160,7 @@ def _handle_update_status(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     return asdict(response)
 
 
-def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_start(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "start"
     spec_id = payload.get("spec_id")
@@ -269,7 +269,7 @@ def _handle_start(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "complete"
     spec_id = payload.get("spec_id")
@@ -427,7 +427,7 @@ def _handle_complete(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_block(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "block"
     spec_id = payload.get("spec_id")
@@ -539,7 +539,7 @@ def _handle_block(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "unblock"
     spec_id = payload.get("spec_id")
@@ -643,7 +643,7 @@ def _handle_unblock(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     return asdict(response)
 
 
-def _handle_list_blocked(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+def _handle_list_blocked(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "list-blocked"
     spec_id = payload.get("spec_id")
