@@ -1,0 +1,1208 @@
+{
+  "spec_id": "remove-mcp-tools-pr-code-test-2026-02-13-001",
+  "title": "remove-mcp-tools-pr-code-test",
+  "generated": "2026-02-13T12:27:48.420546Z",
+  "last_updated": "2026-02-13T12:45:53.209616Z",
+  "metadata": {
+    "description": "",
+    "mission": "Remove pr, code, and test entirely \u2014 MCP tools, CLI commands, and core/testing.py \u2014 eliminating runtime registration, discovery exposure, CLI entry points, and all references across docs, prompts, and tests in one atomic PR.",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 0,
+    "assumptions": [
+      "CLI pr and test commands remain intact \u2014 only MCP tool surface is removed",
+      "No staged deprecation window \u2014 tools are removed atomically",
+      "code tool has no runtime router module \u2014 removal is discovery/manifest only",
+      "Removing tools from capabilities manifest is a breaking contract change requiring semver major bump",
+      "Core logic modules (core/pr.py, core/test.py) are out of scope and must not be modified",
+      "SUPERSEDES a-1: CLI pr and test commands are ALSO removed (not just MCP surface)",
+      "SUPERSEDES a-5: core/testing.py IS in scope for deletion (only consumers are tools/unified/test.py and cli/commands/testing.py, both being deleted). core/review.py stays."
+    ],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "remove-mcp-tools-pr-code-test",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-7",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6"
+      ],
+      "total_tasks": 45,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Remove Runtime Tool Registration",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "verify-1-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Remove pr and test from the unified tool runtime so the MCP server no longer registers them. Delete the router modules."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Remove pr/test imports and registration from __init__.py",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove register_unified_pr_tool and register_unified_test_tool imports, registration branches, and __all__ entries.",
+        "file_path": "src/foundry_mcp/tools/unified/__init__.py",
+        "acceptance_criteria": [
+          "register_unified_pr_tool import removed",
+          "register_unified_test_tool import removed",
+          "pr/test registration branches removed from register_unified_tools()",
+          "pr/test removed from __all__"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Delete unified pr router module",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the pr.py unified router module entirely.",
+        "file_path": "src/foundry_mcp/tools/unified/pr.py",
+        "acceptance_criteria": [
+          "src/foundry_mcp/tools/unified/pr.py no longer exists"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Delete unified test router module",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the test.py unified router module entirely.",
+        "file_path": "src/foundry_mcp/tools/unified/test.py",
+        "acceptance_criteria": [
+          "src/foundry_mcp/tools/unified/test.py no longer exists"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Verify runtime registration imports cleanly",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Confirm register_unified_tools can be imported without errors referencing pr/test. Run: python -c 'from foundry_mcp.tools.unified import register_unified_tools'",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Remove Discovery Exposure",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "verify-2-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Remove pr, code, and test from all discovery surfaces \u2014 server manifest builder and static capabilities manifest. Bump manifest version for contract change."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Remove pr/test from server.py manifest builder",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "In _build_unified_manifest_tools: remove _PR_ROUTER and _TEST_ROUTER imports, remove pr/test entries from routers, categories, and descriptions dicts.",
+        "file_path": "src/foundry_mcp/tools/unified/server.py",
+        "acceptance_criteria": [
+          "_PR_ROUTER import removed",
+          "_TEST_ROUTER import removed",
+          "pr entry removed from routers/categories/descriptions",
+          "test entry removed from routers/categories/descriptions"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Remove pr/code/test from capabilities_manifest.json and bump versions",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove tool objects for pr, code, test from tools.unified array. Remove pr, code, test from unified_tools.tools list. Update unified_tools.description count 16\u219213. Bump schema_version 1.1.0\u21922.0.0. Bump server.version 0.5.1\u21920.6.0.",
+        "file_path": "mcp/capabilities_manifest.json",
+        "acceptance_criteria": [
+          "pr tool object removed from tools.unified",
+          "code tool object removed from tools.unified",
+          "test tool object removed from tools.unified",
+          "pr/code/test removed from unified_tools.tools list",
+          "unified_tools.description says (13 tools)",
+          "schema_version is 2.0.0",
+          "server.version is 0.6.0"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Validate capabilities manifest JSON",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run: python -m json.tool mcp/capabilities_manifest.json >/dev/null. Verify no pr/code/test tool entries remain.",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Update Prompt and Config References",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "verify-3-1",
+        "task-3-3",
+        "task-3-4"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Remove references to pr and test as MCP tools from prompt guidance and config templates. Ensure only still-available tools are presented."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-4"
+        ],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Remove test MCP guidance from workflows.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove or replace test(action='run') and test(action='discover') prompt guidance. Add note that test execution is CLI-only.",
+        "file_path": "src/foundry_mcp/prompts/workflows.py",
+        "acceptance_criteria": [
+          "No test(action= references remain",
+          "No pr(action= references remain",
+          "CLI alternative noted if applicable"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Remove pr/test from environment.py TOML template",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove pr and test from the TOML template comment listing available unified tools.",
+        "file_path": "src/foundry_mcp/tools/unified/environment.py",
+        "acceptance_criteria": [
+          "pr removed from tool list comment",
+          "test removed from tool list comment"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Verify no MCP tool references to pr/test in prompts/config",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run: rg -n 'test\\(action=|pr\\(action=' src/foundry_mcp/prompts src/foundry_mcp/tools/unified/environment.py \u2014 expect no matches.",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-4": {
+      "type": "phase",
+      "title": "Update Documentation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-4-1",
+        "task-4-2",
+        "task-4-3",
+        "task-4-4",
+        "verify-4-1",
+        "task-4-5",
+        "task-4-6",
+        "task-4-7",
+        "task-4-8"
+      ],
+      "total_tasks": 9,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Remove stale MCP tool references from user-facing and developer documentation. Add migration note about CLI alternatives."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-5"
+        ],
+        "blocked_by": [
+          "phase-3"
+        ],
+        "depends": []
+      }
+    },
+    "task-4-1": {
+      "type": "task",
+      "title": "Remove pr/code/test from MCP tool reference",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove overview rows for pr, code, test. Remove ## test section. Update top-level tool count. Add migration note about CLI alternatives.",
+        "file_path": "docs/05-mcp-tool-reference.md",
+        "acceptance_criteria": [
+          "pr overview row removed",
+          "code overview row removed",
+          "test overview row and section removed",
+          "Tool count updated",
+          "Migration note added"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-2": {
+      "type": "task",
+      "title": "Remove MCP mappings from docs README",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove 'Run tests' MCP mapping. Remove CLI-to-MCP rows for test run / test discover.",
+        "file_path": "docs/README.md",
+        "acceptance_criteria": [
+          "Run tests MCP mapping removed",
+          "test run/discover CLI-to-MCP rows removed"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-3": {
+      "type": "task",
+      "title": "Remove MCP equivalents from CLI command reference",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove or replace MCP equivalents for test and pr commands in Command Groups Overview and individual sections.",
+        "file_path": "docs/04-cli-command-reference.md",
+        "acceptance_criteria": [
+          "MCP equivalent lines for test removed or replaced",
+          "MCP equivalent lines for pr removed or replaced"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-4": {
+      "type": "task",
+      "title": "Update naming conventions with new router list",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove pr, code, test from canonical unified router lists. Update count: 16 \u2192 13 (manifest) / 14 (runtime).",
+        "file_path": "dev_docs/codebase_standards/naming-conventions.md",
+        "acceptance_criteria": [
+          "pr removed from router lists",
+          "code removed from router lists",
+          "test removed from router lists",
+          "Count references updated"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-4-1": {
+      "type": "verify",
+      "title": "Verify no stale MCP tool references in docs",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run targeted rg sweeps for MCP: test, MCP: pr, pr/test as tool references in docs/ and dev_docs/.",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-5": {
+      "type": "phase",
+      "title": "Update and Remove Tests",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-5-1",
+        "task-5-2",
+        "task-5-3",
+        "task-5-4",
+        "task-5-5",
+        "task-5-6",
+        "task-5-7",
+        "verify-5-1",
+        "task-5-8",
+        "task-5-9",
+        "task-5-10",
+        "task-5-11"
+      ],
+      "total_tasks": 12,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Align test suite with reduced router inventory. Remove pr/test entries from baselines, update count assertions, delete dedicated test files."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-6"
+        ],
+        "blocked_by": [
+          "phase-4"
+        ],
+        "depends": []
+      }
+    },
+    "task-5-1": {
+      "type": "task",
+      "title": "Remove pr/test from MCP smoke test tool names",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove 'pr' and 'test' from _UNIFIED_TOOL_NAMES set. Update docstring/count wording.",
+        "file_path": "tests/integration/test_mcp_smoke.py",
+        "acceptance_criteria": [
+          "pr removed from _UNIFIED_TOOL_NAMES",
+          "test removed from _UNIFIED_TOOL_NAMES",
+          "Count/docstring updated"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-2": {
+      "type": "task",
+      "title": "Remove pr/test from registration parity test",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove _PR_ROUTER/_TEST_ROUTER imports. Remove from parity mapping and TOOL_NAMES parametrized list.",
+        "file_path": "tests/tools/unified/test_tool_registration_parity.py",
+        "acceptance_criteria": [
+          "_PR_ROUTER import removed",
+          "_TEST_ROUTER import removed",
+          "pr/test removed from parity mapping",
+          "pr/test removed from TOOL_NAMES"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-3": {
+      "type": "task",
+      "title": "Remove pr/test from dispatch common test",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove pr/test baseline entries from DISPATCH_BASELINES. Update router-count assertions: 16 \u2192 14.",
+        "file_path": "tests/tools/unified/test_dispatch_common.py",
+        "acceptance_criteria": [
+          "pr baseline entry removed",
+          "test baseline entry removed",
+          "Count assertions updated to 14"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-4": {
+      "type": "task",
+      "title": "Remove pr/test from telemetry invariants test",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove pr/test from ROUTER_BASELINES. Update count assertions.",
+        "file_path": "tests/tools/unified/test_telemetry_invariants.py",
+        "acceptance_criteria": [
+          "pr removed from ROUTER_BASELINES",
+          "test removed from ROUTER_BASELINES",
+          "Count assertions updated"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-5": {
+      "type": "task",
+      "title": "Update dispatch contracts test docstring",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Update 'all 16 routers' docstring to 'all 14 routers'.",
+        "file_path": "tests/unit/test_contracts/test_dispatch_contracts.py",
+        "acceptance_criteria": [
+          "Docstring says 14 routers instead of 16"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-6": {
+      "type": "task",
+      "title": "Delete dedicated pr test file",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete tests/tools/unified/test_pr.py entirely.",
+        "file_path": "tests/tools/unified/test_pr.py",
+        "acceptance_criteria": [
+          "tests/tools/unified/test_pr.py no longer exists"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-7": {
+      "type": "task",
+      "title": "Delete dedicated test test file",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete tests/tools/unified/test_test.py entirely.",
+        "file_path": "tests/tools/unified/test_test.py",
+        "acceptance_criteria": [
+          "tests/tools/unified/test_test.py no longer exists"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-5-1": {
+      "type": "verify",
+      "title": "Run unified tool test suite",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run all affected test files: pytest tests/integration/test_mcp_smoke.py tests/tools/unified/test_tool_registration_parity.py tests/tools/unified/test_dispatch_common.py tests/tools/unified/test_telemetry_invariants.py tests/unit/test_contracts/test_dispatch_contracts.py",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-6": {
+      "type": "phase",
+      "title": "Count-Reference Sweep and Final Validation",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-6-1",
+        "task-6-2",
+        "task-6-3",
+        "task-6-4",
+        "verify-6-1",
+        "task-6-5"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Fix all remaining hardcoded 16-router references. Run comprehensive stale reference sweep and full test suite."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-5"
+        ],
+        "depends": []
+      }
+    },
+    "task-6-1": {
+      "type": "task",
+      "title": "Update server.py module docstring router count",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Change 'unified 16-router tool surface' to 'unified 14-router tool surface' in module docstring.",
+        "file_path": "src/foundry_mcp/server.py",
+        "acceptance_criteria": [
+          "Docstring says 14-router"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-2": {
+      "type": "task",
+      "title": "Update tools/__init__.py module docstring router count",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Change 'unified 16-router tool surface' to 'unified 14-router tool surface' in module docstring.",
+        "file_path": "src/foundry_mcp/tools/__init__.py",
+        "acceptance_criteria": [
+          "Docstring says 14-router"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-3": {
+      "type": "task",
+      "title": "Sweep for remaining 16-router count references",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Search for any remaining references to 16 routers across the codebase: rg -n '16.router|16 router' src tests docs dev_docs. Fix any found.",
+        "acceptance_criteria": [
+          "No remaining 16-router references in codebase"
+        ],
+        "task_category": "investigation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-4": {
+      "type": "task",
+      "title": "Sweep for stale pr/test/code import references",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Search for stale references: rg -n 'unified\\.pr|unified\\.test|register_unified_pr_tool|register_unified_test_tool|test\\(action=|pr\\(action=' src tests docs dev_docs mcp. Fix any found.",
+        "acceptance_criteria": [
+          "No stale import or action references to removed tools"
+        ],
+        "task_category": "investigation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-6-1": {
+      "type": "verify",
+      "title": "Run full test suite",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run: pytest tests/tools/unified && pytest (full suite). All tests must pass.",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-7": {
+      "type": "phase",
+      "title": "Remove CLI Commands and Core Modules",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-7-1",
+        "task-7-2",
+        "task-7-3",
+        "task-7-4",
+        "task-7-5",
+        "verify-7-1"
+      ],
+      "total_tasks": 6,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Remove CLI pr and test command groups, their registry entries, and the core/testing.py module (no other consumers). core/review.py stays since it is used by the review tool."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-1": {
+      "type": "task",
+      "title": "Delete CLI pr command module",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the pr.py CLI command module entirely. Contains pr create, context, and status subcommands.",
+        "file_path": "src/foundry_mcp/cli/commands/pr.py",
+        "acceptance_criteria": [
+          "src/foundry_mcp/cli/commands/pr.py no longer exists"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-2": {
+      "type": "task",
+      "title": "Delete CLI test command module",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the testing.py CLI command module entirely. Contains test run, discover, presets, check-tools, quick, unit, consult subcommands.",
+        "file_path": "src/foundry_mcp/cli/commands/testing.py",
+        "acceptance_criteria": [
+          "src/foundry_mcp/cli/commands/testing.py no longer exists"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-3": {
+      "type": "task",
+      "title": "Remove pr/test from CLI commands __init__.py",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove pr_group and test_group imports and exports from the CLI commands package init.",
+        "file_path": "src/foundry_mcp/cli/commands/__init__.py",
+        "acceptance_criteria": [
+          "pr_group import removed",
+          "test_group import removed",
+          "Both removed from __all__ or exports"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-4": {
+      "type": "task",
+      "title": "Remove pr/test from CLI registry",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove pr_group and test_group imports and registration calls from register_all_commands().",
+        "file_path": "src/foundry_mcp/cli/registry.py",
+        "acceptance_criteria": [
+          "pr_group import removed",
+          "test_group import removed",
+          "Registration calls removed from register_all_commands()"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-7-5": {
+      "type": "task",
+      "title": "Delete core/testing.py module",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete core/testing.py \u2014 only consumers were tools/unified/test.py and cli/commands/testing.py, both being deleted. No other imports exist.",
+        "file_path": "src/foundry_mcp/core/testing.py",
+        "acceptance_criteria": [
+          "src/foundry_mcp/core/testing.py no longer exists",
+          "No remaining imports of foundry_mcp.core.testing anywhere"
+        ],
+        "task_category": "refactoring"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-7-1": {
+      "type": "verify",
+      "title": "Verify CLI imports cleanly without pr/test",
+      "status": "pending",
+      "parent": "phase-7",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run: python -c 'from foundry_mcp.cli.registry import register_all_commands' \u2014 should succeed without pr/test references.",
+        "verification_type": "run-tests"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-8": {
+      "type": "task",
+      "title": "Fix additional pr/test references in telemetry invariants test",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Beyond ROUTER_BASELINES (task 5-4), also remove pr/test from _DISPATCH_SIGNATURES, _KEYWORD_ONLY_DISPATCH, and the _call_dispatch() branch. Update test_all_16_routers_covered method name and assertion to 14.",
+        "file_path": "tests/tools/unified/test_telemetry_invariants.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-9": {
+      "type": "task",
+      "title": "Remove pr entry from test_spec_public_api.py",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove the foundry_mcp.tools.unified.pr entry from the EXPECTED_SPEC_PUBLIC_API dictionary. After pr.py is deleted, this import-based test will fail with ModuleNotFoundError.",
+        "file_path": "tests/unit/test_core/test_spec_public_api.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-5": {
+      "type": "task",
+      "title": "Remove test/code tool examples from development guide",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove test(action='run', preset='full'), test(action='discover'), code(action='find-function'), and code(action='trace') examples from the tool usage table.",
+        "file_path": "dev_docs/guides/development-guide.md"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-6": {
+      "type": "task",
+      "title": "Update import consumer audit doc",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove tools/unified/pr.py consumer row and update the router inventory list to remove _PR_ROUTER and _TEST_ROUTER.",
+        "file_path": "dev_docs/refactoring/import_consumer_audit.md"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-6-5": {
+      "type": "task",
+      "title": "Delete PLAN_TOOL_REMOVAL.md from repo root",
+      "status": "pending",
+      "parent": "phase-6",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Delete the planning precursor file now that the spec captures all requirements.",
+        "file_path": "PLAN_TOOL_REMOVAL.md"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-10": {
+      "type": "task",
+      "title": "Remove pr/test CLI test classes from test_sdd_cli_core.py",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove TestPRCommands class (tests pr status, pr context) and TestTestingCommands class from this file.",
+        "file_path": "tests/unit/test_sdd_cli_core.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-5-11": {
+      "type": "task",
+      "title": "Remove pr/test from CLI integration test expected_groups",
+      "status": "pending",
+      "parent": "phase-5",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove TestRunTestsWorkflows class. Remove 'pr' and 'test' from expected_groups list in command group availability assertion.",
+        "file_path": "tests/integration/test_sdd_cli_advanced.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-3": {
+      "type": "task",
+      "title": "Update verify node template in core/spec/hierarchy.py",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Line 139 contains mcp_tool: mcp__foundry-mcp__test-run in a hardcoded verification node template. Update to remove the mcp_tool key or replace with a CLI-based command reference (e.g., pytest directly).",
+        "file_path": "src/foundry_mcp/core/spec/hierarchy.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-4": {
+      "type": "task",
+      "title": "Remove test tool from environment.py permission preset",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove mcp__foundry-mcp__test from the standard permissions preset in _update_permissions(). Currently at line 129.",
+        "file_path": "src/foundry_mcp/tools/unified/environment.py"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-7": {
+      "type": "task",
+      "title": "Update testing guide to remove MCP and core/testing.py references",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove reference to src/foundry_mcp/core/testing.py (being deleted). Remove test(action='run', preset='full') and test(action='discover') MCP tool call examples. Note that test presets are CLI-only.",
+        "file_path": "dev_docs/guides/testing.md"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-4-8": {
+      "type": "task",
+      "title": "Remove code tool references from best practices docs",
+      "status": "pending",
+      "parent": "phase-4",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove code(action='trace'), code(action='impact'), and code(action=...) references from dev_docs/mcp_best_practices/06-pagination-streaming.md and dev_docs/cli_best_practices/01-cli-runtime.md. Replace with currently-available tool examples."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": []
+}
