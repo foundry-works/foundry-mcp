@@ -55,7 +55,6 @@ the workflow is organized, and how to use the CLI and MCP tools.
 | Complete a task | [CLI: tasks complete](04-cli-command-reference.md#tasks-complete), [MCP: task](05-mcp-tool-reference.md#task) |
 | Validate a spec | [CLI: validate](04-cli-command-reference.md#validate), [MCP: spec](05-mcp-tool-reference.md#spec) |
 | Run a review | [CLI: review spec](04-cli-command-reference.md#review-spec), [MCP: review](05-mcp-tool-reference.md#review) |
-| Run tests | [CLI: test run](04-cli-command-reference.md#test-run), [MCP: test](05-mcp-tool-reference.md#test) |
 | Configure LLM | [LLM Configuration](guides/llm-configuration.md), [Troubleshooting: LLM](07-troubleshooting.md#llmai-issues) |
 | Fix errors | [Error Codes](reference/error-codes.md), [Troubleshooting](07-troubleshooting.md) |
 
@@ -76,8 +75,6 @@ the workflow is organized, and how to use the CLI and MCP tools.
 | `review fidelity` | `review` | `fidelity` |
 | `validate check` | `spec` | `validate` |
 | `validate fix` | `spec` | `fix` |
-| `test run` | `test` | `run` |
-| `test discover` | `test` | `discover` |
 | `journal add` | `journal` | `add` |
 | `plan create` | `plan` | `create` |
 | `plan review` | `plan` | `review` |

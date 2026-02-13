@@ -1,8 +1,8 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "2.0.0",
   "server": {
     "name": "foundry-mcp",
-    "version": "0.5.1",
+    "version": "0.6.0",
     "description": "MCP server for SDD spec management with tools, resources, and prompts"
   },
   "tools": {
@@ -72,43 +72,6 @@
         "examples": [
           {
             "description": "Example: plan action=create",
-            "input": {
-              "action": "create"
-            }
-          }
-        ]
-      },
-      {
-        "name": "pr",
-        "description": "PR workflows with spec context.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {
-            "name": "action",
-            "type": "string",
-            "required": true,
-            "enum": [
-              "create",
-              "get-context"
-            ],
-            "description": "PR workflow action"
-          },
-          {
-            "name": "spec_id",
-            "type": "string",
-            "required": false,
-            "description": "Spec ID for context/PR creation"
-          }
-        ],
-        "version": "1.0.0",
-        "deprecated": false,
-        "tags": [
-          "unified"
-        ],
-        "examples": [
-          {
-            "description": "Example: pr action=create",
             "input": {
               "action": "create"
             }
@@ -1180,47 +1143,6 @@
         ]
       },
       {
-        "name": "code",
-        "description": "Repo-local code navigation helpers.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {
-            "name": "action",
-            "type": "string",
-            "required": true,
-            "enum": [
-              "find-class",
-              "find-function",
-              "callers",
-              "callees",
-              "trace",
-              "impact"
-            ],
-            "description": "Code navigation action"
-          },
-          {
-            "name": "symbol",
-            "type": "string",
-            "required": false,
-            "description": "Symbol name (required for most actions)"
-          }
-        ],
-        "version": "1.0.0",
-        "deprecated": false,
-        "tags": [
-          "unified"
-        ],
-        "examples": [
-          {
-            "description": "Example: code action=find-class",
-            "input": {
-              "action": "find-class"
-            }
-          }
-        ]
-      },
-      {
         "name": "server",
         "description": "Tool discovery, schemas, context, and capabilities.",
         "auth_required": false,
@@ -1309,48 +1231,6 @@
             "description": "Example: server action=tools",
             "input": {
               "action": "tools"
-            }
-          }
-        ]
-      },
-      {
-        "name": "test",
-        "description": "Pytest discovery and execution.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {
-            "name": "action",
-            "type": "string",
-            "required": true,
-            "enum": [
-              "run",
-              "discover"
-            ],
-            "description": "Test action"
-          },
-          {
-            "name": "preset",
-            "type": "string",
-            "required": false,
-            "enum": [
-              "quick",
-              "unit",
-              "full"
-            ],
-            "description": "Preset for action=run"
-          }
-        ],
-        "version": "1.0.0",
-        "deprecated": false,
-        "tags": [
-          "unified"
-        ],
-        "examples": [
-          {
-            "description": "Example: test action=run",
-            "input": {
-              "action": "run"
             }
           }
         ]
@@ -1622,11 +1502,10 @@
       },
       "unified_tools": {
         "supported": true,
-        "description": "Action-based unified tool surface (16 tools)",
+        "description": "Action-based unified tool surface (13 tools)",
         "tools": [
           "health",
           "plan",
-          "pr",
           "error",
           "journal",
           "authoring",
@@ -1637,9 +1516,7 @@
           "task",
           "spec",
           "review",
-          "code",
-          "server",
-          "test"
+          "server"
         ],
         "feature_flags": [
           "unified_manifest",

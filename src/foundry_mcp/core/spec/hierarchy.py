@@ -136,7 +136,7 @@ def _add_phase_verification(
         "completed_tasks": 0,
         "metadata": {
             "verification_type": "run-tests",
-            "mcp_tool": "mcp__foundry-mcp__test-run",
+            "command": "pytest",
             "expected": "All tests pass",
         },
         "dependencies": {

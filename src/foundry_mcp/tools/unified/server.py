@@ -133,18 +133,15 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
     from foundry_mcp.tools.unified.journal import _JOURNAL_ROUTER
     from foundry_mcp.tools.unified.lifecycle import _LIFECYCLE_ROUTER
     from foundry_mcp.tools.unified.plan import _PLAN_ROUTER
-    from foundry_mcp.tools.unified.pr import _PR_ROUTER
     from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
     from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
-    from foundry_mcp.tools.unified.test import _TEST_ROUTER
     from foundry_mcp.tools.unified.verification import _VERIFICATION_ROUTER
 
     routers = {
         "health": _HEALTH_ROUTER,
         "plan": _PLAN_ROUTER,
-        "pr": _PR_ROUTER,
         "error": _ERROR_ROUTER,
         "journal": _JOURNAL_ROUTER,
         "authoring": _AUTHORING_ROUTER,
@@ -156,13 +153,11 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "spec": _SPEC_ROUTER,
         "review": _REVIEW_ROUTER,
         "server": _SERVER_ROUTER,
-        "test": _TEST_ROUTER,
     }
 
     categories = {
         "health": "health",
         "plan": "planning",
-        "pr": "workflow",
         "error": "observability",
         "journal": "journal",
         "authoring": "specs",
@@ -174,13 +169,11 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "spec": "specs",
         "review": "review",
         "server": "server",
-        "test": "testing",
     }
 
     descriptions = {
         "health": "Health checks and diagnostics.",
         "plan": "Planning helpers (create/list/review plans).",
-        "pr": "PR workflows with spec context.",
         "error": "Error collection query and cleanup.",
         "journal": "Journaling add/list helpers.",
         "authoring": "Spec authoring mutations (phases, assumptions, revisions).",
@@ -192,7 +185,6 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "spec": "Spec discovery, validation, and analysis.",
         "review": "LLM-assisted review workflows.",
         "server": "Tool discovery, schemas, context, and capabilities.",
-        "test": "Pytest discovery and execution.",
     }
 
     tools: list[Dict[str, Any]] = []

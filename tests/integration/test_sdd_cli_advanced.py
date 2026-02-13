@@ -118,48 +118,6 @@ class TestModifyWorkflows:
         assert "add" in result.output
 
 
-class TestRunTestsWorkflows:
-    """Tests for run-tests command workflows."""
-
-    def test_test_group_available(self, cli_runner, temp_specs_dir):
-        """test command group is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "test", "--help"]
-        )
-        assert result.exit_code == 0
-        assert "run" in result.output
-        assert "discover" in result.output
-        assert "presets" in result.output
-        assert "check-tools" in result.output
-
-    def test_test_presets_lists_all(self, cli_runner, temp_specs_dir):
-        """test presets returns all preset configurations."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        presets = data["data"]["presets"]
-        assert "quick" in presets
-        assert "full" in presets
-        assert "unit" in presets
-        assert "integration" in presets
-        assert "smoke" in presets
-
-    def test_test_check_tools_returns_status(self, cli_runner, temp_specs_dir):
-        """test check-tools returns tool availability."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "test", "check-tools"]
-        )
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert data["success"] is True
-        assert "tools" in data["data"]
-        # pytest should be available in test environment
-        assert data["data"]["tools"]["pytest"]["available"] is True
-
-
 class TestDevWorkflows:
     """Tests for dev utility workflows."""
 
@@ -198,11 +156,9 @@ class TestCrossWorkflowIntegration:
         # Check all groups are present
         expected_groups = [
             "modify",
-            "test",
             "dev",
             "validate",
             "review",
-            "pr",
             "specs",
             "tasks",
             "lifecycle",

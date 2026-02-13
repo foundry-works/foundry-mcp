@@ -778,7 +778,7 @@ foundry-cli test run tests/unit/ --preset quick
 foundry-cli test run --markers "not slow" --fail-fast
 ```
 
-**MCP equivalent:** `test` tool with `action=run`
+**Note:** MCP test tool has been removed. Use CLI directly.
 
 ---
 
@@ -806,7 +806,7 @@ foundry-cli test discover
 foundry-cli test discover tests/unit/ --pattern "auth"
 ```
 
-**MCP equivalent:** `test` tool with `action=discover`
+**Note:** MCP test tool has been removed. Use CLI directly.
 
 ---
 

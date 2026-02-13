@@ -45,9 +45,9 @@ structured = true
 
 [tools]
 # Disable tools to reduce context window usage
-# Available: health, plan, pr, error, journal, authoring, review,
+# Available: health, plan, error, journal, authoring, review,
 #            spec, task, provider, environment, lifecycle, verification,
-#            server, test, research
+#            server, research
 disabled_tools = ["error", "health"]
 
 [workflow]
@@ -126,7 +126,6 @@ def _update_permissions(
             "mcp__foundry-mcp__server",
             "mcp__foundry-mcp__spec",
             "mcp__foundry-mcp__task",
-            "mcp__foundry-mcp__test",
             "Read(//**/specs/**)",
             "Write(//**/specs/active/**)",
             "Write(//**/specs/pending/**)",

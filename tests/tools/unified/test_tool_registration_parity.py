@@ -41,19 +41,16 @@ def _live_routers():
     from foundry_mcp.tools.unified.journal import _JOURNAL_ROUTER
     from foundry_mcp.tools.unified.lifecycle import _LIFECYCLE_ROUTER
     from foundry_mcp.tools.unified.plan import _PLAN_ROUTER
-    from foundry_mcp.tools.unified.pr import _PR_ROUTER
     from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.server import _SERVER_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
     from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
-    from foundry_mcp.tools.unified.test import _TEST_ROUTER
     from foundry_mcp.tools.unified.verification import _VERIFICATION_ROUTER
 
     return {
         "health": _HEALTH_ROUTER,
         "plan": _PLAN_ROUTER,
-        "pr": _PR_ROUTER,
         "error": _ERROR_ROUTER,
         "journal": _JOURNAL_ROUTER,
         "authoring": _AUTHORING_ROUTER,
@@ -65,7 +62,6 @@ def _live_routers():
         "spec": _SPEC_ROUTER,
         "review": _REVIEW_ROUTER,
         "server": _SERVER_ROUTER,
-        "test": _TEST_ROUTER,
     }
 
 
@@ -108,7 +104,6 @@ class TestToolCountAndNames:
 EXPECTED_CATEGORIES = {
     "health": "health",
     "plan": "planning",
-    "pr": "workflow",
     "error": "observability",
     "journal": "journal",
     "authoring": "specs",
@@ -120,7 +115,6 @@ EXPECTED_CATEGORIES = {
     "spec": "specs",
     "review": "review",
     "server": "server",
-    "test": "testing",
 }
 
 

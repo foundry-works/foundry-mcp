@@ -141,7 +141,7 @@ pytest -m "unit and not slow"
 
 ### Built-in Test Presets
 
-The project includes preset configurations in `src/foundry_mcp/core/testing.py`:
+The project includes preset configurations for running tests via CLI:
 
 | Preset | Timeout | Fail Fast | Markers | Use Case |
 |--------|---------|-----------|---------|----------|
@@ -301,9 +301,7 @@ Once connected via Claude Desktop or MCP dev mode, test these tools:
 - `journal(action="list")` - Get journal entries
 - `journal(action="list-unjournaled")` - List completed tasks needing journals
 
-**Test Tool (`test`)**
-- `test(action="run", preset="full")` - Run pytest suite
-- `test(action="discover")` - Discover available tests
+> **Note:** Test execution is CLI-only. Use `sdd test run --preset full` or `pytest` directly.
 
 ### Testing Resources
 
