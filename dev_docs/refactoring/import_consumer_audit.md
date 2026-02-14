@@ -99,7 +99,7 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 
 ## 3. `foundry_mcp.tools.unified.*` Consumers
 
-### Source Code (3 external files + 16 internal cross-imports)
+### Source Code (3 external files + 14 internal cross-imports)
 
 | File | Symbols | Classification |
 |------|---------|---------------|
@@ -109,11 +109,11 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 
 ### Internal Cross-Module Imports (within `tools/unified/`)
 
-All 16 tool routers import from `tools/unified/router`:
+All 14 tool routers import from `tools/unified/router`:
 - `ActionDefinition`, `ActionRouter`, `DispatchError`, `error_response`, `success_response`
 
-`tools/unified/server.py` imports all 12 router singletons:
-- `_AUTHORING_ROUTER`, `_ENVIRONMENT_ROUTER`, `_ERROR_ROUTER`, `_HEALTH_ROUTER`, `_JOURNAL_ROUTER`, `_LIFECYCLE_ROUTER`, `_PLAN_ROUTER`, `_PROVIDER_ROUTER`, `_REVIEW_ROUTER`, `_SPEC_ROUTER`, `_TASK_ROUTER`, `_VERIFICATION_ROUTER`
+`tools/unified/server.py` manifest builder imports all 14 router singletons:
+- `_AUTHORING_ROUTER`, `_ENVIRONMENT_ROUTER`, `_ERROR_ROUTER`, `_HEALTH_ROUTER`, `_JOURNAL_ROUTER`, `_LIFECYCLE_ROUTER`, `_PLAN_ROUTER`, `_PROVIDER_ROUTER`, `_RESEARCH_ROUTER`, `_REVIEW_ROUTER`, `_SERVER_ROUTER`, `_SPEC_ROUTER`, `_TASK_ROUTER`, `_VERIFICATION_ROUTER`
 
 `tools/unified/__init__.py:53` — Dynamic import via `importlib.import_module("foundry_mcp.tools.unified.task")` for conditional tool registration.
 

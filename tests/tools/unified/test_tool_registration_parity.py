@@ -42,6 +42,7 @@ def _live_routers():
     from foundry_mcp.tools.unified.lifecycle import _LIFECYCLE_ROUTER
     from foundry_mcp.tools.unified.plan import _PLAN_ROUTER
     from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
+    from foundry_mcp.tools.unified.research import _RESEARCH_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.server import _SERVER_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
@@ -61,16 +62,12 @@ def _live_routers():
         "task": _TASK_ROUTER,
         "spec": _SPEC_ROUTER,
         "review": _REVIEW_ROUTER,
+        "research": _RESEARCH_ROUTER,
         "server": _SERVER_ROUTER,
     }
 
 
-# NOTE: The research router is intentionally excluded from the manifest
-# builder (_build_unified_manifest_tools) and therefore from this parity
-# test.  It is registered at runtime but not surfaced in the manifest.
-# If research is added to the manifest, update _live_routers() and
-# EXPECTED_CATEGORIES accordingly.
-MANIFEST_EXCLUDED_ROUTERS = {"research"}
+MANIFEST_EXCLUDED_ROUTERS: set[str] = set()
 
 LIVE_ROUTERS = _live_routers()
 TOOL_NAMES = sorted(LIVE_ROUTERS.keys())
@@ -114,6 +111,7 @@ EXPECTED_CATEGORIES = {
     "task": "tasks",
     "spec": "specs",
     "review": "review",
+    "research": "research",
     "server": "server",
 }
 

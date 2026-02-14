@@ -107,22 +107,6 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-# NOTE: _validation_error is kept local to server.py because it has a unique
-# signature (no field/action params) different from the common helper.
-def _validation_error(
-    *, message: str, request_id: str, remediation: Optional[str] = None
-) -> dict:
-    return asdict(
-        error_response(
-            message,
-            error_code=ErrorCode.VALIDATION_ERROR,
-            error_type=ErrorType.VALIDATION,
-            remediation=remediation,
-            request_id=request_id,
-        )
-    )
-
-
 def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
     """Return compact tool entries for the unified manifest."""
 
@@ -134,6 +118,7 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
     from foundry_mcp.tools.unified.lifecycle import _LIFECYCLE_ROUTER
     from foundry_mcp.tools.unified.plan import _PLAN_ROUTER
     from foundry_mcp.tools.unified.provider import _PROVIDER_ROUTER
+    from foundry_mcp.tools.unified.research import _RESEARCH_ROUTER
     from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
     from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
@@ -152,6 +137,7 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "task": _TASK_ROUTER,
         "spec": _SPEC_ROUTER,
         "review": _REVIEW_ROUTER,
+        "research": _RESEARCH_ROUTER,
         "server": _SERVER_ROUTER,
     }
 
@@ -168,6 +154,7 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "task": "tasks",
         "spec": "specs",
         "review": "review",
+        "research": "research",
         "server": "server",
     }
 
@@ -184,6 +171,7 @@ def _build_unified_manifest_tools() -> list[Dict[str, Any]]:
         "task": "Task preparation, mutation, and listing.",
         "spec": "Spec discovery, validation, and analysis.",
         "review": "LLM-assisted review workflows.",
+        "research": "AI-powered research workflows (chat, consensus, thinkdeep, ideate, deep research).",
         "server": "Tool discovery, schemas, context, and capabilities.",
     }
 

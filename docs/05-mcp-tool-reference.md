@@ -1,6 +1,6 @@
 # MCP Tool Reference
 
-foundry-mcp exposes 13 unified tools with an `action` parameter that switches behavior. The authoritative schemas live in `mcp/capabilities_manifest.json`.
+foundry-mcp exposes 14 unified tools with an `action` parameter that switches behavior. The authoritative schemas live in `mcp/capabilities_manifest.json`.
 
 > **Note:** The `pr`, `code`, and `test` tools have been removed from the MCP surface. Use CLI alternatives instead:
 > - `pr`: Use `gh` CLI or git commands directly
@@ -23,6 +23,7 @@ foundry-mcp exposes 13 unified tools with an `action` parameter that switches be
 | `provider` | LLM provider discovery | `list`, `status`, `execute` |
 | `environment` | Workspace setup and verification | `init`, `verify-env`, `verify-toolchain`, `setup`, `detect` |
 | `error` | Error collection and cleanup | `list`, `get`, `stats`, `patterns`, `cleanup` |
+| `research` | AI-powered research workflows | `chat`, `consensus`, `thinkdeep`, `ideate`, `deep-research`, `deep-research-status`, `deep-research-report`, `deep-research-list`, `deep-research-delete`, `thread-list`, `thread-get`, `thread-delete`, `node-execute`, `node-record`, `node-status`, `node-findings`, `extract` |
 | `server` | Tool discovery and capabilities | `tools`, `schema`, `capabilities`, `context`, `llm-status` |
 
 ---

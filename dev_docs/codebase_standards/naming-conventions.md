@@ -47,7 +47,7 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 | `update` | Status changes, journaling, lifecycle | `task`, `journal`, `lifecycle` |
 | `validate` | Validation, fix, reporting | `spec` |
 | `provider` | LLM provider management | `provider` |
-| `test` | Test discovery/execution | `test` |
+| `test` | Test discovery/execution | CLI-only (pytest) |
 | `spec-mod` | Bulk spec modifications | `authoring`, `verification` |
 | `plan-review` | Reviews helpers | `review` |
 | `context` | Session + token tracking | `server` (context), `environment` |
@@ -77,9 +77,9 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 
 ## Current Implementation Audit *(unified routers)*
 
-The canonical advertised tool surface is the 13 unified routers (manifest) / 14 (runtime) in `mcp/capabilities_manifest.json`:
+The canonical advertised tool surface is the 14 unified routers in `mcp/capabilities_manifest.json`:
 
-`health`, `plan`, `error`, `journal`, `authoring`, `provider`, `environment`, `lifecycle`, `verification`, `task`, `spec`, `review`, `server`.
+`health`, `plan`, `error`, `journal`, `authoring`, `provider`, `environment`, `lifecycle`, `verification`, `task`, `spec`, `review`, `research`, `server`.
 
 Each router exposes a stable `action` enum; add functionality by extending `action` (and updating the manifest/specs/tests) rather than introducing new top-level tool names.
 

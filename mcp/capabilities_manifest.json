@@ -2,7 +2,7 @@
   "schema_version": "2.0.0",
   "server": {
     "name": "foundry-mcp",
-    "version": "0.6.0",
+    "version": "0.10.2",
     "description": "MCP server for SDD spec management with tools, resources, and prompts"
   },
   "tools": {
@@ -1234,6 +1234,71 @@
             }
           }
         ]
+      },
+      {
+        "name": "research",
+        "description": "AI-powered research workflows (chat, consensus, thinkdeep, ideate, deep research).",
+        "auth_required": false,
+        "rate_limit": null,
+        "parameters": [
+          {
+            "name": "action",
+            "type": "string",
+            "required": true,
+            "enum": [
+              "chat",
+              "consensus",
+              "thinkdeep",
+              "ideate",
+              "deep-research",
+              "deep-research-status",
+              "deep-research-report",
+              "deep-research-list",
+              "deep-research-delete",
+              "thread-list",
+              "thread-get",
+              "thread-delete",
+              "node-execute",
+              "node-record",
+              "node-status",
+              "node-findings",
+              "extract"
+            ],
+            "description": "Research workflow action"
+          },
+          {
+            "name": "prompt",
+            "type": "string",
+            "required": false,
+            "description": "User prompt/message (chat, consensus)"
+          },
+          {
+            "name": "topic",
+            "type": "string",
+            "required": false,
+            "description": "Topic for new investigation/ideation"
+          },
+          {
+            "name": "query",
+            "type": "string",
+            "required": false,
+            "description": "Research query (deep-research) or follow-up (thinkdeep)"
+          }
+        ],
+        "version": "1.0.0",
+        "deprecated": false,
+        "tags": [
+          "unified"
+        ],
+        "examples": [
+          {
+            "description": "Example: research action=chat",
+            "input": {
+              "action": "chat",
+              "prompt": "Explain the trade-offs of cursor vs offset pagination"
+            }
+          }
+        ]
       }
     ]
   },
@@ -1468,7 +1533,7 @@
         "expires_at": null
       },
       "unified_manifest": {
-        "description": "Expose only the 16 unified tools for discovery/token reduction",
+        "description": "Expose only the 14 unified tools for discovery/token reduction",
         "state": "beta",
         "default_enabled": false,
         "percentage_rollout": 0,
@@ -1502,7 +1567,7 @@
       },
       "unified_tools": {
         "supported": true,
-        "description": "Action-based unified tool surface (13 tools)",
+        "description": "Action-based unified tool surface (14 tools)",
         "tools": [
           "health",
           "plan",
@@ -1516,6 +1581,7 @@
           "task",
           "spec",
           "review",
+          "research",
           "server"
         ],
         "feature_flags": [

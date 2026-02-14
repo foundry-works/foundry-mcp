@@ -3,6 +3,9 @@
 This server exposes the unified 14-router tool surface described in
 `mcp/capabilities_manifest.json`.
 
+Routers: health, plan, error, journal, authoring, provider, environment,
+lifecycle, verification, task, spec, review, research, server.
+
 Note: Legacy per-tool-name MCP endpoints are intentionally not registered.
 """
 
