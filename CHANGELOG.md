@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-02-14
+
+### Removed
+
+- **MCP tools: `pr`, `code`, `test`** — Removed three MCP tools that duplicated capabilities already available natively in Claude Code and other AI coding agents. This reduces the tool surface from 16 to 13 unified tools, lowering token overhead and eliminating maintenance burden for tools that provided no unique value over the host environment.
+  - `pr` tool (PR creation/description generation) — replaced by native `gh` CLI usage
+  - `test` tool (test execution/debugging) — replaced by native test runner invocation
+  - `code` tool (code generation) — removed as redundant with agent capabilities
+- **CLI commands: `pr`, `test`** — Removed corresponding CLI subcommands (`cli/commands/pr.py`, `cli/commands/testing.py`) and their registry entries
+- **Core testing module** (`core/testing.py`, 839 lines) — Removed the test execution engine backing the test tool
+
+### Changed
+
+- Updated capabilities manifest to reflect 13 tools (was 16)
+- Updated tool registration parity tests, dispatch contract tests, telemetry invariant tests, and golden fixture tests
+- Updated documentation (MCP tool reference, CLI command reference) to remove references to deleted tools
+- Added `research` to capabilities manifest (was missing)
+
 ## [0.10.1] - 2026-02-08
 
 ### Fixed

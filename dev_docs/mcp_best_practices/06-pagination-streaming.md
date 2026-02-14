@@ -229,7 +229,7 @@ Not all list operations require full cursor-based pagination. For some use cases
 | Pattern | Use When | Example Tools |
 |---------|----------|---------------|
 | **Cursor pagination** | Sequential iteration needed, deterministic traversal, large ordered datasets | `spec(action="list")`, `task(action="query")`, `journal(action="list")` |
-| **max_results limit** | Graph traversal, non-sequential data, "top N" use cases, bounded exploration | `code(action="trace")`, `code(action="impact")` |
+| **max_results limit** | Graph traversal, non-sequential data, "top N" use cases, bounded exploration | `review(action="list-tools")`, `provider(action="list")` |
 
 ### When to Use Limit-Based Truncation
 

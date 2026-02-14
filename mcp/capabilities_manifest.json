@@ -1,8 +1,8 @@
 {
-  "schema_version": "1.1.0",
+  "schema_version": "2.0.0",
   "server": {
     "name": "foundry-mcp",
-    "version": "0.5.1",
+    "version": "0.10.2",
     "description": "MCP server for SDD spec management with tools, resources, and prompts"
   },
   "tools": {
@@ -72,43 +72,6 @@
         "examples": [
           {
             "description": "Example: plan action=create",
-            "input": {
-              "action": "create"
-            }
-          }
-        ]
-      },
-      {
-        "name": "pr",
-        "description": "PR workflows with spec context.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {
-            "name": "action",
-            "type": "string",
-            "required": true,
-            "enum": [
-              "create",
-              "get-context"
-            ],
-            "description": "PR workflow action"
-          },
-          {
-            "name": "spec_id",
-            "type": "string",
-            "required": false,
-            "description": "Spec ID for context/PR creation"
-          }
-        ],
-        "version": "1.0.0",
-        "deprecated": false,
-        "tags": [
-          "unified"
-        ],
-        "examples": [
-          {
-            "description": "Example: pr action=create",
             "input": {
               "action": "create"
             }
@@ -1180,47 +1143,6 @@
         ]
       },
       {
-        "name": "code",
-        "description": "Repo-local code navigation helpers.",
-        "auth_required": false,
-        "rate_limit": null,
-        "parameters": [
-          {
-            "name": "action",
-            "type": "string",
-            "required": true,
-            "enum": [
-              "find-class",
-              "find-function",
-              "callers",
-              "callees",
-              "trace",
-              "impact"
-            ],
-            "description": "Code navigation action"
-          },
-          {
-            "name": "symbol",
-            "type": "string",
-            "required": false,
-            "description": "Symbol name (required for most actions)"
-          }
-        ],
-        "version": "1.0.0",
-        "deprecated": false,
-        "tags": [
-          "unified"
-        ],
-        "examples": [
-          {
-            "description": "Example: code action=find-class",
-            "input": {
-              "action": "find-class"
-            }
-          }
-        ]
-      },
-      {
         "name": "server",
         "description": "Tool discovery, schemas, context, and capabilities.",
         "auth_required": false,
@@ -1314,8 +1236,8 @@
         ]
       },
       {
-        "name": "test",
-        "description": "Pytest discovery and execution.",
+        "name": "research",
+        "description": "AI-powered research workflows (chat, consensus, thinkdeep, ideate, deep research).",
         "auth_required": false,
         "rate_limit": null,
         "parameters": [
@@ -1324,21 +1246,43 @@
             "type": "string",
             "required": true,
             "enum": [
-              "run",
-              "discover"
+              "chat",
+              "consensus",
+              "thinkdeep",
+              "ideate",
+              "deep-research",
+              "deep-research-status",
+              "deep-research-report",
+              "deep-research-list",
+              "deep-research-delete",
+              "thread-list",
+              "thread-get",
+              "thread-delete",
+              "node-execute",
+              "node-record",
+              "node-status",
+              "node-findings",
+              "extract"
             ],
-            "description": "Test action"
+            "description": "Research workflow action"
           },
           {
-            "name": "preset",
+            "name": "prompt",
             "type": "string",
             "required": false,
-            "enum": [
-              "quick",
-              "unit",
-              "full"
-            ],
-            "description": "Preset for action=run"
+            "description": "User prompt/message (chat, consensus)"
+          },
+          {
+            "name": "topic",
+            "type": "string",
+            "required": false,
+            "description": "Topic for new investigation/ideation"
+          },
+          {
+            "name": "query",
+            "type": "string",
+            "required": false,
+            "description": "Research query (deep-research) or follow-up (thinkdeep)"
           }
         ],
         "version": "1.0.0",
@@ -1348,9 +1292,10 @@
         ],
         "examples": [
           {
-            "description": "Example: test action=run",
+            "description": "Example: research action=chat",
             "input": {
-              "action": "run"
+              "action": "chat",
+              "prompt": "Explain the trade-offs of cursor vs offset pagination"
             }
           }
         ]
@@ -1588,7 +1533,7 @@
         "expires_at": null
       },
       "unified_manifest": {
-        "description": "Expose only the 16 unified tools for discovery/token reduction",
+        "description": "Expose only the 14 unified tools for discovery/token reduction",
         "state": "beta",
         "default_enabled": false,
         "percentage_rollout": 0,
@@ -1622,11 +1567,10 @@
       },
       "unified_tools": {
         "supported": true,
-        "description": "Action-based unified tool surface (16 tools)",
+        "description": "Action-based unified tool surface (14 tools)",
         "tools": [
           "health",
           "plan",
-          "pr",
           "error",
           "journal",
           "authoring",
@@ -1637,9 +1581,8 @@
           "task",
           "spec",
           "review",
-          "code",
-          "server",
-          "test"
+          "research",
+          "server"
         ],
         "feature_flags": [
           "unified_manifest",

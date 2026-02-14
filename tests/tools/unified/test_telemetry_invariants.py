@@ -35,14 +35,12 @@ ROUTER_BASELINES = [
     ("journal",          "journal",      None,                  False,   False),
     ("lifecycle",        "lifecycle",    "lifecycle",            True,    False),
     ("plan",             "plan",         None,                  False,   False),
-    ("pr",               "pr",           None,                  False,   False),
     ("provider",         "provider",     "provider",            True,    False),
     ("research",         "research",     None,                  False,   True),
     ("review",           "review",       None,                  False,   False),
     ("server",           "server",       "unified_tools.server", True,   False),
     ("spec",             "spec",         None,                  False,   False),
     ("task",             "task",         "unified_tools.task",  True,    False),
-    ("test",             "test",         "unified_tools.test",  True,    False),
     ("verification",     "verification", "verification",        True,    False),
 ]
 
@@ -95,11 +93,9 @@ _DISPATCH_SIGNATURES: dict[str, dict] = {
     "server":        {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "spec":          {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "task":          {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
-    "test":          {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     "verification":  {"action": "nonexistent-action", "payload": {}, "config": MagicMock(specs_dir=None)},
     # Positional-style: (action, payload)
     "plan":          {"action": "nonexistent-action", "payload": {}},
-    "pr":            {"action": "nonexistent-action", "payload": {}},
     # Unique signatures
     "health":        {"action": "nonexistent-action"},
     "research":      {"action": "nonexistent-action"},
@@ -108,7 +104,7 @@ _DISPATCH_SIGNATURES: dict[str, dict] = {
 # Dispatch functions that use **keyword-only** arguments
 _KEYWORD_ONLY_DISPATCH = {
     "authoring", "environment", "error", "journal", "lifecycle",
-    "provider", "review", "server", "spec", "task", "test", "verification",
+    "provider", "review", "server", "spec", "task", "verification",
 }
 
 # Dispatch functions that use positional arguments
@@ -120,7 +116,7 @@ def _call_dispatch(module_name: str):
     sig = _DISPATCH_SIGNATURES[module_name]
     if module_name in _KEYWORD_ONLY_DISPATCH:
         return dispatch_fn(**sig)
-    elif module_name == "plan" or module_name == "pr":
+    elif module_name == "plan":
         return dispatch_fn(sig["action"], sig["payload"])
     elif module_name == "health":
         return dispatch_fn(sig["action"])
@@ -230,9 +226,9 @@ class TestRequestIdInvariants:
         )
 
     def test_request_id_router_count(self):
-        """Exactly 8 routers define local _request_id helpers."""
-        assert len(_ROUTERS_WITH_REQUEST_ID) == 8, (
-            f"Expected 8 routers with _request_id, got {len(_ROUTERS_WITH_REQUEST_ID)}: "
+        """Exactly 7 routers define local _request_id helpers."""
+        assert len(_ROUTERS_WITH_REQUEST_ID) == 7, (
+            f"Expected 7 routers with _request_id, got {len(_ROUTERS_WITH_REQUEST_ID)}: "
             f"{sorted(_ROUTERS_WITH_REQUEST_ID)}"
         )
 
@@ -317,8 +313,8 @@ class TestDispatchToolNameInvariants:
             f"'{expected_tool_name}', got: {result['error']}"
         )
 
-    def test_all_16_routers_covered(self):
-        """Baseline table covers all 16 routers."""
-        assert len(ROUTER_BASELINES) == 16, (
-            f"Expected 16 router baselines, got {len(ROUTER_BASELINES)}"
+    def test_all_14_routers_covered(self):
+        """Baseline table covers all 14 routers."""
+        assert len(ROUTER_BASELINES) == 14, (
+            f"Expected 14 router baselines, got {len(ROUTER_BASELINES)}"
         )

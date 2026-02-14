@@ -91,7 +91,6 @@ foundry_mcp/
 │   │   ├── lifecycle.py     # sdd activate/complete/archive
 │   │   ├── validation.py    # sdd validate/fix commands
 │   │   ├── docs.py          # sdd doc-* commands
-│   │   ├── test.py          # sdd test-* commands
 │   │   └── review.py        # sdd review-* commands
 │   ├── output.py            # JSON/text output formatting
 │   ├── config.py            # CLI-specific config (work_mode, etc.)

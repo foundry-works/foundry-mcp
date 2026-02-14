@@ -28,4 +28,4 @@
 ## 1.5 Metrics & Logging
 
 - Emit structured logs via `foundry_mcp.core.observability` with context IDs pulled from CLI flags (or generated UUIDs). This ensures CLI-only usage still populates shared observability streams per [dev_docs/mcp_best_practices/05-observability-telemetry.md](../mcp_best_practices/05-observability-telemetry.md).
-- For long-running commands, add progress hooks that can be reused by the MCP streaming APIs (e.g., environment verification, repo-local code scans via `code(action=...)`).
+- For long-running commands, add progress hooks that can be reused by the MCP streaming APIs (e.g., environment verification, research workflows).

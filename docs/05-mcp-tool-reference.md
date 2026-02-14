@@ -1,6 +1,11 @@
 # MCP Tool Reference
 
-foundry-mcp exposes 16 unified tools with an `action` parameter that switches behavior. The authoritative schemas live in `mcp/capabilities_manifest.json`.
+foundry-mcp exposes 14 unified tools with an `action` parameter that switches behavior. The authoritative schemas live in `mcp/capabilities_manifest.json`.
+
+> **Note:** The `pr`, `code`, and `test` tools have been removed from the MCP surface. Use CLI alternatives instead:
+> - `pr`: Use `gh` CLI or git commands directly
+> - `code`: Use LSP-integrated editors (Cursor, VS Code)
+> - `test`: Use `pytest` directly or `foundry-cli test run`
 
 ## Tool Overview
 
@@ -15,13 +20,11 @@ foundry-mcp exposes 16 unified tools with an `action` parameter that switches be
 | `review` | LLM-assisted review workflows | `spec`, `fidelity`, `parse-feedback`, `list-tools`, `list-plan-tools` |
 | `verification` | Verification definition and execution | `add`, `execute` |
 | `journal` | Journaling helpers | `add`, `list`, `list-unjournaled` |
-| `pr` | PR workflows with spec context | `create`, `get-context` |
 | `provider` | LLM provider discovery | `list`, `status`, `execute` |
 | `environment` | Workspace setup and verification | `init`, `verify-env`, `verify-toolchain`, `setup`, `detect` |
 | `error` | Error collection and cleanup | `list`, `get`, `stats`, `patterns`, `cleanup` |
-| `code` | Code navigation helpers | `find-class`, `find-function`, `callers`, `callees`, `trace`, `impact` |
+| `research` | AI-powered research workflows | `chat`, `consensus`, `thinkdeep`, `ideate`, `deep-research`, `deep-research-status`, `deep-research-report`, `deep-research-list`, `deep-research-delete`, `thread-list`, `thread-get`, `thread-delete`, `node-execute`, `node-record`, `node-status`, `node-findings`, `extract` |
 | `server` | Tool discovery and capabilities | `tools`, `schema`, `capabilities`, `context`, `llm-status` |
-| `test` | Test discovery and execution | `run`, `discover` |
 
 ---
 
@@ -349,40 +352,6 @@ Journaling add/list helpers.
 | `entry_type` | string | No | - | Entry type filter |
 
 **CLI equivalent:** `foundry-cli journal`
-
----
-
-## test
-
-Pytest discovery and execution.
-
-### Actions
-
-| Action | Description |
-|--------|-------------|
-| `run` | Run tests |
-| `discover` | Discover tests |
-
-### Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `action` | string | Yes | - | Test action |
-| `preset` | string | No | - | Preset (`quick`, `unit`, `full`) |
-| `target` | string | No | - | Test target path |
-| `pattern` | string | No | - | Test pattern |
-| `timeout` | integer | No | 300 | Timeout in seconds |
-| `verbose` | boolean | No | `true` | Verbose output |
-| `fail_fast` | boolean | No | `false` | Stop on first failure |
-
-### Examples
-
-```json
-{"action": "run", "preset": "quick"}
-{"action": "discover", "target": "tests/unit/"}
-```
-
-**CLI equivalent:** `foundry-cli test run`
 
 ---
 

@@ -1,6 +1,6 @@
 """Smoke tests for MCP server tool registration.
 
-Verifies that the server registers the unified 16-router tool surface.
+Verifies that the server registers the unified 14-router tool surface.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from foundry_mcp.server import create_server
 _UNIFIED_TOOL_NAMES = {
     "health",
     "plan",
-    "pr",
     "error",
     "journal",
     "authoring",
@@ -28,7 +27,6 @@ _UNIFIED_TOOL_NAMES = {
     "spec",
     "review",
     "server",
-    "test",
     "research",
 }
 

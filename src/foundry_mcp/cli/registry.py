@@ -65,12 +65,10 @@ def register_all_commands(cli: click.Group) -> None:
         lifecycle,
         modify_group,
         plan_group,
-        pr_group,
         review_group,
         session,
         specs,
         tasks,
-        test_group,
         validate_group,
     )
 
@@ -82,9 +80,7 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(journal)
     cli.add_command(validate_group)
     cli.add_command(review_group)
-    cli.add_command(pr_group)
     cli.add_command(modify_group)
-    cli.add_command(test_group)
     cli.add_command(dev_group)
     cli.add_command(plan_group)
 

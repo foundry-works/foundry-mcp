@@ -1,6 +1,6 @@
 """MCP tool registration surface.
 
-Only the unified 16-router tool surface is exported.
+Only the unified 14-router tool surface is exported.
 """
 
 from foundry_mcp.tools.unified import register_unified_tools

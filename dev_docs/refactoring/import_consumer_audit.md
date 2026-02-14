@@ -25,7 +25,6 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 | `tools/unified/journal.py:31` | `find_specs_directory`, `load_spec`, `save_spec` | **Internal** — tool router |
 | `tools/unified/lifecycle.py:24` | `find_specs_directory` | **Internal** — tool router |
 | `tools/unified/plan.py:35` | `find_specs_directory` | **Internal** — tool router |
-| `tools/unified/pr.py:25` | `find_spec_file`, `find_specs_directory`, `load_spec` | **Internal** — tool router |
 | `tools/unified/review.py:41` | `find_spec_file`, `find_specs_directory`, `load_spec` | **Internal** — tool router |
 | `tools/unified/verification.py:23` | `find_specs_directory`, `load_spec`, `save_spec` | **Internal** — tool router |
 | `tools/unified/research.py:743,778,884` | `load_spec`, `find_specs_directory`, `save_spec` | **Internal** — tool router (function-scope imports) |
@@ -100,7 +99,7 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 
 ## 3. `foundry_mcp.tools.unified.*` Consumers
 
-### Source Code (3 external files + 16 internal cross-imports)
+### Source Code (3 external files + 14 internal cross-imports)
 
 | File | Symbols | Classification |
 |------|---------|---------------|
@@ -110,11 +109,11 @@ Target modules: `foundry_mcp.core.spec`, `foundry_mcp.core.task`, `foundry_mcp.t
 
 ### Internal Cross-Module Imports (within `tools/unified/`)
 
-All 16 tool routers import from `tools/unified/router`:
+All 14 tool routers import from `tools/unified/router`:
 - `ActionDefinition`, `ActionRouter`, `DispatchError`, `error_response`, `success_response`
 
-`tools/unified/server.py` imports all 14 router singletons:
-- `_AUTHORING_ROUTER`, `_ENVIRONMENT_ROUTER`, `_ERROR_ROUTER`, `_HEALTH_ROUTER`, `_JOURNAL_ROUTER`, `_LIFECYCLE_ROUTER`, `_PLAN_ROUTER`, `_PR_ROUTER`, `_PROVIDER_ROUTER`, `_REVIEW_ROUTER`, `_SPEC_ROUTER`, `_TASK_ROUTER`, `_TEST_ROUTER`, `_VERIFICATION_ROUTER`
+`tools/unified/server.py` manifest builder imports all 14 router singletons:
+- `_AUTHORING_ROUTER`, `_ENVIRONMENT_ROUTER`, `_ERROR_ROUTER`, `_HEALTH_ROUTER`, `_JOURNAL_ROUTER`, `_LIFECYCLE_ROUTER`, `_PLAN_ROUTER`, `_PROVIDER_ROUTER`, `_RESEARCH_ROUTER`, `_REVIEW_ROUTER`, `_SERVER_ROUTER`, `_SPEC_ROUTER`, `_TASK_ROUTER`, `_VERIFICATION_ROUTER`
 
 `tools/unified/__init__.py:53` — Dynamic import via `importlib.import_module("foundry_mcp.tools.unified.task")` for conditional tool registration.
 

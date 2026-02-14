@@ -241,9 +241,9 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 "- Run full test suite if changes are significant",
                 "",
                 "## Available Tools",
-                "Use these MCP tools to help debug:",
-                '- `test(action="run", preset="quick")`: Run tests',
-                '- `test(action="discover")`: Discover available tests',
+                "Use these commands to help debug:",
+                "- `pytest tests/ -v --tb=long`: Run tests (CLI)",
+                "- `pytest --collect-only`: Discover available tests (CLI)",
                 "",
             ]
         )
@@ -385,7 +385,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 '- `task(action="next")`: Find next task to work on',
                 '- `task(action="prepare")`: Get task context',
                 '- `task(action="complete")`: Mark task done with journal',
-                '- `test(action="run", preset="quick")`: Run verification tests',
+                '- `pytest -x`: Run verification tests (CLI)',
                 "",
                 "Ready to proceed? Let's review the remaining tasks.",
             ]

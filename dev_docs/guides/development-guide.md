@@ -385,9 +385,7 @@ Follow the [naming conventions](../codebase_standards/naming-conventions.md):
 | Unified tool router | `task` | `task(action="next")`, `task(action="prepare")` |
 | Unified tool router | `lifecycle` | `lifecycle(action="activate")`, `lifecycle(action="archive")` |
 | Unified tool router | `journal` | `journal(action="add")`, `journal(action="list")` |
-| Unified tool router | `test` | `test(action="run", preset="full")`, `test(action="discover")` |
 | Unified tool router | `review` | `review(action="spec")`, `review(action="fidelity")` |
-| Unified tool router | `code` | `code(action="find-function")`, `code(action="trace")` |
 | Unified tool router | `server` | `server(action="tools")`, `server(action="schema", tool_name="spec")` |
 
 ---

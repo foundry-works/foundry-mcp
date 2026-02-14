@@ -36,14 +36,12 @@ DISPATCH_BASELINES = [
     ("journal",       "_dispatch_journal_action",       "_JOURNAL_ROUTER",       "journal",       "kw",       "add"),
     ("lifecycle",     "_dispatch_lifecycle_action",     "_LIFECYCLE_ROUTER",     "lifecycle",     "kw",       "move"),
     ("plan",          "_dispatch_plan_action",          "_PLAN_ROUTER",          "plan",          "pos",      "create"),
-    ("pr",            "_dispatch_pr_action",            "_PR_ROUTER",            "pr",            "pos",      "get-context"),
     ("provider",      "_dispatch_provider_action",      "_PROVIDER_ROUTER",      "provider",      "kw",       "list"),
     ("research",      "_dispatch_research_action",      "_RESEARCH_ROUTER",      "research",      "research", "chat"),
     ("review",        "_dispatch_review_action",        "_REVIEW_ROUTER",        "review",        "kw",       "spec"),
     ("server",        "_dispatch_server_action",        "_SERVER_ROUTER",        "server",        "kw",       "tools"),
     ("spec",          "_dispatch_spec_action",          "_SPEC_ROUTER",          "spec",          "kw",       "list"),
     ("task",          "_dispatch_task_action",          "_TASK_ROUTER",          "task",          "kw",       "list"),
-    ("test",          "_dispatch_test_action",          "_TEST_ROUTER",          "test",          "kw",       "run"),
     ("verification",  "_dispatch_verification_action",  "_VERIFICATION_ROUTER",  "verification",  "kw",       "add"),
 ]
 
@@ -121,7 +119,7 @@ def assert_internal_error_envelope(response: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 1. Parametrized unsupported-action tests (all 16 routers)
+# 1. Parametrized unsupported-action tests (all 14 routers)
 # ---------------------------------------------------------------------------
 
 class TestUnsupportedActionEnvelope:
@@ -144,12 +142,12 @@ class TestUnsupportedActionEnvelope:
         # Error message references the tool name
         assert tool_name in result["error"]
 
-    def test_all_16_routers_covered(self):
-        assert len(DISPATCH_BASELINES) == 16
+    def test_all_14_routers_covered(self):
+        assert len(DISPATCH_BASELINES) == 14
 
 
 # ---------------------------------------------------------------------------
-# 2. Parametrized internal-error tests (all 16 routers)
+# 2. Parametrized internal-error tests (all 14 routers)
 # ---------------------------------------------------------------------------
 
 class TestInternalErrorEnvelope:
