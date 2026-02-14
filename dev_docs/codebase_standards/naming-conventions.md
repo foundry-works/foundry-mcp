@@ -47,7 +47,6 @@ All binaries import `foundry_mcp.sdd_cli.__main__` so the same parser/runtime st
 | `update` | Status changes, journaling, lifecycle | `task`, `journal`, `lifecycle` |
 | `validate` | Validation, fix, reporting | `spec` |
 | `provider` | LLM provider management | `provider` |
-| `test` | Test discovery/execution | CLI-only (pytest) |
 | `spec-mod` | Bulk spec modifications | `authoring`, `verification` |
 | `plan-review` | Reviews helpers | `review` |
 | `context` | Session + token tracking | `server` (context), `environment` |
