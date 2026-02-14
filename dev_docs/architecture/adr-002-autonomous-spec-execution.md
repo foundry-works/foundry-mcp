@@ -36,12 +36,12 @@ Key decisions:
 4. Add context-aware pause/resume using heartbeat updates with staleness detection; keep `status`/`list` read-only and enforce state transitions on mutating paths or maintenance sweeps.
 5. Close the orchestration feedback loop: callers must report step outcomes before requesting the next step.
 6. Maintain backward compatibility for existing `session-config` (`get`, `auto_mode`) during a deprecation window.
-7. Require verifiable gate evidence for `run_fidelity_gate` outcomes using server-generated nonces with session/phase/step binding so callers cannot forge or replay gate results.
+7. Require verifiable gate evidence for `run_fidelity_gate` outcomes using server-generated `gate_attempt_id` matching with session/phase/step binding so callers cannot misattribute or replay gate results. (v1 uses ID matching; cryptographic nonce signing is deferred to v2 for multi-tenant deployments.)
 8. Define deterministic active-session lookup behavior (`NO_ACTIVE_SESSION`, `AMBIGUOUS_ACTIVE_SESSION`) when `session_id` is omitted.
 9. Enforce one active session per spec — `command="start"` rejects if a non-terminal session already exists for the same `spec_id` (unless `force=true` ends the existing session first).
 10. Snapshot spec structure at session start and validate integrity at phase boundaries to detect spec mutations during execution.
 11. Make one-active-session-per-spec atomic by guarding `start` with a per-spec lock and active-session index transaction.
-12. Use unsigned nonce gate evidence only in local-trust deployments; require signed gate evidence mode for remote/multi-tenant deployments.
+12. **[Deferred to v2]** Signed gate evidence (HMAC with key ID rotation) for remote/multi-tenant deployments. v1 uses `gate_attempt_id` matching within the local trust boundary, which is sufficient when caller and server share filesystem trust.
 13. Write journal entries for session lifecycle events to provide an audit trail and enrich resume context.
 14. Require explicit manual-gate acknowledgment payload on `resume` when paused with `gate_review_required`.
 15. Restrict `reset` to `failed` sessions only; reject other source states with deterministic error semantics.
@@ -51,7 +51,7 @@ Key decisions:
 19. Add configurable stop conditions so the orchestrator pauses when any configured condition is true (logical OR), including phase completion and context exhaustion safeguards.
 20. Add a fidelity-cycle stop heuristic (`max_fidelity_review_cycles_per_phase`) to pause sessions that are repeatedly re-running the same phase gate ("spinning wheels").
 21. Enable automatic fidelity-gate retries for `strict`/`lenient` policies (configurable) and bound them with the fidelity-cycle safety stop.
-22. Prevent gate/step bypass by enforcing autonomy write-locks: protected task/lifecycle mutations require a valid step-proof token issued by `session-step` `next`.
+22. Prevent gate/step bypass by enforcing autonomy write-locks: while a non-terminal autonomous session exists for a spec, protected task/lifecycle mutations are rejected unless the caller passes a `bypass_autonomy_lock=true` flag. This is a simple boolean guard — the escape hatch is to end/reset the session first. (v1 uses boolean enforcement; cryptographic step-proof tokens with TTL and replay detection are deferred to v2 for multi-tenant deployments.)
 
 Non-goal:
 
@@ -120,12 +120,10 @@ All session and step IDs use ULID format (`auto_01HXYZ...`, `step_01JABCD...`). 
 - `heartbeat_stale_minutes` (optional, default 10)
 - `heartbeat_grace_minutes` (optional, default 5; initial grace window before first heartbeat is required — shorter than `heartbeat_stale_minutes` because the first heartbeat should arrive promptly after the caller begins work)
 - `step_stale_minutes` (optional, default 60; max age of an outstanding step before auto-pause)
-- `gate_nonce_ttl_minutes` (optional, default 30; TTL for gate evidence nonces — controls how long a nonce remains valid after minting and how long consumed nonces are retained for replay prevention)
 - `stop_on_phase_completion` (optional, bool, default false — when true, pause after a phase gate passes instead of immediately issuing work from the next phase)
 - `max_fidelity_review_cycles_per_phase` (optional, integer, default 3, min 1 — max accepted `run_fidelity_gate` cycles for the active phase before pausing with `fidelity_cycle_limit`)
 - `auto_retry_fidelity_gate` (optional, bool, default true — for `strict`/`lenient`, failed gate evaluations automatically schedule remediation (`address_fidelity_feedback`) before retrying the gate, until the phase cycle cap is reached)
-- `enforce_autonomy_write_lock` (optional, bool, default true — when true, protected task/lifecycle status mutations require a step-proof token while a non-terminal autonomous session exists)
-- `step_proof_ttl_minutes` (optional, integer, default 15, min 1 — validity window for step-proof tokens used by protected mutations)
+- `enforce_autonomy_write_lock` (optional, bool, default true — when true, protected task/lifecycle status mutations are rejected while a non-terminal autonomous session exists, unless `bypass_autonomy_lock=true` is passed)
 - `force` (optional, bool, default false — if true and an active session exists for this spec, ends the existing session before starting a new one)
 
 Stop-condition semantics:
@@ -185,7 +183,7 @@ On `rebase`, the orchestrator:
 - `meta.pagination.page_size` (effective page size)
 - `meta.pagination.total_count` (optional; include when inexpensive)
 - Cursor ordering is deterministic: `updated_at DESC, session_id DESC`.
-- Cursor format is opaque, versioned, and server-generated (base64url-encoded payload containing `{v, updated_at, session_id}`).
+- Cursor format is opaque, versioned, and server-generated. Callers must not parse or construct cursors.
 - Invalid/malformed cursor returns `INVALID_CURSOR`.
 
 `list` remains read-only. For stale `running` sessions it returns `effective_status="paused"` with staleness metadata (`stale_reason`, `stale_detected_at`) but does not persist the transition.
@@ -219,17 +217,13 @@ On `rebase`, the orchestrator:
     "heartbeat_stale_minutes": 10,
     "heartbeat_grace_minutes": 5,
     "step_stale_minutes": 60,
-    "gate_nonce_ttl_minutes": 30,
     "max_fidelity_review_cycles_per_phase": 3
   },
   "stop_conditions": {
     "stop_on_phase_completion": false,
     "auto_retry_fidelity_gate": true
   },
-  "write_lock": {
-    "enforced": true,
-    "step_proof_ttl_minutes": 15
-  },
+  "write_lock_enforced": true,
   "active_phase_id": "phase-2",
   "last_heartbeat_at": "2026-02-13T18:39:12Z",
   "next_action_hint": "task(action='session-step', command='next')"
@@ -304,7 +298,6 @@ Active-session lookup follows the same rules as `task(action="session")`: single
 - `next_step` object (or `null` when terminal/paused)
 
 `next_step` always includes a stable `step_id` token. The caller MUST echo this as `last_step_result.step_id` on the next `command="next"` call.
-`next_step` also includes `step_proof_token` + `step_proof_expires_at` when autonomy write-lock is enabled. Callers MUST attach the proof token to protected status-mutating calls (see [Non-Bypass Enforcement](#non-bypass-enforcement)).
 
 `next_step.type` enum:
 
@@ -324,8 +317,6 @@ Active-session lookup follows the same rules as `task(action="session")`: single
 ```json
 {
   "step_id": "step_01JABCD...",
-  "step_proof_token": "stp_eyJ2IjoxLCJzaWQiOiJhdXRvXzAxLi4uIn0",
-  "step_proof_expires_at": "2026-02-13T18:54:12Z",
   "type": "implement_task",
   "task_id": "task-2-3",
   "phase_id": "phase-2",
@@ -341,8 +332,6 @@ Active-session lookup follows the same rules as `task(action="session")`: single
 ```json
 {
   "step_id": "step_01JABCE...",
-  "step_proof_token": "stp_eyJ2IjoxLCJzaWQiOiJhdXRvXzAxLi4uIn0",
-  "step_proof_expires_at": "2026-02-13T18:54:12Z",
   "type": "run_fidelity_gate",
   "phase_id": "phase-2",
   "instructions": [
@@ -354,8 +343,6 @@ Active-session lookup follows the same rules as `task(action="session")`: single
 ```json
 {
   "step_id": "step_01JABCG...",
-  "step_proof_token": "stp_eyJ2IjoxLCJzaWQiOiJhdXRvXzAxLi4uIn0",
-  "step_proof_expires_at": "2026-02-13T18:54:12Z",
   "type": "address_fidelity_feedback",
   "phase_id": "phase-2",
   "gate_attempt_id": "gate_01J...",
@@ -377,10 +364,10 @@ Active-session lookup follows the same rules as `task(action="session")`: single
 
 ### 3) Backward Compatibility for `session-config`
 
-`task(action="session-config")` retains its existing `get` and `auto_mode` fields unchanged. During the deprecation window:
+`task(action="session-config")` retains its existing `get` field unchanged. During the deprecation window:
 
-- `auto_mode=true` logs a deprecation warning and delegates to `session` `command="start"` if `spec_id` is provided as an explicit parameter. If `spec_id` is omitted, the handler checks for a single active spec in the resolved workspace scope (via `spec(action="list", status="active", limit=2, workspace=<resolved_workspace>)`); if exactly one exists, it uses that spec's ID. If zero or multiple active specs exist, return `AUTO_MODE_SPEC_RESOLUTION_FAILED` and do not use ephemeral fallback.
-- `auto_mode=false` logs a deprecation warning and delegates to `session` `command="pause"` via active-session lookup in the resolved workspace. If no active session exists, return `NO_ACTIVE_SESSION` and do not use ephemeral fallback.
+- `auto_mode=true` logs a deprecation warning and delegates to `session` `command="start"`. Requires `spec_id` as an explicit parameter. If `spec_id` is omitted, return `AUTO_MODE_SPEC_REQUIRED` with a message directing the caller to use `task(action="session", command="start", spec_id=...)` instead. No implicit spec resolution — the heuristic of scanning the workspace for a single active spec is fragile for a deprecation path and not worth the implementation cost.
+- `auto_mode=false` logs a deprecation warning and delegates to `session` `command="pause"` via active-session lookup in the resolved workspace. If no active session exists, return `NO_ACTIVE_SESSION`.
 - `get=true` continues to return the lightweight session config (not the full session state).
 
 After two release cycles (Phase F), `auto_mode` support is removed.
@@ -414,11 +401,11 @@ After the caller executes the step returned by a previous `session-step` `comman
 
 For `step_type="run_fidelity_gate"`:
 
-- `last_step_result` MUST include `phase_id`, `gate_attempt_id`, and `gate_evidence_token`.
-- `review(action="fidelity-gate")` mints a server-generated gate evidence token and creates a gate-attempt record in session state (`pending_gate_evidence`) scoped to `{session_id, phase_id, step_id, gate_attempt_id, verdict, issued_at, expires_at}`.
-- Multiple review attempts are allowed for the same `step_id` before `command="next"` consumes one. Each new attempt replaces `pending_gate_evidence` for that step (`latest attempt wins`) and invalidates prior unconsumed tokens for that step.
-- `command="next"` validates `gate_attempt_id` + `gate_evidence_token` against `pending_gate_evidence`: matching attempt ID, matching session/phase/step binding, not expired, and not previously consumed. If invalid, return `INVALID_GATE_EVIDENCE` without mutating state.
-- After validation, orchestrator derives gate pass/fail from `verdict` + session `gate_policy` (caller-provided pass/fail booleans are non-authoritative). The consumed token hash is recorded to prevent replay.
+- `last_step_result` MUST include `phase_id` and `gate_attempt_id`.
+- `review(action="fidelity-gate")` creates a gate-attempt record in session state (`pending_gate_evidence`) scoped to `{session_id, phase_id, step_id, gate_attempt_id, verdict, issued_at}`.
+- Multiple review attempts are allowed for the same `step_id` before `command="next"` consumes one. Each new attempt replaces `pending_gate_evidence` for that step (`latest attempt wins`).
+- `command="next"` validates `gate_attempt_id` against `pending_gate_evidence`: matching attempt ID, matching session/phase/step binding. If invalid, return `INVALID_GATE_EVIDENCE` without mutating state.
+- After validation, orchestrator derives gate pass/fail from `verdict` + session `gate_policy` (caller-provided pass/fail booleans are non-authoritative).
 - Each accepted `run_fidelity_gate` result increments the active phase's fidelity-review cycle counter. The counter resets when the session advances to a new phase.
 - Gate failure handling:
   - `gate_policy="manual"` always pauses with `gate_review_required`.
@@ -433,11 +420,7 @@ For `step_type="address_fidelity_feedback"`:
 - `last_step_result.files_touched` should include remediation edits when available.
 - On `outcome="success"`, the orchestrator schedules `run_fidelity_gate` for the retry cycle (subject to cycle limits).
 
-**Design note**:
-
-- **Local-trust mode (default)**: Unsigned server-generated nonces are allowed when caller and server share the same trust boundary.
-- **Remote/multi-tenant mode (required outside local trust)**: Gate evidence tokens must be signed (HMAC with key ID rotation). `command="next"` rejects unsigned tokens when `autonomy_signed_gate_evidence` is enabled.
-- Nonce binding prevents accidental misattribution and replay. Signed mode adds origin integrity when callers do not share filesystem trust with the server.
+**v1 trust model**: Gate evidence uses `gate_attempt_id` matching within the local trust boundary. The `gate_attempt_id` is server-generated and bound to `{session_id, phase_id, step_id}`, preventing misattribution. Since v1 callers share filesystem trust with the server, this is sufficient. Cryptographic nonce signing (HMAC with key ID rotation) for remote/multi-tenant deployments is deferred to v2.
 
 If `last_step_result` is omitted on a non-initial call, the orchestrator returns an error (`STEP_RESULT_REQUIRED`) rather than silently advancing. The first `command="next"` call after `start` or `resume`/`rebase` is exempt.
 
@@ -463,12 +446,10 @@ Response data:
 - `verdict`: `pass | fail | warn`
 - `gate_policy` (echo of active session policy for transparency)
 - `gate_passed_preview` (bool, convenience preview only; `command="next"` recomputes authoritatively)
-- `gate_evidence_token` (server-generated nonce consumed by `command="next"`)
-- `gate_evidence_expires_at`
 - `review_path` (if written)
 - `findings` (summary of issues, if any)
 
-If review execution succeeds but gate fails, return `success=true` with warnings and `gate_passed_preview=false`. The caller still reports the step as `outcome="success"` with `gate_evidence_token`; `session-step` `command="next"` validates the nonce and applies gate policy. If policy fails, orchestrator pauses the session without incrementing `consecutive_errors`.
+If review execution succeeds but gate fails, return `success=true` with warnings and `gate_passed_preview=false`. The caller still reports the step as `outcome="success"` with `gate_attempt_id`; `session-step` `command="next"` validates the attempt ID against the pending gate record and applies gate policy. If policy fails, orchestrator pauses the session without incrementing `consecutive_errors`.
 
 Retry semantics for repeated reviews on the same gate step:
 
@@ -487,31 +468,22 @@ Protected actions (non-exhaustive):
 
 Rules:
 
-- While a non-terminal autonomous session (`running | paused | failed`) exists for a spec and write-lock is enabled, protected mutations require `autonomy_step_proof`.
-- Protected mutation requests carry `autonomy_step_proof` as an explicit request field on the mutating action.
-- `autonomy_step_proof` must match the latest issued step proof binding (`session_id`, `spec_id`, `step_id`, allowed action set), must be unexpired, and single-use.
-- Missing proof returns `STEP_PROOF_REQUIRED`.
-- Invalid/expired/replayed/mismatched proof returns `STEP_PROOF_INVALID`.
-- Valid proof but disallowed mutation for the current step returns `AUTONOMY_WRITE_LOCK_ACTIVE`.
+- While a non-terminal autonomous session (`running | paused | failed`) exists for a spec and write-lock is enabled, protected mutations are rejected with `AUTONOMY_WRITE_LOCK_ACTIVE`.
+- Protected mutation requests can pass `bypass_autonomy_lock=true` to override — this is logged as a warning and recorded in the journal. The bypass flag is an explicit opt-out for manual intervention, not a routine code path.
 - Read-only actions remain unaffected.
 - Controlled escape hatch: end/reset the autonomous session first (`session` lifecycle commands), then perform manual status surgery explicitly outside autonomy mode.
 
-This means an agent cannot "just mark task/phase complete" through alternate MCP status-mutating actions while the autonomous controller is active.
+This means an agent cannot accidentally "just mark task/phase complete" through alternate MCP status-mutating actions while the autonomous controller is active. The boolean guard is sufficient for v1 (single local caller). Cryptographic step-proof tokens (with TTL, replay detection, and allowed-action-set binding) are deferred to v2 for multi-tenant deployments where the bypass flag would be an insufficient trust boundary.
 
 ### 7) Extend `server(action="capabilities")`
 
 Add capability flags for negotiation/discovery:
 
-- `autonomy_sessions`
-- `autonomy_session_step`
-- `autonomy_resume`
-- `autonomy_rebase`
-- `autonomy_fidelity_gates`
-- `autonomy_auto_gate_retry`
-- `autonomy_write_lock`
-- `autonomy_step_proofs`
-- `autonomy_context_heartbeat`
-- `autonomy_signed_gate_evidence`
+- `autonomy_sessions` — core lifecycle (`session`) and step engine (`session-step`) available, including resume, rebase, heartbeat, and write-lock support
+- `autonomy_fidelity_gates` — gate enforcement and auto-retry available
+- `autonomy_signed_gate_evidence` — **[v2]** remote trust mode with cryptographic nonce signing
+
+Callers check `autonomy_sessions` to know the feature exists, and `autonomy_fidelity_gates` to know gate enforcement is active. All other settings (write-lock enforcement, auto-retry policy, heartbeat config) are session-level configuration communicated in the `start` response — they do not need capability negotiation because callers see them directly in the session state.
 
 Expose rollout state and defaults in `capabilities.feature_flags`.
 
@@ -579,7 +551,9 @@ Events that produce journal entries:
 | Task step completed | `step` | `step_id`, `task_id`, `outcome`, `files_touched`, `note` |
 | Gate evaluated | `gate` | `phase_id`, `verdict`, `gate_passed`, review findings summary |
 
-Journal writes are best-effort — a journal write failure does not block session state transitions. Failures are logged with `task.session.journal_write_failed.total` metric.
+Journal writes are best-effort for mid-session events — a journal write failure does not block session state transitions. Failures are logged with `task.session.journal_write_failed.total` metric.
+
+**Exception**: The `start` journal write is mandatory. If the journal write fails during `command="start"`, the orchestrator rolls back the session (deletes state file and index entry) and returns an error. The rationale: a session that starts without an audit trail has no provenance from inception, which undermines the value of journal-based resume context. Since `start` is an infrequent operation and the journal write is a cheap local I/O, the risk of spurious failures is low.
 
 The `resume_context` includes `files_touched` inline for recent completed tasks (sourced from journal entries), and `journal_available` indicates whether journal writes succeeded. When `journal_available` is `true`, `journal_hint` directs callers to the journal for full history. When `false`, the inline `resume_context` data is the best available context.
 
@@ -610,18 +584,8 @@ Persist as JSON (file-backed), versioned independently from response envelope. `
     "task_id": "task-2-3",
     "issued_at": "2026-02-13T18:39:12Z"
   },
-  "pending_step_proof": {
-    "proof_hash": "sha256:6ae4...",
-    "step_id": "step_01JABCD...",
-    "issued_at": "2026-02-13T18:39:12Z",
-    "expires_at": "2026-02-13T18:54:12Z",
-    "consumed_at": null
-  },
   "pending_gate_evidence": null,
   "pending_manual_gate_ack": null,
-  "consumed_gate_nonces": [
-    {"nonce_hash": "sha256:...", "consumed_at": "2026-02-13T18:21:00Z"}
-  ],
   "counters": {
     "tasks_completed": 6,
     "consecutive_errors": 0,
@@ -634,17 +598,13 @@ Persist as JSON (file-backed), versioned independently from response envelope. `
     "heartbeat_stale_minutes": 10,
     "heartbeat_grace_minutes": 5,
     "step_stale_minutes": 60,
-    "gate_nonce_ttl_minutes": 30,
     "max_fidelity_review_cycles_per_phase": 3
   },
   "stop_conditions": {
     "stop_on_phase_completion": false,
     "auto_retry_fidelity_gate": true
   },
-  "write_lock": {
-    "enforced": true,
-    "step_proof_ttl_minutes": 15
-  },
+  "write_lock_enforced": true,
   "gate_policy": "strict",
   "context": {
     "context_usage_pct": 72,
@@ -656,7 +616,7 @@ Persist as JSON (file-backed), versioned independently from response envelope. `
       "required": true,
       "status": "passed",
       "verdict": "pass",
-      "evidence_hash": "sha256:abc123...",
+      "gate_attempt_id": "gate_01J...",
       "review_path": "specs/.fidelity-reviews/feature-auth-001-phase-phase-1.md",
       "evaluated_at": "2026-02-13T18:20:03Z"
     }
@@ -672,20 +632,12 @@ Schema fields of note:
 - `idempotency_key`: Client-provided key from `start`, or `null`. Stored for duplicate-start detection. Expires with the session.
 - `spec_file_mtime`: Cached mtime of the spec file at last hash computation.
 - `spec_file_size`: Cached spec file size used with `spec_file_mtime` for fast-path change detection.
-- `pending_gate_evidence`: Current unconsumed gate attempt for the active `run_fidelity_gate` step. Includes `gate_attempt_id`, `step_id`, `phase_id`, `verdict`, `token_hash`, `issued_at`, and `expires_at`. Replaced on each new review attempt for the same step.
+- `pending_gate_evidence`: Current unconsumed gate attempt for the active `run_fidelity_gate` step. Includes `gate_attempt_id`, `step_id`, `phase_id`, `verdict`, and `issued_at`. Replaced on each new review attempt for the same step.
 - `pending_manual_gate_ack`: Set when `gate_policy="manual"` pauses the session. Includes the gate attempt the caller must acknowledge on `resume`.
-- `pending_step_proof`: Latest unconsumed step proof for protected mutations. Includes proof hash, bound `step_id`, issue/expiry timestamps, and consumption timestamp.
-- `gate_nonce_ttl_minutes`: Controls both nonce validity window and consumed-nonce retention. Stored in `limits` so it is visible in session responses.
 - `max_fidelity_review_cycles_per_phase`: Spin-detection guard for repeated gate attempts in the same phase.
 - `stop_conditions.stop_on_phase_completion`: When `true`, the orchestrator pauses with `pause_reason="phase_complete"` after a phase gate passes and before issuing work from the next phase.
 - `stop_conditions.auto_retry_fidelity_gate`: When `true`, failed `strict`/`lenient` gate outcomes automatically schedule `address_fidelity_feedback` followed by another `run_fidelity_gate` while below the phase cycle cap.
-- `write_lock.enforced`: Enables protected-mutation lockout for non-terminal autonomous sessions.
-- `write_lock.step_proof_ttl_minutes`: Controls step-proof validity windows.
-
-`consumed_gate_nonces` retention policy:
-
-- Prune entries older than `max(2 * gate_nonce_ttl_minutes, 120 minutes)` during each state mutation.
-- No hard cap on record count. TTL-based pruning is sufficient because the maximum number of unexpired nonces is bounded by `gate_nonce_ttl_minutes / time_between_gates`, which is small in practice (a session would need to evaluate hundreds of gates within 2 hours to accumulate significant records).
+- `write_lock_enforced`: Enables protected-mutation boolean lockout for non-terminal autonomous sessions. Protected mutations are rejected with `AUTONOMY_WRITE_LOCK_ACTIVE` unless `bypass_autonomy_lock=true` is passed.
 
 Enums:
 
@@ -700,14 +652,16 @@ Enums:
 
 1. **Validate feedback**: If not the first call in the session/resume/rebase, require `last_step_result`. Return `STEP_RESULT_REQUIRED` error if missing.
 2. **Validate step identity**: If `last_step_issued` doesn't match the reported step (`step_id`/type/task-or-phase binding), return `STEP_MISMATCH`.
-3. **Record step outcome**: Apply `last_step_result` to session state (mark task complete, increment error counter, record gate result, etc.). Write a journal entry for the step outcome (including `files_touched` and `note` if provided). For `run_fidelity_gate`, validate `gate_attempt_id` + `gate_evidence_token` against `pending_gate_evidence`; on invalid/expired/replayed/stale attempt return `INVALID_GATE_EVIDENCE` and do not mutate state. On valid gate consumption, increment `fidelity_review_cycles_in_active_phase`.
-   - Protected task/lifecycle mutations attempted without a valid step proof are rejected by router guards (`STEP_PROOF_REQUIRED` / `STEP_PROOF_INVALID` / `AUTONOMY_WRITE_LOCK_ACTIVE`) and do not count as progress.
+3. **Record step outcome**: Apply `last_step_result` to session state (mark task complete, increment error counter, record gate result, etc.). Write a journal entry for the step outcome (including `files_touched` and `note` if provided). For `run_fidelity_gate`, validate `gate_attempt_id` against `pending_gate_evidence` (matching attempt ID, matching session/phase/step binding); on invalid/stale attempt return `INVALID_GATE_EVIDENCE` and do not mutate state. On valid gate consumption, increment `fidelity_review_cycles_in_active_phase`.
 4. **Validate spec integrity**: Compare spec file `mtime` + file size to cached values. If either changed, or if this call crosses a phase boundary, recompute `spec_structure_hash` and compare to stored value. On mismatch, transition to `failed` with `failure_reason="spec_structure_changed"`.
 5. **Check terminal states**: If session is `completed` or `ended`, return terminal `status` with `next_step=null`.
-6. **Enforce heartbeat staleness**:
+6. **Enforce step staleness** (hard backstop): If `last_step_issued` is non-null and `now - last_step_issued.issued_at > step_stale_minutes`, pause (`step_stale`). This catches sessions where the caller received a step, partially executed, and disappeared without reporting back.
+7. **Enforce heartbeat staleness** (cooperative signal):
    - Before first heartbeat, allow a grace window (`heartbeat_grace_minutes`) from `created_at`.
-   - After first heartbeat, if `now - last_heartbeat_at > heartbeat_stale_minutes`, pause (`heartbeat_stale`) and return `HEARTBEAT_STALE` in `data.details.pause_trigger` so the caller can distinguish this from other pause reasons without inspecting `pause_reason`.
-7. **Enforce step staleness**: If `last_step_issued` is non-null and `now - last_step_issued.issued_at > step_stale_minutes`, pause (`step_stale`). This catches sessions where the caller received a step, partially executed, and disappeared without reporting back.
+   - After first heartbeat, if `now - last_heartbeat_at > heartbeat_stale_minutes`:
+     - If `last_step_issued` is non-null and the step is not yet stale (i.e., within `step_stale_minutes`), include a `heartbeat_stale_warning=true` flag in `data.details` but do **not** pause. The caller may simply be busy executing the step.
+     - If no outstanding step exists (session is idle between steps), pause (`heartbeat_stale`) and return `HEARTBEAT_STALE` in `data.details.pause_trigger`.
+   - This ordering ensures the step staleness check (hard backstop) takes priority, and heartbeat staleness (cooperative signal) does not prematurely interrupt active work.
 8. **Enforce pause guards (cooperative)**:
    - `context_usage_pct >= context_threshold_pct` -> pause (`context_limit`). Note: this guard relies on caller-reported heartbeat data and is advisory (see decision 17).
    - `consecutive_errors >= max_consecutive_errors` -> pause (`error_threshold`)
@@ -725,7 +679,7 @@ Enums:
 16. If gate passed and next unblocked task exists -> `implement_task`.
 17. If no remaining tasks -> `complete_spec` then transition session `status=completed`. Write a journal entry for session completion.
 
-On success, set `last_step_issued` to the returned step, mint a fresh `step_proof_token` (hash persisted as `pending_step_proof`), and persist before responding.
+On success, set `last_step_issued` to the returned step and persist before responding.
 
 On any pause transition, write a journal entry recording the `pause_reason`.
 
@@ -781,6 +735,7 @@ Rules:
 - Per-spec locks: `specs/.autonomy/locks/spec_<spec_id>.lock`.
 - One JSON file per session, named by session ID.
 - Use file locks (`filelock`) and sanitized IDs (same security pattern as research memory).
+- **Filesystem requirement**: File locking assumes a local POSIX filesystem. Network filesystems (NFS, CIFS) are not supported for session storage because `fcntl.flock` is advisory-only and does not guarantee mutual exclusion across hosts. If `specs/` is on a network mount, the user should configure the fallback path (`~/.foundry-mcp/autonomy/sessions/`) on local storage.
 - Add migration module (`_schema_version`) mirroring deep-research migration strategy.
 
 ### Concurrency Model
@@ -836,8 +791,8 @@ Observability:
   - `task.session_step.heartbeat.stale.total`
   - `task.session_step.step.stale.total`
   - `task.session_step.gate_retry.total`
-  - `task.autonomy_write_lock.reject.total{reason=required|invalid|disallowed}`
-  - `task.autonomy_step_proof.consume.total{result=success|replay|expired|mismatch}`
+  - `task.autonomy_write_lock.reject.total`
+  - `task.autonomy_write_lock.bypass.total`
   - `task.session.stale.detected.total{source=status|list|next|maintenance}`
   - `task.session.spec_drift.total`
   - `task.session.timeout.total{command=...}`
@@ -846,45 +801,38 @@ Observability:
   - `task.session.journal_write_failed.total`
   - `review.fidelity_gate.timeout.total`
   - `review.fidelity_gate.total{outcome=pass|fail|warn}`
-- Structured logs with `request_id`, `session_id`, `spec_id`, `phase_id`, `step_id`, `pause_reason`, `failure_reason`, `state_version`, `step_proof_validation`.
+- Structured logs with `request_id`, `session_id`, `spec_id`, `phase_id`, `step_id`, `pause_reason`, `failure_reason`, `state_version`.
 
 Security:
 
-- Validate all IDs and bounds (`context_usage_pct` 0-100, thresholds positive integers, `max_fidelity_review_cycles_per_phase >= 1`, `auto_retry_fidelity_gate` boolean, `enforce_autonomy_write_lock` boolean, `step_proof_ttl_minutes >= 1`, counters non-negative).
+- Validate all IDs and bounds (`context_usage_pct` 0-100, thresholds positive integers, `max_fidelity_review_cycles_per_phase >= 1`, `auto_retry_fidelity_gate` boolean, `enforce_autonomy_write_lock` boolean, counters non-negative).
 - Sanitize text fields (task titles, notes, pause reasons, reset reasons, rebase reasons) before logs/responses.
 - Enforce workspace path constraints and existing trust boundary checks.
-- Treat caller-reported step outcomes as untrusted until matched against `last_step_issued` and (for gates) validated via nonce binding.
+- Treat caller-reported step outcomes as untrusted until matched against `last_step_issued` and (for gates) validated via `gate_attempt_id` binding.
 - Treat caller-reported `context_usage_pct` as advisory — use for cooperative pausing but do not rely on it as a security boundary.
-- Bind `gate_evidence_token` nonce to `session_id` + `phase_id` + `step_id`, enforce short TTL (`gate_nonce_ttl_minutes`), and reject replay by persisting consumed nonce hashes.
+- Validate `gate_attempt_id` against `pending_gate_evidence` (matching session/phase/step binding) before accepting gate results.
 - Validate manual-gate acknowledgment payloads (`acknowledge_gate_review`, `acknowledged_gate_attempt_id`) against `pending_manual_gate_ack` before allowing resume.
-- Require signed gate evidence tokens when running outside local trust boundaries (`autonomy_signed_gate_evidence=true`).
-- Enforce autonomy write-lock on protected mutations when a non-terminal session exists and `enforce_autonomy_write_lock=true`.
-- Validate step proofs (binding, expiry, replay, allowed action set) before protected mutations.
+- Enforce autonomy write-lock (boolean check) on protected mutations when a non-terminal session exists and `enforce_autonomy_write_lock=true`. Log bypass usage.
 - No shell execution introduced by session APIs.
 - `force` resume from `failed` requires explicit flag to prevent accidental resumption of broken sessions.
 - `force` rebase requires explicit flag to prevent accidental loss of completed-task records.
 - `idempotency_key` is validated for length (max 128 chars) and character set (alphanumeric, hyphens, underscores) to prevent injection.
+- **[v2]** Signed gate evidence tokens (HMAC with key rotation) and cryptographic step-proof tokens for remote/multi-tenant deployments where filesystem trust is not shared.
 
 ## Rollout Plan
 
 1. Phase A (feature-flagged): persistent session store + `task(action="session")` lifecycle commands (`start`, `status`, `pause`, `resume`, `end`, `list`, `reset`). Add `python-ulid` dependency. Register `task(action="session-step")` action with feature-flag guard.
-2. Phase B: `session-step` `command="next"` step engine with feedback loop, pause guards, heartbeat staleness, step staleness, phase-complete stop condition, fidelity-cycle stop heuristic, step-proof issuance, autonomy write-lock enforcement for protected mutations, spec integrity validation, and journal integration.
+2. Phase B: `session-step` `command="next"` step engine with feedback loop, pause guards, heartbeat staleness, step staleness, phase-complete stop condition, fidelity-cycle stop heuristic, boolean autonomy write-lock enforcement for protected mutations, spec integrity validation, and journal integration.
 3. Phase C: `review(action="fidelity-gate")` and gate policy enforcement.
 4. Phase D: `session` `command="rebase"` with structural diff computation and completed-task validation.
 5. Phase E: `claude-foundry` skill + hook alignment (`session` lifecycle + `session-step` hot path).
 6. Phase F: deprecate legacy `session-config` `auto_mode` path after two release cycles.
+7. **[v2]** Cryptographic step-proof tokens, signed gate evidence (HMAC), and `autonomy_signed_gate_evidence` capability flag for multi-tenant deployments.
 
 Feature flags (initial defaults):
 
 - `autonomy_sessions`: off
-- `autonomy_session_step`: off
-- `autonomy_rebase`: off
 - `autonomy_fidelity_gates`: off
-- `autonomy_auto_gate_retry`: off
-- `autonomy_write_lock`: on (safety-critical default)
-- `autonomy_step_proofs`: on (required by write-lock)
-- `autonomy_context_heartbeat`: on (safe additive)
-- `autonomy_signed_gate_evidence`: off in local mode, on in remote/multi-tenant mode
 
 ## Legacy Code Cleanup
 
@@ -899,8 +847,8 @@ The following existing code is superseded by this design and should be cleaned u
 
 - `src/foundry_mcp/tools/unified/task_handlers/handlers_query.py` — add `session` action handler with command dispatch
 - `src/foundry_mcp/tools/unified/task_handlers/__init__.py` — register `session` and `session-step` actions
-- `src/foundry_mcp/tools/unified/task_handlers/handlers_mutate.py` — enforce autonomy step-proof validation on protected task mutations
-- `src/foundry_mcp/tools/unified/lifecycle.py` — enforce autonomy step-proof validation on protected lifecycle mutations
+- `src/foundry_mcp/tools/unified/task_handlers/handlers_mutate.py` — enforce autonomy write-lock guard on protected task mutations
+- `src/foundry_mcp/tools/unified/lifecycle.py` — enforce autonomy write-lock guard on protected lifecycle mutations
 - `src/foundry_mcp/tools/unified/review.py` — add `fidelity-gate` action handler
 - `src/foundry_mcp/core/discovery.py` — add autonomy capability flags and feature flag descriptors
 - `mcp/capabilities_manifest.json` — add autonomy capabilities
@@ -910,12 +858,12 @@ The following existing code is superseded by this design and should be cleaned u
 ### Files to create
 
 - `src/foundry_mcp/core/autonomy/__init__.py`
-- `src/foundry_mcp/core/autonomy/models.py` — Pydantic models for session state, step results, gate policies, nonce records, rebase results
+- `src/foundry_mcp/core/autonomy/models.py` — Pydantic models for session state, step results, gate policies, rebase results
 - `src/foundry_mcp/core/autonomy/memory.py` — file-backed persistence (mirrors research memory pattern), active-session index management, lock file cleanup
 - `src/foundry_mcp/core/autonomy/state_migrations.py` — schema versioning and migration functions (v1 initial, infrastructure for future migrations)
 - `src/foundry_mcp/core/autonomy/orchestrator.py` — step engine, pause guards, feedback loop, spec integrity (metadata fast-path + phase-boundary re-hash), journal writes, opportunistic GC (outside lock scope)
 - `src/foundry_mcp/core/autonomy/spec_hash.py` — spec structure hashing, mtime-based change detection, drift reporting, and rebase diff computation
-- `src/foundry_mcp/core/autonomy/write_lock.py` — step-proof mint/verify/consume helpers and protected-action policy
+- `src/foundry_mcp/core/autonomy/write_lock.py` — boolean write-lock check helpers and protected-action policy (v2: step-proof mint/verify/consume)
 - `src/foundry_mcp/tools/unified/task_handlers/handlers_session_step.py` — `session-step` action handler (`next`, `heartbeat`)
 
 ### Dependencies to add
@@ -929,83 +877,66 @@ The following existing code is superseded by this design and should be cleaned u
 
 ## Testing Strategy
 
-  - Unit:
-  - State schema validation and migration (v1 initial, forward path infrastructure)
-  - Pause-guard decision logic (each guard independently and combined)
+Tests are organized by rollout phase. **Phase A must-haves** are marked with **(P0)** — these gate the Phase A ship decision. Remaining tests land with their corresponding phases.
+
+- Unit:
+  - **(P0)** State schema validation and migration (v1 initial, forward path infrastructure)
+  - **(P0)** Pause-guard decision logic (each guard independently and combined)
+  - **(P0)** Active-session lookup resolution (single match, none, ambiguous)
+  - **(P0)** One-active-session-per-spec enforcement
+  - **(P0)** Feedback loop validation (missing result, mismatched step, all outcome types)
+  - **(P0)** State transitions (start → pause → resume → end; start → complete; start → failed → reset)
+  - **(P0)** Spec structure hash computation (deterministic across equivalent structures)
+  - **(P0)** Spec integrity: drift detection (added/removed phases and tasks), metadata fast-path skip, phase-boundary re-hash
+  - **(P0)** Resume context generation (truncation at 10 tasks, correct count, `files_touched` from journal, `journal_available` flag)
   - Stop-condition OR semantics (`context` safeguards, phase-complete stop, fidelity-cycle stop)
   - Gate policy evaluation (strict/lenient/manual for each verdict)
-  - Active-session lookup resolution (single match, none, ambiguous)
   - Active-session lookup excludes `reset` (explicit `session_id` required)
   - Atomic one-active-session-per-spec start enforcement under concurrent `start` calls
   - Idempotency key: duplicate `start` with same key returns existing session; different key returns `SPEC_SESSION_EXISTS`
-  - Cursor encoding/decoding (`v` field), sort stability, and invalid cursor handling (`INVALID_CURSOR`)
-  - Gate evidence nonce validation (binding, expiry, replay rejection, `gate_nonce_ttl_minutes` respected)
-  - Step proof validation (binding, expiry, replay rejection, and allowed-action enforcement)
-  - Multiple gate review attempts for the same `step_id`: latest attempt accepted, prior attempt token rejected as stale
-  - Consumed nonce TTL-based pruning (parameterized by `gate_nonce_ttl_minutes`)
-  - Feedback loop validation (missing result, mismatched step, all outcome types)
-  - Heartbeat staleness detection with `HEARTBEAT_STALE` trigger in response details
-  - Heartbeat grace window: first heartbeat allowed within `heartbeat_grace_minutes` of `created_at`; staleness triggers after grace expires
+  - Cursor encoding/decoding, sort stability, and invalid cursor handling (`INVALID_CURSOR`)
+  - Gate attempt ID validation (binding, latest-attempt-wins, stale attempt rejection)
+  - Multiple gate review attempts for the same `step_id`: latest attempt accepted, prior attempt rejected
   - Step staleness detection
+  - Heartbeat staleness: warning-only when outstanding step is fresh; pause when idle between steps
+  - Heartbeat grace window: first heartbeat allowed within `heartbeat_grace_minutes` of `created_at`
   - `stop_on_phase_completion=true` pauses at phase boundary after gate pass; `false` continues to next phase
   - `auto_retry_fidelity_gate=true` causes failed strict/lenient gate outcomes to emit `address_fidelity_feedback`, then `run_fidelity_gate` after remediation success (until cycle cap)
   - `auto_retry_fidelity_gate=false` pauses failed strict/lenient gate outcomes with `gate_failed`
-  - Protected task/lifecycle mutation with active session and no proof returns `STEP_PROOF_REQUIRED`
-  - Protected mutation with invalid/expired/replayed proof returns `STEP_PROOF_INVALID`
-  - Protected mutation with valid proof but disallowed action for step returns `AUTONOMY_WRITE_LOCK_ACTIVE`
-  - Fidelity-cycle heuristic pauses with `fidelity_cycle_limit` once `max_fidelity_review_cycles_per_phase` is reached for the active phase
-  - Fidelity-cycle counter resets when advancing to a new phase
-  - Spec structure hash computation (deterministic across equivalent structures)
-  - Spec metadata fast-path skip (`mtime` + file size unchanged skips re-hash outside phase boundaries)
-  - Phase-boundary integrity check forces re-hash even when `mtime` + file size are unchanged
-  - Spec structure drift detection (added/removed phases and tasks)
-  - One-active-session-per-spec enforcement
-  - Resume context generation (truncation at 10 tasks, correct count, `files_touched` included from journal, `journal_available` flag)
-  - Session reset (state file deleted, index entry removed, spec task statuses preserved)
-  - Session reset rejects non-`failed` states with `INVALID_STATE_TRANSITION`
+  - Protected task/lifecycle mutation with active session returns `AUTONOMY_WRITE_LOCK_ACTIVE`; `bypass_autonomy_lock=true` overrides
+  - Fidelity-cycle heuristic pauses with `fidelity_cycle_limit` once `max_fidelity_review_cycles_per_phase` is reached; counter resets on phase advance
+  - Session reset (state file deleted, index entry removed, spec task statuses preserved); rejects non-`failed` states
   - Manual gate resume requires acknowledgment (`MANUAL_GATE_ACK_REQUIRED` / `INVALID_GATE_ACK`)
-  - Reset reason recorded in structured log
   - Lock acquisition timeout returns `LOCK_TIMEOUT`
-  - Journal entry generation for lifecycle events (content, entry_type, including rebase)
-  - Journal write failure does not block state transition
-  - Rebase: no-change returns `rebase_result="no_change"` and transitions to running
-  - Rebase: structural diff computed correctly (added/removed phases and tasks)
-  - Rebase: completed tasks removed without `force` returns `REBASE_COMPLETED_TASKS_REMOVED`
-  - Rebase: completed tasks removed with `force=true` removes from `completed_task_ids` and decrements counters
-  - Rebase: invalid source state returns `INVALID_STATE_TRANSITION`
+  - Journal: lifecycle events produce entries; `start` journal write failure rolls back session; mid-session journal failures do not block
+  - Rebase: no-change, structural diff, completed-task removal guard, force override, invalid source state
   - Force resume from `failed` with `spec_structure_changed` returns `SPEC_REBASE_REQUIRED`
   - `_check_all_blocked` extraction: shared utility callable from both `batch_operations` and orchestrator
-  - Integration:
-  - Full lifecycle: start -> heartbeat -> next loop -> context pause -> resume -> complete
-  - Phase boundary: gate pass advances, gate fail pauses, manual gate requires human resume
+- Integration:
+  - **(P0)** Full lifecycle: start → heartbeat → next loop → context pause → resume → complete
+  - **(P0)** Phase boundary: gate pass advances, gate fail pauses, manual gate requires human resume
+  - **(P0)** Spec drift: editing spec mid-session causes `failed` on next `next` call; recovery via `rebase`
+  - **(P0)** Duplicate start: second `start` for same spec returns `SPEC_SESSION_EXISTS`; with `force=true` ends existing and starts new
+  - **(P0)** Action split: `session` rejects `next`/`heartbeat` commands; `session-step` rejects lifecycle commands
   - Phase-complete mode: gate pass pauses session with `phase_complete`, resume continues into next phase
   - Auto gate retry mode: failed strict/lenient verdicts trigger `address_fidelity_feedback` + re-review retries and eventually pause at `fidelity_cycle_limit`
-  - Bypass resistance: direct `task complete`/status mutation without proof during active session is rejected
-  - Spinning-wheels guard: repeated gate attempts in one phase pause with `fidelity_cycle_limit`
-  - Fidelity trust path: forged nonce rejected; genuine nonce accepted; nonce replay rejected
-  - Fidelity retry path: repeated `review(action="fidelity-gate")` on same step issues new `gate_attempt_id`; `next` accepts latest attempt and rejects older attempt token
-  - GC: expired sessions cleaned (including index entries and orphaned lock files), active sessions preserved
-  - Opportunistic GC: `start` triggers cleanup after lock release; GC does not consume lock budget
+  - Bypass resistance: direct `task complete`/status mutation during active session is rejected; `bypass_autonomy_lock=true` overrides
+  - Fidelity retry path: repeated `review(action="fidelity-gate")` on same step issues new `gate_attempt_id`; `next` accepts latest attempt and rejects older attempt
+  - GC: expired sessions cleaned (including index entries and orphaned lock files); opportunistic GC on `start` outside lock scope
   - Passive staleness: `status`/`list` return derived `effective_status` without mutating state
   - Maintenance sweep: stale `running` sessions are persisted to `paused`
-  - Spec drift: editing spec mid-session causes `failed` on next `next` call
-  - Spec drift recovery via rebase: `failed` session with `spec_structure_changed` recovers via `rebase` preserving completed tasks
-  - Spec drift recovery via rebase from paused: paused session rebases before spec drift detection on `next`
   - Spec metadata unchanged: `next` call skips re-hash outside phase boundaries (verified via mock/spy on hash function)
-  - Duplicate start: second `start` for same spec returns `SPEC_SESSION_EXISTS`; with `force=true` ends existing and starts new
   - Idempotent start: retry with same `idempotency_key` returns existing session
   - Session recovery: `reset` on corrupt session allows fresh start
   - Timeout paths: `next` and `fidelity-gate` timeout return `TIMEOUT` with actionable reconciliation fields
   - Lock timeout: concurrent `start` calls where lock is held returns `LOCK_TIMEOUT`
-  - Signed gate evidence mode: unsigned token rejected when `autonomy_signed_gate_evidence=true`
-  - Backward compat: `session-config` `auto_mode=true` with explicit `spec_id` delegates to `session` start; with single active spec in resolved workspace delegates to `session` start; with zero/multiple active specs returns `AUTO_MODE_SPEC_RESOLUTION_FAILED`; `auto_mode=false` with active session delegates to `session` pause; `auto_mode=false` with no active session returns `NO_ACTIVE_SESSION`
-  - Journal trail: lifecycle events produce journal entries; `resume_context.journal_hint` points to correct spec journal; `resume_context.files_touched` populated from journal entries
-  - Action split: `session` rejects `next`/`heartbeat` commands; `session-step` rejects lifecycle commands
+  - Backward compat: `session-config` `auto_mode=true` with explicit `spec_id` delegates to `session` start; without `spec_id` returns `AUTO_MODE_SPEC_REQUIRED`; `auto_mode=false` with active session delegates to `session` pause; with no active session returns `NO_ACTIVE_SESSION`
+  - Journal trail: `resume_context.journal_hint` points to correct spec journal; `resume_context.files_touched` populated from journal entries
 - Contract:
   - response-v2 envelope conformance for all new/extended actions
   - `session list` emits cursor pagination in `meta.pagination`
-  - Capability manifest and schema alignment (includes `autonomy_session_step`, `autonomy_rebase`, `autonomy_write_lock`, `autonomy_step_proofs`)
-  - Error codes (`STEP_RESULT_REQUIRED`, `STEP_MISMATCH`, `STEP_PROOF_REQUIRED`, `STEP_PROOF_INVALID`, `AUTONOMY_WRITE_LOCK_ACTIVE`, `INVALID_GATE_EVIDENCE`, `INVALID_CURSOR`, `NO_ACTIVE_SESSION`, `AMBIGUOUS_ACTIVE_SESSION`, `SPEC_SESSION_EXISTS`, `SESSION_UNRECOVERABLE`, `LOCK_TIMEOUT`, `TIMEOUT`, `MANUAL_GATE_ACK_REQUIRED`, `INVALID_GATE_ACK`, `INVALID_STATE_TRANSITION`, `AUTO_MODE_SPEC_RESOLUTION_FAILED`, `SPEC_REBASE_REQUIRED`, `REBASE_COMPLETED_TASKS_REMOVED`, `HEARTBEAT_STALE`) in standard error envelope
+  - Capability manifest and schema alignment (includes `autonomy_sessions`, `autonomy_fidelity_gates`)
+  - Error codes (`STEP_RESULT_REQUIRED`, `STEP_MISMATCH`, `AUTONOMY_WRITE_LOCK_ACTIVE`, `INVALID_GATE_EVIDENCE`, `INVALID_CURSOR`, `NO_ACTIVE_SESSION`, `AMBIGUOUS_ACTIVE_SESSION`, `SPEC_SESSION_EXISTS`, `SESSION_UNRECOVERABLE`, `LOCK_TIMEOUT`, `TIMEOUT`, `MANUAL_GATE_ACK_REQUIRED`, `INVALID_GATE_ACK`, `INVALID_STATE_TRANSITION`, `AUTO_MODE_SPEC_REQUIRED`, `SPEC_REBASE_REQUIRED`, `REBASE_COMPLETED_TASKS_REMOVED`, `HEARTBEAT_STALE`) in standard error envelope
 - Stress:
   - Concurrent `next` calls on the same session: file locking prevents corruption, second caller gets `STEP_MISMATCH`
   - Rapid start/end cycles for the same spec: one-session-per-spec constraint holds under contention
@@ -1024,7 +955,7 @@ Positive:
 - Reuses proven persistence/migration patterns already present in deep research.
 - Gate policies provide flexibility across different risk profiles without sacrificing safety defaults.
 - Automatic strict/lenient gate retries reduce manual babysitting while preserving deterministic stop behavior via cycle limits.
-- Autonomy write-lock + step proofs prevent direct task/phase status mutations from bypassing gate sequencing.
+- Autonomy write-lock prevents accidental direct task/phase status mutations from bypassing gate sequencing.
 - Configurable phase-completion stopping enables deliberate "one phase per run" execution without losing session continuity.
 - Split `session`/`session-step` actions keep dispatch depth consistent with the rest of the codebase (two levels, not three) while separating concerns by performance profile.
 - Spec integrity validation prevents silent state corruption from mid-session spec edits.
@@ -1048,8 +979,7 @@ Tradeoffs:
 - Journal writes on every lifecycle event add I/O. Mitigated by best-effort semantics — journal failures do not block session operations.
 - Heartbeat-based context guard is cooperative — a misbehaving caller can report inaccurate context usage. Step staleness provides a hard backstop.
 - Automatic gate retries can increase AI-review cost/latency when a phase repeatedly fails fidelity.
-- Write-lock enforcement requires updates across existing mutating handlers and can temporarily break legacy automations that mutate task/lifecycle state directly.
-- Step proofs prevent out-of-band status mutation bypass, but they do not by themselves prove the semantic quality of implementation work reported in `last_step_result`.
+- Write-lock enforcement requires updates across existing mutating handlers and can temporarily break legacy automations that mutate task/lifecycle state directly. The `bypass_autonomy_lock=true` escape hatch mitigates this for manual intervention.
 - Fidelity-cycle stop heuristics can pause legitimate but complex phases; callers may need to raise `max_fidelity_review_cycles_per_phase` for difficult specs.
 - `rebase` adds a new state transition path that must be tested thoroughly, particularly around completed-task validation and counter adjustment.
 
@@ -1058,21 +988,7 @@ Tradeoffs:
 1. **Per-phase gate policy overrides**: Should v1 support per-phase policies, or is session-level sufficient? Current decision: session-level only, tracked for v2.
 2. **Partial resume granularity**: Should resume support restarting from a specific task within a phase, or always from where it left off? Current decision: resume from last checkpoint only. The escape hatch for "restart from a specific task" is `end`/`reset` (to release autonomy write-lock), then manual task-status manipulation via `task(action="update")`, then starting a new session.
 3. **One-session-per-spec relaxation**: The current hard constraint prevents legitimate workflows like re-implementing a later phase while an earlier session is paused. `rebase` partially addresses this (the user can edit the spec and continue), but doesn't allow truly parallel sessions. Potential v2 options: allow a new session when the existing one has been paused for more than N hours, or add a `supersede` mode that inherits completed-phase state from the old session. Current decision: hard constraint in v1, tracked for v2.
-
-## Revision History
-
-| Date | Change |
-|---|---|
-| 2026-02-12 | Initial proposal |
-| 2026-02-12 | Revised per review: unified `session` action (merged `autonomy`+`autonomy-next`), simplified gate evidence from crypto signing to server-side nonce, added spec integrity validation, one-session-per-spec constraint, passive heartbeat enforcement on read paths, step staleness detection, `files_touched` protocol via `last_step_result`, `reset` command for corrupt state recovery, `resume_context` truncation, clarified concurrency model, expanded testing strategy with stress tests and deprecation edge cases. Removed multi-agent coordination open question (resolved by one-session-per-spec). |
-| 2026-02-13 | Revised per architecture critique: made one-active-session-per-spec atomic via per-spec lock + index transaction, clarified `reset` requires explicit `session_id`, made `status`/`list` read-only with derived `effective_status`, specified deterministic cursor pagination contract, bounded nonce replay cache retention, added explicit timeout/cancellation budgets, and introduced signed gate evidence requirement for remote/multi-tenant trust boundaries. |
-| 2026-02-13 | Revised per codebase-grounded critique: added design rationale for unified action vs split; replaced hand-wavy spec caching with mtime-based fast-path change detection; moved `files_touched` from session state to journal entries (advisory data belongs in audit trail, not orchestration state); added journal integration for all lifecycle events; reduced `heartbeat_grace_minutes` default to 5 and documented asymmetry rationale; added explicit lock-acquisition timeout (5s) and `LOCK_TIMEOUT` error for `start`; added `idempotency_key` on `start` for safe retries; added `reason` field on `reset` with structured logging; removed 512-record nonce cap (TTL pruning alone is sufficient); made `session-config` spec-context resolution explicit (explicit `spec_id` param or single-active-spec workspace lookup); added opportunistic GC on `start`/`list` for short-lived CLI; added `python-ulid` dependency to rollout plan; specified `reset` cleans up active-session index; documented `instructions` as semantic hints; documented `state_version` semantics; added legacy code cleanup section for dead `_check_autonomous_limits` and ephemeral `AutonomousSession`; added open question for one-session-per-spec relaxation in v2. |
-| 2026-02-13 | Revised per follow-up review: resolved gate retry semantics for `run_fidelity_gate` by adding `gate_attempt_id`, allowing multiple reviews per step with deterministic latest-attempt-wins behavior, clarifying that `review(action="fidelity-gate")` writes pending evidence metadata only, and expanding unit/integration tests for stale-attempt rejection. |
-| 2026-02-13 | Revised to close remaining critique items: removed `session-config` ephemeral fallback in ambiguous cases (`AUTO_MODE_SPEC_RESOLUTION_FAILED`), added explicit manual-gate resume acknowledgment contract (`MANUAL_GATE_ACK_REQUIRED`, `INVALID_GATE_ACK`), restricted `reset` to `failed` sessions (`INVALID_STATE_TRANSITION`), reconciled read-only `list` semantics by moving opportunistic GC trigger to `start` only, and strengthened spec drift detection with metadata fast-path (`mtime` + file size) plus phase-boundary re-hash. |
-| 2026-02-13 | Major revision per comprehensive critique: **Split `session` into `session` + `session-step`** — lifecycle commands (start/status/pause/resume/rebase/end/list/reset) in `session`, hot-path commands (next/heartbeat) in `session-step`, eliminating three-level dispatch depth. **Added `rebase` command** for graceful spec drift recovery — re-snapshots spec structure, validates completed tasks exist, preserves session state vs. the destructive `reset`+`start` cycle. **Fixed `_check_all_blocked` claim** — the helper is used by `prepare_batch_context` and must be retained or extracted. **Clarified heartbeat as cooperative/advisory** (decision 17) — not a hard safety boundary, with step staleness as the backstop. **Strengthened resume context** — `files_touched` included inline from journal entries, `journal_available` flag added. **Specified `gate_nonce_ttl_minutes`** default (30) and added to limits/schema. **Added `HEARTBEAT_STALE` trigger** in `next` response details. **Added lock file cleanup** to GC. **Moved opportunistic GC outside lock scope** to avoid consuming lock budget. **Clarified `_schema_version` 1** as initial (no v0 files). **Changed `instructions` format** from string array to structured hint objects. **Scoped ULID adoption** to autonomy subsystem. **Added `SPEC_REBASE_REQUIRED` error** for force-resume when spec changed. **Added `handlers_session_step.py`** to implementation mapping. |
-| 2026-02-13 | Revised per stopping-condition feedback: added explicit stop-condition OR semantics, introduced configurable `stop_on_phase_completion`, added `max_fidelity_review_cycles_per_phase` spinning-wheels heuristic, extended schema/pause reasons (`phase_complete`, `fidelity_cycle_limit`), and updated orchestration/test guidance accordingly. |
-| 2026-02-13 | Revised per gate-loop clarification: automatic strict/lenient gate retry now requires an explicit `address_fidelity_feedback` remediation step before each re-review, ensuring feedback is addressed before retrying while still bounded by `max_fidelity_review_cycles_per_phase`. |
-| 2026-02-13 | Revised per bypass-risk review: added autonomy write-lock + step-proof enforcement for protected task/lifecycle mutations, introduced reject codes (`STEP_PROOF_REQUIRED`, `STEP_PROOF_INVALID`, `AUTONOMY_WRITE_LOCK_ACTIVE`), expanded security/telemetry/tests/capabilities, and clarified manual-status escape hatch requires ending/resetting the active session first. |
+4. **Cryptographic step proofs and signed gate evidence (v2)**: v1 uses boolean write-lock and `gate_attempt_id` matching, which is sufficient for local single-caller trust. For multi-tenant or remote deployments, cryptographic step-proof tokens (with TTL, replay detection, and allowed-action-set binding) and HMAC-signed gate evidence tokens would strengthen the trust boundary. Current decision: deferred to v2 — implement only if/when the system moves beyond local-trust deployments.
 
 ## Best-Practice References Consulted
 
