@@ -285,6 +285,7 @@ class RebaseResultDetail(BaseModel):
     removed_phases: List[str] = Field(default_factory=list, description="Removed phase IDs")
     added_tasks: List[str] = Field(default_factory=list, description="Added task IDs")
     removed_tasks: List[str] = Field(default_factory=list, description="Removed task IDs")
+    completed_tasks_removed: Optional[int] = Field(None, description="Number of completed tasks removed when force=true")
 
 
 class SessionResponseData(BaseModel):

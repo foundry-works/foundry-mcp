@@ -14,7 +14,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from ulid import ULID
 
@@ -907,22 +907,75 @@ def _handle_session_list(
 # Session Rebase Handler
 # =============================================================================
 
+ERROR_REBASE_COMPLETED_TASKS_REMOVED = "REBASE_COMPLETED_TASKS_REMOVED"
+
+
+def _find_backup_with_hash(
+    spec_id: str,
+    target_hash: str,
+    workspace: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Find a backup spec file that matches the target hash.
+
+    Args:
+        spec_id: Spec ID to search for
+        target_hash: Target spec_structure_hash to match
+        workspace: Workspace path
+
+    Returns:
+        Parsed spec data from matching backup, or None if not found
+    """
+    ws_path = Path(workspace) if workspace else Path.cwd()
+    backup_dir = ws_path / "specs" / ".backups" / spec_id
+
+    if not backup_dir.exists():
+        return None
+
+    # List all backup files and check their hashes
+    backup_files = sorted(backup_dir.glob("*.json"), reverse=True)
+
+    for backup_file in backup_files:
+        if backup_file.name == "latest.json":
+            continue
+        try:
+            backup_data = json.loads(backup_file.read_text())
+            backup_hash = compute_spec_structure_hash(backup_data)
+            if backup_hash == target_hash:
+                logger.debug("Found matching backup: %s", backup_file)
+                return backup_data
+        except Exception as e:
+            logger.debug("Failed to read backup %s: %s", backup_file, e)
+            continue
+
+    return None
+
 
 def _handle_session_rebase(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    force: bool = False,
     workspace: Optional[str] = None,
     **payload: Any,
 ) -> dict:
     """Handle session-rebase action.
 
-    Rebases an active session to spec changes.
-    Computes structural diff and updates session state.
+    Rebases a paused or failed session to spec changes.
+    Computes structural diff, validates completed tasks, and updates session state.
+
+    Valid source states: paused, failed
+    INVALID_STATE_TRANSITION for other states.
+
+    Behavior:
+    - No-change: returns no_change, transitions to running
+    - Hash differs: compute structural diff
+    - Completed task removal guarded (REBASE_COMPLETED_TASKS_REMOVED) unless force=true
+    - force=true removes missing completed task IDs and adjusts counters
 
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
+        force: Force rebase even if completed tasks were removed
         workspace: Workspace path
         **payload: Additional parameters
 
@@ -949,14 +1002,14 @@ def _handle_session_rebase(
     if not session:
         return _session_not_found_response("session-rebase", request_id, spec_id)
 
-    # Only allow rebase for running/paused sessions
-    if session.status not in {SessionStatus.RUNNING, SessionStatus.PAUSED}:
+    # Only allow rebase for paused or failed sessions
+    if session.status not in {SessionStatus.PAUSED, SessionStatus.FAILED}:
         return _invalid_transition_response(
             action="session-rebase",
             request_id=request_id,
             current_status=session.status.value,
             target_status="rebase",
-            reason="Only running or paused sessions can be rebased",
+            reason="Only paused or failed sessions can be rebased",
         )
 
     # Load current spec
@@ -986,45 +1039,128 @@ def _handle_session_rebase(
 
     # Check if spec changed
     if current_hash == session.spec_structure_hash:
-        # No structural changes
+        # No structural changes - transition to running
+        session.status = SessionStatus.RUNNING
+        session.pause_reason = None
+        session.failure_reason = None
+        session.paused_at = None
+        session.updated_at = datetime.now(timezone.utc)
+
+        storage.save(session)
+
         rebase_result = RebaseResultDetail(
             result="no_change",
         )
-        return _build_session_response(session, request_id, rebase_result=rebase_result)
 
-    # Compute structural diff
-    # We need the old spec structure - for now, we can only compute hash diff
-    # A full implementation would store the old structure or load from backup
-    diff = StructuralDiff()  # Empty diff - would need old structure for full diff
+        # Write journal
+        _write_session_journal(
+            spec_id=spec_id,
+            action="rebase",
+            summary="Session rebase: no structural changes detected",
+            session_id=session.id,
+            workspace=workspace,
+            metadata={"result": "no_change"},
+        )
 
-    rebase_result = RebaseResultDetail(
-        result="success",
-    )
+        return _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True)
 
-    # Update session with new hash
+    # Compute structural diff - try to find old structure from backups
+    old_spec_data = _find_backup_with_hash(spec_id, session.spec_structure_hash, workspace)
+
+    if old_spec_data:
+        diff = compute_structural_diff(old_spec_data, current_spec_data)
+    else:
+        # Fallback: can't compute full diff without old structure
+        # Create a minimal diff indicating unknown changes
+        diff = StructuralDiff()
+        logger.warning(
+            "Could not find backup matching hash %s for spec %s, using minimal diff",
+            session.spec_structure_hash[:16],
+            spec_id,
+        )
+
+    # Check for completed tasks in removed tasks
+    removed_completed_tasks = [
+        task_id for task_id in session.completed_task_ids
+        if task_id in diff.removed_tasks
+    ]
+
+    if removed_completed_tasks and not force:
+        return asdict(error_response(
+            "Cannot rebase: completed tasks would be removed",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "action": "session-rebase",
+                "error_code": ERROR_REBASE_COMPLETED_TASKS_REMOVED,
+                "removed_completed_tasks": removed_completed_tasks,
+                "hint": "Use force=true to remove these completed tasks and adjust counters",
+            },
+        ))
+
+    # Apply rebase
+    tasks_removed_count = 0
+    if removed_completed_tasks and force:
+        # Remove missing completed task IDs
+        for task_id in removed_completed_tasks:
+            if task_id in session.completed_task_ids:
+                session.completed_task_ids.remove(task_id)
+                session.counters.tasks_completed = max(0, session.counters.tasks_completed - 1)
+                tasks_removed_count += 1
+
+    # Update session state
     session.spec_structure_hash = current_hash
     session.spec_file_mtime = current_metadata.mtime if current_metadata else None
     session.spec_file_size = current_metadata.file_size if current_metadata else None
+    session.status = SessionStatus.RUNNING
+    session.pause_reason = None
+    session.failure_reason = None
+    session.paused_at = None
     session.updated_at = datetime.now(timezone.utc)
 
     storage.save(session)
+
+    # Build rebase result
+    rebase_result = RebaseResultDetail(
+        result="success",
+        added_phases=diff.added_phases,
+        removed_phases=diff.removed_phases,
+        added_tasks=diff.added_tasks,
+        removed_tasks=diff.removed_tasks,
+        completed_tasks_removed=tasks_removed_count if tasks_removed_count > 0 else None,
+    )
 
     # Write journal
     _write_session_journal(
         spec_id=spec_id,
         action="rebase",
-        summary="Session rebased to updated spec",
+        summary=f"Session rebased: +{len(diff.added_tasks)}/-{len(diff.removed_tasks)} tasks",
         session_id=session.id,
         workspace=workspace,
         metadata={
             "old_hash": session.spec_structure_hash[:16],
             "new_hash": current_hash[:16],
+            "added_phases": diff.added_phases,
+            "removed_phases": diff.removed_phases,
+            "added_tasks": diff.added_tasks,
+            "removed_tasks": diff.removed_tasks,
+            "force": force,
+            "tasks_removed": tasks_removed_count,
         },
     )
 
-    logger.info("Rebased session %s for spec %s", session.id, spec_id)
+    logger.info(
+        "Rebased session %s for spec %s: +%d/-%d phases, +%d/-%d tasks",
+        session.id,
+        spec_id,
+        len(diff.added_phases),
+        len(diff.removed_phases),
+        len(diff.added_tasks),
+        len(diff.removed_tasks),
+    )
 
-    return _build_session_response(session, request_id, rebase_result=rebase_result)
+    return _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True)
 
 
 # =============================================================================
