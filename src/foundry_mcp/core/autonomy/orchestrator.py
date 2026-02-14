@@ -33,11 +33,13 @@ from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models import (
     AutonomousSessionState,
     FailureReason,
+    GatePolicy,
     GateVerdict,
     LastStepIssued,
     LastStepResult,
     NextStep,
     PauseReason,
+    PendingGateEvidence,
     PhaseGateRecord,
     PhaseGateStatus,
     SessionStatus,
@@ -225,6 +227,19 @@ class StepOrchestrator:
                     should_persist=False,
                 )
 
+        # Validate gate evidence for fidelity gate steps
+        if last_step_result is not None and last_step_result.step_type == StepType.RUN_FIDELITY_GATE:
+            gate_error = self._validate_gate_evidence(session, last_step_result)
+            if gate_error:
+                logger.warning("INVALID_GATE_EVIDENCE: %s", gate_error)
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_INVALID_GATE_EVIDENCE,
+                    error_message=gate_error,
+                    should_persist=False,
+                )
+
         # =================================================================
         # Step 3: Record Step Outcome
         # =================================================================
@@ -373,6 +388,52 @@ class StepOrchestrator:
 
         return None
 
+    def _validate_gate_evidence(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+    ) -> Optional[str]:
+        """Validate gate attempt ID against pending evidence.
+
+        Checks session/phase/step binding to ensure the gate attempt is valid
+        and not stale.
+
+        Returns:
+            None if valid, error message if invalid
+        """
+        if not result.gate_attempt_id:
+            return None  # No gate attempt to validate
+
+        evidence = session.pending_gate_evidence
+        if not evidence:
+            return (
+                f"No pending gate evidence found for gate_attempt_id {result.gate_attempt_id}. "
+                f"The gate evidence may have already been consumed or was never created."
+            )
+
+        # Validate gate_attempt_id matches
+        if result.gate_attempt_id != evidence.gate_attempt_id:
+            return (
+                f"Gate attempt ID mismatch: expected {evidence.gate_attempt_id}, "
+                f"got {result.gate_attempt_id}"
+            )
+
+        # Validate step binding
+        if session.last_step_issued and result.step_id != evidence.step_id:
+            return (
+                f"Gate evidence step binding mismatch: evidence bound to step {evidence.step_id}, "
+                f"but result is for step {result.step_id}"
+            )
+
+        # Validate phase binding
+        if result.phase_id and result.phase_id != evidence.phase_id:
+            return (
+                f"Gate evidence phase binding mismatch: evidence bound to phase {evidence.phase_id}, "
+                f"but result is for phase {result.phase_id}"
+            )
+
+        return None
+
     def _record_step_outcome(
         self,
         session: AutonomousSessionState,
@@ -382,9 +443,14 @@ class StepOrchestrator:
         """Record the outcome of a step execution.
 
         Updates counters, completed tasks, and phase gates based on outcome.
+        Gate failures do NOT increment consecutive_errors (per ADR-002).
         """
-        # Update counters
-        if result.outcome == StepOutcome.FAILURE:
+        # Update counters - gate failures do not increment consecutive_errors
+        is_gate_failure = (
+            result.step_type == StepType.RUN_FIDELITY_GATE
+            and result.outcome == StepOutcome.FAILURE
+        )
+        if result.outcome == StepOutcome.FAILURE and not is_gate_failure:
             session.counters.consecutive_errors += 1
         else:
             session.counters.consecutive_errors = 0
@@ -862,32 +928,95 @@ class StepOrchestrator:
         gate_record = session.phase_gates.get(phase_id)
         return gate_record is not None and gate_record.status == PhaseGateStatus.PASSED
 
+    def _evaluate_gate_policy(
+        self,
+        session: AutonomousSessionState,
+        evidence: PendingGateEvidence,
+    ) -> Tuple[bool, Optional[PauseReason]]:
+        """Evaluate gate verdict against the configured gate policy.
+
+        Policy behaviors:
+        - STRICT: Pass only on verdict=pass
+        - LENIENT: Pass on verdict=pass or verdict=warn
+        - MANUAL: Always pause for manual review
+
+        Returns:
+            Tuple of (should_pass, pause_reason_if_any)
+        """
+        policy = session.gate_policy
+
+        if policy == GatePolicy.MANUAL:
+            # Manual policy always requires human review
+            return False, PauseReason.GATE_REVIEW_REQUIRED
+
+        if policy == GatePolicy.STRICT:
+            # Strict: only pass on explicit pass
+            if evidence.verdict == GateVerdict.PASS:
+                return True, None
+            return False, PauseReason.GATE_FAILED
+
+        if policy == GatePolicy.LENIENT:
+            # Lenient: pass on pass or warn
+            if evidence.verdict in (GateVerdict.PASS, GateVerdict.WARN):
+                return True, None
+            return False, PauseReason.GATE_FAILED
+
+        # Default to strict behavior
+        return evidence.verdict == GateVerdict.PASS, None
+
     def _handle_gate_evidence(
         self,
         session: AutonomousSessionState,
         now: datetime,
     ) -> OrchestrationResult:
-        """Handle pending gate evidence (steps 13-14)."""
+        """Handle pending gate evidence (steps 13-14).
+
+        Applies gate policy evaluation:
+        - STRICT: pass only on verdict=pass
+        - LENIENT: pass on pass or warn
+        - MANUAL: always pause with gate_review_required
+
+        Auto-retry behavior:
+        - If auto_retry_fidelity_gate=true and gate fails: address_fidelity_feedback → retry
+        - If auto_retry_fidelity_gate=false and gate fails: pause with gate_failed
+        """
         evidence = session.pending_gate_evidence
         if not evidence:
             return self._create_complete_spec_result(session, now)
 
-        # If gate passed, clear evidence and continue
-        if evidence.verdict == GateVerdict.PASS:
+        # Evaluate gate against policy
+        should_pass, pause_reason = self._evaluate_gate_policy(session, evidence)
+
+        if should_pass:
+            # Gate passed according to policy - clear evidence and continue
             session.pending_gate_evidence = None
+            # Increment fidelity cycle counter on accepted gate
+            session.counters.fidelity_review_cycles_in_active_phase += 1
             return self._determine_next_step_after_gate(session, now)
 
-        # If gate failed
+        # Gate failed or manual review required
+        if pause_reason == PauseReason.GATE_REVIEW_REQUIRED:
+            # Manual policy always requires human acknowledgment
+            return self._create_pause_result(
+                session,
+                PauseReason.GATE_REVIEW_REQUIRED,
+                now,
+                f"Manual gate review required for phase {evidence.phase_id}. "
+                f"Verdict: {evidence.verdict.value}. Acknowledge to continue.",
+            )
+
+        # Gate failed - check auto-retry setting
         if session.stop_conditions.auto_retry_fidelity_gate:
-            # Create address_fidelity_feedback step
+            # Create address_fidelity_feedback step for auto-retry cycle
             return self._create_fidelity_feedback_step(session, evidence, now)
         else:
-            # Pause for manual review
+            # No auto-retry - pause for manual intervention
             return self._create_pause_result(
                 session,
                 PauseReason.GATE_FAILED,
                 now,
-                f"Fidelity gate failed for phase {evidence.phase_id}. Manual review required.",
+                f"Fidelity gate failed for phase {evidence.phase_id}. "
+                f"Verdict: {evidence.verdict.value}. Manual review required.",
             )
 
     def _determine_next_step_after_gate(
@@ -895,12 +1024,23 @@ class StepOrchestrator:
         session: AutonomousSessionState,
         now: datetime,
     ) -> OrchestrationResult:
-        """Determine next step after gate passes."""
-        # Increment fidelity cycle counter
-        session.counters.fidelity_review_cycles_in_active_phase += 1
+        """Determine next step after gate passes.
 
-        # Move to next phase or complete
-        # This is simplified - real implementation would check for more tasks
+        The fidelity cycle counter is incremented in _handle_gate_evidence
+        when the gate is accepted. This method handles phase transition
+        and task continuation.
+        """
+        # Check if we should stop on phase completion
+        if session.stop_conditions.stop_on_phase_completion:
+            return self._create_pause_result(
+                session,
+                PauseReason.PHASE_COMPLETE,
+                now,
+                f"Phase {session.active_phase_id} complete. Stopping as configured.",
+            )
+
+        # Look for more tasks in the current or next phase
+        # The _find_next_task method will handle phase transition
         return self._create_complete_spec_result(session, now)
 
     def _find_next_task(
@@ -928,6 +1068,14 @@ class StepOrchestrator:
                 if task_id and task_id not in session.completed_task_ids:
                     # Check if task can start
                     if self._task_can_start(task, session.completed_task_ids, spec_data):
+                        # Check for phase advance - reset cycle counter on phase change
+                        if session.active_phase_id != phase_id:
+                            logger.info(
+                                "Phase advance detected: %s -> %s, resetting fidelity cycle counter",
+                                session.active_phase_id,
+                                phase_id,
+                            )
+                            session.counters.fidelity_review_cycles_in_active_phase = 0
                         # Update active phase
                         session.active_phase_id = phase_id
                         return task
