@@ -376,6 +376,8 @@ class ServerCapabilities:
         rate_limit_headers: Whether responses include rate limit headers
         supported_formats: List of supported response formats
         feature_flags_enabled: Whether feature flags are active
+        autonomy_sessions: Whether autonomous session management is supported
+        autonomy_fidelity_gates: Whether fidelity gates for autonomous execution are enabled
     """
 
     response_version: str = "response-v2"
@@ -386,6 +388,8 @@ class ServerCapabilities:
     rate_limit_headers: bool = True
     supported_formats: List[str] = field(default_factory=lambda: ["json"])
     feature_flags_enabled: bool = False
+    autonomy_sessions: bool = False
+    autonomy_fidelity_gates: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -403,6 +407,8 @@ class ServerCapabilities:
             "rate_limit_headers": self.rate_limit_headers,
             "formats": self.supported_formats,
             "feature_flags": self.feature_flags_enabled,
+            "autonomy_sessions": self.autonomy_sessions,
+            "autonomy_fidelity_gates": self.autonomy_fidelity_gates,
         }
 
 
@@ -471,6 +477,8 @@ def negotiate_capabilities(
         "pagination": _capabilities.supports_pagination,
         "rate_limit_headers": _capabilities.rate_limit_headers,
         "feature_flags": _capabilities.feature_flags_enabled,
+        "autonomy_sessions": _capabilities.autonomy_sessions,
+        "autonomy_fidelity_gates": _capabilities.autonomy_fidelity_gates,
     }
 
     if requested_features:
@@ -1601,3 +1609,75 @@ def get_provider_tool_metadata(tool_name: str) -> Optional[ToolMetadata]:
         ToolMetadata if found, None otherwise
     """
     return PROVIDER_TOOL_METADATA.get(tool_name)
+
+
+# =============================================================================
+# Autonomy Feature Flags for Discovery
+# =============================================================================
+
+
+# Autonomy feature flags for capability negotiation
+AUTONOMY_FEATURE_FLAGS: Dict[str, FeatureFlagDescriptor] = {
+    "autonomy_sessions": FeatureFlagDescriptor(
+        name="autonomy_sessions",
+        description="Autonomous session management for continuous task execution with persistence",
+        state="experimental",
+        default_enabled=False,
+        percentage_rollout=0,
+        dependencies=[],
+    ),
+    "autonomy_fidelity_gates": FeatureFlagDescriptor(
+        name="autonomy_fidelity_gates",
+        description="Fidelity gates for autonomous execution - quality checkpoints between phases",
+        state="experimental",
+        default_enabled=False,
+        percentage_rollout=0,
+        dependencies=["autonomy_sessions"],
+    ),
+}
+
+
+def get_autonomy_capabilities() -> Dict[str, Any]:
+    """
+    Get autonomy-related capabilities for capability negotiation.
+
+    Returns:
+        Dict with autonomy feature flags and session management support.
+    """
+    return {
+        "autonomy": {
+            "supported": True,
+            "description": "Autonomous execution with session persistence and fidelity gates",
+            "actions": ["session", "session-step"],
+            "tools": ["task"],
+        },
+        "feature_flags": {
+            name: flag.to_dict() for name, flag in AUTONOMY_FEATURE_FLAGS.items()
+        },
+    }
+
+
+def is_autonomy_feature_flag(flag_name: str) -> bool:
+    """
+    Check if a flag name is an autonomy feature flag.
+
+    Args:
+        flag_name: Name of the flag to check
+
+    Returns:
+        True if flag is an autonomy feature flag
+    """
+    return flag_name in AUTONOMY_FEATURE_FLAGS
+
+
+def get_autonomy_feature_flag(flag_name: str) -> Optional[FeatureFlagDescriptor]:
+    """
+    Get descriptor for a specific autonomy feature flag.
+
+    Args:
+        flag_name: Name of the autonomy feature flag
+
+    Returns:
+        FeatureFlagDescriptor if found, None otherwise
+    """
+    return AUTONOMY_FEATURE_FLAGS.get(flag_name)

@@ -50,6 +50,22 @@ from foundry_mcp.tools.unified.task_handlers.handlers_mutation import (
     _handle_update_estimate,
     _handle_update_metadata,
 )
+from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+    _handle_session_end,
+    _handle_session_heartbeat,
+    _handle_session_list,
+    _handle_session_pause,
+    _handle_session_rebase,
+    _handle_session_reset,
+    _handle_session_resume,
+    _handle_session_start,
+    _handle_session_status,
+)
+from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+    _handle_session_step_next,
+    _handle_session_step_report,
+    _handle_session_step_replay,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +99,20 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="query", handler=_handle_query, summary="Query tasks by status or parent"),
     ActionDefinition(name="hierarchy", handler=_handle_hierarchy, summary="Return paginated hierarchy slices"),
     ActionDefinition(name="session-config", handler=_handle_session_config, summary="Get/set autonomous session configuration"),
+    # Session lifecycle actions (feature-flag guarded by autonomy_sessions)
+    ActionDefinition(name="session-start", handler=_handle_session_start, summary="Start a new autonomous session for a spec"),
+    ActionDefinition(name="session-pause", handler=_handle_session_pause, summary="Pause an active autonomous session"),
+    ActionDefinition(name="session-resume", handler=_handle_session_resume, summary="Resume a paused autonomous session"),
+    ActionDefinition(name="session-end", handler=_handle_session_end, summary="End an autonomous session (terminal state)"),
+    ActionDefinition(name="session-status", handler=_handle_session_status, summary="Get current status of an autonomous session"),
+    ActionDefinition(name="session-list", handler=_handle_session_list, summary="List autonomous sessions with optional filtering"),
+    ActionDefinition(name="session-rebase", handler=_handle_session_rebase, summary="Rebase an active session to spec changes"),
+    ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="Update session heartbeat and context metrics"),
+    ActionDefinition(name="session-reset", handler=_handle_session_reset, summary="Reset a failed session to allow retry"),
+    # Session-step actions (feature-flag guarded by autonomy_sessions)
+    ActionDefinition(name="session-step-next", handler=_handle_session_step_next, summary="Get the next step to execute in a session"),
+    ActionDefinition(name="session-step-report", handler=_handle_session_step_report, summary="Report the outcome of a step execution"),
+    ActionDefinition(name="session-step-replay", handler=_handle_session_step_replay, summary="Replay the last issued response for safe retry"),
 ]
 
 _TASK_ROUTER = ActionRouter(tool_name="task", actions=_ACTION_DEFINITIONS)
@@ -157,6 +187,13 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         completions: Optional[List[Dict[str, Any]]] = None,
         # reset-batch specific parameters
         threshold_hours: Optional[float] = None,
+        # session lifecycle parameters (autonomy_sessions feature flag)
+        session_id: Optional[str] = None,
+        # session-step parameters
+        step_id: Optional[str] = None,
+        outcome: Optional[str] = None,
+        files_touched: Optional[List[str]] = None,
+        context_usage_pct: Optional[int] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
@@ -210,6 +247,13 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "completions": completions,
             # reset-batch specific
             "threshold_hours": threshold_hours,
+            # session lifecycle specific
+            "session_id": session_id,
+            # session-step specific
+            "step_id": step_id,
+            "outcome": outcome,
+            "files_touched": files_touched,
+            "context_usage_pct": context_usage_pct,
         }
         return _dispatch_task_action(action=action, payload=payload, config=config)
 

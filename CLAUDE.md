@@ -32,3 +32,12 @@ You are operating inside the `foundry-mcp` repository, which adheres to the MCP 
 - Keep responses concise and structured for LLM consumption per [dev_docs/mcp_best_practices/11-ai-llm-integration.md](dev_docs/mcp_best_practices/11-ai-llm-integration.md); use progressive disclosure and tool-chaining-friendly outputs.
 - When documenting or exposing tools, update discovery metadata per [dev_docs/mcp_best_practices/13-tool-discovery.md](dev_docs/mcp_best_practices/13-tool-discovery.md) (usage examples, tags, rate limits, capability negotiation).
 - Default to schema-tagged envelopes via the helpers in `src/foundry_mcp/core/responses.py`; never hand-roll response objects. See [dev_docs/codebase_standards/mcp_response_schema.md](dev_docs/codebase_standards/mcp_response_schema.md) for the full response contract and usage examples.
+
+<sandbox-context>
+## Sandbox Context
+- **Repository**: foundry-works/foundry-mcp
+- **Branch**: `tyler/foundry-mcp-20260214-0833`
+- **Based on**: `main`
+
+When creating PRs, target `main` as the base branch.
+</sandbox-context>

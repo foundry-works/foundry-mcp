@@ -707,6 +707,8 @@
               "complete-batch",
               "reset-batch",
               "session-config",
+              "session",
+              "session-step",
               "next",
               "info",
               "check-deps",
@@ -1541,6 +1543,28 @@
         "dependencies": [],
         "created_at": "2025-12-10T00:00:00Z",
         "expires_at": null
+      },
+      "autonomy_sessions": {
+        "description": "Autonomous session management for continuous task execution with persistence",
+        "state": "experimental",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "foundry-mcp core",
+        "dependencies": [],
+        "created_at": "2026-02-14T00:00:00Z",
+        "expires_at": null
+      },
+      "autonomy_fidelity_gates": {
+        "description": "Fidelity gates for autonomous execution - quality checkpoints between phases",
+        "state": "experimental",
+        "default_enabled": false,
+        "percentage_rollout": 0,
+        "owner": "foundry-mcp core",
+        "dependencies": [
+          "autonomy_sessions"
+        ],
+        "created_at": "2026-02-14T00:00:00Z",
+        "expires_at": null
       }
     }
   },
@@ -1602,6 +1626,21 @@
         "description": "Spec discovery and analysis",
         "tools": [
           "spec"
+        ]
+      },
+      "autonomy": {
+        "supported": true,
+        "description": "Autonomous execution with session persistence and fidelity gates",
+        "actions": [
+          "session",
+          "session-step"
+        ],
+        "tools": [
+          "task"
+        ],
+        "feature_flags": [
+          "autonomy_sessions",
+          "autonomy_fidelity_gates"
         ]
       }
     }

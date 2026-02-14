@@ -154,6 +154,9 @@ class ErrorCode(str, Enum):
     AI_PROMPT_NOT_FOUND = "AI_PROMPT_NOT_FOUND"
     AI_CACHE_STALE = "AI_CACHE_STALE"
 
+    # Autonomy errors
+    AUTONOMY_WRITE_LOCK_ACTIVE = "AUTONOMY_WRITE_LOCK_ACTIVE"
+
 
 class ErrorType(str, Enum):
     """Error categories for routing and client-side handling.
