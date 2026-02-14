@@ -1,37 +1,59 @@
 """Session-step action handlers: next, report, replay.
 
 This module provides handlers for session-step actions that drive
-autonomous execution forward.
+autonomous execution forward using the StepOrchestrator.
 
-Phase A (current):
-- next: Stub returning FEATURE_DISABLED (requires Phase B orchestrator)
-- report: Stub returning FEATURE_DISABLED (requires Phase B orchestrator)
-- replay: Stub returning FEATURE_DISABLED (requires Phase B orchestrator)
+Phase B (current):
+- next: Computes next step via orchestrator with replay-safe semantics
+- report: Reports step outcome (Phase B)
+- replay: Returns cached last response for safe retry (Phase B)
 
 All actions are feature-flag guarded by 'autonomy_sessions'.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
-from foundry_mcp.core.autonomy.models import SessionStatus
+from foundry_mcp.core.autonomy.models import (
+    LastStepResult,
+    NextStep,
+    SessionStatus,
+    SessionStepResponseData,
+    StepOutcome,
+    StepType,
+)
+from foundry_mcp.core.autonomy.orchestrator import (
+    OrchestrationResult,
+    StepOrchestrator,
+    ERROR_STEP_RESULT_REQUIRED,
+    ERROR_STEP_MISMATCH,
+    ERROR_SPEC_REBASE_REQUIRED,
+    ERROR_HEARTBEAT_STALE,
+    ERROR_STEP_STALE,
+    ERROR_ALL_TASKS_BLOCKED,
+    ERROR_SESSION_UNRECOVERABLE,
+)
 from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
     error_response,
     success_response,
 )
+from foundry_mcp.core.spec import load_spec
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _request_id,
     _validation_error,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_storage(config: ServerConfig, workspace: Optional[str] = None) -> AutonomyStorage:
@@ -55,27 +77,145 @@ def _session_not_found_response(action: str, request_id: str, spec_id: Optional[
     ))
 
 
+def _map_orchestrator_error_to_response(
+    error_code: Optional[str],
+    error_message: str,
+    request_id: str,
+    session_id: Optional[str] = None,
+    state_version: Optional[int] = None,
+) -> dict:
+    """Map orchestrator error codes to response format."""
+    # Map orchestrator error codes to ErrorCode enum
+    error_code_map = {
+        ERROR_STEP_RESULT_REQUIRED: ErrorCode.VALIDATION_ERROR,
+        ERROR_STEP_MISMATCH: ErrorCode.CONFLICT,
+        ERROR_SPEC_REBASE_REQUIRED: ErrorCode.CONFLICT,
+        ERROR_HEARTBEAT_STALE: ErrorCode.UNAVAILABLE,
+        ERROR_STEP_STALE: ErrorCode.UNAVAILABLE,
+        ERROR_ALL_TASKS_BLOCKED: ErrorCode.RESOURCE_BUSY,
+        ERROR_SESSION_UNRECOVERABLE: ErrorCode.INTERNAL_ERROR,
+    }
+
+    # Map to error types
+    error_type_map = {
+        ERROR_STEP_RESULT_REQUIRED: ErrorType.VALIDATION,
+        ERROR_STEP_MISMATCH: ErrorType.CONFLICT,
+        ERROR_SPEC_REBASE_REQUIRED: ErrorType.CONFLICT,
+        ERROR_HEARTBEAT_STALE: ErrorType.UNAVAILABLE,
+        ERROR_STEP_STALE: ErrorType.UNAVAILABLE,
+        ERROR_ALL_TASKS_BLOCKED: ErrorType.UNAVAILABLE,
+        ERROR_SESSION_UNRECOVERABLE: ErrorType.INTERNAL,
+    }
+
+    mapped_code = error_code_map.get(error_code or "", ErrorCode.INTERNAL_ERROR)
+    mapped_type = error_type_map.get(error_code or "", ErrorType.INTERNAL)
+
+    details: Dict[str, Any] = {
+        "error_code": error_code,
+        "session_id": session_id,
+    }
+    if state_version is not None:
+        details["state_version"] = state_version
+
+    # Add remediation hints based on error type
+    if error_code == ERROR_STEP_RESULT_REQUIRED:
+        details["remediation"] = "Provide last_step_result with the outcome of the previous step"
+    elif error_code == ERROR_STEP_MISMATCH:
+        details["remediation"] = "Ensure step_id and step_type match the last issued step"
+    elif error_code == ERROR_SPEC_REBASE_REQUIRED:
+        details["remediation"] = "Use session-rebase to reconcile spec structure changes"
+    elif error_code in (ERROR_HEARTBEAT_STALE, ERROR_STEP_STALE):
+        details["remediation"] = "Session may need to be reset or heartbeat updated"
+    elif error_code == ERROR_ALL_TASKS_BLOCKED:
+        details["remediation"] = "Resolve task blockers to continue execution"
+
+    return asdict(error_response(
+        error_message,
+        error_code=mapped_code,
+        error_type=mapped_type,
+        request_id=request_id,
+        details=details,
+    ))
+
+
+def _build_next_step_response(
+    result: OrchestrationResult,
+    request_id: str,
+) -> dict:
+    """Build the response for session-step-next.
+
+    Response format matches ADR:
+    {
+        "success": true,
+        "data": {
+            "session_id": "...",
+            "status": "running" | "paused" | "completed" | "failed",
+            "state_version": 7,
+            "next_step": { ... } | null
+        },
+        "error": null,
+        "meta": {"version": "response-v2", "request_id": "..."}
+    }
+    """
+    session = result.session
+
+    # Build response data - pass NextStep model directly
+    response_data = SessionStepResponseData(
+        session_id=session.id,
+        status=session.status,
+        state_version=session.state_version,
+        next_step=result.next_step,  # Pass the NextStep model directly
+    )
+
+    return asdict(success_response(
+        data=response_data.model_dump(mode="json", by_alias=True),
+        request_id=request_id,
+    ))
+
+
 def _handle_session_step_next(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
     workspace: Optional[str] = None,
+    last_step_result: Optional[Dict[str, Any]] = None,
+    context_usage_pct: Optional[int] = None,
+    heartbeat: Optional[bool] = None,
     **payload: Any,
 ) -> dict:
     """Handle session-step-next action.
 
     Gets the next step to execute in an autonomous session.
 
-    NOTE: This is a Phase B feature. Phase A returns FEATURE_DISABLED.
+    This handler integrates with the StepOrchestrator to:
+    - Validate feedback (last_step_result) on non-initial calls
+    - Check for replay scenarios (return cached response)
+    - Enforce pause guards and staleness checks
+    - Determine the next step based on 18-step orchestration rules
 
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
         workspace: Workspace path
+        last_step_result: Result of previous step (required on non-initial calls)
+            - step_id: ID of the completed step
+            - step_type: Type of the step (implement_task, execute_verification, etc.)
+            - task_id: Task ID if step involved a task
+            - phase_id: Phase ID if step involved a phase
+            - outcome: "success", "failure", or "skipped"
+            - note: Optional note about the outcome
+            - files_touched: Optional list of files modified
+            - gate_attempt_id: Gate attempt ID for gate steps
+        context_usage_pct: Caller-reported context usage percentage (0-100)
+        heartbeat: If true, update heartbeat timestamp
         **payload: Additional parameters
 
     Returns:
-        Response dict with next step details or error
+        Response dict with:
+        - session_id: Session identifier
+        - status: Current session status
+        - state_version: Monotonic state version
+        - next_step: Next step object or null if terminal/paused
     """
     request_id = _request_id()
 
@@ -87,21 +227,120 @@ def _handle_session_step_next(
             request_id=request_id,
         )
 
-    # Phase A: Return feature disabled with descriptive message
-    # This feature requires the Phase B orchestrator which validates
-    # the closed feedback loop between steps
-    return asdict(error_response(
-        "session-step-next requires Phase B orchestrator",
-        error_code=ErrorCode.FEATURE_DISABLED,
-        error_type=ErrorType.FEATURE_FLAG,
-        request_id=request_id,
-        details={
-            "action": "session-step-next",
-            "feature_flag": "autonomy_sessions",
-            "phase": "A",
-            "hint": "Use task(action=session-*) for lifecycle commands. Session-step commands require Phase B.",
-        },
-    ))
+    storage = _get_storage(config, workspace)
+
+    # Find active session for this spec
+    active_session_id = storage.get_active_session(spec_id)
+    if not active_session_id:
+        return _session_not_found_response("session-step-next", request_id, spec_id)
+
+    # Load session state
+    session = storage.load(active_session_id)
+    if not session:
+        return _session_not_found_response("session-step-next", request_id, spec_id)
+
+    # Parse last_step_result if provided
+    parsed_last_step_result: Optional[LastStepResult] = None
+    if last_step_result:
+        try:
+            # Convert outcome string to enum
+            outcome_str = last_step_result.get("outcome", "success")
+            outcome = StepOutcome(outcome_str)
+
+            # step_type is required in LastStepResult
+            step_type_str = last_step_result.get("step_type")
+            if not step_type_str:
+                return asdict(error_response(
+                    "step_type is required in last_step_result",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    request_id=request_id,
+                    details={
+                        "action": "session-step-next",
+                        "field": "last_step_result.step_type",
+                        "hint": "Provide step_type matching the last issued step",
+                    },
+                ))
+            step_type = StepType(step_type_str)
+
+            parsed_last_step_result = LastStepResult(
+                step_id=last_step_result.get("step_id", ""),
+                step_type=step_type,
+                task_id=last_step_result.get("task_id"),
+                phase_id=last_step_result.get("phase_id"),
+                outcome=outcome,
+                note=last_step_result.get("note"),
+                files_touched=last_step_result.get("files_touched"),
+                gate_attempt_id=last_step_result.get("gate_attempt_id"),
+            )
+        except (ValueError, TypeError) as e:
+            logger.warning("Failed to parse last_step_result: %s", e)
+            return asdict(error_response(
+                f"Invalid last_step_result format: {e}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+                details={
+                    "action": "session-step-next",
+                    "field": "last_step_result",
+                    "hint": "Ensure outcome is one of: success, failure, skipped",
+                },
+            ))
+
+    # Prepare heartbeat timestamp if requested
+    heartbeat_at = None
+    if heartbeat:
+        heartbeat_at = datetime.now(timezone.utc)
+
+    # Create orchestrator and compute next step
+    orchestrator = StepOrchestrator(
+        storage=storage,
+        spec_loader=load_spec,
+        workspace_path=Path(workspace) if workspace else Path.cwd(),
+    )
+
+    result = orchestrator.compute_next_step(
+        session=session,
+        last_step_result=parsed_last_step_result,
+        context_usage_pct=context_usage_pct,
+        heartbeat_at=heartbeat_at,
+    )
+
+    # Handle replay scenario
+    if result.replay_response is not None:
+        logger.info("Returning cached replay response for session %s", session.id)
+        return result.replay_response
+
+    # Persist session if needed
+    if result.should_persist:
+        try:
+            storage.save(result.session)
+            # Update active session pointer
+            storage.set_active_session(spec_id, result.session.id)
+        except Exception as e:
+            logger.error("Failed to persist session %s: %s", session.id, e)
+            return asdict(error_response(
+                f"Failed to persist session state: {e}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                request_id=request_id,
+                details={
+                    "session_id": session.id,
+                    "state_version": session.state_version,
+                },
+            ))
+
+    # Return error or success response
+    if not result.success:
+        return _map_orchestrator_error_to_response(
+            error_code=result.error_code,
+            error_message=result.error_message or "Orchestration failed",
+            request_id=request_id,
+            session_id=session.id,
+            state_version=session.state_version,
+        )
+
+    return _build_next_step_response(result, request_id)
 
 
 def _handle_session_step_report(
@@ -119,7 +358,9 @@ def _handle_session_step_report(
 
     Reports the outcome of a step execution.
 
-    NOTE: This is a Phase B feature. Phase A returns FEATURE_DISABLED.
+    This is an alias for session-step-next with last_step_result.
+    The report action was deprecated in favor of passing last_step_result
+    directly to session-step-next for a more ergonomic API.
 
     Args:
         config: Server configuration
@@ -132,7 +373,7 @@ def _handle_session_step_report(
         **payload: Additional parameters
 
     Returns:
-        Response dict with updated session state or error
+        Response dict with next step or error
     """
     request_id = _request_id()
 
@@ -160,19 +401,24 @@ def _handle_session_step_report(
             request_id=request_id,
         )
 
-    # Phase A: Return feature disabled with descriptive message
-    return asdict(error_response(
-        "session-step-report requires Phase B orchestrator",
-        error_code=ErrorCode.FEATURE_DISABLED,
-        error_type=ErrorType.FEATURE_FLAG,
-        request_id=request_id,
-        details={
-            "action": "session-step-report",
-            "feature_flag": "autonomy_sessions",
-            "phase": "A",
-            "hint": "Use task(action=session-*) for lifecycle commands. Session-step commands require Phase B.",
-        },
-    ))
+    # Build last_step_result and delegate to next handler
+    last_step_result: Dict[str, Any] = {
+        "step_id": step_id,
+        "outcome": outcome,
+    }
+    if note:
+        last_step_result["note"] = note
+    if files_touched:
+        last_step_result["files_touched"] = files_touched
+
+    # Delegate to session-step-next
+    return _handle_session_step_next(
+        config=config,
+        spec_id=spec_id,
+        workspace=workspace,
+        last_step_result=last_step_result,
+        **payload,
+    )
 
 
 def _handle_session_step_replay(
@@ -186,7 +432,9 @@ def _handle_session_step_replay(
 
     Replays the last issued response for safe retry.
 
-    NOTE: This is a Phase B feature. Phase A returns FEATURE_DISABLED.
+    This returns the cached last_issued_response from the session state,
+    enabling safe retry after network failures or timeouts without
+    re-executing the step.
 
     Args:
         config: Server configuration
@@ -207,16 +455,31 @@ def _handle_session_step_replay(
             request_id=request_id,
         )
 
-    # Phase A: Return feature disabled with descriptive message
-    return asdict(error_response(
-        "session-step-replay requires Phase B orchestrator",
-        error_code=ErrorCode.FEATURE_DISABLED,
-        error_type=ErrorType.FEATURE_FLAG,
-        request_id=request_id,
-        details={
-            "action": "session-step-replay",
-            "feature_flag": "autonomy_sessions",
-            "phase": "A",
-            "hint": "Use task(action=session-*) for lifecycle commands. Session-step commands require Phase B.",
-        },
-    ))
+    storage = _get_storage(config, workspace)
+
+    # Find active session for this spec
+    active_session_id = storage.get_active_session(spec_id)
+    if not active_session_id:
+        return _session_not_found_response("session-step-replay", request_id, spec_id)
+
+    # Load session state
+    session = storage.load(active_session_id)
+    if not session:
+        return _session_not_found_response("session-step-replay", request_id, spec_id)
+
+    # Check for cached response
+    if not session.last_issued_response:
+        return asdict(error_response(
+            "No cached response available for replay",
+            error_code=ErrorCode.NOT_FOUND,
+            error_type=ErrorType.NOT_FOUND,
+            request_id=request_id,
+            details={
+                "action": "session-step-replay",
+                "session_id": session.id,
+                "hint": "Call session-step-next first to get a step to execute",
+            },
+        ))
+
+    logger.info("Replaying cached response for session %s", session.id)
+    return session.last_issued_response

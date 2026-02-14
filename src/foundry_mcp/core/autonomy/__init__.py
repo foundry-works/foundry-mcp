@@ -10,6 +10,7 @@ including:
 
 Key modules:
 - models: Pydantic models for session state
+- orchestrator: 18-step orchestration engine
 - state_migrations: Schema versioning and migrations
 - write_lock: Write-lock enforcement helpers
 """
@@ -46,6 +47,20 @@ from .models import (
     CompletedPhaseSummary,
     PendingTaskSummary,
     StepInstruction,
+)
+from .orchestrator import (
+    StepOrchestrator,
+    OrchestrationResult,
+    ERROR_STEP_RESULT_REQUIRED,
+    ERROR_STEP_MISMATCH,
+    ERROR_INVALID_GATE_EVIDENCE,
+    ERROR_NO_ACTIVE_SESSION,
+    ERROR_AMBIGUOUS_ACTIVE_SESSION,
+    ERROR_SESSION_UNRECOVERABLE,
+    ERROR_SPEC_REBASE_REQUIRED,
+    ERROR_HEARTBEAT_STALE,
+    ERROR_STEP_STALE,
+    ERROR_ALL_TASKS_BLOCKED,
 )
 from .state_migrations import (
     CURRENT_SCHEMA_VERSION,
@@ -113,6 +128,19 @@ __all__ = [
     "CompletedPhaseSummary",
     "PendingTaskSummary",
     "StepInstruction",
+    # Orchestrator
+    "StepOrchestrator",
+    "OrchestrationResult",
+    "ERROR_STEP_RESULT_REQUIRED",
+    "ERROR_STEP_MISMATCH",
+    "ERROR_INVALID_GATE_EVIDENCE",
+    "ERROR_NO_ACTIVE_SESSION",
+    "ERROR_AMBIGUOUS_ACTIVE_SESSION",
+    "ERROR_SESSION_UNRECOVERABLE",
+    "ERROR_SPEC_REBASE_REQUIRED",
+    "ERROR_HEARTBEAT_STALE",
+    "ERROR_STEP_STALE",
+    "ERROR_ALL_TASKS_BLOCKED",
     # State migrations
     "CURRENT_SCHEMA_VERSION",
     "SCHEMA_VERSION_KEY",
