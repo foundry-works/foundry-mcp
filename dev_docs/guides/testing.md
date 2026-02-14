@@ -141,7 +141,7 @@ pytest -m "unit and not slow"
 
 ### Built-in Test Presets
 
-The project includes preset configurations for running tests via CLI:
+The project includes preset configurations for running tests via pytest:
 
 | Preset | Timeout | Fail Fast | Markers | Use Case |
 |--------|---------|-----------|---------|----------|
@@ -301,7 +301,7 @@ Once connected via Claude Desktop or MCP dev mode, test these tools:
 - `journal(action="list")` - Get journal entries
 - `journal(action="list-unjournaled")` - List completed tasks needing journals
 
-> **Note:** Test execution is CLI-only. Use `sdd test run --preset full` or `pytest` directly.
+> **Note:** Test execution uses `pytest` directly. There is no MCP tool or CLI command for running tests.
 
 ### Testing Resources
 
