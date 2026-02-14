@@ -177,7 +177,7 @@ class TestResponseEnvelopeParity:
     def test_success_response_envelope(self, cli_runner, temp_specs_dir):
         """Success responses follow envelope structure."""
         result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+            cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"]
         )
         assert result.exit_code == 0
 
@@ -218,26 +218,22 @@ class TestResponseEnvelopeParity:
 class TestGoldenFixtureParity:
     """Tests that CLI outputs match golden fixture schemas."""
 
-    def test_test_presets_matches_golden(self, cli_runner, temp_specs_dir):
-        """test presets output matches expected schema."""
+    def test_dev_check_matches_golden(self, cli_runner, temp_specs_dir):
+        """dev check output matches expected schema."""
         result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+            cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"]
         )
         assert result.exit_code == 0
 
         actual = json.loads(result.output)
-        load_golden_fixture("success_test_presets")
 
         # Validate envelope structure
         violations = validate_envelope_structure(actual)
         assert not violations, f"Envelope violations: {violations}"
 
         # Verify key structure matches
-        assert "presets" in actual["data"]
-        expected_presets = {"quick", "full", "unit", "integration", "smoke"}
-        actual_presets = set(actual["data"]["presets"].keys())
-        missing_presets = expected_presets - actual_presets
-        assert not missing_presets, f"Missing presets: {missing_presets}"
+        assert "tools" in actual["data"]
+        assert "all_required_available" in actual["data"]
 
     def test_validation_success_matches_golden(self, cli_runner, temp_specs_dir):
         """validate check output matches expected schema."""
@@ -349,7 +345,7 @@ class TestOutputStability:
         results = []
         for _ in range(3):
             result = cli_runner.invoke(
-                cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+                cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"]
             )
             assert result.exit_code == 0
             results.append(json.loads(result.output))
@@ -369,7 +365,7 @@ class TestOutputStability:
     def test_no_ansi_in_output(self, cli_runner, temp_specs_dir):
         """CLI output contains no ANSI escape codes."""
         result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "test", "presets"]
+            cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"]
         )
         assert result.exit_code == 0
 
@@ -383,7 +379,7 @@ class TestOutputStability:
     def test_output_is_valid_json(self, cli_runner, temp_specs_dir):
         """All output is valid JSON (no extra text)."""
         commands = [
-            ["test", "presets"],
+            ["dev", "check"],
             ["specs", "analyze"],
             ["session", "status"],
         ]

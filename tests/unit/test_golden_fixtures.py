@@ -140,7 +140,7 @@ class TestGoldenFixtures:
         """CLI responses follow standard envelope structure."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "test", "presets"],
+            ["--specs-dir", str(temp_specs_dir), "dev", "check"],
         )
 
         assert result.exit_code == 0
@@ -155,22 +155,16 @@ class TestGoldenFixtures:
         """Success responses match expected schema."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "test", "presets"],
+            ["--specs-dir", str(temp_specs_dir), "dev", "check"],
         )
 
         assert result.exit_code == 0
         actual = json.loads(result.output)
 
-        # Load golden fixture
-        golden_path = GOLDEN_DIR / "success_test_presets.json"
-        if golden_path.exists():
-            expected = json.loads(golden_path.read_text())
-
-            # Compare key presence (not exact values which may vary)
-            assert actual["success"] == expected["success"]
-            assert "presets" in actual["data"]
-            for preset_name in ["quick", "full", "unit", "integration", "smoke"]:
-                assert preset_name in actual["data"]["presets"], f"Missing preset: {preset_name}"
+        # Verify expected fields in data
+        assert actual["success"] is True
+        assert "tools" in actual["data"]
+        assert "all_required_available" in actual["data"]
 
     def test_error_response_schema(self, cli_runner, temp_specs_dir):
         """Error responses match expected schema."""
@@ -194,11 +188,11 @@ class TestGoldenFixtures:
 class TestSchemaStability:
     """Tests ensuring schema stability across versions."""
 
-    def test_test_presets_schema_stable(self, cli_runner, temp_specs_dir):
-        """test presets output schema is stable."""
+    def test_dev_check_schema_stable(self, cli_runner, temp_specs_dir):
+        """dev check output schema is stable."""
         result = cli_runner.invoke(
             cli,
-            ["--specs-dir", str(temp_specs_dir), "test", "presets"],
+            ["--specs-dir", str(temp_specs_dir), "dev", "check"],
         )
 
         assert result.exit_code == 0
@@ -206,8 +200,8 @@ class TestSchemaStability:
 
         # Verify expected fields in data
         assert data["success"] is True
-        assert "presets" in data["data"]
-        assert isinstance(data["data"]["presets"], dict)
+        assert "tools" in data["data"]
+        assert "all_required_available" in data["data"]
 
     def test_validation_schema_stable(self, cli_runner, temp_specs_dir):
         """validate output schema is stable."""
@@ -224,18 +218,3 @@ class TestSchemaStability:
         assert "is_valid" in data["data"]
         assert "error_count" in data["data"]
         assert "warning_count" in data["data"]
-
-    def test_dev_check_schema_stable(self, cli_runner, temp_specs_dir):
-        """dev check output schema is stable."""
-        result = cli_runner.invoke(
-            cli,
-            ["--specs-dir", str(temp_specs_dir), "dev", "check"],
-        )
-
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-
-        # Verify expected fields in data
-        assert data["success"] is True
-        assert "tools" in data["data"]
-        assert "all_required_available" in data["data"]

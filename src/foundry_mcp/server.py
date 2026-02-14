@@ -1,6 +1,6 @@
 """FastMCP server for foundry-mcp.
 
-This server exposes the unified 16-router tool surface described in
+This server exposes the unified 14-router tool surface described in
 `mcp/capabilities_manifest.json`.
 
 Note: Legacy per-tool-name MCP endpoints are intentionally not registered.

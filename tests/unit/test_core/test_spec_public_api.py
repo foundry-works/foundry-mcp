@@ -145,9 +145,6 @@ CONSUMER_IMPORTS = {
     "foundry_mcp.tools.unified.plan": [
         "find_specs_directory",
     ],
-    "foundry_mcp.tools.unified.pr": [
-        "find_spec_file", "find_specs_directory", "load_spec",
-    ],
     "foundry_mcp.tools.unified.review": [
         "find_spec_file", "find_specs_directory", "load_spec",
     ],
