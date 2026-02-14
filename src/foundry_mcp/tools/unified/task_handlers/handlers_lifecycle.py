@@ -35,7 +35,6 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.spec import save_spec
 from foundry_mcp.core.task import check_dependencies
-from foundry_mcp.cli.context import get_context_tracker
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
@@ -459,24 +458,8 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
 
     completed_at = task_data.get("metadata", {}).get("completed_at")
 
-    # Update autonomous session tracking for batch mode
-    tracker = get_context_tracker()
-    session = tracker.get_session()
-    autonomous_state = None
-    batch_paused = False
-
-    if session and session.autonomous and session.autonomous.enabled:
-        session.autonomous.tasks_completed += 1
-
-        # Check batch mode limits
-        if session.autonomous.batch_mode and session.autonomous.batch_remaining is not None:
-            session.autonomous.batch_remaining -= 1
-            if session.autonomous.batch_remaining <= 0:
-                session.autonomous.pause_reason = "batch"
-                session.autonomous.enabled = False
-                batch_paused = True
-
-        autonomous_state = session.autonomous.to_dict()
+    # Note: Autonomous session tracking has been migrated to the autonomy module.
+    # Batch mode is now handled by AutonomousSessionState in core/autonomy/models.py.
 
     progress = get_progress_summary(spec_data)
     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -496,16 +479,6 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
         "request_id": request_id,
         "telemetry": {"duration_ms": round(elapsed_ms, 2)},
     }
-
-    # Include autonomous state if available
-    if autonomous_state is not None:
-        response_kwargs["autonomous"] = autonomous_state
-        if batch_paused:
-            response_kwargs["batch_paused"] = True
-            response_kwargs["batch_pause_message"] = (
-                "Batch limit reached. Call task(action='session-config', auto_mode=true) "
-                "to resume autonomous execution."
-            )
 
     response = success_response(**response_kwargs)
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)

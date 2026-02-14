@@ -29,11 +29,10 @@ from foundry_mcp.core.task import (
     get_next_task,
     prepare_task as core_prepare_task,
 )
-from foundry_mcp.cli.context import (
-    AutonomousSession,
-    get_context_tracker,
-)
-from foundry_mcp.core.llm_config import get_workflow_config, WorkflowMode
+from foundry_mcp.cli.context import get_context_tracker
+import logging
+
+logger = logging.getLogger(__name__)
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
@@ -644,21 +643,19 @@ def _handle_hierarchy(*, config: ServerConfig, **payload: Any) -> dict:
 
 def _handle_session_config(*, config: ServerConfig, **payload: Any) -> dict:
     """
-    Handle session-config action: get/set autonomous mode preferences.
+    Handle session-config action: get CLI session configuration.
 
-    This action manages the ephemeral autonomous session state, allowing
-    agents to enable/disable autonomous mode and track task completion
-    during autonomous execution.
+    This action provides lightweight CLI session tracking for consultations
+    and token usage. Autonomous mode tracking has been migrated to the
+    autonomy module. Use task(action='session') for session management.
 
     Parameters:
-        get: If true, just return current session config without changes
-        auto_mode: Set autonomous mode enabled (true) or disabled (false)
+        get: If true, return current CLI session config without changes
+        auto_mode: [REMOVED] Returns error - use task(action='session') instead
 
     Returns:
-        Current session configuration including autonomous state
+        CLI session configuration (session_id, limits, stats)
     """
-    from datetime import datetime, timezone
-
     request_id = _request_id()
     action = "session-config"
     start = time.perf_counter()
@@ -667,85 +664,55 @@ def _handle_session_config(*, config: ServerConfig, **payload: Any) -> dict:
     get_only = payload.get("get", False)
     auto_mode = payload.get("auto_mode")
 
-    # Get the context tracker and session
+    # Handle auto_mode parameter - return clear removal error
+    if auto_mode is not None:
+        return asdict(error_response(
+            "The 'auto_mode' parameter has been removed from session-config. "
+            "Use task(action='session', command='start') to start a session or "
+            "task(action='session', command='pause') to pause a session.",
+            error_code=ErrorCode.FEATURE_DISABLED,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "removed_parameter": "auto_mode",
+                "action": action,
+                "migration": {
+                    "auto_mode=true": "Use task(action='session', command='start', spec_id=...)",
+                    "auto_mode=false": "Use task(action='session', command='pause', spec_id=...)",
+                },
+            },
+        ))
+
+    # Get the context tracker and session for CLI tracking
     tracker = get_context_tracker()
     session = tracker.get_or_create_session()
 
-    # Initialize autonomous if not present, applying defaults from WorkflowConfig
-    if session.autonomous is None:
-        workflow_config = get_workflow_config()
-        # Determine initial state based on workflow mode
-        initial_enabled = False
-        initial_batch_mode = False
-        initial_batch_size = workflow_config.batch_size
-
-        if workflow_config.mode == WorkflowMode.AUTONOMOUS:
-            initial_enabled = True
-        elif workflow_config.mode == WorkflowMode.BATCH:
-            initial_enabled = True
-            initial_batch_mode = True
-
-        session.autonomous = AutonomousSession(
-            enabled=initial_enabled,
-            batch_mode=initial_batch_mode,
-            batch_size=initial_batch_size,
-            batch_remaining=initial_batch_size if initial_batch_mode else None,
-        )
-
-    # If just getting, return current state
-    if get_only:
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        response = success_response(
-            session_id=session.session_id,
-            autonomous=session.autonomous.to_dict(),
-            message="Current session configuration",
-            request_id=request_id,
-            telemetry={"duration_ms": round(elapsed_ms, 2)},
-        )
-        _metrics.counter(_metric(action), labels={"status": "success", "operation": "get"})
-        return asdict(response)
-
-    # Handle auto_mode setting
-    if auto_mode is not None:
-        if not isinstance(auto_mode, bool):
-            return _validation_error(
-                field="auto_mode",
-                action=action,
-                message="auto_mode must be a boolean (true/false)",
-                request_id=request_id,
-            )
-
-        previous_enabled = session.autonomous.enabled
-        session.autonomous.enabled = auto_mode
-
-        if auto_mode and not previous_enabled:
-            # Starting autonomous mode - apply workflow config for batch settings
-            workflow_config = get_workflow_config()
-            session.autonomous.started_at = (
-                datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            )
-            session.autonomous.tasks_completed = 0
-            session.autonomous.pause_reason = None
-
-            # Configure batch mode based on workflow config
-            if workflow_config.mode == WorkflowMode.BATCH:
-                session.autonomous.batch_mode = True
-                session.autonomous.batch_size = workflow_config.batch_size
-                session.autonomous.batch_remaining = workflow_config.batch_size
-            else:
-                session.autonomous.batch_mode = False
-                session.autonomous.batch_remaining = None
-        elif not auto_mode and previous_enabled:
-            # Stopping autonomous mode
-            session.autonomous.pause_reason = "user"
-
+    # Return current CLI session state
     elapsed_ms = (time.perf_counter() - start) * 1000
     response = success_response(
         session_id=session.session_id,
-        autonomous=session.autonomous.to_dict(),
-        message="Autonomous mode enabled" if session.autonomous.enabled else "Autonomous mode disabled",
+        limits={
+            "max_consultations": session.limits.max_consultations,
+            "max_context_tokens": session.limits.max_context_tokens,
+            "warn_at_percentage": session.limits.warn_at_percentage,
+        },
+        stats={
+            "consultation_count": session.stats.consultation_count,
+            "estimated_tokens_used": session.stats.estimated_tokens_used,
+            "commands_executed": session.stats.commands_executed,
+            "errors_encountered": session.stats.errors_encountered,
+        },
+        derived={
+            "consultations_remaining": session.consultations_remaining,
+            "tokens_remaining": session.tokens_remaining,
+            "consultation_usage_percentage": round(session.consultation_usage_percentage, 1),
+            "token_usage_percentage": round(session.token_usage_percentage, 1),
+            "should_warn": session.should_warn,
+            "at_limit": session.at_limit,
+        },
+        message="Current CLI session configuration" if get_only else "Current CLI session configuration (no changes)",
         request_id=request_id,
         telemetry={"duration_ms": round(elapsed_ms, 2)},
     )
-    _metrics.counter(_metric(action), labels={"status": "success", "operation": "set"})
+    _metrics.counter(_metric(action), labels={"status": "success", "operation": "get" if get_only else "status"})
     return asdict(response)
