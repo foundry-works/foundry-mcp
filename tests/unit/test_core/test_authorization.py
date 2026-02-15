@@ -1,6 +1,8 @@
 """Tests for authorization module."""
 
 import os
+import subprocess
+import sys
 import time
 from unittest.mock import patch
 
@@ -22,6 +24,11 @@ from foundry_mcp.core.authorization import (
     RateLimitTracker,
     get_rate_limit_tracker,
     reset_rate_limit_tracker,
+    RunnerIsolationConfig,
+    set_runner_isolation_config,
+    reset_runner_isolation_config,
+    run_isolated_subprocess,
+    StdinTimeoutError,
 )
 
 
@@ -320,3 +327,49 @@ class TestGetRateLimitTracker:
 
         # Cleanup
         reset_rate_limit_tracker()
+
+    def test_get_rate_limit_tracker_with_config_reinitializes_singleton(self):
+        """Providing explicit config should reinitialize the global tracker."""
+        reset_rate_limit_tracker()
+
+        tracker1 = get_rate_limit_tracker(RateLimitConfig(max_consecutive_denials=2))
+        tracker2 = get_rate_limit_tracker(RateLimitConfig(max_consecutive_denials=5))
+
+        assert tracker1 is not tracker2
+        assert tracker2.get_stats("x")["denial_count"] == 0
+
+        # Cleanup
+        reset_rate_limit_tracker()
+
+
+class TestRunIsolatedSubprocess:
+    """Test stdin timeout and timeout precedence behavior."""
+
+    def teardown_method(self):
+        reset_runner_isolation_config()
+
+    def test_stdin_timeout_cap_applies_when_timeout_not_provided(self):
+        set_runner_isolation_config(RunnerIsolationConfig(stdin_timeout_seconds=0.1))
+
+        with pytest.raises(StdinTimeoutError):
+            run_isolated_subprocess(
+                [sys.executable, "-c", "import time; time.sleep(0.5)"],
+            )
+
+    def test_explicit_timeout_shorter_than_stdin_timeout_raises_timeout_expired(self):
+        set_runner_isolation_config(RunnerIsolationConfig(stdin_timeout_seconds=1.0))
+
+        with pytest.raises(subprocess.TimeoutExpired):
+            run_isolated_subprocess(
+                [sys.executable, "-c", "import time; time.sleep(0.5)"],
+                timeout=0.05,
+            )
+
+    def test_stdin_timeout_caps_longer_explicit_timeout(self):
+        set_runner_isolation_config(RunnerIsolationConfig(stdin_timeout_seconds=0.1))
+
+        with pytest.raises(StdinTimeoutError):
+            run_isolated_subprocess(
+                [sys.executable, "-c", "import time; time.sleep(0.5)"],
+                timeout=5.0,
+            )

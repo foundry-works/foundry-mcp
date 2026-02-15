@@ -52,6 +52,7 @@ from foundry_mcp.core.autonomy.orchestrator import (
     OrchestrationResult,
     StepOrchestrator,
 )
+from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
 
 from .conftest import make_session, make_spec_data
 
@@ -885,6 +886,156 @@ class TestPhaseAdvancement:
         assert next_task.get("id") == "task-2"
         assert session.active_phase_id == "phase-1"
         assert session.counters.fidelity_review_cycles_in_active_phase == 1  # Unchanged
+
+
+# =============================================================================
+# Verification Ordering
+# =============================================================================
+
+
+class TestVerificationOrdering:
+    """Verification should not run before implementation tasks in the same phase."""
+
+    def test_compute_next_step_prefers_implement_before_verify(self, tmp_path):
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                        {"id": "verify-1", "title": "Verify 1", "type": "verify", "status": "pending"},
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+        session = make_session(
+            active_phase_id="phase-1",
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=[],
+            last_step_issued=None,
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.IMPLEMENT_TASK
+        assert result.next_step.task_id == "task-1"
+
+
+class TestExecutionOrderModelCheck:
+    """Table-driven checks for phase progression next-step transitions."""
+
+    @pytest.mark.parametrize(
+        "name,phases,completed_task_ids,expected_step_type,expected_task_id",
+        [
+            (
+                "task_only_phase",
+                [
+                    {
+                        "id": "phase-1",
+                        "title": "Phase 1",
+                        "tasks": [
+                            {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                        ],
+                    },
+                ],
+                [],
+                StepType.IMPLEMENT_TASK,
+                "task-1",
+            ),
+            (
+                "task_and_verify_phase_task_pending",
+                [
+                    {
+                        "id": "phase-1",
+                        "title": "Phase 1",
+                        "tasks": [
+                            {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                            {"id": "verify-1", "title": "Verify 1", "type": "verify", "status": "pending"},
+                        ],
+                    },
+                ],
+                [],
+                StepType.IMPLEMENT_TASK,
+                "task-1",
+            ),
+            (
+                "task_and_verify_phase_ready_for_verification",
+                [
+                    {
+                        "id": "phase-1",
+                        "title": "Phase 1",
+                        "tasks": [
+                            {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                            {"id": "verify-1", "title": "Verify 1", "type": "verify", "status": "pending"},
+                        ],
+                    },
+                ],
+                ["task-1"],
+                StepType.EXECUTE_VERIFICATION,
+                "verify-1",
+            ),
+            (
+                "verify_only_phase",
+                [
+                    {
+                        "id": "phase-1",
+                        "title": "Phase 1",
+                        "tasks": [
+                            {"id": "verify-1", "title": "Verify 1", "type": "verify", "status": "pending"},
+                        ],
+                    },
+                ],
+                [],
+                StepType.EXECUTE_VERIFICATION,
+                "verify-1",
+            ),
+            (
+                "gate_required_phase",
+                [
+                    {
+                        "id": "phase-1",
+                        "title": "Phase 1",
+                        "metadata": {"requires_gate": True},
+                        "tasks": [
+                            {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                        ],
+                    },
+                ],
+                ["task-1"],
+                StepType.RUN_FIDELITY_GATE,
+                None,
+            ),
+        ],
+    )
+    def test_phase_progression_matrix(
+        self,
+        tmp_path,
+        name,
+        phases,
+        completed_task_ids,
+        expected_step_type,
+        expected_task_id,
+    ):
+        spec_data = make_spec_data(phases=phases)
+        orch = _make_orchestrator(tmp_path, spec_data)
+        session = make_session(
+            active_phase_id="phase-1",
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=completed_task_ids,
+            last_step_issued=None,
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True, name
+        assert result.next_step is not None, name
+        assert result.next_step.type == expected_step_type, name
+        assert result.next_step.task_id == expected_task_id, name
 
 
 # =============================================================================

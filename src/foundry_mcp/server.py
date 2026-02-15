@@ -19,7 +19,11 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig, get_config
-from foundry_mcp.core.authorization import initialize_role_from_config
+from foundry_mcp.core.authorization import (
+    RateLimitConfig,
+    get_rate_limit_tracker,
+    initialize_role_from_config,
+)
 from foundry_mcp.core.observability import audit_log, get_observability_manager
 from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
@@ -100,6 +104,28 @@ def _init_metrics_persistence(config: ServerConfig) -> None:
     except Exception as exc:
         # Don't fail server startup due to optional persistence
         logger.warning("Failed to initialize metrics persistence: %s", exc)
+
+
+def _init_authorization_rate_limits(config: ServerConfig) -> None:
+    """Initialize authorization denial rate-limiting from server config."""
+    rate_limit_config = RateLimitConfig(
+        max_consecutive_denials=(
+            config.autonomy_security.rate_limit_max_consecutive_denials
+        ),
+        denial_window_seconds=(
+            config.autonomy_security.rate_limit_denial_window_seconds
+        ),
+        retry_after_seconds=(
+            config.autonomy_security.rate_limit_retry_after_seconds
+        ),
+    )
+    get_rate_limit_tracker(rate_limit_config)
+    logger.info(
+        "Authorization denial rate limit configured: max_denials=%d window=%ds retry_after=%ds",
+        rate_limit_config.max_consecutive_denials,
+        rate_limit_config.denial_window_seconds,
+        rate_limit_config.retry_after_seconds,
+    )
 
 
 def _init_timeout_watchdog() -> None:
@@ -209,6 +235,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
     config.setup_logging()
     initialized_role = initialize_role_from_config(config.autonomy_security.role)
     logger.info("Authorization role initialized: %s", initialized_role)
+    _init_authorization_rate_limits(config)
 
     _init_observability(config)
     _init_error_collection(config)

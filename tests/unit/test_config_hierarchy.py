@@ -506,3 +506,65 @@ level = "INFO"
                     assert config.disabled_tools == ["health"]
                 finally:
                     os.chdir(original_cwd)
+
+    def test_autonomy_security_rate_limit_loaded_from_toml(self, tmp_path):
+        """Autonomy security rate-limit fields are loaded from TOML."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_security]
+rate_limit_max_consecutive_denials = 7
+rate_limit_denial_window_seconds = 45
+rate_limit_retry_after_seconds = 12
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_security.rate_limit_max_consecutive_denials == 7
+                    assert config.autonomy_security.rate_limit_denial_window_seconds == 45
+                    assert config.autonomy_security.rate_limit_retry_after_seconds == 12
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_security_rate_limit_env_overrides(self, tmp_path):
+        """Environment variables override autonomy security rate-limit values."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_security]
+rate_limit_max_consecutive_denials = 7
+rate_limit_denial_window_seconds = 45
+rate_limit_retry_after_seconds = 12
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS": "3",
+                    "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_DENIAL_WINDOW_SECONDS": "22",
+                    "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_RETRY_AFTER_SECONDS": "9",
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_security.rate_limit_max_consecutive_denials == 3
+                    assert config.autonomy_security.rate_limit_denial_window_seconds == 22
+                    assert config.autonomy_security.rate_limit_retry_after_seconds == 9
+                finally:
+                    os.chdir(original_cwd)

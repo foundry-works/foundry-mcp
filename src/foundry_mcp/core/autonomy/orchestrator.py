@@ -1360,6 +1360,14 @@ class StepOrchestrator:
         if not current_phase:
             return None
 
+        # Verification steps are only eligible after all implementation tasks in
+        # the phase are complete.
+        if not self._all_implementation_tasks_complete(
+            current_phase,
+            session.completed_task_ids,
+        ):
+            return None
+
         for task in current_phase.get("tasks", []):
             task_id = task.get("id", "")
             task_type = task.get("type", "task")
@@ -1371,6 +1379,19 @@ class StepOrchestrator:
                 return task
 
         return None
+
+    def _all_implementation_tasks_complete(
+        self,
+        phase: Dict[str, Any],
+        completed_task_ids: List[str],
+    ) -> bool:
+        """Check whether all implementation tasks in a phase are complete."""
+        for task in phase.get("tasks", []):
+            task_type = task.get("type", "task")
+            task_id = task.get("id", "")
+            if task_type == "task" and task_id not in completed_task_ids:
+                return False
+        return True
 
     def _should_run_fidelity_gate(
         self,
@@ -1389,11 +1410,11 @@ class StepOrchestrator:
             return False
 
         # Check if all implementation tasks are complete
-        for task in phase.get("tasks", []):
-            task_type = task.get("type", "task")
-            task_id = task.get("id", "")
-            if task_type == "task" and task_id not in session.completed_task_ids:
-                return False  # Implementation tasks still pending
+        if not self._all_implementation_tasks_complete(
+            phase,
+            session.completed_task_ids,
+        ):
+            return False
 
         # Check if verifications are complete (or no verifications exist)
         for task in phase.get("tasks", []):

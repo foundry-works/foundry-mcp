@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -316,6 +317,54 @@ class TestSessionStepNext:
         assert call_args.kwargs["last_step_result"].step_id == "step-001"
         assert call_args.kwargs["last_step_result"].outcome == StepOutcome.SUCCESS
 
+    def test_next_passes_step_proof_and_verification_receipt(self, tmp_path):
+        """step_proof and verification_receipt are parsed into LastStepResult."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+
+        mock_result = OrchestrationResult(
+            success=True,
+            session=make_session(session_id=session_id),
+            next_step=None,
+            should_persist=True,
+        )
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
+        ) as MockOrch:
+            MockOrch.return_value.compute_next_step.return_value = mock_result
+            resp = _handle_session_step_next(
+                config=config,
+                spec_id="test-spec-001",
+                workspace=str(workspace),
+                last_step_result={
+                    "step_id": "step-verify-001",
+                    "step_type": "execute_verification",
+                    "outcome": "success",
+                    "task_id": "verify-1",
+                    "phase_id": "phase-1",
+                    "step_proof": "proof-abc-123",
+                    "verification_receipt": {
+                        "command_hash": "a" * 64,
+                        "exit_code": 0,
+                        "output_digest": "b" * 64,
+                        "issued_at": datetime.now(timezone.utc).isoformat(),
+                        "step_id": "step-verify-001",
+                    },
+                },
+            )
+
+        _assert_success(resp)
+        call_args = MockOrch.return_value.compute_next_step.call_args
+        parsed = call_args.kwargs["last_step_result"]
+        assert parsed.step_proof == "proof-abc-123"
+        assert parsed.verification_receipt is not None
+        assert parsed.verification_receipt.command_hash == "a" * 64
+        assert parsed.verification_receipt.output_digest == "b" * 64
+
     def test_next_missing_step_type_in_feedback(self, tmp_path):
         """last_step_result without step_type returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
@@ -384,7 +433,12 @@ class TestSessionStepNext:
 
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
 
-        cached_response = {"success": True, "data": {"cached": True}, "error": None, "meta": {"version": "response-v2"}}
+        cached_response = {
+            "session_id": session_id,
+            "status": "running",
+            "state_version": 2,
+            "next_step": None,
+        }
         mock_result = OrchestrationResult(
             success=True,
             session=make_session(session_id=session_id),
@@ -404,6 +458,8 @@ class TestSessionStepNext:
         # Replay response is wrapped in a success_response envelope (fix #1: full SessionStepResponseData caching)
         assert resp["success"] is True
         assert resp["data"] == cached_response
+        assert resp["error"] is None
+        assert resp["meta"]["version"] == "response-v2"
 
     def test_next_orchestrator_error_mapped(self, tmp_path):
         """Orchestrator error is mapped to appropriate response."""
@@ -634,7 +690,7 @@ class TestSessionStepReplay:
         assert resp["success"] is False
 
     def test_replay_returns_cached_response(self, tmp_path):
-        """Replay returns the session's last_issued_response."""
+        """Replay returns the cached response data inside a standard envelope."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
             _handle_session_step_replay,
         )
@@ -644,10 +700,10 @@ class TestSessionStepReplay:
 
         # Set up a cached response
         cached = {
-            "success": True,
-            "data": {"session_id": session_id, "status": "running", "state_version": 2, "next_step": None},
-            "error": None,
-            "meta": {"version": "response-v2"},
+            "session_id": session_id,
+            "status": "running",
+            "state_version": 2,
+            "next_step": None,
         }
         storage = _get_storage(config, str(workspace))
         session = storage.load(session_id)
@@ -659,7 +715,10 @@ class TestSessionStepReplay:
             spec_id="test-spec-001",
             workspace=str(workspace),
         )
-        assert resp == cached
+        assert resp["success"] is True
+        assert resp["error"] is None
+        assert resp["meta"]["version"] == "response-v2"
+        assert resp["data"] == cached
 
     def test_replay_by_session_id(self, tmp_path):
         """Replay works when resolved by session_id."""
@@ -671,10 +730,10 @@ class TestSessionStepReplay:
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
 
         cached = {
-            "success": True,
-            "data": {"cached": True},
-            "error": None,
-            "meta": {"version": "response-v2"},
+            "session_id": session_id,
+            "status": "running",
+            "state_version": 3,
+            "next_step": None,
         }
         storage = _get_storage(config, str(workspace))
         session = storage.load(session_id)
@@ -686,4 +745,100 @@ class TestSessionStepReplay:
             session_id=session_id,
             workspace=str(workspace),
         )
-        assert resp == cached
+        assert resp["success"] is True
+        assert resp["error"] is None
+        assert resp["meta"]["version"] == "response-v2"
+        assert resp["data"] == cached
+
+    def test_replay_matches_step_next_envelope_shape(self, tmp_path):
+        """Replay response uses the same envelope shape as session-step-next."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+            _handle_session_step_replay,
+        )
+
+        workspace, config, _session_id = _create_session_for_step_tests(tmp_path)
+
+        next_resp = _handle_session_step_next(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        assert next_resp["success"] is True
+        assert next_resp["error"] is None
+        assert next_resp["meta"]["version"] == "response-v2"
+
+        replay_resp = _handle_session_step_replay(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        assert replay_resp["success"] is True
+        assert replay_resp["error"] is None
+        assert replay_resp["meta"]["version"] == "response-v2"
+        assert set(replay_resp.keys()) == set(next_resp.keys())
+        assert replay_resp["data"] == next_resp["data"]
+
+
+class TestSessionStepContractConformance:
+    """Contract checks for session-step-next/session-step-replay envelopes."""
+
+    def test_next_and_replay_success_paths_follow_response_v2(
+        self,
+        tmp_path,
+        assert_response_contract,
+    ):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+            _handle_session_step_replay,
+        )
+
+        workspace, config, _session_id = _create_session_for_step_tests(tmp_path)
+
+        next_resp = _handle_session_step_next(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        assert_response_contract(next_resp)
+
+        replay_resp = _handle_session_step_replay(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        assert_response_contract(replay_resp)
+
+    def test_next_error_path_follows_response_v2(self, tmp_path, assert_response_contract):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, _session_id = _create_session_for_step_tests(tmp_path)
+
+        resp = _handle_session_step_next(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+            last_step_result={
+                "step_id": "step-001",
+                "outcome": "success",
+                # step_type missing -> validation error path
+            },
+        )
+        assert_response_contract(resp)
+        assert resp["success"] is False
+
+    def test_replay_error_path_follows_response_v2(self, tmp_path, assert_response_contract):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_replay,
+        )
+
+        workspace, config, _session_id = _create_session_for_step_tests(tmp_path)
+        resp = _handle_session_step_replay(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        assert_response_contract(resp)
+        assert resp["success"] is False

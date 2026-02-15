@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from pydantic import ValidationError
+
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.autonomy.models import (
     LastStepResult,
@@ -243,6 +245,8 @@ def _handle_session_step_next(
             - note: Optional note about the outcome
             - files_touched: Optional list of files modified
             - gate_attempt_id: Gate attempt ID for gate steps
+            - step_proof: Optional one-time proof token for proof-enforced steps
+            - verification_receipt: Optional receipt object for execute_verification success
         context_usage_pct: Caller-reported context usage percentage (0-100)
         heartbeat: If true, update heartbeat timestamp
         **payload: Additional parameters
@@ -299,8 +303,10 @@ def _handle_session_step_next(
                 note=last_step_result.get("note"),
                 files_touched=last_step_result.get("files_touched"),
                 gate_attempt_id=last_step_result.get("gate_attempt_id"),
+                step_proof=last_step_result.get("step_proof"),
+                verification_receipt=last_step_result.get("verification_receipt"),
             )
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, ValidationError) as e:
             logger.warning("Failed to parse last_step_result: %s", e)
             return asdict(error_response(
                 f"Invalid last_step_result format: {e}",
@@ -525,7 +531,10 @@ def _handle_session_step_replay(
         ))
 
     logger.info("Replaying cached response for session %s", session.id)
-    return session.last_issued_response
+    return asdict(success_response(
+        data=session.last_issued_response,
+        request_id=request_id,
+    ))
 
 
 def _handle_session_step_heartbeat(

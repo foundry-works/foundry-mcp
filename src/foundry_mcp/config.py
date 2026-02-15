@@ -1665,11 +1665,33 @@ class ServerConfig:
             # Autonomy security settings
             if "autonomy_security" in data:
                 sec_data = data["autonomy_security"]
+                current = self.autonomy_security
                 self.autonomy_security = AutonomySecurityConfig(
-                    allow_lock_bypass=sec_data.get("allow_lock_bypass", False),
-                    allow_gate_waiver=sec_data.get("allow_gate_waiver", False),
-                    enforce_required_phase_gates=sec_data.get("enforce_required_phase_gates", True),
-                    role=sec_data.get("role", "observer"),
+                    allow_lock_bypass=sec_data.get(
+                        "allow_lock_bypass",
+                        current.allow_lock_bypass,
+                    ),
+                    allow_gate_waiver=sec_data.get(
+                        "allow_gate_waiver",
+                        current.allow_gate_waiver,
+                    ),
+                    enforce_required_phase_gates=sec_data.get(
+                        "enforce_required_phase_gates",
+                        current.enforce_required_phase_gates,
+                    ),
+                    role=sec_data.get("role", current.role),
+                    rate_limit_max_consecutive_denials=sec_data.get(
+                        "rate_limit_max_consecutive_denials",
+                        current.rate_limit_max_consecutive_denials,
+                    ),
+                    rate_limit_denial_window_seconds=sec_data.get(
+                        "rate_limit_denial_window_seconds",
+                        current.rate_limit_denial_window_seconds,
+                    ),
+                    rate_limit_retry_after_seconds=sec_data.get(
+                        "rate_limit_retry_after_seconds",
+                        current.rate_limit_retry_after_seconds,
+                    ),
                 )
 
         except Exception as e:
@@ -1844,6 +1866,51 @@ class ServerConfig:
         # Disabled tools (comma-separated list)
         if disabled := os.environ.get("FOUNDRY_MCP_DISABLED_TOOLS"):
             self.disabled_tools = [t.strip() for t in disabled.split(",") if t.strip()]
+
+        # Autonomy security settings
+        if allow_lock_bypass := os.environ.get(
+            "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS"
+        ):
+            self.autonomy_security.allow_lock_bypass = _parse_bool(allow_lock_bypass)
+        if allow_gate_waiver := os.environ.get(
+            "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER"
+        ):
+            self.autonomy_security.allow_gate_waiver = _parse_bool(allow_gate_waiver)
+        if enforce_required_gates := os.environ.get(
+            "FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES"
+        ):
+            self.autonomy_security.enforce_required_phase_gates = _parse_bool(
+                enforce_required_gates
+            )
+        if role := os.environ.get("FOUNDRY_MCP_ROLE"):
+            self.autonomy_security.role = role.strip().lower()
+        if max_denials := os.environ.get(
+            "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS"
+        ):
+            try:
+                parsed = int(max_denials)
+                if parsed > 0:
+                    self.autonomy_security.rate_limit_max_consecutive_denials = parsed
+            except ValueError:
+                pass
+        if denial_window := os.environ.get(
+            "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_DENIAL_WINDOW_SECONDS"
+        ):
+            try:
+                parsed = int(denial_window)
+                if parsed > 0:
+                    self.autonomy_security.rate_limit_denial_window_seconds = parsed
+            except ValueError:
+                pass
+        if retry_after := os.environ.get(
+            "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_RETRY_AFTER_SECONDS"
+        ):
+            try:
+                parsed = int(retry_after)
+                if parsed > 0:
+                    self.autonomy_security.rate_limit_retry_after_seconds = parsed
+            except ValueError:
+                pass
 
     def validate_api_key(self, key: Optional[str]) -> bool:
         """

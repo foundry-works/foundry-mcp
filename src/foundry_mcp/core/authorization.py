@@ -524,6 +524,10 @@ def get_rate_limit_tracker(
     with _rate_limit_lock:
         if _rate_limit_tracker is None:
             _rate_limit_tracker = RateLimitTracker(config)
+        elif config is not None:
+            # Explicit config re-initializes the singleton so startup can
+            # apply configured thresholds deterministically.
+            _rate_limit_tracker = RateLimitTracker(config)
         return _rate_limit_tracker
 
 
@@ -753,13 +757,13 @@ def is_runner_role() -> bool:
 
 
 class StdinTimeoutError(Exception):
-    """Raised when a subprocess times out waiting for stdin."""
+    """Raised when a subprocess exceeds the stdin timeout cap."""
 
-    def __init__(self, timeout_seconds: int, command: Sequence[str]):
+    def __init__(self, timeout_seconds: float, command: Sequence[str]):
         self.timeout_seconds = timeout_seconds
         self.command = command
         super().__init__(
-            f"Subprocess killed after {timeout_seconds}s stdin timeout: {' '.join(command[:3])}..."
+            f"Subprocess killed after {timeout_seconds:g}s stdin timeout: {' '.join(command[:3])}..."
         )
 
 
@@ -778,7 +782,7 @@ def run_isolated_subprocess(
 
     For autonomy_runner role, applies:
     - Restricted PATH from RunnerIsolationConfig
-    - stdin timeout with process termination
+    - Hard stdin timeout cap with process termination
     - Workspace validation for cwd
 
     Args:
@@ -795,14 +799,20 @@ def run_isolated_subprocess(
         CompletedProcess result
 
     Raises:
-        StdinTimeoutError: If stdin timeout is exceeded
+        StdinTimeoutError: If stdin timeout cap is exceeded
         subprocess.TimeoutExpired: If overall timeout is exceeded
         PathValidationError: If cwd validation fails for runner role
     """
     config = get_runner_isolation_config()
 
     # Get stdin timeout from config if not specified
-    effective_stdin_timeout = stdin_timeout or config.stdin_timeout_seconds
+    effective_stdin_timeout: Optional[float]
+    if stdin_timeout is not None:
+        effective_stdin_timeout = stdin_timeout
+    else:
+        effective_stdin_timeout = config.stdin_timeout_seconds
+    if effective_stdin_timeout is not None and effective_stdin_timeout <= 0:
+        effective_stdin_timeout = None
 
     # Build environment with PATH restriction
     effective_env = get_restricted_environment(env)
@@ -819,25 +829,33 @@ def run_isolated_subprocess(
     # and stdin=DEVNULL to prevent blocking on input
     stdin_setting = kwargs.pop("stdin", subprocess.DEVNULL)
 
+    # Apply stdin timeout as a hard cap (shorter of explicit timeout and stdin cap).
+    timeout_source = "overall"
+    effective_timeout = timeout
+    if effective_stdin_timeout is not None:
+        if effective_timeout is None or effective_timeout > effective_stdin_timeout:
+            effective_timeout = effective_stdin_timeout
+            timeout_source = "stdin"
+
     try:
         result = subprocess.run(
             command,
             stdin=stdin_setting,
             capture_output=capture_output,
             text=text,
-            timeout=timeout,
+            timeout=effective_timeout,
             env=effective_env,
             cwd=effective_cwd,
             **kwargs,
         )
         return result
     except subprocess.TimeoutExpired as e:
-        # Check if this might be stdin-related timeout
-        if effective_stdin_timeout and (timeout is None or timeout > effective_stdin_timeout):
+        if timeout_source == "stdin" and effective_stdin_timeout is not None:
             logger.warning(
-                "Subprocess timeout (may be stdin-blocked): %s",
+                "Subprocess stdin timeout: %s",
                 " ".join(str(c) for c in command[:3]),
             )
+            raise StdinTimeoutError(effective_stdin_timeout, command) from e
         raise
 
 
