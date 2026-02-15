@@ -62,6 +62,7 @@ from foundry_mcp.tools.unified.task_handlers.handlers_session import (
     _handle_session_status,
 )
 from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+    _handle_session_step_heartbeat,
     _handle_session_step_next,
     _handle_session_step_report,
     _handle_session_step_replay,
@@ -107,12 +108,13 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="session-status", handler=_handle_session_status, summary="Get current status of an autonomous session"),
     ActionDefinition(name="session-list", handler=_handle_session_list, summary="List autonomous sessions with optional filtering"),
     ActionDefinition(name="session-rebase", handler=_handle_session_rebase, summary="Rebase an active session to spec changes"),
-    ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="Update session heartbeat and context metrics"),
+    ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="[Deprecated: use session-step-heartbeat] Update session heartbeat and context metrics"),
     ActionDefinition(name="session-reset", handler=_handle_session_reset, summary="Reset a failed session to allow retry"),
     # Session-step actions (feature-flag guarded by autonomy_sessions)
     ActionDefinition(name="session-step-next", handler=_handle_session_step_next, summary="Get the next step to execute in a session"),
     ActionDefinition(name="session-step-report", handler=_handle_session_step_report, summary="Report the outcome of a step execution"),
     ActionDefinition(name="session-step-replay", handler=_handle_session_step_replay, summary="Replay the last issued response for safe retry"),
+    ActionDefinition(name="session-step-heartbeat", handler=_handle_session_step_heartbeat, summary="Update session heartbeat and context metrics (ADR session-step command)"),
 ]
 
 _TASK_ROUTER = ActionRouter(tool_name="task", actions=_ACTION_DEFINITIONS)
@@ -189,11 +191,31 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         threshold_hours: Optional[float] = None,
         # session lifecycle parameters (autonomy_sessions feature flag)
         session_id: Optional[str] = None,
+        force: bool = False,
+        gate_ack: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
+        include_resume_context: bool = False,
+        # session-start configuration parameters
+        gate_policy: Optional[str] = None,
+        max_tasks_per_session: Optional[int] = None,
+        max_consecutive_errors: Optional[int] = None,
+        context_threshold_pct: Optional[int] = None,
+        stop_on_phase_completion: Optional[bool] = None,
+        auto_retry_fidelity_gate: Optional[bool] = None,
+        heartbeat_stale_minutes: Optional[int] = None,
+        heartbeat_grace_minutes: Optional[int] = None,
+        step_stale_minutes: Optional[int] = None,
+        max_fidelity_review_cycles_per_phase: Optional[int] = None,
+        enforce_autonomy_write_lock: Optional[bool] = None,
+        estimated_tokens_used: Optional[int] = None,
         # session-step parameters
         step_id: Optional[str] = None,
+        step_type: Optional[str] = None,
         outcome: Optional[str] = None,
         files_touched: Optional[List[str]] = None,
         context_usage_pct: Optional[int] = None,
+        last_step_result: Optional[Dict[str, Any]] = None,
+        heartbeat: Optional[bool] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
@@ -249,11 +271,31 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "threshold_hours": threshold_hours,
             # session lifecycle specific
             "session_id": session_id,
+            "force": force,
+            "gate_ack": gate_ack,
+            "idempotency_key": idempotency_key,
+            "include_resume_context": include_resume_context,
+            # session-start configuration
+            "gate_policy": gate_policy,
+            "max_tasks_per_session": max_tasks_per_session,
+            "max_consecutive_errors": max_consecutive_errors,
+            "context_threshold_pct": context_threshold_pct,
+            "stop_on_phase_completion": stop_on_phase_completion,
+            "auto_retry_fidelity_gate": auto_retry_fidelity_gate,
+            "heartbeat_stale_minutes": heartbeat_stale_minutes,
+            "heartbeat_grace_minutes": heartbeat_grace_minutes,
+            "step_stale_minutes": step_stale_minutes,
+            "max_fidelity_review_cycles_per_phase": max_fidelity_review_cycles_per_phase,
+            "enforce_autonomy_write_lock": enforce_autonomy_write_lock,
+            "estimated_tokens_used": estimated_tokens_used,
             # session-step specific
             "step_id": step_id,
+            "step_type": step_type,
             "outcome": outcome,
             "files_touched": files_touched,
             "context_usage_pct": context_usage_pct,
+            "last_step_result": last_step_result,
+            "heartbeat": heartbeat,
         }
         return _dispatch_task_action(action=action, payload=payload, config=config)
 

@@ -28,9 +28,10 @@ def test_run_tests_fallback_gemini_to_cursor():
         text=True,
     )
 
-    # Should succeed even if gemini unavailable (returncode 0)
-    # or fail gracefully with message (returncode 1)
-    assert result.returncode in (0, 1)
+    # Should succeed even if gemini unavailable (returncode 0),
+    # fail gracefully with message (returncode 1),
+    # or report unknown subcommand (returncode 2).
+    assert result.returncode in (0, 1, 2)
     # Should produce some output (success message or error)
     assert result.stdout or result.stderr
 

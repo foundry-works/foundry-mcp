@@ -86,13 +86,30 @@ def _check_autonomy_write_lock(
         # Write-lock module not available; allow operation.
         return None
 
-    return _check_autonomy_write_lock_impl(
+    from foundry_mcp.core.autonomy.write_lock import WriteLockStatus
+
+    result = _check_autonomy_write_lock_impl(
         spec_id=spec_id,
         workspace=workspace,
-        bypass_autonomy_lock=bypass_autonomy_lock,
+        bypass_flag=bypass_autonomy_lock,
         bypass_reason=bypass_reason,
-        request_id=request_id,
     )
+
+    if result.status == WriteLockStatus.LOCKED:
+        return asdict(error_response(
+            result.message or "Autonomy write lock is active for this spec",
+            error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
+            error_type=ErrorType.CONFLICT,
+            request_id=request_id,
+            details={
+                "session_id": result.session_id,
+                "session_status": result.session_status,
+                "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
+            },
+        ))
+
+    # ALLOWED or BYPASSED — operation can proceed
+    return None
 
 
 def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:

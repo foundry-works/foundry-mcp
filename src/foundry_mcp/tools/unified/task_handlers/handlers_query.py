@@ -664,24 +664,50 @@ def _handle_session_config(*, config: ServerConfig, **payload: Any) -> dict:
     get_only = payload.get("get", False)
     auto_mode = payload.get("auto_mode")
 
-    # Handle auto_mode parameter - return clear removal error
+    # Handle auto_mode parameter - delegate to session handlers during deprecation window
     if auto_mode is not None:
-        return asdict(error_response(
-            "The 'auto_mode' parameter has been removed from session-config. "
-            "Use task(action='session', command='start') to start a session or "
-            "task(action='session', command='pause') to pause a session.",
-            error_code=ErrorCode.FEATURE_DISABLED,
-            error_type=ErrorType.VALIDATION,
-            request_id=request_id,
-            details={
-                "removed_parameter": "auto_mode",
-                "action": action,
-                "migration": {
-                    "auto_mode=true": "Use task(action='session', command='start', spec_id=...)",
-                    "auto_mode=false": "Use task(action='session', command='pause', spec_id=...)",
-                },
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_pause,
+        )
+
+        deprecation_meta = {
+            "deprecation_warning": (
+                "auto_mode in session-config is deprecated. "
+                "Use task(action='session', command='start') or "
+                "task(action='session', command='pause') instead."
+            ),
+            "migration": {
+                "auto_mode=true": "task(action='session', command='start', spec_id=...)",
+                "auto_mode=false": "task(action='session', command='pause', spec_id=...)",
             },
-        ))
+        }
+
+        spec_id = payload.get("spec_id")
+        workspace = payload.get("workspace")
+
+        if auto_mode:
+            # Delegate to session-start
+            result = _handle_session_start(
+                config=config,
+                spec_id=spec_id,
+                workspace=workspace,
+            )
+        else:
+            # Delegate to session-pause
+            result = _handle_session_pause(
+                config=config,
+                spec_id=spec_id,
+                reason="user",
+                workspace=workspace,
+            )
+
+        # Inject deprecation warning into meta
+        if isinstance(result, dict):
+            meta = result.setdefault("meta", {})
+            meta.update(deprecation_meta)
+
+        return result
 
     # Get the context tracker and session for CLI tracking
     tracker = get_context_tracker()

@@ -26,6 +26,7 @@ from .models import (
     AutonomousSessionState,
     SessionStatus,
     SessionSummary,
+    TERMINAL_STATUSES,
 )
 from .state_migrations import (
     CURRENT_SCHEMA_VERSION,
@@ -47,10 +48,6 @@ GC_TTL_DAYS: Dict[SessionStatus, int] = {
     SessionStatus.ENDED: 7,
     SessionStatus.FAILED: 30,
 }
-
-# Terminal statuses (not eligible for active session lookup)
-TERMINAL_STATUSES = {SessionStatus.COMPLETED, SessionStatus.ENDED}
-
 
 class ActiveSessionLookupResult(Enum):
     """Result of active session lookup."""
@@ -572,37 +569,19 @@ class AutonomyStorage:
     ) -> Optional[SessionStatus]:
         """Compute effective status considering staleness.
 
-        Args:
-            session: Session state
-
-        Returns:
-            Derived status (paused) if stale, None if actual status applies
+        Delegates to the shared implementation in models.py to avoid duplication.
         """
-        if session.status != SessionStatus.RUNNING:
-            return None
-
-        now = datetime.now(timezone.utc)
-
-        # Check step staleness
-        if session.last_step_issued:
-            step_stale_threshold = timedelta(
-                minutes=session.limits.step_stale_minutes
-            )
-            if now - session.last_step_issued.issued_at > step_stale_threshold:
-                return SessionStatus.PAUSED
-
-        # Check heartbeat staleness (after grace period)
-        if session.context.last_heartbeat_at:
-            heartbeat_stale_threshold = timedelta(
-                minutes=session.limits.heartbeat_stale_minutes
-            )
-            if now - session.context.last_heartbeat_at > heartbeat_stale_threshold:
-                return SessionStatus.PAUSED
-
-        return None
+        from foundry_mcp.core.autonomy.models import compute_effective_status
+        return compute_effective_status(session)
 
     # =========================================================================
     # Active Session Pointer Management
+    #
+    # NOTE: ADR-002 (line 734) specifies spec_active_index.json, but this
+    # implementation uses per-spec pointer files (index/{spec_id}.active)
+    # instead.  Per-spec files are better for concurrency because they avoid
+    # contention on a single shared index file under concurrent session
+    # operations for different specs.
     # =========================================================================
 
     def get_active_session(self, spec_id: str) -> Optional[str]:

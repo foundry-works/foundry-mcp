@@ -16,6 +16,8 @@ Key modules:
 """
 
 from .models import (
+    # Constants
+    TERMINAL_STATUSES,
     # Enums
     SessionStatus,
     PauseReason,
@@ -97,6 +99,8 @@ from .spec_hash import (
 
 
 __all__ = [
+    # Constants
+    "TERMINAL_STATUSES",
     # Models - Enums
     "SessionStatus",
     "PauseReason",

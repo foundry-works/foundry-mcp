@@ -105,18 +105,20 @@ READ_ONLY_TASK_ACTIONS: FrozenSet[str] = frozenset({
     "history",
 })
 
+# Import canonical terminal statuses from models
+from foundry_mcp.core.autonomy.models import (
+    TERMINAL_STATUSES as _TERMINAL_STATUSES_ENUM,
+    SessionStatus as _SessionStatus,
+)
+
 # Terminal session statuses - write lock not enforced for these
-TERMINAL_SESSION_STATUSES: FrozenSet[str] = frozenset({
-    "completed",
-    "ended",
-})
+# String-based versions for backward compatibility with code comparing raw JSON status strings
+TERMINAL_SESSION_STATUSES: FrozenSet[str] = frozenset(s.value for s in _TERMINAL_STATUSES_ENUM)
 
 # Non-terminal session statuses - write lock IS enforced for these
-NON_TERMINAL_SESSION_STATUSES: FrozenSet[str] = frozenset({
-    "running",
-    "paused",
-    "failed",
-})
+NON_TERMINAL_SESSION_STATUSES: FrozenSet[str] = frozenset(
+    s.value for s in _SessionStatus if s not in _TERMINAL_STATUSES_ENUM
+)
 
 
 @dataclass
@@ -186,51 +188,6 @@ def is_protected_action(action_name: str, action_category: str = "task") -> bool
     return True
 
 
-def _get_autonomy_sessions_dir(workspace: Optional[str]) -> Optional[Path]:
-    """
-    Get the autonomy sessions directory for a workspace.
-
-    Args:
-        workspace: Path to workspace (uses default if None)
-
-    Returns:
-        Path to sessions directory, or None if not determinable
-    """
-    if workspace:
-        ws_path = Path(workspace)
-        sessions_dir = ws_path / "specs" / ".autonomy" / "sessions"
-        if sessions_dir.exists():
-            return sessions_dir
-
-    # Fallback to default location
-    default_dir = Path.home() / ".foundry-mcp" / "autonomy" / "sessions"
-    if default_dir.exists():
-        return default_dir
-
-    return None
-
-
-def _get_active_session_index_path(workspace: Optional[str]) -> Optional[Path]:
-    """
-    Get the active session index file path.
-
-    Args:
-        workspace: Path to workspace
-
-    Returns:
-        Path to index file, or None if not determinable
-    """
-    if workspace:
-        ws_path = Path(workspace)
-        index_path = ws_path / "specs" / ".autonomy" / "index" / "spec_active_index.json"
-        if index_path.parent.exists():
-            return index_path
-
-    # Fallback to default location
-    default_path = Path.home() / ".foundry-mcp" / "autonomy" / "index" / "spec_active_index.json"
-    return default_path
-
-
 def _find_active_session_for_spec(
     spec_id: str,
     workspace: Optional[str],
@@ -238,7 +195,8 @@ def _find_active_session_for_spec(
     """
     Find an active (non-terminal) session for a spec.
 
-    Checks the active session index and validates session status.
+    Delegates to AutonomyStorage for consistent session discovery
+    using per-spec pointer files.
 
     Args:
         spec_id: The spec ID to check
@@ -247,63 +205,30 @@ def _find_active_session_for_spec(
     Returns:
         Session data dict if active session found, None otherwise
     """
-    import json
-
-    # First check the index for fast lookup
-    index_path = _get_active_session_index_path(workspace)
-    if index_path and index_path.exists():
-        try:
-            with open(index_path, "r") as f:
-                index_data = json.load(f)
-
-            # Index maps spec_id to session_id
-            session_id = index_data.get("specs", {}).get(spec_id)
-            if session_id:
-                # Validate the session still exists and is non-terminal
-                sessions_dir = _get_autonomy_sessions_dir(workspace)
-                if sessions_dir:
-                    session_file = sessions_dir / f"{session_id}.json"
-                    if session_file.exists():
-                        try:
-                            with open(session_file, "r") as f:
-                                session_data = json.load(f)
-
-                            status = session_data.get("status", "")
-                            if status in NON_TERMINAL_SESSION_STATUSES:
-                                return session_data
-                        except (json.JSONDecodeError, OSError) as e:
-                            logger.debug(
-                                "Failed to read session file",
-                                extra={"session_id": session_id, "error": str(e)}
-                            )
-        except (json.JSONDecodeError, OSError) as e:
-            logger.debug(
-                "Failed to read session index",
-                extra={"spec_id": spec_id, "error": str(e)}
-            )
-
-    # Fallback: scan sessions directory if index not available
-    sessions_dir = _get_autonomy_sessions_dir(workspace)
-    if not sessions_dir or not sessions_dir.exists():
-        return None
+    from foundry_mcp.core.autonomy.memory import AutonomyStorage
 
     try:
-        for session_file in sessions_dir.glob("auto_*.json"):
-            try:
-                with open(session_file, "r") as f:
-                    session_data = json.load(f)
+        ws_path = Path(workspace) if workspace else Path.cwd()
+        storage = AutonomyStorage(workspace_path=ws_path)
 
-                # Check if this session is for our spec and is non-terminal
-                if session_data.get("spec_id") == spec_id:
-                    status = session_data.get("status", "")
-                    if status in NON_TERMINAL_SESSION_STATUSES:
-                        return session_data
-            except (json.JSONDecodeError, OSError):
-                continue
-    except OSError:
-        pass
+        session_id = storage.get_active_session(spec_id)
+        if not session_id:
+            return None
 
-    return None
+        session = storage.load(session_id)
+        if not session:
+            return None
+
+        if session.status.value in NON_TERMINAL_SESSION_STATUSES:
+            return session.model_dump(mode="json", by_alias=True)
+
+        return None
+    except Exception as e:
+        logger.debug(
+            "Failed to find active session for spec",
+            extra={"spec_id": spec_id, "error": str(e)}
+        )
+        return None
 
 
 def _log_bypass_warning(
@@ -539,7 +464,9 @@ def check_autonomy_write_lock(
 
     # Lock is active - check for bypass
     if bypass_flag:
-        # Bypass requires a reason
+        # Bypass requires a reason — intentional deviation from ADR (which
+        # only requires bypass_flag=true).  Mandatory reason improves audit
+        # traceability for manual overrides during autonomous sessions.
         if not bypass_reason or not bypass_reason.strip():
             return WriteLockResult(
                 status=WriteLockStatus.LOCKED,

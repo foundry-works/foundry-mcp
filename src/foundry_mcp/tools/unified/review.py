@@ -932,7 +932,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     return asdict(
         success_response(
-            **response_data,
+            data=response_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
         )
     )
@@ -1151,7 +1151,7 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
 
     return asdict(
         success_response(
-            **response_data,
+            data=response_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
         )
     )

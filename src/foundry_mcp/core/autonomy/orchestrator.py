@@ -43,6 +43,7 @@ from foundry_mcp.core.autonomy.models import (
     PhaseGateRecord,
     PhaseGateStatus,
     SessionStatus,
+    SessionStepResponseData,
     StepInstruction,
     StepOutcome,
     StepType,
@@ -51,6 +52,7 @@ from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,
 )
+from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.core.task._helpers import check_all_blocked
 
 logger = logging.getLogger(__name__)
@@ -145,6 +147,8 @@ class StepOrchestrator:
         self.storage = storage
         self.spec_loader = spec_loader
         self.workspace_path = workspace_path or Path.cwd()
+        # Cache: (spec_id, mtime, file_size) -> spec_data
+        self._spec_cache: Optional[Tuple[str, float, int, Dict[str, Any]]] = None
 
     def compute_next_step(
         self,
@@ -244,6 +248,8 @@ class StepOrchestrator:
         # Step 3: Record Step Outcome
         # =================================================================
         if last_step_result is not None:
+            # Clear cached response since we're processing new feedback
+            session.last_issued_response = None
             self._record_step_outcome(session, last_step_result, now)
 
         # =================================================================
@@ -254,6 +260,7 @@ class StepOrchestrator:
             session.status = SessionStatus.FAILED
             session.failure_reason = FailureReason.SPEC_STRUCTURE_CHANGED
             session.updated_at = now
+            session.state_version += 1
             return OrchestrationResult(
                 success=False,
                 session=session,
@@ -344,6 +351,19 @@ class StepOrchestrator:
         # Steps 11-17: Determine Next Action Based on Phase State
         # =================================================================
         next_step_result = self._determine_next_step(session, spec_data, now)
+
+        # Cache the response for replay-safe exactly-once semantics
+        if next_step_result.success and next_step_result.next_step is not None:
+            response_data = SessionStepResponseData(
+                session_id=session.id,
+                status=session.status,
+                state_version=session.state_version,
+                next_step=next_step_result.next_step,
+            )
+            session.last_issued_response = response_data.model_dump(
+                mode="json", by_alias=True
+            )
+
         return next_step_result
 
     def _validate_step_identity(
@@ -402,7 +422,10 @@ class StepOrchestrator:
             None if valid, error message if invalid
         """
         if not result.gate_attempt_id:
-            return None  # No gate attempt to validate
+            return (
+                "gate_attempt_id is required for RUN_FIDELITY_GATE step results. "
+                "Include the gate_attempt_id from the issued step in last_step_result."
+            )
 
         evidence = session.pending_gate_evidence
         if not evidence:
@@ -445,15 +468,16 @@ class StepOrchestrator:
         Updates counters, completed tasks, and phase gates based on outcome.
         Gate failures do NOT increment consecutive_errors (per ADR-002).
         """
-        # Update counters - gate failures do not increment consecutive_errors
-        is_gate_failure = (
-            result.step_type == StepType.RUN_FIDELITY_GATE
-            and result.outcome == StepOutcome.FAILURE
+        # Update counters - gate steps do not affect consecutive_errors at all
+        is_gate_step = result.step_type in (
+            StepType.RUN_FIDELITY_GATE,
+            StepType.ADDRESS_FIDELITY_FEEDBACK,
         )
-        if result.outcome == StepOutcome.FAILURE and not is_gate_failure:
-            session.counters.consecutive_errors += 1
-        else:
-            session.counters.consecutive_errors = 0
+        if not is_gate_step:
+            if result.outcome == StepOutcome.FAILURE:
+                session.counters.consecutive_errors += 1
+            elif result.outcome == StepOutcome.SUCCESS:
+                session.counters.consecutive_errors = 0
 
         # Record task completion
         if (
@@ -480,28 +504,53 @@ class StepOrchestrator:
         result: LastStepResult,
         now: datetime,
     ) -> None:
-        """Record fidelity gate evaluation outcome."""
+        """Record fidelity gate evaluation outcome.
+
+        Per ADR-002 section 4: the caller reports outcome="success" to indicate
+        the review ran successfully. The gate verdict and pass/fail determination
+        come from pending_gate_evidence.verdict + session gate_policy, NOT from
+        the step outcome. A step with outcome="success" and verdict="fail" should
+        still record the gate as failed.
+        """
         if not result.phase_id:
             return
 
         gate_record = session.phase_gates.get(result.phase_id)
-        if gate_record:
-            if result.outcome == StepOutcome.SUCCESS:
+        if not gate_record:
+            return
+
+        # Derive verdict from pending_gate_evidence, not step outcome
+        evidence = session.pending_gate_evidence
+        if evidence and evidence.phase_id == result.phase_id:
+            gate_record.verdict = evidence.verdict
+            # Evaluate pass/fail using gate policy
+            should_pass, _ = self._evaluate_gate_policy(session, evidence)
+            if should_pass:
                 gate_record.status = PhaseGateStatus.PASSED
-                gate_record.verdict = GateVerdict.PASS
-            elif result.outcome == StepOutcome.FAILURE:
+            else:
                 gate_record.status = PhaseGateStatus.FAILED
-                gate_record.verdict = GateVerdict.FAIL
-            gate_record.evaluated_at = now
-            gate_record.gate_attempt_id = result.gate_attempt_id
+        elif result.outcome == StepOutcome.FAILURE:
+            # Fallback: step itself failed (review couldn't run)
+            gate_record.status = PhaseGateStatus.FAILED
+            gate_record.verdict = GateVerdict.FAIL
+
+        gate_record.evaluated_at = now
+        gate_record.gate_attempt_id = result.gate_attempt_id
 
     def _write_step_journal(
         self,
         session: AutonomousSessionState,
         result: LastStepResult,
     ) -> None:
-        """Write journal entry for step outcome (best-effort)."""
+        """Write journal entry for step outcome (best-effort).
+
+        Uses the existing journal system (add_journal_entry + save_spec)
+        to persist step outcomes with files_touched and notes.
+        """
         try:
+            from foundry_mcp.core.journal import add_journal_entry
+            from foundry_mcp.core.spec import load_spec, save_spec
+
             outcome_str = result.outcome.value if result.outcome else "unknown"
             step_type_str = result.step_type.value if result.step_type else "unknown"
 
@@ -511,8 +560,6 @@ class StepOrchestrator:
             if result.files_touched:
                 content += f"\n\nFiles touched: {', '.join(result.files_touched)}"
 
-            # Note: Journal writing requires spec_data which we may not have here
-            # This is best-effort, so we log instead
             logger.info(
                 "Step outcome: session=%s step=%s type=%s outcome=%s",
                 session.id,
@@ -520,6 +567,30 @@ class StepOrchestrator:
                 step_type_str,
                 outcome_str,
             )
+
+            # Write to spec journal via the standard journal system
+            specs_dir = self.workspace_path / "specs"
+            spec_data = load_spec(session.spec_id, specs_dir)
+            if spec_data is not None:
+                add_journal_entry(
+                    spec_data,
+                    title=f"Step {step_type_str}: {outcome_str}",
+                    content=content,
+                    entry_type="step",
+                    task_id=result.task_id,
+                    author="autonomy",
+                    metadata={
+                        "session_id": session.id,
+                        "step_id": result.step_id,
+                        "step_type": step_type_str,
+                        "outcome": outcome_str,
+                        "files_touched": result.files_touched or [],
+                    },
+                )
+                save_spec(session.spec_id, spec_data, specs_dir)
+            else:
+                logger.debug("Spec not found for step journal: %s", session.spec_id)
+
         except Exception as e:
             logger.debug("Failed to write step journal: %s", e)
 
@@ -576,10 +647,34 @@ class StepOrchestrator:
                 session.spec_file_mtime = current_metadata.mtime
                 session.spec_file_size = current_metadata.file_size
 
+                # Populate spec cache for subsequent calls
+                self._spec_cache = (
+                    session.spec_id,
+                    current_metadata.mtime,
+                    current_metadata.file_size,
+                    spec_data,
+                )
+
                 return spec_data, None
+
+            # Fast path: return cached spec_data if available for this mtime
+            if (
+                self._spec_cache is not None
+                and self._spec_cache[0] == session.spec_id
+                and self._spec_cache[1] == current_metadata.mtime
+                and self._spec_cache[2] == current_metadata.file_size
+            ):
+                return self._spec_cache[3], None
 
             # Load spec without re-hashing
             spec_data = self._load_spec_file(spec_path)
+            if spec_data is not None:
+                self._spec_cache = (
+                    session.spec_id,
+                    current_metadata.mtime,
+                    current_metadata.file_size,
+                    spec_data,
+                )
             return spec_data, None
 
         except Exception as e:
@@ -587,24 +682,9 @@ class StepOrchestrator:
             return None, f"Spec integrity validation failed: {e}"
 
     def _find_spec_path(self, spec_id: str) -> Optional[Path]:
-        """Find the path to a spec file."""
-        search_dirs = [
-            self.workspace_path / "specs" / "active",
-            self.workspace_path / "specs" / "pending",
-            self.workspace_path / "specs" / "completed",
-            self.workspace_path / "specs" / "archived",
-        ]
-
-        for search_dir in search_dirs:
-            if not search_dir.exists():
-                continue
-
-            # Check for exact match
-            spec_path = search_dir / f"{spec_id}.json"
-            if spec_path.exists():
-                return spec_path
-
-        return None
+        """Find the path to a spec file using the canonical resolver."""
+        specs_dir = self.workspace_path / "specs"
+        return resolve_spec_file(spec_id, specs_dir)
 
     def _load_spec_file(self, spec_path: Path) -> Optional[Dict[str, Any]]:
         """Load and parse a spec file."""
@@ -818,7 +898,7 @@ class StepOrchestrator:
 
         # Step 13-14: Handle gate failures
         if session.pending_gate_evidence:
-            return self._handle_gate_evidence(session, now)
+            return self._handle_gate_evidence(session, spec_data, now)
 
         # Step 15: Gate passed + stop_on_phase_completion
         if (
@@ -967,6 +1047,7 @@ class StepOrchestrator:
     def _handle_gate_evidence(
         self,
         session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
         now: datetime,
     ) -> OrchestrationResult:
         """Handle pending gate evidence (steps 13-14).
@@ -987,12 +1068,13 @@ class StepOrchestrator:
         # Evaluate gate against policy
         should_pass, pause_reason = self._evaluate_gate_policy(session, evidence)
 
+        # Increment fidelity cycle counter on every consumed gate attempt (ADR Step 9)
+        session.counters.fidelity_review_cycles_in_active_phase += 1
+
         if should_pass:
             # Gate passed according to policy - clear evidence and continue
             session.pending_gate_evidence = None
-            # Increment fidelity cycle counter on accepted gate
-            session.counters.fidelity_review_cycles_in_active_phase += 1
-            return self._determine_next_step_after_gate(session, now)
+            return self._determine_next_step_after_gate(session, spec_data, now)
 
         # Gate failed or manual review required
         if pause_reason == PauseReason.GATE_REVIEW_REQUIRED:
@@ -1022,6 +1104,7 @@ class StepOrchestrator:
     def _determine_next_step_after_gate(
         self,
         session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
         now: datetime,
     ) -> OrchestrationResult:
         """Determine next step after gate passes.
@@ -1040,7 +1123,11 @@ class StepOrchestrator:
             )
 
         # Look for more tasks in the current or next phase
-        # The _find_next_task method will handle phase transition
+        next_task = self._find_next_task(session, spec_data)
+        if next_task:
+            return self._create_implement_task_step(session, next_task, spec_data, now)
+
+        # No remaining tasks - complete spec
         return self._create_complete_spec_result(session, now)
 
     def _find_next_task(
@@ -1094,6 +1181,7 @@ class StepOrchestrator:
         session.paused_at = now
         session.pause_reason = reason
         session.updated_at = now
+        session.state_version += 1
 
         step_id = f"step_{ULID()}"
         next_step = NextStep(
@@ -1179,6 +1267,7 @@ class StepOrchestrator:
         session.last_task_id = task_id
         session.status = SessionStatus.RUNNING
         session.updated_at = now
+        session.state_version += 1
 
         return OrchestrationResult(
             success=True,
@@ -1238,6 +1327,7 @@ class StepOrchestrator:
             issued_at=now,
         )
         session.updated_at = now
+        session.state_version += 1
 
         return OrchestrationResult(
             success=True,
@@ -1304,6 +1394,7 @@ class StepOrchestrator:
         )
         session.phase_gates[phase_id].gate_attempt_id = gate_attempt_id
         session.updated_at = now
+        session.state_version += 1
 
         return OrchestrationResult(
             success=True,
@@ -1359,6 +1450,7 @@ class StepOrchestrator:
             issued_at=now,
         )
         session.updated_at = now
+        session.state_version += 1
 
         return OrchestrationResult(
             success=True,
@@ -1375,6 +1467,7 @@ class StepOrchestrator:
         """Create a complete_spec result (terminal state)."""
         session.status = SessionStatus.COMPLETED
         session.updated_at = now
+        session.state_version += 1
 
         step_id = f"step_{ULID()}"
         next_step = NextStep(

@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models import (
     LastStepResult,
     NextStep,
@@ -39,6 +38,7 @@ from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_STEP_STALE,
     ERROR_ALL_TASKS_BLOCKED,
     ERROR_SESSION_UNRECOVERABLE,
+    ERROR_INVALID_GATE_EVIDENCE,
 )
 from foundry_mcp.core.responses import (
     ErrorCode,
@@ -49,32 +49,14 @@ from foundry_mcp.core.responses import (
 from foundry_mcp.core.spec import load_spec
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
+    _get_storage,
     _request_id,
+    _resolve_session,
+    _session_not_found_response,
     _validation_error,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _get_storage(config: ServerConfig, workspace: Optional[str] = None) -> AutonomyStorage:
-    """Get AutonomyStorage instance."""
-    ws_path = Path(workspace) if workspace else Path.cwd()
-    return AutonomyStorage(workspace_path=ws_path)
-
-
-def _session_not_found_response(action: str, request_id: str, spec_id: Optional[str] = None) -> dict:
-    """Return session not found error response."""
-    return asdict(error_response(
-        "No active session found",
-        error_code=ErrorCode.NOT_FOUND,
-        error_type=ErrorType.NOT_FOUND,
-        request_id=request_id,
-        details={
-            "action": action,
-            "spec_id": spec_id,
-            "hint": "Start a session with session-start action",
-        },
-    ))
 
 
 def _map_orchestrator_error_to_response(
@@ -94,6 +76,7 @@ def _map_orchestrator_error_to_response(
         ERROR_STEP_STALE: ErrorCode.UNAVAILABLE,
         ERROR_ALL_TASKS_BLOCKED: ErrorCode.RESOURCE_BUSY,
         ERROR_SESSION_UNRECOVERABLE: ErrorCode.INTERNAL_ERROR,
+        ERROR_INVALID_GATE_EVIDENCE: ErrorCode.VALIDATION_ERROR,
     }
 
     # Map to error types
@@ -105,6 +88,7 @@ def _map_orchestrator_error_to_response(
         ERROR_STEP_STALE: ErrorType.UNAVAILABLE,
         ERROR_ALL_TASKS_BLOCKED: ErrorType.UNAVAILABLE,
         ERROR_SESSION_UNRECOVERABLE: ErrorType.INTERNAL,
+        ERROR_INVALID_GATE_EVIDENCE: ErrorType.VALIDATION,
     }
 
     mapped_code = error_code_map.get(error_code or "", ErrorCode.INTERNAL_ERROR)
@@ -128,6 +112,8 @@ def _map_orchestrator_error_to_response(
         details["remediation"] = "Session may need to be reset or heartbeat updated"
     elif error_code == ERROR_ALL_TASKS_BLOCKED:
         details["remediation"] = "Resolve task blockers to continue execution"
+    elif error_code == ERROR_INVALID_GATE_EVIDENCE:
+        details["remediation"] = "Provide valid gate evidence via fidelity-gate action"
 
     return asdict(error_response(
         error_message,
@@ -177,6 +163,7 @@ def _handle_session_step_next(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     workspace: Optional[str] = None,
     last_step_result: Optional[Dict[str, Any]] = None,
     context_usage_pct: Optional[int] = None,
@@ -219,25 +206,11 @@ def _handle_session_step_next(
     """
     request_id = _request_id()
 
-    if not spec_id:
-        return _validation_error(
-            action="session-step-next",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    # Find active session for this spec
-    active_session_id = storage.get_active_session(spec_id)
-    if not active_session_id:
-        return _session_not_found_response("session-step-next", request_id, spec_id)
-
-    # Load session state
-    session = storage.load(active_session_id)
-    if not session:
-        return _session_not_found_response("session-step-next", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-step-next", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Parse last_step_result if provided
     parsed_last_step_result: Optional[LastStepResult] = None
@@ -306,17 +279,20 @@ def _handle_session_step_next(
         heartbeat_at=heartbeat_at,
     )
 
-    # Handle replay scenario
+    # Handle replay scenario — return cached SessionStepResponseData in envelope
     if result.replay_response is not None:
         logger.info("Returning cached replay response for session %s", session.id)
-        return result.replay_response
+        return asdict(success_response(
+            data=result.replay_response,
+            request_id=request_id,
+        ))
 
     # Persist session if needed
     if result.should_persist:
         try:
             storage.save(result.session)
             # Update active session pointer
-            storage.set_active_session(spec_id, result.session.id)
+            storage.set_active_session(result.session.spec_id, result.session.id)
         except Exception as e:
             logger.error("Failed to persist session %s: %s", session.id, e)
             return asdict(error_response(
@@ -347,7 +323,9 @@ def _handle_session_step_report(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     step_id: Optional[str] = None,
+    step_type: Optional[str] = None,
     outcome: Optional[str] = None,
     note: Optional[str] = None,
     files_touched: Optional[list] = None,
@@ -401,9 +379,18 @@ def _handle_session_step_report(
             request_id=request_id,
         )
 
+    if not step_type:
+        return _validation_error(
+            action="session-step-report",
+            field="step_type",
+            message="step_type is required",
+            request_id=request_id,
+        )
+
     # Build last_step_result and delegate to next handler
     last_step_result: Dict[str, Any] = {
         "step_id": step_id,
+        "step_type": step_type,
         "outcome": outcome,
     }
     if note:
@@ -415,6 +402,7 @@ def _handle_session_step_report(
     return _handle_session_step_next(
         config=config,
         spec_id=spec_id,
+        session_id=session_id,
         workspace=workspace,
         last_step_result=last_step_result,
         **payload,
@@ -425,6 +413,7 @@ def _handle_session_step_replay(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     workspace: Optional[str] = None,
     **payload: Any,
 ) -> dict:
@@ -447,25 +436,11 @@ def _handle_session_step_replay(
     """
     request_id = _request_id()
 
-    if not spec_id:
-        return _validation_error(
-            action="session-step-replay",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    # Find active session for this spec
-    active_session_id = storage.get_active_session(spec_id)
-    if not active_session_id:
-        return _session_not_found_response("session-step-replay", request_id, spec_id)
-
-    # Load session state
-    session = storage.load(active_session_id)
-    if not session:
-        return _session_not_found_response("session-step-replay", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-step-replay", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Check for cached response
     if not session.last_issued_response:
@@ -483,3 +458,35 @@ def _handle_session_step_replay(
 
     logger.info("Replaying cached response for session %s", session.id)
     return session.last_issued_response
+
+
+def _handle_session_step_heartbeat(
+    *,
+    config: ServerConfig,
+    spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    context_usage_pct: Optional[int] = None,
+    estimated_tokens_used: Optional[int] = None,
+    workspace: Optional[str] = None,
+    **payload: Any,
+) -> dict:
+    """Handle session-step-heartbeat action.
+
+    Updates session heartbeat and context metrics.
+    ADR specifies heartbeat as a session-step command alongside next.
+
+    Delegates to the session heartbeat handler for implementation.
+    """
+    from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+        _handle_session_heartbeat,
+    )
+
+    return _handle_session_heartbeat(
+        config=config,
+        spec_id=spec_id,
+        session_id=session_id,
+        context_usage_pct=context_usage_pct,
+        estimated_tokens_used=estimated_tokens_used,
+        workspace=workspace,
+        **payload,
+    )

@@ -6,7 +6,7 @@ as defined in ADR-002. Models are designed for file-backed persistence
 with schema versioning support.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +25,10 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     ENDED = "ended"
+
+
+# Canonical set of terminal statuses — import from here instead of redefining.
+TERMINAL_STATUSES = frozenset({SessionStatus.COMPLETED, SessionStatus.ENDED})
 
 
 class PauseReason(str, Enum):
@@ -326,6 +330,12 @@ class AutonomousSessionState(BaseModel):
 
     This model represents the full state of an autonomous execution session,
     designed for file-backed persistence with schema versioning support.
+
+    IMPORTANT: ``schema_version`` uses ``alias="_schema_version"`` so that
+    persisted JSON contains the underscore-prefixed key expected by
+    ``state_migrations``.  Always serialize with ``by_alias=True`` (the
+    overridden ``model_dump`` defaults to this) to avoid breaking migration
+    detection.
     """
 
     # Schema versioning (serialized as _schema_version for ADR compliance)
@@ -415,6 +425,10 @@ class AutonomousSessionState(BaseModel):
         },
     }
 
+    def model_dump(self, *, by_alias: bool = True, **kwargs: Any) -> Dict[str, Any]:
+        """Override to default ``by_alias=True`` for correct _schema_version serialization."""
+        return super().model_dump(by_alias=by_alias, **kwargs)
+
 
 # =============================================================================
 # Session Summary for List Operations
@@ -437,3 +451,45 @@ class SessionSummary(BaseModel):
     updated_at: datetime = Field(..., description="When session was last updated")
     active_phase_id: Optional[str] = Field(None, description="Active phase ID")
     tasks_completed: int = Field(default=0, description="Number of completed tasks")
+
+
+# =============================================================================
+# Shared Utility Functions
+# =============================================================================
+
+
+def compute_effective_status(session: AutonomousSessionState) -> Optional[SessionStatus]:
+    """Compute effective status considering staleness.
+
+    If the session is nominally RUNNING but heartbeat or step timestamps
+    indicate staleness, the effective status is PAUSED.
+
+    Args:
+        session: Session state
+
+    Returns:
+        Derived status (PAUSED) if stale, None if the actual status applies.
+    """
+    if session.status != SessionStatus.RUNNING:
+        return None
+
+    now = datetime.now(timezone.utc)
+
+    # Check step staleness
+    if session.last_step_issued:
+        step_stale_threshold = timedelta(minutes=session.limits.step_stale_minutes)
+        if now - session.last_step_issued.issued_at > step_stale_threshold:
+            return SessionStatus.PAUSED
+
+    # Check heartbeat staleness
+    if session.context.last_heartbeat_at:
+        heartbeat_stale_threshold = timedelta(minutes=session.limits.heartbeat_stale_minutes)
+        if now - session.context.last_heartbeat_at > heartbeat_stale_threshold:
+            return SessionStatus.PAUSED
+    else:
+        # Pre-first-heartbeat: use heartbeat_grace_minutes from created_at
+        grace_threshold = timedelta(minutes=session.limits.heartbeat_grace_minutes)
+        if now - session.created_at > grace_threshold:
+            return SessionStatus.PAUSED
+
+    return None

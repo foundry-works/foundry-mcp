@@ -20,13 +20,13 @@ from ulid import ULID
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.autonomy.memory import (
-    AutonomyStorage,
     ActiveSessionLookupResult,
     ListSessionsResult,
 )
 from foundry_mcp.core.autonomy.models import (
     AutonomousSessionState,
     SessionStatus,
+    TERMINAL_STATUSES,
     PauseReason,
     FailureReason,
     SessionResponseData,
@@ -38,6 +38,7 @@ from foundry_mcp.core.autonomy.models import (
     CompletedTaskSummary,
     CompletedPhaseSummary,
     PendingTaskSummary,
+    PhaseGateStatus,
     RebaseResultDetail,
     GatePolicy,
 )
@@ -53,10 +54,13 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.spec import load_spec
+from foundry_mcp.core.spec import load_spec, resolve_spec_file
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
+    _get_storage,
     _request_id,
+    _resolve_session,
+    _session_not_found_response,
     _validation_error,
     _resolve_specs_dir,
 )
@@ -85,12 +89,6 @@ ERROR_IDEMPOTENCY_MISMATCH = "IDEMPOTENCY_MISMATCH"
 # =============================================================================
 
 
-def _get_storage(config: ServerConfig, workspace: Optional[str] = None) -> AutonomyStorage:
-    """Get AutonomyStorage instance."""
-    ws_path = Path(workspace) if workspace else Path.cwd()
-    return AutonomyStorage(workspace_path=ws_path)
-
-
 def _feature_disabled_response(action: str, request_id: str) -> dict:
     """Return feature disabled error response."""
     return asdict(error_response(
@@ -106,21 +104,6 @@ def _feature_disabled_response(action: str, request_id: str) -> dict:
     ))
 
 
-def _session_not_found_response(action: str, request_id: str, spec_id: Optional[str] = None) -> dict:
-    """Return session not found error response."""
-    return asdict(error_response(
-        "No active session found",
-        error_code=ErrorCode.NOT_FOUND,
-        error_type=ErrorType.NOT_FOUND,
-        request_id=request_id,
-        details={
-            "action": action,
-            "spec_id": spec_id,
-            "hint": "Start a session with session-start action",
-        },
-    ))
-
-
 def _invalid_transition_response(
     action: str,
     request_id: str,
@@ -131,7 +114,7 @@ def _invalid_transition_response(
     """Return invalid state transition error response."""
     return asdict(error_response(
         f"Invalid state transition: {current_status} -> {target_status}",
-        error_code=ErrorCode.VALIDATION_ERROR,
+        error_code=ErrorCode.INVALID_STATE_TRANSITION,
         error_type=ErrorType.VALIDATION,
         request_id=request_id,
         details={
@@ -147,32 +130,120 @@ def _invalid_transition_response(
 def _compute_effective_status(session: AutonomousSessionState) -> Optional[SessionStatus]:
     """Compute effective status considering staleness.
 
+    Delegates to the shared implementation in models.py to avoid duplication.
+    """
+    from foundry_mcp.core.autonomy.models import compute_effective_status
+    return compute_effective_status(session)
+
+
+def _build_resume_context(
+    session: AutonomousSessionState,
+    workspace: Optional[str] = None,
+) -> Optional[ResumeContext]:
+    """Build resume context from session state and spec data.
+
+    Loads the spec to extract completed/pending tasks, completed phases,
+    and journal availability for providing context on resume/rebase.
+
     Args:
         session: Session state
+        workspace: Workspace path
 
     Returns:
-        Derived status (paused) if stale, None if actual status applies
+        Populated ResumeContext or None if spec cannot be loaded
     """
-    if session.status != SessionStatus.RUNNING:
+    ws_path = Path(workspace) if workspace else Path.cwd()
+    specs_dir = ws_path / "specs"
+
+    spec_data = load_spec(session.spec_id, specs_dir)
+    if spec_data is None:
         return None
 
-    now = datetime.now(timezone.utc)
+    spec_title = spec_data.get("title") or spec_data.get("name")
 
-    # Check step staleness
-    if session.last_step_issued:
-        from datetime import timedelta
-        step_stale_threshold = timedelta(minutes=session.limits.step_stale_minutes)
-        if now - session.last_step_issued.issued_at > step_stale_threshold:
-            return SessionStatus.PAUSED
+    # Extract phase and task information
+    phases = spec_data.get("phases", [])
+    if not isinstance(phases, list):
+        phases = []
 
-    # Check heartbeat staleness (after grace period)
-    if session.context.last_heartbeat_at:
-        from datetime import timedelta
-        heartbeat_stale_threshold = timedelta(minutes=session.limits.heartbeat_stale_minutes)
-        if now - session.context.last_heartbeat_at > heartbeat_stale_threshold:
-            return SessionStatus.PAUSED
+    completed_tasks: list[CompletedTaskSummary] = []
+    pending_tasks_in_phase: list[PendingTaskSummary] = []
+    completed_phases: list[CompletedPhaseSummary] = []
 
-    return None
+    active_phase_title = None
+
+    for phase in phases:
+        if not isinstance(phase, dict):
+            continue
+
+        phase_id = phase.get("id", "")
+        phase_title = phase.get("title")
+
+        # Track active phase title
+        if phase_id == session.active_phase_id:
+            active_phase_title = phase_title
+
+        # Check phase completion via gate records
+        gate_record = session.phase_gates.get(phase_id)
+        if gate_record and gate_record.status in (
+            PhaseGateStatus.PASSED,
+            PhaseGateStatus.WAIVED,
+        ):
+            completed_phases.append(CompletedPhaseSummary(
+                phase_id=phase_id,
+                title=phase_title,
+                gate_status=gate_record.status,
+            ))
+
+        # Process tasks in this phase
+        tasks = phase.get("tasks", [])
+        if not isinstance(tasks, list):
+            continue
+
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            task_id = task.get("id", "")
+            task_title = task.get("title", task_id)
+
+            if task_id in session.completed_task_ids:
+                completed_tasks.append(CompletedTaskSummary(
+                    task_id=task_id,
+                    title=task_title,
+                    phase_id=phase_id,
+                    files_touched=None,  # Not tracked in spec data
+                ))
+            elif phase_id == session.active_phase_id:
+                task_type = task.get("type", "task")
+                if task_type in ("task", "verify"):
+                    pending_tasks_in_phase.append(PendingTaskSummary(
+                        task_id=task_id,
+                        title=task_title,
+                    ))
+
+    # Cap recent completed tasks at 10 (most recent = last appended)
+    recent_completed = completed_tasks[-10:] if len(completed_tasks) > 10 else completed_tasks
+
+    # Check journal availability
+    journal_available = bool(spec_data.get("journal"))
+    journal_hint = (
+        f"Use journal(action='list', spec_id='{session.spec_id}') to view journal entries"
+        if journal_available else None
+    )
+
+    return ResumeContext(
+        spec_id=session.spec_id,
+        spec_title=spec_title,
+        active_phase_id=session.active_phase_id,
+        active_phase_title=active_phase_title,
+        completed_task_count=len(session.completed_task_ids),
+        recent_completed_tasks=recent_completed,
+        completed_phases=completed_phases,
+        pending_tasks_in_phase=pending_tasks_in_phase,
+        last_pause_reason=session.pause_reason,
+        journal_available=journal_available,
+        journal_hint=journal_hint,
+    )
 
 
 def _build_session_response(
@@ -180,9 +251,15 @@ def _build_session_response(
     request_id: str,
     include_resume_context: bool = False,
     rebase_result: Optional[RebaseResultDetail] = None,
+    workspace: Optional[str] = None,
 ) -> dict:
     """Build standard session response data."""
     effective_status = _compute_effective_status(session)
+
+    # Build resume context if requested
+    resume_context = None
+    if include_resume_context:
+        resume_context = _build_resume_context(session, workspace)
 
     response_data = SessionResponseData(
         session_id=session.id,
@@ -196,12 +273,12 @@ def _build_session_response(
         active_phase_id=session.active_phase_id,
         last_heartbeat_at=session.context.last_heartbeat_at,
         next_action_hint=None,  # Filled by step commands
-        resume_context=None,
+        resume_context=resume_context,
         rebase_result=rebase_result,
     )
 
     # Include effective status if derived
-    data = asdict(response_data)
+    data = response_data.model_dump(mode="json", by_alias=True)
     if effective_status:
         data["effective_status"] = effective_status.value
 
@@ -221,6 +298,9 @@ def _write_session_journal(
 ) -> bool:
     """Write a journal entry for session lifecycle event.
 
+    Uses the existing journal system (add_journal_entry + save_spec)
+    to avoid direct spec file mutation and associated race conditions.
+
     Args:
         spec_id: Spec ID
         action: Action being performed
@@ -233,56 +313,31 @@ def _write_session_journal(
         True if journal entry was written successfully
     """
     try:
-        # Find spec file
+        from foundry_mcp.core.journal import add_journal_entry
+        from foundry_mcp.core.spec import load_spec, save_spec
+
         ws_path = Path(workspace) if workspace else Path.cwd()
         specs_dir = ws_path / "specs"
-        spec_path = specs_dir / f"{spec_id}.json"
 
-        if not spec_path.exists():
-            logger.warning("Spec file not found for journal: %s", spec_path)
+        spec_data = load_spec(spec_id, specs_dir)
+        if spec_data is None:
+            logger.warning("Spec not found for journal: %s", spec_id)
             return False
 
-        # Load spec data
-        spec_data = json.loads(spec_path.read_text())
-
-        # Add journal entry
-        journal_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "entry_type": "status_change",
-            "title": f"Session {action}",
-            "content": summary,
-            "author": "autonomy",
-            "task_id": None,
-            "metadata": {
+        add_journal_entry(
+            spec_data,
+            title=f"Session {action}",
+            content=summary,
+            entry_type="session",
+            author="autonomy",
+            metadata={
                 "session_id": session_id,
                 "action": action,
                 **(metadata or {}),
             },
-        }
+        )
 
-        # Ensure journal array exists
-        if "journal" not in spec_data:
-            spec_data["journal"] = []
-
-        spec_data["journal"].append(journal_entry)
-
-        # Write back atomically
-        import tempfile
-        import os
-        fd, temp_path = tempfile.mkstemp(dir=specs_dir, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(spec_data, f, indent=2, default=str)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(temp_path, spec_path)
-        except Exception:
-            try:
-                os.unlink(temp_path)
-            except OSError:
-                pass
-            raise
-
+        save_spec(spec_id, spec_data, specs_dir)
         logger.debug("Wrote session journal entry for %s", session_id)
         return True
 
@@ -301,7 +356,20 @@ def _handle_session_start(
     config: ServerConfig,
     spec_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
+    force: bool = False,
     workspace: Optional[str] = None,
+    # Session configuration parameters
+    gate_policy: Optional[str] = None,
+    max_tasks_per_session: Optional[int] = None,
+    max_consecutive_errors: Optional[int] = None,
+    context_threshold_pct: Optional[int] = None,
+    stop_on_phase_completion: Optional[bool] = None,
+    auto_retry_fidelity_gate: Optional[bool] = None,
+    heartbeat_stale_minutes: Optional[int] = None,
+    heartbeat_grace_minutes: Optional[int] = None,
+    step_stale_minutes: Optional[int] = None,
+    max_fidelity_review_cycles_per_phase: Optional[int] = None,
+    enforce_autonomy_write_lock: Optional[bool] = None,
     **payload: Any,
 ) -> dict:
     """Handle session-start action.
@@ -358,34 +426,53 @@ def _handle_session_start(
         existing_session_id = storage.get_active_session(spec_id)
         if existing_session_id:
             existing_session = storage.load(existing_session_id)
-            if existing_session and existing_session.status in {
-                SessionStatus.RUNNING,
-                SessionStatus.PAUSED,
-            }:
+            if existing_session and existing_session.status not in TERMINAL_STATUSES:
                 # Check idempotency key match
                 if idempotency_key and existing_session.idempotency_key == idempotency_key:
                     # Idempotent - return existing session
                     return _build_session_response(existing_session, request_id)
 
-                return asdict(error_response(
-                    "Active session already exists for this spec",
-                    error_code=ErrorCode.CONFLICT,
-                    error_type=ErrorType.CONFLICT,
-                    request_id=request_id,
-                    details={
-                        "spec_id": spec_id,
-                        "existing_session_id": existing_session_id,
-                        "existing_status": existing_session.status.value,
-                        "hint": "End existing session before starting a new one",
-                    },
-                ))
+                if force:
+                    # Force-end existing session before creating new one
+                    existing_session.status = SessionStatus.ENDED
+                    existing_session.updated_at = datetime.now(timezone.utc)
+                    storage.save(existing_session)
+                    storage.remove_active_session(spec_id)
+
+                    _write_session_journal(
+                        spec_id=spec_id,
+                        action="end",
+                        summary="Session force-ended by new session start",
+                        session_id=existing_session.id,
+                        workspace=workspace,
+                        metadata={"reason": "force_replaced"},
+                    )
+
+                    logger.info(
+                        "Force-ended existing session %s for spec %s",
+                        existing_session.id,
+                        spec_id,
+                    )
+                else:
+                    return asdict(error_response(
+                        "Active session already exists for this spec",
+                        error_code=ErrorCode.SPEC_SESSION_EXISTS,
+                        error_type=ErrorType.CONFLICT,
+                        request_id=request_id,
+                        details={
+                            "spec_id": spec_id,
+                            "existing_session_id": existing_session_id,
+                            "existing_status": existing_session.status.value,
+                            "hint": "End existing session or use force=true to replace it",
+                        },
+                    ))
 
         # Step 3: Load spec and compute hash
         ws_path = Path(workspace) if workspace else Path.cwd()
         specs_dir = ws_path / "specs"
-        spec_path = specs_dir / f"{spec_id}.json"
+        spec_path = resolve_spec_file(spec_id, specs_dir)
 
-        if not spec_path.exists():
+        if not spec_path:
             return asdict(error_response(
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.NOT_FOUND,
@@ -407,8 +494,46 @@ def _handle_session_start(
                 details={"spec_id": spec_id},
             ))
 
-        # Step 4: Create session state
+        # Step 4: Create session state with caller-provided configuration
         now = datetime.now(timezone.utc)
+
+        # Build limits from payload, falling back to defaults
+        limits_kwargs = {}
+        if max_tasks_per_session is not None:
+            limits_kwargs["max_tasks_per_session"] = max_tasks_per_session
+        if max_consecutive_errors is not None:
+            limits_kwargs["max_consecutive_errors"] = max_consecutive_errors
+        if context_threshold_pct is not None:
+            limits_kwargs["context_threshold_pct"] = context_threshold_pct
+        if heartbeat_stale_minutes is not None:
+            limits_kwargs["heartbeat_stale_minutes"] = heartbeat_stale_minutes
+        if heartbeat_grace_minutes is not None:
+            limits_kwargs["heartbeat_grace_minutes"] = heartbeat_grace_minutes
+        if step_stale_minutes is not None:
+            limits_kwargs["step_stale_minutes"] = step_stale_minutes
+        if max_fidelity_review_cycles_per_phase is not None:
+            limits_kwargs["max_fidelity_review_cycles_per_phase"] = max_fidelity_review_cycles_per_phase
+
+        # Build stop conditions from payload
+        stop_kwargs = {}
+        if stop_on_phase_completion is not None:
+            stop_kwargs["stop_on_phase_completion"] = stop_on_phase_completion
+        if auto_retry_fidelity_gate is not None:
+            stop_kwargs["auto_retry_fidelity_gate"] = auto_retry_fidelity_gate
+
+        # Resolve gate policy
+        resolved_gate_policy = GatePolicy.STRICT
+        if gate_policy is not None:
+            try:
+                resolved_gate_policy = GatePolicy(gate_policy)
+            except ValueError:
+                return _validation_error(
+                    action="session-start",
+                    field="gate_policy",
+                    message=f"Invalid gate_policy: {gate_policy}. Must be one of: strict, lenient, manual",
+                    request_id=request_id,
+                )
+
         session = AutonomousSessionState(
             id=str(ULID()),
             spec_id=spec_id,
@@ -420,11 +545,11 @@ def _handle_session_start(
             created_at=now,
             updated_at=now,
             counters=SessionCounters(),
-            limits=SessionLimits(),
-            stop_conditions=StopConditions(),
+            limits=SessionLimits(**limits_kwargs),
+            stop_conditions=StopConditions(**stop_kwargs),
             context=SessionContext(),
-            write_lock_enforced=True,
-            gate_policy=GatePolicy.STRICT,
+            write_lock_enforced=enforce_autonomy_write_lock if enforce_autonomy_write_lock is not None else True,
+            gate_policy=resolved_gate_policy,
         )
 
         # Step 5: Save state (atomic write)
@@ -450,9 +575,10 @@ def _handle_session_start(
         )
 
         if not journal_success:
-            # Rollback: delete state before releasing lock
+            # Rollback: delete state and index entry before releasing lock
             logger.warning("Journal write failed, rolling back session %s", session.id)
             storage.delete(session.id)
+            storage.remove_active_session(spec_id)
             return asdict(error_response(
                 "Failed to write session journal",
                 error_code=ErrorCode.INTERNAL_ERROR,
@@ -507,27 +633,11 @@ def _handle_session_status(
     """
     request_id = _request_id()
 
-    if not spec_id and not session_id:
-        return _validation_error(
-            action="session-status",
-            field="spec_id",
-            message="spec_id or session_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    # Load by session_id or find by spec_id
-    session = None
-    if session_id:
-        session = storage.load(session_id)
-    elif spec_id:
-        active_session_id = storage.get_active_session(spec_id)
-        if active_session_id:
-            session = storage.load(active_session_id)
-
-    if not session:
-        return _session_not_found_response("session-status", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-status", request_id, session_id, spec_id)
+    if err:
+        return err
 
     return _build_session_response(session, request_id)
 
@@ -541,6 +651,7 @@ def _handle_session_pause(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     reason: Optional[str] = None,
     workspace: Optional[str] = None,
     **payload: Any,
@@ -553,6 +664,7 @@ def _handle_session_pause(
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
+        session_id: Session ID (optional, alternative to spec_id)
         reason: Optional reason for pausing
         workspace: Workspace path
         **payload: Additional parameters
@@ -562,23 +674,11 @@ def _handle_session_pause(
     """
     request_id = _request_id()
 
-    if not spec_id:
-        return _validation_error(
-            action="session-pause",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    session_id = storage.get_active_session(spec_id)
-    if not session_id:
-        return _session_not_found_response("session-pause", request_id, spec_id)
-
-    session = storage.load(session_id)
-    if not session:
-        return _session_not_found_response("session-pause", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-pause", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Validate state transition
     if session.status != SessionStatus.RUNNING:
@@ -591,23 +691,29 @@ def _handle_session_pause(
         )
 
     # Update session
+    now = datetime.now(timezone.utc)
     session.status = SessionStatus.PAUSED
-    session.pause_reason = PauseReason.USER if not reason else PauseReason(reason)
-    session.updated_at = datetime.now(timezone.utc)
-    session.paused_at = datetime.now(timezone.utc)
+    try:
+        pause_reason = PauseReason(reason) if reason else PauseReason.USER
+    except ValueError:
+        pause_reason = PauseReason.USER
+    session.pause_reason = pause_reason
+    session.updated_at = now
+    session.paused_at = now
+    session.state_version += 1
 
     storage.save(session)
 
     # Write journal
     _write_session_journal(
-        spec_id=spec_id,
+        spec_id=session.spec_id,
         action="pause",
         summary=f"Session paused: {reason or 'user request'}",
         session_id=session.id,
         workspace=workspace,
     )
 
-    logger.info("Paused session %s for spec %s", session.id, spec_id)
+    logger.info("Paused session %s for spec %s", session.id, session.spec_id)
 
     return _build_session_response(session, request_id)
 
@@ -621,6 +727,7 @@ def _handle_session_resume(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     gate_ack: Optional[str] = None,
     force: bool = False,
     workspace: Optional[str] = None,
@@ -636,6 +743,7 @@ def _handle_session_resume(
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
+        session_id: Session ID (optional, alternative to spec_id)
         gate_ack: Optional gate acknowledgment ID
         force: Force resume from failed state
         workspace: Workspace path
@@ -646,23 +754,11 @@ def _handle_session_resume(
     """
     request_id = _request_id()
 
-    if not spec_id:
-        return _validation_error(
-            action="session-resume",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    session_id = storage.get_active_session(spec_id)
-    if not session_id:
-        return _session_not_found_response("session-resume", request_id, spec_id)
-
-    session = storage.load(session_id)
-    if not session:
-        return _session_not_found_response("session-resume", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-resume", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Validate state transition
     if session.status == SessionStatus.FAILED:
@@ -674,6 +770,34 @@ def _handle_session_resume(
                 target_status="running",
                 reason="Use force=true to resume from failed state",
             )
+
+        # Per ADR: if failure_reason == spec_structure_changed, recompute hash
+        if session.failure_reason == FailureReason.SPEC_STRUCTURE_CHANGED:
+            ws_path = Path(workspace) if workspace else Path.cwd()
+            specs_dir = ws_path / "specs"
+            spec_path = resolve_spec_file(session.spec_id, specs_dir)
+
+            if spec_path:
+                try:
+                    current_spec_data = json.loads(spec_path.read_text())
+                    current_hash = compute_spec_structure_hash(current_spec_data)
+                    if current_hash != session.spec_structure_hash:
+                        return asdict(error_response(
+                            "Spec structure has changed since session was created. Use session-rebase to reconcile.",
+                            error_code=ErrorCode.SPEC_REBASE_REQUIRED,
+                            error_type=ErrorType.CONFLICT,
+                            request_id=request_id,
+                            details={
+                                "action": "session-resume",
+                                "spec_id": session.spec_id,
+                                "old_hash": session.spec_structure_hash[:16],
+                                "new_hash": current_hash[:16],
+                                "hint": "Use session-rebase to reconcile spec structure changes before resuming",
+                            },
+                        ))
+                except Exception as e:
+                    logger.warning("Failed to validate spec structure on resume: %s", e)
+
     elif session.status != SessionStatus.PAUSED:
         return _invalid_transition_response(
             action="session-resume",
@@ -688,7 +812,7 @@ def _handle_session_resume(
         if not gate_ack:
             return asdict(error_response(
                 "Manual gate acknowledgment required",
-                error_code=ErrorCode.VALIDATION_ERROR,
+                error_code=ErrorCode.MANUAL_GATE_ACK_REQUIRED,
                 error_type=ErrorType.VALIDATION,
                 request_id=request_id,
                 details={
@@ -702,7 +826,7 @@ def _handle_session_resume(
         if gate_ack != session.pending_manual_gate_ack.gate_attempt_id:
             return asdict(error_response(
                 "Invalid gate acknowledgment",
-                error_code=ErrorCode.VALIDATION_ERROR,
+                error_code=ErrorCode.INVALID_GATE_ACK,
                 error_type=ErrorType.VALIDATION,
                 request_id=request_id,
                 details={
@@ -721,12 +845,13 @@ def _handle_session_resume(
     session.failure_reason = None
     session.updated_at = datetime.now(timezone.utc)
     session.paused_at = None
+    session.state_version += 1
 
     storage.save(session)
 
     # Write journal
     _write_session_journal(
-        spec_id=spec_id,
+        spec_id=session.spec_id,
         action="resume",
         summary=f"Session resumed{', forced from failed' if force else ''}",
         session_id=session.id,
@@ -734,9 +859,9 @@ def _handle_session_resume(
         metadata={"gate_ack": gate_ack, "force": force},
     )
 
-    logger.info("Resumed session %s for spec %s", session.id, spec_id)
+    logger.info("Resumed session %s for spec %s", session.id, session.spec_id)
 
-    return _build_session_response(session, request_id, include_resume_context=True)
+    return _build_session_response(session, request_id, include_resume_context=True, workspace=workspace)
 
 
 # =============================================================================
@@ -748,6 +873,7 @@ def _handle_session_end(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     workspace: Optional[str] = None,
     **payload: Any,
 ) -> dict:
@@ -759,6 +885,7 @@ def _handle_session_end(
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
+        session_id: Session ID (optional, alternative to spec_id)
         workspace: Workspace path
         **payload: Additional parameters
 
@@ -767,23 +894,11 @@ def _handle_session_end(
     """
     request_id = _request_id()
 
-    if not spec_id:
-        return _validation_error(
-            action="session-end",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    session_id = storage.get_active_session(spec_id)
-    if not session_id:
-        return _session_not_found_response("session-end", request_id, spec_id)
-
-    session = storage.load(session_id)
-    if not session:
-        return _session_not_found_response("session-end", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-end", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Validate state transition (any non-terminal -> ended)
     if session.status in {SessionStatus.COMPLETED, SessionStatus.ENDED}:
@@ -795,25 +910,29 @@ def _handle_session_end(
             reason="Session is already in terminal state",
         )
 
+    # Capture previous status before mutation for journal
+    previous_status = session.status
+
     # Update session
     session.status = SessionStatus.ENDED
     session.updated_at = datetime.now(timezone.utc)
+    session.state_version += 1
 
     storage.save(session)
 
     # Remove pointer
-    storage.remove_active_session(spec_id)
+    storage.remove_active_session(session.spec_id)
 
     # Write journal
     _write_session_journal(
-        spec_id=spec_id,
+        spec_id=session.spec_id,
         action="end",
-        summary=f"Session ended (was {session.status.value})",
+        summary=f"Session ended (was {previous_status.value})",
         session_id=session.id,
         workspace=workspace,
     )
 
-    logger.info("Ended session %s for spec %s", session.id, spec_id)
+    logger.info("Ended session %s for spec %s", session.id, session.spec_id)
 
     return _build_session_response(session, request_id)
 
@@ -869,7 +988,7 @@ def _handle_session_list(
         # Invalid cursor
         return asdict(error_response(
             f"Invalid cursor: {e}",
-            error_code=ErrorCode.VALIDATION_ERROR,
+            error_code=ErrorCode.INVALID_CURSOR,
             error_type=ErrorType.VALIDATION,
             request_id=request_id,
         ))
@@ -906,9 +1025,6 @@ def _handle_session_list(
 # =============================================================================
 # Session Rebase Handler
 # =============================================================================
-
-ERROR_REBASE_COMPLETED_TASKS_REMOVED = "REBASE_COMPLETED_TASKS_REMOVED"
-
 
 def _find_backup_with_hash(
     spec_id: str,
@@ -954,6 +1070,7 @@ def _handle_session_rebase(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     force: bool = False,
     workspace: Optional[str] = None,
     **payload: Any,
@@ -975,6 +1092,7 @@ def _handle_session_rebase(
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
+        session_id: Session ID (optional, alternative to spec_id)
         force: Force rebase even if completed tasks were removed
         workspace: Workspace path
         **payload: Additional parameters
@@ -984,23 +1102,11 @@ def _handle_session_rebase(
     """
     request_id = _request_id()
 
-    if not spec_id:
-        return _validation_error(
-            action="session-rebase",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    session_id = storage.get_active_session(spec_id)
-    if not session_id:
-        return _session_not_found_response("session-rebase", request_id, spec_id)
-
-    session = storage.load(session_id)
-    if not session:
-        return _session_not_found_response("session-rebase", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-rebase", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Only allow rebase for paused or failed sessions
     if session.status not in {SessionStatus.PAUSED, SessionStatus.FAILED}:
@@ -1015,11 +1121,11 @@ def _handle_session_rebase(
     # Load current spec
     ws_path = Path(workspace) if workspace else Path.cwd()
     specs_dir = ws_path / "specs"
-    spec_path = specs_dir / f"{spec_id}.json"
+    spec_path = resolve_spec_file(session.spec_id, specs_dir)
 
-    if not spec_path.exists():
+    if not spec_path:
         return asdict(error_response(
-            f"Spec not found: {spec_id}",
+            f"Spec not found: {session.spec_id}",
             error_code=ErrorCode.NOT_FOUND,
             error_type=ErrorType.NOT_FOUND,
             request_id=request_id,
@@ -1038,13 +1144,14 @@ def _handle_session_rebase(
         ))
 
     # Check if spec changed
+    now = datetime.now(timezone.utc)
     if current_hash == session.spec_structure_hash:
         # No structural changes - transition to running
         session.status = SessionStatus.RUNNING
         session.pause_reason = None
         session.failure_reason = None
         session.paused_at = None
-        session.updated_at = datetime.now(timezone.utc)
+        session.updated_at = now
 
         storage.save(session)
 
@@ -1054,7 +1161,7 @@ def _handle_session_rebase(
 
         # Write journal
         _write_session_journal(
-            spec_id=spec_id,
+            spec_id=session.spec_id,
             action="rebase",
             summary="Session rebase: no structural changes detected",
             session_id=session.id,
@@ -1062,10 +1169,10 @@ def _handle_session_rebase(
             metadata={"result": "no_change"},
         )
 
-        return _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True)
+        return _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True, workspace=workspace)
 
     # Compute structural diff - try to find old structure from backups
-    old_spec_data = _find_backup_with_hash(spec_id, session.spec_structure_hash, workspace)
+    old_spec_data = _find_backup_with_hash(session.spec_id, session.spec_structure_hash, workspace)
 
     if old_spec_data:
         diff = compute_structural_diff(old_spec_data, current_spec_data)
@@ -1076,7 +1183,7 @@ def _handle_session_rebase(
         logger.warning(
             "Could not find backup matching hash %s for spec %s, using minimal diff",
             session.spec_structure_hash[:16],
-            spec_id,
+            session.spec_id,
         )
 
     # Check for completed tasks in removed tasks
@@ -1088,12 +1195,11 @@ def _handle_session_rebase(
     if removed_completed_tasks and not force:
         return asdict(error_response(
             "Cannot rebase: completed tasks would be removed",
-            error_code=ErrorCode.VALIDATION_ERROR,
+            error_code=ErrorCode.REBASE_COMPLETED_TASKS_REMOVED,
             error_type=ErrorType.VALIDATION,
             request_id=request_id,
             details={
                 "action": "session-rebase",
-                "error_code": ERROR_REBASE_COMPLETED_TASKS_REMOVED,
                 "removed_completed_tasks": removed_completed_tasks,
                 "hint": "Use force=true to remove these completed tasks and adjust counters",
             },
@@ -1117,7 +1223,7 @@ def _handle_session_rebase(
     session.pause_reason = None
     session.failure_reason = None
     session.paused_at = None
-    session.updated_at = datetime.now(timezone.utc)
+    session.updated_at = now
 
     storage.save(session)
 
@@ -1133,7 +1239,7 @@ def _handle_session_rebase(
 
     # Write journal
     _write_session_journal(
-        spec_id=spec_id,
+        spec_id=session.spec_id,
         action="rebase",
         summary=f"Session rebased: +{len(diff.added_tasks)}/-{len(diff.removed_tasks)} tasks",
         session_id=session.id,
@@ -1153,14 +1259,14 @@ def _handle_session_rebase(
     logger.info(
         "Rebased session %s for spec %s: +%d/-%d phases, +%d/-%d tasks",
         session.id,
-        spec_id,
+        session.spec_id,
         len(diff.added_phases),
         len(diff.removed_phases),
         len(diff.added_tasks),
         len(diff.removed_tasks),
     )
 
-    return _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True)
+    return _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True, workspace=workspace)
 
 
 # =============================================================================
@@ -1172,6 +1278,7 @@ def _handle_session_heartbeat(
     *,
     config: ServerConfig,
     spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
     context_usage_pct: Optional[int] = None,
     estimated_tokens_used: Optional[int] = None,
     workspace: Optional[str] = None,
@@ -1184,6 +1291,7 @@ def _handle_session_heartbeat(
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
+        session_id: Session ID (optional, alternative to spec_id)
         context_usage_pct: Current context usage percentage
         estimated_tokens_used: Estimated tokens used
         workspace: Workspace path
@@ -1193,14 +1301,6 @@ def _handle_session_heartbeat(
         Response dict confirming heartbeat or error
     """
     request_id = _request_id()
-
-    if not spec_id:
-        return _validation_error(
-            action="session-heartbeat",
-            field="spec_id",
-            message="spec_id is required",
-            request_id=request_id,
-        )
 
     # Validate context_usage_pct
     if context_usage_pct is not None:
@@ -1214,13 +1314,9 @@ def _handle_session_heartbeat(
 
     storage = _get_storage(config, workspace)
 
-    session_id = storage.get_active_session(spec_id)
-    if not session_id:
-        return _session_not_found_response("session-heartbeat", request_id, spec_id)
-
-    session = storage.load(session_id)
-    if not session:
-        return _session_not_found_response("session-heartbeat", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-heartbeat", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Update heartbeat
     now = datetime.now(timezone.utc)
@@ -1282,61 +1378,46 @@ def _handle_session_reset(
     """
     request_id = _request_id()
 
-    if not spec_id and not session_id:
-        return _validation_error(
-            action="session-reset",
-            field="session_id",
-            message="spec_id or session_id is required",
-            request_id=request_id,
-        )
-
     storage = _get_storage(config, workspace)
 
-    # Load session
-    session = None
-    if session_id:
-        session = storage.load(session_id)
-    elif spec_id:
-        active_id = storage.get_active_session(spec_id)
-        if active_id:
-            session = storage.load(active_id)
-
-    if not session:
-        return _session_not_found_response("session-reset", request_id, spec_id)
+    session, err = _resolve_session(storage, "session-reset", request_id, session_id, spec_id)
+    if err:
+        return err
 
     # Only allow reset for failed sessions
     if session.status != SessionStatus.FAILED:
-        return asdict(error_response(
-            f"Cannot reset session in {session.status.value} state",
-            error_code=ErrorCode.VALIDATION_ERROR,
-            error_type=ErrorType.VALIDATION,
+        return _invalid_transition_response(
+            action="session-reset",
             request_id=request_id,
-            details={
-                "action": "session-reset",
-                "current_status": session.status.value,
-                "hint": "Only failed sessions can be reset",
-            },
-        ))
+            current_status=session.status.value,
+            target_status="deleted",
+            reason="Only failed sessions can be reset",
+        )
 
-    # Reset session to paused state
-    session.status = SessionStatus.PAUSED
-    session.pause_reason = PauseReason.USER
-    session.failure_reason = None
-    session.updated_at = datetime.now(timezone.utc)
-    session.paused_at = datetime.now(timezone.utc)
-    session.counters.consecutive_errors = 0
+    # Per ADR: reset deletes session state file and removes index entry.
+    # This is the escape hatch for corrupt state.
+    deleted_session_id = session.id
+    deleted_spec_id = session.spec_id
 
-    storage.save(session)
+    storage.delete(session.id)
+    storage.remove_active_session(session.spec_id)
 
     # Write journal
     _write_session_journal(
-        spec_id=session.spec_id,
+        spec_id=deleted_spec_id,
         action="reset",
-        summary="Session reset from failed state",
-        session_id=session.id,
+        summary=f"Session {deleted_session_id} deleted via reset (was failed)",
+        session_id=deleted_session_id,
         workspace=workspace,
     )
 
-    logger.info("Reset session %s for spec %s", session.id, session.spec_id)
+    logger.info("Reset (deleted) session %s for spec %s", deleted_session_id, deleted_spec_id)
 
-    return _build_session_response(session, request_id)
+    return asdict(success_response(
+        data={
+            "session_id": deleted_session_id,
+            "spec_id": deleted_spec_id,
+            "result": "deleted",
+        },
+        request_id=request_id,
+    ))
