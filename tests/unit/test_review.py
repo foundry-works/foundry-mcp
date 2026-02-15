@@ -18,9 +18,11 @@ from tests.conftest import extract_response_dict
 def test_get_llm_status_handles_import_error(monkeypatch):
     from foundry_mcp.tools.unified.review_helpers import _get_llm_status
 
-    def _raise():
+    def _raise(*args, **kwargs):
         raise ImportError("missing")
 
+    # Patch both consultation and legacy config paths to simulate broken config
+    monkeypatch.setattr("foundry_mcp.core.llm_config.get_consultation_config", _raise)
     monkeypatch.setattr("foundry_mcp.core.llm_config.get_llm_config", _raise)
     status = _get_llm_status()
     assert status["configured"] is False

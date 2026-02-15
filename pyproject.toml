@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foundry-mcp"
-version = "0.11.0"
+version = "0.11.1"
 description = "MCP server for spec-driven development management"
 readme = "README.md"
 license = "MIT"
@@ -63,6 +63,9 @@ Repository = "https://github.com/tylerburleigh/foundry-mcp"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/foundry_mcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"samples/foundry-mcp.toml" = "foundry_mcp/resources/default-config.toml"
 
 [tool.pyright]
 pythonVersion = "3.10"
