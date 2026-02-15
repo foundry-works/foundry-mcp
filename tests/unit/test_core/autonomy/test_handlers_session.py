@@ -12,7 +12,7 @@ Covers:
 - session-rebase: no-change, structural change, completed task removal guard,
   force rebase with task removal, invalid state
 - session-heartbeat: updates heartbeat, context_usage_pct validation
-- session-reset: failed -> paused, non-failed rejection
+- session-reset: failed -> deleted, non-failed rejection, reason_code validation
 """
 
 from __future__ import annotations
@@ -36,8 +36,6 @@ from foundry_mcp.core.autonomy.models import (
     SessionStatus,
     StopConditions,
 )
-from foundry_mcp.core.responses import ErrorCode
-
 from .conftest import make_session, make_spec_data
 
 
@@ -646,7 +644,10 @@ class TestSessionEnd:
         )
 
         resp = _handle_session_end(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            reason_code="operator_override",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "ended"
@@ -670,7 +671,10 @@ class TestSessionEnd:
         )
 
         resp = _handle_session_end(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            reason_code="operator_override",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "ended"
@@ -681,7 +685,6 @@ class TestSessionEnd:
             _handle_session_start,
             _handle_session_end,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
@@ -692,16 +695,59 @@ class TestSessionEnd:
         session_id = _assert_success(resp_start)["session_id"]
 
         _handle_session_end(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            reason_code="operator_override",
+            workspace=str(workspace),
         )
 
         # Session is now ended, pointer removed. Look up by session_id directly.
         resp = _handle_session_end(
             config=config,
             session_id=session_id,
+            reason_code="operator_override",
             workspace=str(workspace),
         )
         assert resp["success"] is False
+
+    def test_end_requires_reason_code(self, tmp_path):
+        """Ending a session without reason_code returns validation error."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_end,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        _handle_session_start(config=config, spec_id="test-spec-001", workspace=str(workspace))
+
+        resp = _handle_session_end(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        assert resp["success"] is False
+        assert resp["data"]["details"]["field"] == "reason_code"
+
+    def test_end_rejects_invalid_reason_code(self, tmp_path):
+        """Ending a session with invalid reason_code returns validation error."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_end,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        _handle_session_start(config=config, spec_id="test-spec-001", workspace=str(workspace))
+
+        resp = _handle_session_end(
+            config=config,
+            spec_id="test-spec-001",
+            reason_code="not_a_valid_code",
+            workspace=str(workspace),
+        )
+        assert resp["success"] is False
+        assert resp["data"]["details"]["field"] == "reason_code"
 
 
 # =============================================================================
@@ -1192,7 +1238,10 @@ class TestSessionReset:
 
         # Reset requires explicit session_id per ADR
         resp = _handle_session_reset(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            reason_code="corrupt_state",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["result"] == "deleted"
@@ -1211,7 +1260,9 @@ class TestSessionReset:
         config = _make_config(workspace)
 
         resp = _handle_session_reset(
-            config=config, workspace=str(workspace),
+            config=config,
+            reason_code="testing",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
@@ -1231,7 +1282,10 @@ class TestSessionReset:
         session_id = _assert_success(resp_start)["session_id"]
 
         resp = _handle_session_reset(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            reason_code="operator_override",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
@@ -1256,9 +1310,57 @@ class TestSessionReset:
         )
 
         resp = _handle_session_reset(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            reason_code="operator_override",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
+
+    def test_reset_requires_reason_code(self, tmp_path):
+        """Reset without reason_code returns validation error."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_reset,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        resp = _handle_session_reset(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        assert resp["success"] is False
+        assert resp["data"]["details"]["field"] == "reason_code"
+
+    def test_reset_rejects_invalid_reason_code(self, tmp_path):
+        """Reset with invalid reason_code returns validation error."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_reset,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        resp = _handle_session_reset(
+            config=config,
+            session_id=session_id,
+            reason_code="bad_reason",
+            workspace=str(workspace),
+        )
+        assert resp["success"] is False
+        assert resp["data"]["details"]["field"] == "reason_code"
 
 
 # =============================================================================

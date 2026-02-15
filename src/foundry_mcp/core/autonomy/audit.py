@@ -24,7 +24,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import secrets
 from datetime import datetime, timezone
 from enum import Enum
@@ -33,6 +32,8 @@ from typing import Any, Dict, List, Optional
 
 from filelock import FileLock
 from pydantic import BaseModel, Field
+
+from foundry_mcp.core.authorization import get_server_role
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class AuditLedger:
             spec_id: Spec ID this ledger is for
             storage_path: Custom storage path (overrides default)
             workspace_path: Workspace root (default: cwd)
-            server_role: Configured server role (default: from env or 'runner')
+            server_role: Configured server role override (default: authorization role)
             instance_id: Server instance ID (default: generated)
         """
         self.spec_id = spec_id
@@ -180,7 +181,7 @@ class AuditLedger:
         self.lock_path = self.storage_dir / ".ledger.lock"
 
         # Server context
-        self.server_role = server_role or os.environ.get("FOUNDRY_SERVER_ROLE", "runner")
+        self.server_role = server_role or get_server_role()
         self.instance_id = instance_id or self._generate_instance_id()
 
         self._ensure_directories()

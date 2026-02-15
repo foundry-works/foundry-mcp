@@ -161,7 +161,10 @@ class TestFullLifecycle:
 
         # End
         resp = _handle_session_end(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            reason_code="operator_override",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "ended"

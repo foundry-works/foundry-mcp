@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-retry cycle cap**: Added cycle cap check before scheduling `address_fidelity_feedback` to prevent exceeding `max_fidelity_review_cycles_per_phase`
 - **State version increments**: Added missing `state_version` increments in rebase handler (both no-change and success paths), heartbeat handler, and force-end on start
 - **Reset handler safety**: Reset now requires explicit `session_id` parameter — no active-session lookup allowed, per ADR safety constraint
+- **Session override contract enforcement**: `session-end` and `session-reset` now require `reason_code` (`OverrideReasonCode`) from callers/tests; validation errors are returned when missing or invalid
 - **GC spec-lock cleanup**: `cleanup_expired()` now removes orphaned spec-lock files in addition to session locks and pointer files
 - **`AutonomyStorage` export**: Added `AutonomyStorage` to `core/autonomy/__init__.py` public API exports
 - **`LastStepResult` validation**: Added cross-field model validator ensuring required fields per step type (`task_id` for implement/verify, `phase_id`+`gate_attempt_id` for gate steps)

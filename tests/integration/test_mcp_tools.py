@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.authorization import get_server_role, set_server_role
 from foundry_mcp.server import create_server
 from tests.conftest import extract_response_dict
 
@@ -113,12 +114,15 @@ def test_specs_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def test_config(test_specs_dir: Path) -> ServerConfig:
-    return ServerConfig(
+    config = ServerConfig(
         server_name="foundry-mcp-test",
         server_version="0.1.0",
         specs_dir=test_specs_dir,
         log_level="WARNING",
     )
+    # Integration tests exercise both read and mutation paths.
+    config.autonomy_security.role = "maintainer"
+    return config
 
 
 @pytest.fixture
@@ -153,6 +157,26 @@ def test_task_hierarchy_returns_hierarchy(mcp_server):
     assert result["success"] is True
     assert "hierarchy" in result["data"]
     assert "spec-root" in result["data"]["hierarchy"]
+
+
+def test_configured_maintainer_role_allows_task_mutation(test_config: ServerConfig):
+    previous_role = get_server_role()
+    try:
+        test_config.autonomy_security.role = "maintainer"
+        server = create_server(test_config)
+        tools = server._tool_manager._tools
+
+        result = extract_response_dict(
+            tools["task"].fn(
+                action="start",
+                spec_id="test-spec-001",
+                task_id="task-1-2",
+            )
+        )
+        assert result["success"] is True
+        assert get_server_role() == "maintainer"
+    finally:
+        set_server_role(previous_role)
 
 
 class TestResourceAccess:

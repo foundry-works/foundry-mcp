@@ -4,7 +4,9 @@ Provides versioned state schema migrations to ensure backwards compatibility
 when loading persisted AutonomousSessionState from older schema versions.
 
 Schema Versions:
-    v1: Initial schema version (current)
+    v1: Initial schema version
+    v2: Context tracking and staleness-limit fields
+    v3: Required/satisfied phase gate tracking
 
 Migration Strategy:
     - Each version bump has a dedicated migration function

@@ -578,9 +578,9 @@ class TestOrchestratorContextIntegration:
 
 
 class TestStateMigration:
-    """Verify v1 -> v2 migration adds context tracking fields."""
+    """Verify v1/v2 migrations reach current v3 schema."""
 
-    def test_migrate_v1_to_v2(self):
+    def test_migrate_v1_to_v3(self):
         from foundry_mcp.core.autonomy.state_migrations import migrate_state
 
         v1_state = {
@@ -611,7 +611,7 @@ class TestStateMigration:
         }
 
         migrated, warnings = migrate_state(v1_state)
-        assert migrated["_schema_version"] == 2
+        assert migrated["_schema_version"] == 3
         assert len(warnings) == 0
 
         # Check new context fields
@@ -627,6 +627,10 @@ class TestStateMigration:
         assert lim["avg_pct_per_step"] == 3
         assert lim["context_staleness_threshold"] == 5
         assert lim["context_staleness_penalty_pct"] == 5
+
+        # Check new v3 gate tracking fields
+        assert migrated["required_phase_gates"] == {}
+        assert migrated["satisfied_gates"] == {}
 
     def test_migrate_v1_preserves_existing_context(self):
         from foundry_mcp.core.autonomy.state_migrations import migrate_state
@@ -664,18 +668,38 @@ class TestStateMigration:
         assert migrated["counters"]["tasks_completed"] == 5
         assert migrated["limits"]["max_tasks_per_session"] == 50
 
-    def test_v2_state_no_migration_needed(self):
+    def test_v2_state_migrates_to_v3(self):
         from foundry_mcp.core.autonomy.state_migrations import migrate_state, needs_migration
 
         v2_state = {
             "_schema_version": 2,
             "id": "test-session",
             "spec_id": "test-spec",
+            "active_phase_id": "phase-1",
+            "phase_gates": {"phase-1": {"required": True, "status": "pending"}},
         }
 
-        assert needs_migration(v2_state) is False
+        assert needs_migration(v2_state) is True
         migrated, warnings = migrate_state(v2_state)
-        assert migrated["_schema_version"] == 2
+        assert migrated["_schema_version"] == 3
+        assert migrated["required_phase_gates"] == {"phase-1": ["fidelity"]}
+        assert migrated["satisfied_gates"] == {}
+        assert len(warnings) == 0
+
+    def test_v3_state_no_migration_needed(self):
+        from foundry_mcp.core.autonomy.state_migrations import migrate_state, needs_migration
+
+        v3_state = {
+            "_schema_version": 3,
+            "id": "test-session",
+            "spec_id": "test-spec",
+            "required_phase_gates": {"phase-1": ["fidelity"]},
+            "satisfied_gates": {"phase-1": []},
+        }
+
+        assert needs_migration(v3_state) is False
+        migrated, warnings = migrate_state(v3_state)
+        assert migrated["_schema_version"] == 3
         assert len(warnings) == 0
 
     def test_migrated_state_loads_as_model(self):
@@ -711,7 +735,9 @@ class TestStateMigration:
 
         migrated, _ = migrate_state(v1_state)
         session = AutonomousSessionState.model_validate(migrated)
-        assert session.schema_version == 2
+        assert session.schema_version == 3
         assert session.context.context_source is None
         assert session.context.consecutive_same_reports == 0
         assert session.limits.avg_pct_per_step == 3
+        assert session.required_phase_gates == {}
+        assert session.satisfied_gates == {}
