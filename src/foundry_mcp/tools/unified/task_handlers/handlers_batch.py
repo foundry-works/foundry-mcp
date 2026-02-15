@@ -32,6 +32,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _TASK_WARNING_THRESHOLD,
     _VALID_NODE_TYPES,
     _attach_meta,
+    _check_autonomy_write_lock,
     _load_spec_data,
     _match_nodes_for_batch,
     _metric,
@@ -140,6 +141,8 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "start-batch"
     spec_id = payload.get("spec_id")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
             field="spec_id",
@@ -169,6 +172,18 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
             )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -213,6 +228,8 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "complete-batch"
     spec_id = payload.get("spec_id")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(field="spec_id", action=action, message="Provide a non-empty spec identifier", request_id=request_id)
 
@@ -221,6 +238,18 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
         return _validation_error(field="completions", action=action, message="Provide a non-empty list of completions", request_id=request_id)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err

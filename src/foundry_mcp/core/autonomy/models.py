@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # =============================================================================
 # Enums
@@ -202,6 +202,30 @@ class LastStepResult(BaseModel):
     note: Optional[str] = Field(None, description="Free-text note about outcome")
     files_touched: Optional[List[str]] = Field(None, description="Files modified during step")
     gate_attempt_id: Optional[str] = Field(None, description="Gate attempt ID for gate steps")
+
+    @model_validator(mode="after")
+    def validate_fields_by_step_type(self) -> "LastStepResult":
+        """Validate required fields per step type (ADR section 4)."""
+        if self.step_type in (StepType.IMPLEMENT_TASK, StepType.EXECUTE_VERIFICATION):
+            if not self.task_id:
+                raise ValueError(
+                    f"task_id is required for step type {self.step_type.value}"
+                )
+        if self.step_type == StepType.RUN_FIDELITY_GATE:
+            if not self.phase_id:
+                raise ValueError(
+                    "phase_id is required for step type run_fidelity_gate"
+                )
+            if not self.gate_attempt_id:
+                raise ValueError(
+                    "gate_attempt_id is required for step type run_fidelity_gate"
+                )
+        if self.step_type == StepType.ADDRESS_FIDELITY_FEEDBACK:
+            if not self.phase_id:
+                raise ValueError(
+                    "phase_id is required for step type address_fidelity_feedback"
+                )
+        return self
 
 
 class StepInstruction(BaseModel):

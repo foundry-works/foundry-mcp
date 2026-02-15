@@ -255,6 +255,7 @@ class TestStepIdentityValidation:
                 step_type=StepType.RUN_FIDELITY_GATE,
                 task_id=None,
                 phase_id="phase-WRONG",
+                gate_attempt_id="gate-001",
             ),
         )
         assert result.success is False
@@ -342,30 +343,18 @@ class TestGateEvidenceValidation:
         assert result.error_code == ERROR_INVALID_GATE_EVIDENCE
 
     def test_no_gate_attempt_id_returns_error(self, tmp_path):
-        """If result has no gate_attempt_id for a RUN_FIDELITY_GATE step, it returns an error (fix #4)."""
-        orch = _make_orchestrator(tmp_path)
-        session = make_session(
-            last_step_issued=_issued(
-                step_id="step-001",
-                step_type=StepType.RUN_FIDELITY_GATE,
-                task_id=None,
-                phase_id="phase-1",
-            ),
-        )
+        """If result has no gate_attempt_id for a RUN_FIDELITY_GATE step, model validation rejects it."""
+        from pydantic import ValidationError
 
-        result = orch.compute_next_step(
-            session,
+        # Model-level validation now catches missing gate_attempt_id
+        with pytest.raises(ValidationError, match="gate_attempt_id is required"):
             _result(
                 step_id="step-001",
                 step_type=StepType.RUN_FIDELITY_GATE,
                 task_id=None,
                 phase_id="phase-1",
                 gate_attempt_id=None,  # No attempt ID
-            ),
-        )
-        # gate_attempt_id is now required for RUN_FIDELITY_GATE results
-        assert result.success is False
-        assert result.error_code == ERROR_INVALID_GATE_EVIDENCE
+            )
 
 
 # =============================================================================
@@ -420,6 +409,7 @@ class TestRecordStepOutcome:
                 step_type=StepType.RUN_FIDELITY_GATE,
                 outcome=StepOutcome.FAILURE,
                 task_id=None,
+                gate_attempt_id="gate-001",
             ),
             datetime.now(timezone.utc),
         )
@@ -1118,23 +1108,29 @@ class TestHandleGateEvidence:
         assert result.session.status == SessionStatus.PAUSED
         assert result.session.pause_reason == PauseReason.GATE_REVIEW_REQUIRED
 
-    def test_fidelity_cycle_incremented_on_accepted_gate(self, tmp_path):
+    def test_fidelity_cycle_incremented_in_record_step_outcome(self, tmp_path):
+        """Fidelity cycle counter is incremented in _record_step_outcome (step 3), not _handle_gate_evidence."""
         orch = _make_orchestrator(tmp_path)
-        spec_data = make_spec_data()
         now = datetime.now(timezone.utc)
-        evidence = PendingGateEvidence(
-            gate_attempt_id="gate-001",
-            step_id="s1",
-            phase_id="phase-1",
-            verdict=GateVerdict.PASS,
-            issued_at=now,
-        )
         session = make_session(
-            gate_policy=GatePolicy.STRICT,
-            pending_gate_evidence=evidence,
-            active_phase_id="phase-1",  # Must match to avoid phase-change counter reset
+            active_phase_id="phase-1",
             counters=SessionCounters(fidelity_review_cycles_in_active_phase=1),
+            phase_gates={"phase-1": PhaseGateRecord(
+                required=True, status=PhaseGateStatus.PENDING,
+            )},
         )
 
-        orch._handle_gate_evidence(session, spec_data, now)
+        # _record_step_outcome increments fidelity cycle counter on gate steps
+        orch._record_step_outcome(
+            session,
+            _result(
+                step_id="s1",
+                step_type=StepType.RUN_FIDELITY_GATE,
+                outcome=StepOutcome.SUCCESS,
+                task_id=None,
+                phase_id="phase-1",
+                gate_attempt_id="gate-001",
+            ),
+            now,
+        )
         assert session.counters.fidelity_review_cycles_in_active_phase == 2

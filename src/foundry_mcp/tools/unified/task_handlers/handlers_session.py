@@ -415,7 +415,7 @@ def _handle_session_start(
     except Exception as e:
         return asdict(error_response(
             f"Failed to acquire spec lock: {e}",
-            error_code=ErrorCode.RESOURCE_BUSY,
+            error_code=ErrorCode.LOCK_TIMEOUT,
             error_type=ErrorType.UNAVAILABLE,
             request_id=request_id,
             details={"spec_id": spec_id, "action": "session-start"},
@@ -436,6 +436,7 @@ def _handle_session_start(
                     # Force-end existing session before creating new one
                     existing_session.status = SessionStatus.ENDED
                     existing_session.updated_at = datetime.now(timezone.utc)
+                    existing_session.state_version += 1
                     storage.save(existing_session)
                     storage.remove_active_session(spec_id)
 
@@ -728,7 +729,8 @@ def _handle_session_resume(
     config: ServerConfig,
     spec_id: Optional[str] = None,
     session_id: Optional[str] = None,
-    gate_ack: Optional[str] = None,
+    acknowledge_gate_review: Optional[bool] = None,
+    acknowledged_gate_attempt_id: Optional[str] = None,
     force: bool = False,
     workspace: Optional[str] = None,
     **payload: Any,
@@ -744,7 +746,8 @@ def _handle_session_resume(
         config: Server configuration
         spec_id: Spec ID of the session
         session_id: Session ID (optional, alternative to spec_id)
-        gate_ack: Optional gate acknowledgment ID
+        acknowledge_gate_review: Must be True when resuming from gate_review_required
+        acknowledged_gate_attempt_id: Must match pending gate_attempt_id
         force: Force resume from failed state
         workspace: Workspace path
         **payload: Additional parameters
@@ -809,7 +812,7 @@ def _handle_session_resume(
 
     # Check manual gate acknowledgment
     if session.pending_manual_gate_ack:
-        if not gate_ack:
+        if not acknowledge_gate_review:
             return asdict(error_response(
                 "Manual gate acknowledgment required",
                 error_code=ErrorCode.MANUAL_GATE_ACK_REQUIRED,
@@ -819,11 +822,11 @@ def _handle_session_resume(
                     "action": "session-resume",
                     "gate_attempt_id": session.pending_manual_gate_ack.gate_attempt_id,
                     "phase_id": session.pending_manual_gate_ack.phase_id,
-                    "hint": "Provide gate_ack with the gate_attempt_id to acknowledge",
+                    "hint": "Provide acknowledge_gate_review=true and acknowledged_gate_attempt_id to acknowledge",
                 },
             ))
 
-        if gate_ack != session.pending_manual_gate_ack.gate_attempt_id:
+        if not acknowledged_gate_attempt_id or acknowledged_gate_attempt_id != session.pending_manual_gate_ack.gate_attempt_id:
             return asdict(error_response(
                 "Invalid gate acknowledgment",
                 error_code=ErrorCode.INVALID_GATE_ACK,
@@ -832,7 +835,7 @@ def _handle_session_resume(
                 details={
                     "action": "session-resume",
                     "expected": session.pending_manual_gate_ack.gate_attempt_id,
-                    "provided": gate_ack,
+                    "provided": acknowledged_gate_attempt_id,
                 },
             ))
 
@@ -856,7 +859,7 @@ def _handle_session_resume(
         summary=f"Session resumed{', forced from failed' if force else ''}",
         session_id=session.id,
         workspace=workspace,
-        metadata={"gate_ack": gate_ack, "force": force},
+        metadata={"acknowledge_gate_review": acknowledge_gate_review, "acknowledged_gate_attempt_id": acknowledged_gate_attempt_id, "force": force},
     )
 
     logger.info("Resumed session %s for spec %s", session.id, session.spec_id)
@@ -1152,6 +1155,7 @@ def _handle_session_rebase(
         session.failure_reason = None
         session.paused_at = None
         session.updated_at = now
+        session.state_version += 1
 
         storage.save(session)
 
@@ -1205,6 +1209,9 @@ def _handle_session_rebase(
             },
         ))
 
+    # Capture old hash before mutation for accurate journal metadata
+    old_spec_hash = session.spec_structure_hash
+
     # Apply rebase
     tasks_removed_count = 0
     if removed_completed_tasks and force:
@@ -1224,6 +1231,7 @@ def _handle_session_rebase(
     session.failure_reason = None
     session.paused_at = None
     session.updated_at = now
+    session.state_version += 1
 
     storage.save(session)
 
@@ -1245,7 +1253,7 @@ def _handle_session_rebase(
         session_id=session.id,
         workspace=workspace,
         metadata={
-            "old_hash": session.spec_structure_hash[:16],
+            "old_hash": old_spec_hash[:16] if old_spec_hash else None,
             "new_hash": current_hash[:16],
             "added_phases": diff.added_phases,
             "removed_phases": diff.removed_phases,
@@ -1322,6 +1330,7 @@ def _handle_session_heartbeat(
     now = datetime.now(timezone.utc)
     session.context.last_heartbeat_at = now
     session.updated_at = now
+    session.state_version += 1
 
     if context_usage_pct is not None:
         session.context.context_usage_pct = context_usage_pct
@@ -1356,7 +1365,6 @@ def _handle_session_heartbeat(
 def _handle_session_reset(
     *,
     config: ServerConfig,
-    spec_id: Optional[str] = None,
     session_id: Optional[str] = None,
     workspace: Optional[str] = None,
     **payload: Any,
@@ -1366,10 +1374,11 @@ def _handle_session_reset(
     Resets a failed session to allow retry.
     Only failed sessions can be reset.
 
+    Per ADR: reset always requires explicit session_id (no active-session lookup).
+
     Args:
         config: Server configuration
-        spec_id: Spec ID (optional if session_id provided)
-        session_id: Session ID to reset
+        session_id: Session ID to reset (required)
         workspace: Workspace path
         **payload: Additional parameters
 
@@ -1378,11 +1387,19 @@ def _handle_session_reset(
     """
     request_id = _request_id()
 
+    if not session_id:
+        return _validation_error(
+            action="session-reset",
+            field="session_id",
+            message="session_id is required for reset (no active-session lookup allowed)",
+            request_id=request_id,
+        )
+
     storage = _get_storage(config, workspace)
 
-    session, err = _resolve_session(storage, "session-reset", request_id, session_id, spec_id)
-    if err:
-        return err
+    session = storage.load(session_id)
+    if not session:
+        return _session_not_found_response("session-reset", request_id)
 
     # Only allow reset for failed sessions
     if session.status != SessionStatus.FAILED:

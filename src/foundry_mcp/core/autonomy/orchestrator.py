@@ -100,6 +100,7 @@ class OrchestrationResult:
     error_message: Optional[str] = None
     should_persist: bool = True
     replay_response: Optional[Dict[str, Any]] = None
+    warnings: Optional[Dict[str, Any]] = None
 
 
 # =============================================================================
@@ -271,8 +272,10 @@ class StepOrchestrator:
 
         # =================================================================
         # Step 5: Check Terminal States
+        # Per ADR: only COMPLETED and ENDED are truly terminal.
+        # FAILED can transition to running via resume(force=true) or rebase.
         # =================================================================
-        if session.status in (SessionStatus.COMPLETED, SessionStatus.ENDED, SessionStatus.FAILED):
+        if session.status in (SessionStatus.COMPLETED, SessionStatus.ENDED):
             logger.info("Session %s is in terminal state: %s", session.id, session.status)
             return OrchestrationResult(
                 success=True,
@@ -307,9 +310,13 @@ class StepOrchestrator:
         # =================================================================
         # Step 7: Enforce Heartbeat Staleness
         # =================================================================
+        heartbeat_stale_warning = False
         heartbeat_result = self._check_heartbeat_staleness(session, now)
-        if heartbeat_result:
+        if isinstance(heartbeat_result, OrchestrationResult):
             return heartbeat_result
+        elif heartbeat_result is True:
+            # Heartbeat is stale but step is active — ADR: warn, don't pause
+            heartbeat_stale_warning = True
 
         # =================================================================
         # Step 8: Enforce Pause Guards
@@ -351,6 +358,12 @@ class StepOrchestrator:
         # Steps 11-17: Determine Next Action Based on Phase State
         # =================================================================
         next_step_result = self._determine_next_step(session, spec_data, now)
+
+        # Propagate heartbeat_stale_warning into result details (ADR line 662)
+        if heartbeat_stale_warning:
+            if next_step_result.warnings is None:
+                next_step_result.warnings = {}
+            next_step_result.warnings["heartbeat_stale_warning"] = True
 
         # Cache the response for replay-safe exactly-once semantics
         if next_step_result.success and next_step_result.next_step is not None:
@@ -489,8 +502,9 @@ class StepOrchestrator:
                 session.completed_task_ids.append(result.task_id)
                 session.counters.tasks_completed += 1
 
-        # Record gate result
+        # Record gate result and increment fidelity cycle counter (ADR step 3)
         if result.step_type == StepType.RUN_FIDELITY_GATE and result.gate_attempt_id:
+            session.counters.fidelity_review_cycles_in_active_phase += 1
             self._record_gate_outcome(session, result, now)
 
         # Write journal entry (best-effort)
@@ -701,11 +715,12 @@ class StepOrchestrator:
         self,
         session: AutonomousSessionState,
         now: datetime,
-    ) -> Optional[OrchestrationResult]:
+    ):
         """Check for heartbeat staleness with grace window.
 
         Returns:
-            OrchestrationResult if stale, None if OK
+            None if not stale, True if stale but step is active (warning only),
+            OrchestrationResult if stale and should pause
         """
         if session.context.last_heartbeat_at is None:
             # No heartbeat yet - check if within grace period
@@ -727,22 +742,13 @@ class StepOrchestrator:
             session.context.last_heartbeat_at.isoformat() if session.context.last_heartbeat_at else "never",
         )
 
-        # If step is active, return warning; if idle, pause
+        # If step is active, include warning flag but do NOT pause/error (ADR line 662)
         if session.last_step_issued is not None:
             issued_delta = now - session.last_step_issued.issued_at
             step_threshold = timedelta(minutes=session.limits.step_stale_minutes)
             if issued_delta < step_threshold:
-                # Step is still active - return error
-                return OrchestrationResult(
-                    success=False,
-                    session=session,
-                    error_code=ERROR_HEARTBEAT_STALE,
-                    error_message=(
-                        "Heartbeat is stale but step is still active. "
-                        "Update heartbeat or wait for step to complete."
-                    ),
-                    should_persist=False,
-                )
+                # Step is still active - signal warning to caller, do not pause
+                return True
 
         # Pause due to heartbeat staleness
         return self._create_pause_result(
@@ -1068,9 +1074,6 @@ class StepOrchestrator:
         # Evaluate gate against policy
         should_pass, pause_reason = self._evaluate_gate_policy(session, evidence)
 
-        # Increment fidelity cycle counter on every consumed gate attempt (ADR Step 9)
-        session.counters.fidelity_review_cycles_in_active_phase += 1
-
         if should_pass:
             # Gate passed according to policy - clear evidence and continue
             session.pending_gate_evidence = None
@@ -1087,8 +1090,12 @@ class StepOrchestrator:
                 f"Verdict: {evidence.verdict.value}. Acknowledge to continue.",
             )
 
-        # Gate failed - check auto-retry setting
-        if session.stop_conditions.auto_retry_fidelity_gate:
+        # Gate failed - check auto-retry setting and cycle cap (ADR line 675)
+        if (
+            session.stop_conditions.auto_retry_fidelity_gate
+            and session.counters.fidelity_review_cycles_in_active_phase
+            < session.limits.max_fidelity_review_cycles_per_phase
+        ):
             # Create address_fidelity_feedback step for auto-retry cycle
             return self._create_fidelity_feedback_step(session, evidence, now)
         else:

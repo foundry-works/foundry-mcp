@@ -192,7 +192,8 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         # session lifecycle parameters (autonomy_sessions feature flag)
         session_id: Optional[str] = None,
         force: bool = False,
-        gate_ack: Optional[str] = None,
+        acknowledge_gate_review: Optional[bool] = None,
+        acknowledged_gate_attempt_id: Optional[str] = None,
         idempotency_key: Optional[str] = None,
         include_resume_context: bool = False,
         # session-start configuration parameters
@@ -272,7 +273,8 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
             # session lifecycle specific
             "session_id": session_id,
             "force": force,
-            "gate_ack": gate_ack,
+            "acknowledge_gate_review": acknowledge_gate_review,
+            "acknowledged_gate_attempt_id": acknowledged_gate_attempt_id,
             "idempotency_key": idempotency_key,
             "include_resume_context": include_resume_context,
             # session-start configuration

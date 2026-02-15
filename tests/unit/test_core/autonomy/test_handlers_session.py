@@ -576,13 +576,14 @@ class TestSessionResume:
         resp = _handle_session_resume(
             config=config,
             spec_id="test-spec-001",
-            gate_ack="wrong-gate-id",
+            acknowledge_gate_review=True,
+            acknowledged_gate_attempt_id="wrong-gate-id",
             workspace=str(workspace),
         )
         assert resp["success"] is False
 
     def test_resume_manual_gate_ack_correct(self, tmp_path):
-        """Correct gate_ack clears pending ack and resumes."""
+        """Correct gate acknowledgment clears pending ack and resumes."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
             _handle_session_pause,
@@ -614,7 +615,8 @@ class TestSessionResume:
         resp = _handle_session_resume(
             config=config,
             spec_id="test-spec-001",
-            gate_ack="gate-attempt-123",
+            acknowledge_gate_review=True,
+            acknowledged_gate_attempt_id="gate-attempt-123",
             workspace=str(workspace),
         )
         data = _assert_success(resp)
@@ -1164,8 +1166,8 @@ class TestSessionHeartbeat:
 class TestSessionReset:
     """Tests for _handle_session_reset."""
 
-    def test_reset_failed_to_paused(self, tmp_path):
-        """Resetting a failed session transitions to paused."""
+    def test_reset_failed_session(self, tmp_path):
+        """Resetting a failed session deletes it (ADR escape hatch)."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
             _handle_session_reset,
@@ -1188,16 +1190,30 @@ class TestSessionReset:
         session.counters.consecutive_errors = 5
         storage.save(session)
 
+        # Reset requires explicit session_id per ADR
         resp = _handle_session_reset(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config, session_id=session_id, workspace=str(workspace),
         )
         data = _assert_success(resp)
-        # Per ADR: reset deletes the session (escape hatch for corrupt state)
         assert data["result"] == "deleted"
         assert data["session_id"] == session_id
         assert data["spec_id"] == "test-spec-001"
         # Verify session is actually deleted from storage
         assert storage.load(session_id) is None
+
+    def test_reset_requires_session_id(self, tmp_path):
+        """Reset without session_id returns validation error."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_reset,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_reset(
+            config=config, workspace=str(workspace),
+        )
+        assert resp["success"] is False
 
     def test_reset_running_rejected(self, tmp_path):
         """Resetting a running session returns INVALID_STATE_TRANSITION."""
@@ -1209,12 +1225,13 @@ class TestSessionReset:
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
-        _handle_session_start(
+        resp_start = _handle_session_start(
             config=config, spec_id="test-spec-001", workspace=str(workspace),
         )
+        session_id = _assert_success(resp_start)["session_id"]
 
         resp = _handle_session_reset(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config, session_id=session_id, workspace=str(workspace),
         )
         assert resp["success"] is False
 
@@ -1229,15 +1246,17 @@ class TestSessionReset:
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
-        _handle_session_start(
+        resp_start = _handle_session_start(
             config=config, spec_id="test-spec-001", workspace=str(workspace),
         )
+        session_id = _assert_success(resp_start)["session_id"]
+
         _handle_session_pause(
             config=config, spec_id="test-spec-001", workspace=str(workspace),
         )
 
         resp = _handle_session_reset(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config, session_id=session_id, workspace=str(workspace),
         )
         assert resp["success"] is False
 

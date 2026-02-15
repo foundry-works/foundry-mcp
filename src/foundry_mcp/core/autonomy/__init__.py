@@ -89,6 +89,9 @@ from .write_lock import (
     make_write_lock_error_response,
     check_and_enforce_write_lock,
 )
+from .memory import (
+    AutonomyStorage,
+)
 from .spec_hash import (
     SpecFileMetadata,
     StructuralDiff,
@@ -168,6 +171,8 @@ __all__ = [
     "check_autonomy_write_lock",
     "make_write_lock_error_response",
     "check_and_enforce_write_lock",
+    # Storage
+    "AutonomyStorage",
     # Spec hash module
     "SpecFileMetadata",
     "StructuralDiff",

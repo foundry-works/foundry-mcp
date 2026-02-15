@@ -41,6 +41,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _TASK_DEFAULT_PAGE_SIZE,
     _TASK_MAX_PAGE_SIZE,
     _attach_meta,
+    _check_autonomy_write_lock,
     _load_spec_data,
     _metric,
     _metrics,
@@ -49,67 +50,6 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _resolve_specs_dir,
     _validation_error,
 )
-
-# Import write-lock helpers for autonomy session protection.
-# NOTE: The write_lock module is created in a parallel task. The import will work
-# once all tasks complete. The guard functions check if the module is available.
-try:
-    from foundry_mcp.core.autonomy.write_lock import (
-        check_autonomy_write_lock as _check_autonomy_write_lock_impl,
-    )
-    _WRITE_LOCK_AVAILABLE = True
-except ImportError:
-    _check_autonomy_write_lock_impl = None  # type: ignore[misc,assignment]
-    _WRITE_LOCK_AVAILABLE = False
-
-
-def _check_autonomy_write_lock(
-    spec_id: str,
-    workspace: Optional[str],
-    bypass_autonomy_lock: bool,
-    bypass_reason: Optional[str],
-    request_id: str,
-) -> Optional[dict]:
-    """Check autonomy write-lock and return error response if blocked.
-
-    Args:
-        spec_id: The spec ID being modified.
-        workspace: Optional workspace path.
-        bypass_autonomy_lock: If True, bypass the lock (requires bypass_reason).
-        bypass_reason: Reason for bypassing the lock.
-        request_id: Request ID for error response.
-
-    Returns:
-        None if operation is allowed, error response dict if blocked.
-    """
-    if not _WRITE_LOCK_AVAILABLE or _check_autonomy_write_lock_impl is None:
-        # Write-lock module not available; allow operation.
-        return None
-
-    from foundry_mcp.core.autonomy.write_lock import WriteLockStatus
-
-    result = _check_autonomy_write_lock_impl(
-        spec_id=spec_id,
-        workspace=workspace,
-        bypass_flag=bypass_autonomy_lock,
-        bypass_reason=bypass_reason,
-    )
-
-    if result.status == WriteLockStatus.LOCKED:
-        return asdict(error_response(
-            result.message or "Autonomy write lock is active for this spec",
-            error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
-            error_type=ErrorType.CONFLICT,
-            request_id=request_id,
-            details={
-                "session_id": result.session_id,
-                "session_status": result.session_status,
-                "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
-            },
-        ))
-
-    # ALLOWED or BYPASSED — operation can proceed
-    return None
 
 
 def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:
@@ -635,6 +575,8 @@ def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
     spec_id = payload.get("spec_id")
     task_id = payload.get("task_id")
     resolution = payload.get("resolution")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -662,6 +604,18 @@ def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:

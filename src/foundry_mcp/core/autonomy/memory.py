@@ -799,8 +799,20 @@ class AutonomyStorage:
 
         # Clean orphaned lock files
         for lock_path in self.locks_path.glob("*.lock"):
-            # Session locks: check if session exists
-            if not lock_path.name.startswith("spec_"):
+            if lock_path.name.startswith("spec_"):
+                # Spec locks: orphaned if no active pointer references this spec
+                # Extract spec_id from lock filename (spec_{spec_id}.lock)
+                spec_id = lock_path.stem[len("spec_"):]
+                if spec_id:
+                    pointer_path = self.index_path / f"{spec_id}.active"
+                    if not pointer_path.exists():
+                        try:
+                            lock_path.unlink()
+                            removed["locks"] += 1
+                        except OSError:
+                            pass
+            else:
+                # Session locks: check if session exists
                 session_id = lock_path.stem.replace(".lock", "")
                 session_path = self._get_session_path(session_id)
                 if not session_path.exists():
