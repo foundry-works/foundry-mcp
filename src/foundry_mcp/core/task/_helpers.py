@@ -38,3 +38,32 @@ def _get_phase_for_node(hierarchy: Dict[str, Any], node_id: str) -> Optional[str
         current_id = node.get("parent")
 
     return None
+
+
+def check_all_blocked(spec_data: Dict[str, Any]) -> bool:
+    """
+    Check if all remaining tasks are blocked.
+
+    This is a shared utility used by both batch_operations and the step orchestrator
+    to determine if autonomous execution should pause due to all tasks being blocked.
+
+    Args:
+        spec_data: Loaded spec data with hierarchy
+
+    Returns:
+        True if all pending tasks are blocked, False if any task can proceed
+    """
+    from foundry_mcp.core.task.queries import is_unblocked
+
+    hierarchy = spec_data.get("hierarchy", {})
+
+    for task_id, task_data in hierarchy.items():
+        if task_data.get("type") not in ("task", "subtask", "verify"):
+            continue
+        if task_data.get("status") != "pending":
+            continue
+        # If any task is unblocked, not all are blocked
+        if is_unblocked(spec_data, task_id, task_data):
+            return False
+
+    return True

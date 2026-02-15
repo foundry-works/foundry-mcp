@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.core.spec import load_spec, find_specs_directory
 from foundry_mcp.core.task import is_unblocked
+from foundry_mcp.core.task._helpers import check_all_blocked
 
 # Constants for batch operations
 DEFAULT_MAX_TASKS = 3
@@ -405,13 +406,6 @@ CHARS_PER_TOKEN = 3.0
 STALE_TASK_THRESHOLD_HOURS = 1.0
 """Hours before an in_progress task is considered stale."""
 
-# Autonomous mode guardrail constants
-MAX_CONSECUTIVE_ERRORS = 3
-"""Maximum consecutive errors before autonomous mode pauses."""
-
-CONTEXT_LIMIT_PERCENTAGE = 85.0
-"""Context usage percentage that triggers autonomous mode pause."""
-
 
 def _estimate_tokens(text: str) -> int:
     """
@@ -528,115 +522,6 @@ def _build_dependency_graph(
     }
 
 
-def _check_all_blocked(spec_data: Dict[str, Any]) -> bool:
-    """
-    Check if all remaining tasks are blocked.
-
-    Args:
-        spec_data: Loaded spec data
-
-    Returns:
-        True if all pending tasks are blocked
-    """
-    from foundry_mcp.core.task import is_unblocked
-
-    hierarchy = spec_data.get("hierarchy", {})
-
-    for task_id, task_data in hierarchy.items():
-        if task_data.get("type") not in ("task", "subtask", "verify"):
-            continue
-        if task_data.get("status") != "pending":
-            continue
-        # If any task is unblocked, not all are blocked
-        if is_unblocked(spec_data, task_id, task_data):
-            return False
-
-    return True
-
-
-def _check_autonomous_limits(
-    autonomous_session: Optional[Any] = None,
-    session_stats: Optional[Any] = None,
-    session_limits: Optional[Any] = None,
-    spec_data: Optional[Dict[str, Any]] = None,
-    max_errors: int = MAX_CONSECUTIVE_ERRORS,
-    context_limit_pct: float = CONTEXT_LIMIT_PERCENTAGE,
-) -> Optional[str]:
-    """
-    Check if autonomous mode should pause due to resource limits.
-
-    This helper monitors context usage, error rates, and blocking states
-    to determine if autonomous execution should pause for user review.
-
-    Args:
-        autonomous_session: AutonomousSession instance (from cli.context)
-        session_stats: SessionStats instance with error/consultation counts
-        session_limits: SessionLimits instance with max thresholds
-        spec_data: Loaded spec data for checking blocked tasks
-        max_errors: Maximum consecutive errors before pause (default 3)
-        context_limit_pct: Context usage % that triggers pause (default 85.0)
-
-    Returns:
-        pause_reason string if limits hit, None if OK to continue:
-        - "error": Too many consecutive errors
-        - "context": Context/token budget nearing limit
-        - "blocked": All remaining tasks are blocked
-        - "limit": Session consultation/token limit reached
-        - None: OK to continue autonomous execution
-
-    Note:
-        Updates autonomous_session.pause_reason in-place when limits are hit.
-        The caller should check the return value and act accordingly.
-    """
-    # Early return if no autonomous session
-    if autonomous_session is None:
-        return None
-
-    # Check if already paused
-    if autonomous_session.pause_reason is not None:
-        return autonomous_session.pause_reason
-
-    # Check if autonomous mode is not enabled
-    if not autonomous_session.enabled:
-        return None
-
-    pause_reason: Optional[str] = None
-
-    # 1. Check error rate (consecutive errors)
-    if session_stats is not None:
-        errors_encountered = getattr(session_stats, "errors_encountered", 0)
-        if errors_encountered >= max_errors:
-            pause_reason = "error"
-
-    # 2. Check context/token usage
-    if pause_reason is None and session_stats is not None and session_limits is not None:
-        max_tokens = getattr(session_limits, "max_context_tokens", 0)
-        used_tokens = getattr(session_stats, "estimated_tokens_used", 0)
-
-        if max_tokens > 0:
-            usage_pct = (used_tokens / max_tokens) * 100
-            if usage_pct >= context_limit_pct:
-                pause_reason = "context"
-
-        # Also check consultation limit
-        max_consultations = getattr(session_limits, "max_consultations", 0)
-        consultation_count = getattr(session_stats, "consultation_count", 0)
-
-        if max_consultations > 0 and consultation_count >= max_consultations:
-            pause_reason = "limit"
-
-    # 3. Check if all remaining tasks are blocked
-    if pause_reason is None and spec_data is not None:
-        if _check_all_blocked(spec_data):
-            pause_reason = "blocked"
-
-    # Update pause_reason on the session if limits hit
-    if pause_reason is not None:
-        autonomous_session.pause_reason = pause_reason
-
-    return pause_reason
-
-
 def prepare_batch_context(
     spec_id: str,
     max_tasks: int = DEFAULT_MAX_TASKS,
@@ -695,7 +580,7 @@ def prepare_batch_context(
     spec_complete = pending_count == 0 and completed_count > 0
 
     # Check if all remaining are blocked
-    all_blocked = _check_all_blocked(spec_data) if not spec_complete else False
+    all_blocked = check_all_blocked(spec_data) if not spec_complete else False
 
     if not tasks:
         return {
@@ -1187,10 +1072,6 @@ __all__ = [
     "MAX_RETRY_COUNT",
     "DEFAULT_TOKEN_BUDGET",
     "STALE_TASK_THRESHOLD_HOURS",
-    # Autonomous mode guardrails
-    "MAX_CONSECUTIVE_ERRORS",
-    "CONTEXT_LIMIT_PERCENTAGE",
-    "_check_autonomous_limits",
     # Private helpers exposed for testing
     "_get_active_phases",
     "_paths_conflict",
@@ -1198,5 +1079,5 @@ __all__ = [
     "_has_direct_dependency",
     "_estimate_tokens",
     "_get_stale_in_progress_tasks",
-    "_check_all_blocked",
+    # check_all_blocked is now in core/task/_helpers.py
 ]

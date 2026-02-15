@@ -1358,6 +1358,46 @@ class ResearchConfig:
         return base_research / ".archive"
 
 
+@dataclass
+class AutonomySecurityConfig:
+    """Configuration for autonomy session security controls.
+
+    These settings control hardening behaviors for autonomous execution,
+    including write-lock bypass restrictions and authorization controls.
+
+    Attributes:
+        allow_lock_bypass: Whether bypass_autonomy_lock=true is permitted.
+            When False (default), bypass attempts are rejected regardless of
+            caller input. This provides fail-closed protection against
+            unauthorized lock bypasses.
+        allow_gate_waiver: Whether privileged gate waiver is permitted.
+            When False (default), waiver attempts are rejected regardless of
+            role. This provides fail-closed protection against gate bypasses.
+            Even when True, only maintainer role can waive gates.
+        enforce_required_phase_gates: Whether required phase gates are enforced.
+            When True (default), transitions are blocked if required gates
+            are not satisfied. This provides fail-closed protection against
+            skipping quality checkpoints.
+        role: Server role for authorization decisions. Determines what
+            actions are allowed. Can be overridden by FOUNDRY_MCP_ROLE env var.
+            Default: "observer" (fail-closed to read-only).
+        rate_limit_max_consecutive_denials: Maximum consecutive authorization
+            denials before rate limiting kicks in. Default: 10.
+        rate_limit_denial_window_seconds: Sliding window in seconds for
+            counting consecutive denials. Default: 60.
+        rate_limit_retry_after_seconds: Seconds to wait before allowing
+            retries after rate limit is triggered. Default: 5.
+    """
+
+    allow_lock_bypass: bool = False
+    allow_gate_waiver: bool = False
+    enforce_required_phase_gates: bool = True
+    role: str = "observer"
+    rate_limit_max_consecutive_denials: int = 10
+    rate_limit_denial_window_seconds: int = 60
+    rate_limit_retry_after_seconds: int = 5
+
+
 _VALID_COMMIT_CADENCE = {"manual", "task", "phase"}
 
 
@@ -1461,8 +1501,14 @@ class ServerConfig:
     # Research workflows configuration
     research: ResearchConfig = field(default_factory=ResearchConfig)
 
+    # Autonomy security configuration
+    autonomy_security: AutonomySecurityConfig = field(default_factory=AutonomySecurityConfig)
+
     # Tool registration control
     disabled_tools: List[str] = field(default_factory=list)
+
+    # Feature flags for enabling/disabling experimental features
+    feature_flags: Dict[str, bool] = field(default_factory=dict)
 
     @classmethod
     def from_env(cls, config_file: Optional[str] = None) -> "ServerConfig":
@@ -1615,6 +1661,16 @@ class ServerConfig:
             # Research workflows settings
             if "research" in data:
                 self.research = ResearchConfig.from_toml_dict(data["research"])
+
+            # Autonomy security settings
+            if "autonomy_security" in data:
+                sec_data = data["autonomy_security"]
+                self.autonomy_security = AutonomySecurityConfig(
+                    allow_lock_bypass=sec_data.get("allow_lock_bypass", False),
+                    allow_gate_waiver=sec_data.get("allow_gate_waiver", False),
+                    enforce_required_phase_gates=sec_data.get("enforce_required_phase_gates", True),
+                    role=sec_data.get("role", "observer"),
+                )
 
         except Exception as e:
             logger.error(f"Error loading config file {path}: {e}")

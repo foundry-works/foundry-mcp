@@ -12,7 +12,6 @@ Note: Legacy per-tool-name MCP endpoints are intentionally not registered.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -20,6 +19,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig, get_config
+from foundry_mcp.core.authorization import initialize_role_from_config
 from foundry_mcp.core.observability import audit_log, get_observability_manager
 from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
@@ -207,6 +207,8 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
         config = get_config()
 
     config.setup_logging()
+    initialized_role = initialize_role_from_config(config.autonomy_security.role)
+    logger.info("Authorization role initialized: %s", initialized_role)
 
     _init_observability(config)
     _init_error_collection(config)

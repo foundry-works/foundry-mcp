@@ -1,0 +1,1980 @@
+"""Step orchestration engine for autonomous spec execution.
+
+This module implements the 18-step orchestration rules defined in ADR-002
+for driving autonomous task progression with replay-safe semantics.
+
+The orchestrator handles:
+- Replay detection for exactly-once semantics
+- Feedback validation and step identity verification
+- Spec integrity validation with mtime optimization
+- Pause guards (context, error, task limits)
+- Staleness detection (step and heartbeat)
+- Fidelity gate cycles and phase completion
+- Step emission for all 6 step types
+
+Usage:
+    from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
+
+    orchestrator = StepOrchestrator(storage, spec_loader)
+    result = orchestrator.compute_next_step(session, last_step_result)
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+from ulid import ULID
+
+from foundry_mcp.core.autonomy.context_tracker import ContextTracker
+from foundry_mcp.core.autonomy.memory import AutonomyStorage
+from foundry_mcp.core.autonomy.models import (
+    AutonomousSessionState,
+    FailureReason,
+    GatePolicy,
+    GateVerdict,
+    LastStepIssued,
+    LastStepResult,
+    NextStep,
+    PauseReason,
+    PendingGateEvidence,
+    PendingVerificationReceipt,
+    PhaseGateRecord,
+    PhaseGateStatus,
+    SessionStatus,
+    SessionStepResponseData,
+    StepInstruction,
+    StepOutcome,
+    StepType,
+    VerificationReceipt,
+)
+from foundry_mcp.core.autonomy.spec_hash import (
+    compute_spec_structure_hash,
+    get_spec_file_metadata,
+)
+from foundry_mcp.core.autonomy.server_secret import (
+    compute_integrity_checksum,
+    verify_integrity_checksum,
+)
+from foundry_mcp.core.spec import resolve_spec_file
+from foundry_mcp.core.task._helpers import check_all_blocked
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Error Code Constants (from ADR)
+# =============================================================================
+
+ERROR_STEP_RESULT_REQUIRED = "STEP_RESULT_REQUIRED"
+ERROR_STEP_MISMATCH = "STEP_MISMATCH"
+ERROR_INVALID_GATE_EVIDENCE = "INVALID_GATE_EVIDENCE"
+ERROR_NO_ACTIVE_SESSION = "NO_ACTIVE_SESSION"
+ERROR_AMBIGUOUS_ACTIVE_SESSION = "AMBIGUOUS_ACTIVE_SESSION"
+ERROR_SESSION_UNRECOVERABLE = "SESSION_UNRECOVERABLE"
+ERROR_SPEC_REBASE_REQUIRED = "SPEC_REBASE_REQUIRED"
+ERROR_HEARTBEAT_STALE = "HEARTBEAT_STALE"
+ERROR_STEP_STALE = "STEP_STALE"
+ERROR_ALL_TASKS_BLOCKED = "ALL_TASKS_BLOCKED"
+ERROR_GATE_BLOCKED = "GATE_BLOCKED"
+ERROR_REQUIRED_GATE_UNSATISFIED = "REQUIRED_GATE_UNSATISFIED"
+ERROR_VERIFICATION_RECEIPT_MISSING = "VERIFICATION_RECEIPT_MISSING"
+ERROR_VERIFICATION_RECEIPT_INVALID = "VERIFICATION_RECEIPT_INVALID"
+ERROR_GATE_INTEGRITY_CHECKSUM = "GATE_INTEGRITY_CHECKSUM"
+ERROR_GATE_AUDIT_FAILURE = "GATE_AUDIT_FAILURE"
+
+
+# =============================================================================
+# Orchestration Result Types
+# =============================================================================
+
+
+@dataclass
+class OrchestrationResult:
+    """Result of computing the next step.
+
+    Attributes:
+        success: Whether the orchestration succeeded
+        session: Updated session state (may be modified even on error)
+        next_step: The next step to execute (None if terminal/paused)
+        error_code: Error code if success is False
+        error_message: Human-readable error message
+        should_persist: Whether session should be persisted before responding
+        replay_response: Cached response for replay (if applicable)
+    """
+
+    success: bool
+    session: AutonomousSessionState
+    next_step: Optional[NextStep] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    should_persist: bool = True
+    replay_response: Optional[Dict[str, Any]] = None
+    warnings: Optional[Dict[str, Any]] = None
+
+
+# =============================================================================
+# Step Orchestrator
+# =============================================================================
+
+
+class StepOrchestrator:
+    """Orchestrates autonomous session step progression.
+
+    Implements the 18-step priority sequence from ADR-002:
+    0. Replay detection - return cached response if step already processed
+    1. Validate feedback - require last_step_result on non-initial calls
+    2. Validate step identity - check step ID/type/task-or-phase binding
+    3. Record step outcome - mark task complete, increment errors, record gate
+    4. Validate spec integrity - mtime fast-path, re-hash at phase boundaries
+    5. Check terminal states - return terminal status with next_step=null
+    6. Enforce step staleness - hard backstop for disappeared callers
+    7. Enforce heartbeat staleness - cooperative signal with grace window
+    8. Enforce pause guards - context_limit, error_threshold, task_limit
+    9. Enforce fidelity-cycle stop heuristic - prevent spinning
+    10. Check all-blocked - pause if no unblocked work
+    11. Execute verification - if phase tasks complete and verifications pending
+    12. Run fidelity gate - if verifications complete and gate pending
+    13. Gate fails policy - pause or address_fidelity_feedback (auto-retry)
+    14. Fidelity feedback completed - run gate retry
+    15. Gate passed + stop_on_phase_completion - pause (phase_complete)
+    16. Gate passed + next task exists - implement_task
+    17. No remaining tasks - complete_spec, transition to completed
+    """
+
+    def __init__(
+        self,
+        storage: AutonomyStorage,
+        spec_loader: Any,
+        workspace_path: Optional[Path] = None,
+    ) -> None:
+        """Initialize the step orchestrator.
+
+        Args:
+            storage: AutonomyStorage instance for session persistence
+            spec_loader: Function or object to load spec data
+            workspace_path: Path to workspace for spec file resolution
+        """
+        self.storage = storage
+        self.spec_loader = spec_loader
+        self.workspace_path = workspace_path or Path.cwd()
+        # Cache: (spec_id, mtime, file_size) -> spec_data
+        self._spec_cache: Optional[Tuple[str, float, int, Dict[str, Any]]] = None
+        self._context_tracker = ContextTracker(self.workspace_path)
+
+    def compute_next_step(
+        self,
+        session: AutonomousSessionState,
+        last_step_result: Optional[LastStepResult] = None,
+        context_usage_pct: Optional[int] = None,
+        heartbeat_at: Optional[datetime] = None,
+    ) -> OrchestrationResult:
+        """Compute the next step for an autonomous session.
+
+        This is the main entry point for step orchestration. It implements
+        the full 18-step priority sequence.
+
+        Args:
+            session: Current session state
+            last_step_result: Result of the previous step (required on non-initial calls)
+            context_usage_pct: Caller-reported context usage percentage
+            heartbeat_at: Timestamp for heartbeat update
+
+        Returns:
+            OrchestrationResult with next step or error
+        """
+        now = datetime.now(timezone.utc)
+
+        # Update context usage via the tracker (Tier 1/2/3 fallthrough)
+        effective_pct, source = self._context_tracker.get_effective_context_pct(
+            session, context_usage_pct, now
+        )
+        session.context.context_usage_pct = effective_pct
+        session.context.context_source = source
+        self._context_tracker.update_step_counter(session)
+
+        if heartbeat_at is not None:
+            session.context.last_heartbeat_at = heartbeat_at
+
+        # =================================================================
+        # Step 0: Replay Detection
+        # =================================================================
+        if last_step_result is not None and session.last_step_issued is not None:
+            if last_step_result.step_id == session.last_step_issued.step_id:
+                # Check if we already processed this step
+                if session.last_issued_response is not None:
+                    logger.info(
+                        "Replay detected: returning cached response for step %s",
+                        last_step_result.step_id,
+                    )
+                    return OrchestrationResult(
+                        success=True,
+                        session=session,
+                        next_step=None,  # Response will use cached response
+                        replay_response=session.last_issued_response,
+                        should_persist=False,
+                    )
+
+        # =================================================================
+        # Step 1: Validate Feedback
+        # =================================================================
+        if session.last_step_issued is not None and last_step_result is None:
+            logger.warning("STEP_RESULT_REQUIRED: non-initial call without feedback")
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_STEP_RESULT_REQUIRED,
+                error_message=(
+                    f"last_step_result is required on non-initial calls. "
+                    f"Previous step: {session.last_step_issued.step_id}"
+                ),
+                should_persist=False,
+            )
+
+        # =================================================================
+        # Step 2: Validate Step Identity
+        # =================================================================
+        if last_step_result is not None and session.last_step_issued is not None:
+            mismatch_reason = self._validate_step_identity(
+                session.last_step_issued, last_step_result
+            )
+            if mismatch_reason:
+                logger.warning("STEP_MISMATCH: %s", mismatch_reason)
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_STEP_MISMATCH,
+                    error_message=mismatch_reason,
+                    should_persist=False,
+                )
+
+        # Validate gate evidence for fidelity gate steps
+        if last_step_result is not None and last_step_result.step_type == StepType.RUN_FIDELITY_GATE:
+            gate_error = self._validate_gate_evidence(session, last_step_result)
+            if gate_error:
+                logger.warning("INVALID_GATE_EVIDENCE: %s", gate_error)
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_INVALID_GATE_EVIDENCE,
+                    error_message=gate_error,
+                    should_persist=False,
+                )
+
+        # Validate verification receipt for EXECUTE_VERIFICATION steps
+        if last_step_result is not None and last_step_result.step_type == StepType.EXECUTE_VERIFICATION:
+            receipt_error = self._validate_verification_receipt(session, last_step_result)
+            if receipt_error:
+                error_code = ERROR_VERIFICATION_RECEIPT_MISSING
+                if last_step_result.verification_receipt is not None:
+                    error_code = ERROR_VERIFICATION_RECEIPT_INVALID
+                logger.warning("%s: %s", error_code, receipt_error)
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=error_code,
+                    error_message=receipt_error,
+                    should_persist=False,
+                )
+
+        # =================================================================
+        # Step 3: Record Step Outcome
+        # =================================================================
+        if last_step_result is not None:
+            # Clear cached response since we're processing new feedback
+            session.last_issued_response = None
+            self._record_step_outcome(session, last_step_result, now)
+
+        # =================================================================
+        # Step 4: Validate Spec Integrity
+        # =================================================================
+        spec_data, integrity_error = self._validate_spec_integrity(session, now)
+        if integrity_error:
+            session.status = SessionStatus.FAILED
+            session.failure_reason = FailureReason.SPEC_STRUCTURE_CHANGED
+            session.updated_at = now
+            session.state_version += 1
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_SPEC_REBASE_REQUIRED,
+                error_message=integrity_error,
+                should_persist=True,
+            )
+
+        # =================================================================
+        # Step 5: Check Terminal States
+        # Per ADR: only COMPLETED and ENDED are truly terminal.
+        # FAILED can transition to running via resume(force=true) or rebase.
+        # =================================================================
+        if session.status in (SessionStatus.COMPLETED, SessionStatus.ENDED):
+            logger.info("Session %s is in terminal state: %s", session.id, session.status)
+            return OrchestrationResult(
+                success=True,
+                session=session,
+                next_step=None,
+                should_persist=False,
+            )
+
+        # =================================================================
+        # Step 6: Enforce Step Staleness (Hard Backstop)
+        # =================================================================
+        if session.last_step_issued is not None:
+            step_stale_threshold = timedelta(minutes=session.limits.step_stale_minutes)
+            if now - session.last_step_issued.issued_at > step_stale_threshold:
+                logger.warning(
+                    "Step staleness detected: step %s issued at %s",
+                    session.last_step_issued.step_id,
+                    session.last_step_issued.issued_at.isoformat(),
+                )
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_STEP_STALE,
+                    error_message=(
+                        f"Step {session.last_step_issued.step_id} is stale "
+                        f"(issued {session.limits.step_stale_minutes}+ minutes ago). "
+                        f"Session may need to be reset."
+                    ),
+                    should_persist=False,
+                )
+
+        # =================================================================
+        # Step 7: Enforce Heartbeat Staleness
+        # =================================================================
+        heartbeat_stale_warning = False
+        heartbeat_result = self._check_heartbeat_staleness(session, now)
+        if isinstance(heartbeat_result, OrchestrationResult):
+            return heartbeat_result
+        elif heartbeat_result is True:
+            # Heartbeat is stale but step is active — ADR: warn, don't pause
+            heartbeat_stale_warning = True
+
+        # =================================================================
+        # Step 8: Enforce Pause Guards
+        # =================================================================
+        pause_guard_result = self._check_pause_guards(session)
+        if pause_guard_result:
+            return pause_guard_result
+
+        # =================================================================
+        # Step 9: Enforce Fidelity-Cycle Stop Heuristic
+        # =================================================================
+        if (
+            session.counters.fidelity_review_cycles_in_active_phase
+            >= session.limits.max_fidelity_review_cycles_per_phase
+        ):
+            logger.warning(
+                "Fidelity cycle limit reached: %d cycles in phase %s",
+                session.counters.fidelity_review_cycles_in_active_phase,
+                session.active_phase_id,
+            )
+            return self._create_pause_result(
+                session,
+                PauseReason.FIDELITY_CYCLE_LIMIT,
+                now,
+                (
+                    f"Max fidelity review cycles ({session.limits.max_fidelity_review_cycles_per_phase}) "
+                    f"reached in phase {session.active_phase_id}. Manual review required."
+                ),
+            )
+
+        # =================================================================
+        # Step 10: Check All-Blocked
+        # =================================================================
+        all_blocked_result = self._check_all_blocked(session, spec_data)
+        if all_blocked_result:
+            return all_blocked_result
+
+        # =================================================================
+        # Steps 11-17: Determine Next Action Based on Phase State
+        # =================================================================
+        next_step_result = self._determine_next_step(session, spec_data, now)
+
+        # Propagate heartbeat_stale_warning into result details (ADR line 662)
+        if heartbeat_stale_warning:
+            if next_step_result.warnings is None:
+                next_step_result.warnings = {}
+            next_step_result.warnings["heartbeat_stale_warning"] = True
+
+        # Cache the response for replay-safe exactly-once semantics
+        if next_step_result.success and next_step_result.next_step is not None:
+            # Compute gate invariant fields for observability
+            required_phase_gates: list[str] = []
+            satisfied_gates: list[str] = []
+            missing_required_gates: list[str] = []
+
+            for phase_id, gate_record in session.phase_gates.items():
+                if gate_record.required:
+                    required_phase_gates.append(phase_id)
+                    if gate_record.status in (PhaseGateStatus.PASSED, PhaseGateStatus.WAIVED):
+                        satisfied_gates.append(phase_id)
+                    elif gate_record.status in (PhaseGateStatus.PENDING, PhaseGateStatus.FAILED):
+                        missing_required_gates.append(phase_id)
+
+            response_data = SessionStepResponseData(
+                session_id=session.id,
+                status=session.status,
+                state_version=session.state_version,
+                next_step=next_step_result.next_step,
+                required_phase_gates=required_phase_gates if required_phase_gates else None,
+                satisfied_gates=satisfied_gates if satisfied_gates else None,
+                missing_required_gates=missing_required_gates if missing_required_gates else None,
+            )
+            session.last_issued_response = response_data.model_dump(
+                mode="json", by_alias=True
+            )
+
+        return next_step_result
+
+    def _validate_step_identity(
+        self,
+        last_issued: LastStepIssued,
+        result: LastStepResult,
+    ) -> Optional[str]:
+        """Validate that the reported step matches the last issued step.
+
+        Returns:
+            None if valid, error message if mismatch
+        """
+        if result.step_id != last_issued.step_id:
+            return (
+                f"Step ID mismatch: expected {last_issued.step_id}, "
+                f"got {result.step_id}"
+            )
+
+        if result.step_type != last_issued.type:
+            return (
+                f"Step type mismatch: expected {last_issued.type.value}, "
+                f"got {result.step_type.value}"
+            )
+
+        # Validate task/phase binding
+        if last_issued.type in (StepType.IMPLEMENT_TASK, StepType.EXECUTE_VERIFICATION):
+            if result.task_id != last_issued.task_id:
+                return (
+                    f"Task ID mismatch for step type {last_issued.type.value}: "
+                    f"expected {last_issued.task_id}, got {result.task_id}"
+                )
+
+        if last_issued.type in (
+            StepType.RUN_FIDELITY_GATE,
+            StepType.ADDRESS_FIDELITY_FEEDBACK,
+        ):
+            if result.phase_id != last_issued.phase_id:
+                return (
+                    f"Phase ID mismatch for step type {last_issued.type.value}: "
+                    f"expected {last_issued.phase_id}, got {result.phase_id}"
+                )
+
+        return None
+
+    def _validate_gate_evidence(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+    ) -> Optional[str]:
+        """Validate gate attempt ID against pending evidence.
+
+        Checks session/phase/step binding to ensure the gate attempt is valid
+        and not stale.
+
+        Returns:
+            None if valid, error message if invalid
+        """
+        if not result.gate_attempt_id:
+            return (
+                "gate_attempt_id is required for RUN_FIDELITY_GATE step results. "
+                "Include the gate_attempt_id from the issued step in last_step_result."
+            )
+
+        evidence = session.pending_gate_evidence
+        if not evidence:
+            return (
+                f"No pending gate evidence found for gate_attempt_id {result.gate_attempt_id}. "
+                f"The gate evidence may have already been consumed or was never created."
+            )
+
+        # Validate gate_attempt_id matches
+        if result.gate_attempt_id != evidence.gate_attempt_id:
+            return (
+                f"Gate attempt ID mismatch: expected {evidence.gate_attempt_id}, "
+                f"got {result.gate_attempt_id}"
+            )
+
+        # Validate step binding
+        if session.last_step_issued and result.step_id != evidence.step_id:
+            return (
+                f"Gate evidence step binding mismatch: evidence bound to step {evidence.step_id}, "
+                f"but result is for step {result.step_id}"
+            )
+
+        # Validate phase binding
+        if result.phase_id and result.phase_id != evidence.phase_id:
+            return (
+                f"Gate evidence phase binding mismatch: evidence bound to phase {evidence.phase_id}, "
+                f"but result is for phase {result.phase_id}"
+            )
+
+        # Validate integrity checksum (P1.3)
+        if evidence.integrity_checksum:
+            if not verify_integrity_checksum(
+                evidence.gate_attempt_id,
+                evidence.step_id,
+                evidence.phase_id,
+                evidence.verdict.value,
+                evidence.integrity_checksum,
+            ):
+                logger.warning(
+                    "Gate evidence integrity checksum mismatch for gate_attempt_id %s",
+                    evidence.gate_attempt_id,
+                )
+                return (
+                    f"Gate evidence integrity checksum verification failed. "
+                    f"The evidence may have been tampered with or the server secret was rotated. "
+                    f"Gate attempt ID: {evidence.gate_attempt_id}"
+                )
+
+        return None
+
+    def _validate_verification_receipt(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+    ) -> Optional[str]:
+        """Validate verification receipt for EXECUTE_VERIFICATION steps.
+
+        Per P1.2: outcome='success' requires a valid receipt with matching
+        command hash, exit code, and output digest. Missing or invalid
+        receipts yield deterministic validation errors with recovery guidance.
+
+        Args:
+            session: Current session state
+            result: Step result being reported
+
+        Returns:
+            None if valid, error message if validation fails
+        """
+        # Only validate for EXECUTE_VERIFICATION steps with outcome='success'
+        if result.step_type != StepType.EXECUTE_VERIFICATION:
+            return None
+
+        if result.outcome != StepOutcome.SUCCESS:
+            return None
+
+        # Check for pending receipt data
+        pending = session.pending_verification_receipt
+        if not pending:
+            logger.warning(
+                "VERIFICATION_RECEIPT_MISSING: no pending receipt for step %s",
+                result.step_id,
+            )
+            return (
+                f"Verification receipt required for execute_verification step with outcome='success'. "
+                f"No pending receipt found for step {result.step_id}. "
+                f"This may indicate the step was not properly issued by the orchestrator."
+            )
+
+        # Validate step binding
+        if result.step_id != pending.step_id:
+            return (
+                f"Verification receipt step mismatch: expected step {pending.step_id}, "
+                f"got step {result.step_id}"
+            )
+
+        # Check receipt presence
+        receipt = result.verification_receipt
+        if not receipt:
+            logger.warning(
+                "VERIFICATION_RECEIPT_MISSING: step %s reported success without receipt",
+                result.step_id,
+            )
+            return (
+                f"Verification receipt is required when outcome='success' for execute_verification steps. "
+                f"Include verification_receipt with command_hash, exit_code, and output_digest in last_step_result."
+            )
+
+        # Validate step binding in receipt
+        if receipt.step_id != result.step_id:
+            return (
+                f"Verification receipt step_id mismatch: expected {result.step_id}, "
+                f"got {receipt.step_id}"
+            )
+
+        # Validate command hash matches expected
+        if receipt.command_hash != pending.expected_command_hash:
+            return (
+                f"Verification receipt command_hash mismatch: "
+                f"expected {pending.expected_command_hash[:16]}..., "
+                f"got {receipt.command_hash[:16]}.... "
+                f"The verification command may have been modified or a different verification was run."
+            )
+
+        logger.info(
+            "Verification receipt validated for step %s: command_hash=%s, exit_code=%d",
+            result.step_id,
+            receipt.command_hash[:16],
+            receipt.exit_code,
+        )
+
+        # Clear pending receipt after successful validation
+        session.pending_verification_receipt = None
+
+        return None
+
+    def _record_step_outcome(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+        now: datetime,
+    ) -> None:
+        """Record the outcome of a step execution.
+
+        Updates counters, completed tasks, and phase gates based on outcome.
+        Gate failures do NOT increment consecutive_errors (per ADR-002).
+        """
+        # Update counters - gate steps do not affect consecutive_errors at all
+        is_gate_step = result.step_type in (
+            StepType.RUN_FIDELITY_GATE,
+            StepType.ADDRESS_FIDELITY_FEEDBACK,
+        )
+        if not is_gate_step:
+            if result.outcome == StepOutcome.FAILURE:
+                session.counters.consecutive_errors += 1
+            elif result.outcome == StepOutcome.SUCCESS:
+                session.counters.consecutive_errors = 0
+
+        # Record task completion
+        if (
+            result.step_type in (StepType.IMPLEMENT_TASK, StepType.EXECUTE_VERIFICATION)
+            and result.outcome == StepOutcome.SUCCESS
+            and result.task_id
+        ):
+            if result.task_id not in session.completed_task_ids:
+                session.completed_task_ids.append(result.task_id)
+                session.counters.tasks_completed += 1
+
+        # Record gate result and increment fidelity cycle counter (ADR step 3)
+        if result.step_type == StepType.RUN_FIDELITY_GATE and result.gate_attempt_id:
+            session.counters.fidelity_review_cycles_in_active_phase += 1
+            self._record_gate_outcome(session, result, now)
+
+        # Write journal entry (best-effort)
+        self._write_step_journal(session, result)
+
+        session.updated_at = now
+
+    def _record_gate_outcome(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+        now: datetime,
+    ) -> None:
+        """Record fidelity gate evaluation outcome.
+
+        Per ADR-002 section 4: the caller reports outcome="success" to indicate
+        the review ran successfully. The gate verdict and pass/fail determination
+        come from pending_gate_evidence.verdict + session gate_policy, NOT from
+        the step outcome. A step with outcome="success" and verdict="fail" should
+        still record the gate as failed.
+        """
+        if not result.phase_id:
+            return
+
+        gate_record = session.phase_gates.get(result.phase_id)
+        if not gate_record:
+            return
+
+        # Derive verdict from pending_gate_evidence, not step outcome
+        evidence = session.pending_gate_evidence
+        if evidence and evidence.phase_id == result.phase_id:
+            gate_record.verdict = evidence.verdict
+            # Evaluate pass/fail using gate policy
+            should_pass, _ = self._evaluate_gate_policy(session, evidence)
+            if should_pass:
+                gate_record.status = PhaseGateStatus.PASSED
+            else:
+                gate_record.status = PhaseGateStatus.FAILED
+        elif result.outcome == StepOutcome.FAILURE:
+            # Fallback: step itself failed (review couldn't run)
+            gate_record.status = PhaseGateStatus.FAILED
+            gate_record.verdict = GateVerdict.FAIL
+
+        gate_record.evaluated_at = now
+        gate_record.gate_attempt_id = result.gate_attempt_id
+
+    def _write_step_journal(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+    ) -> None:
+        """Write journal entry for step outcome (best-effort).
+
+        Uses the existing journal system (add_journal_entry + save_spec)
+        to persist step outcomes with files_touched and notes.
+        """
+        try:
+            from foundry_mcp.core.journal import add_journal_entry
+            from foundry_mcp.core.spec import load_spec, save_spec
+
+            outcome_str = result.outcome.value if result.outcome else "unknown"
+            step_type_str = result.step_type.value if result.step_type else "unknown"
+
+            content = f"Step {result.step_id} ({step_type_str}) completed with outcome: {outcome_str}"
+            if result.note:
+                content += f"\n\nNote: {result.note}"
+            if result.files_touched:
+                content += f"\n\nFiles touched: {', '.join(result.files_touched)}"
+
+            logger.info(
+                "Step outcome: session=%s step=%s type=%s outcome=%s",
+                session.id,
+                result.step_id,
+                step_type_str,
+                outcome_str,
+            )
+
+            # Write to spec journal via the standard journal system
+            specs_dir = self.workspace_path / "specs"
+            spec_data = load_spec(session.spec_id, specs_dir)
+            if spec_data is not None:
+                add_journal_entry(
+                    spec_data,
+                    title=f"Step {step_type_str}: {outcome_str}",
+                    content=content,
+                    entry_type="step",
+                    task_id=result.task_id,
+                    author="autonomy",
+                    metadata={
+                        "session_id": session.id,
+                        "step_id": result.step_id,
+                        "step_type": step_type_str,
+                        "outcome": outcome_str,
+                        "files_touched": result.files_touched or [],
+                    },
+                )
+                save_spec(session.spec_id, spec_data, specs_dir)
+            else:
+                logger.debug("Spec not found for step journal: %s", session.spec_id)
+
+        except Exception as e:
+            logger.debug("Failed to write step journal: %s", e)
+
+    def _validate_spec_integrity(
+        self,
+        session: AutonomousSessionState,
+        now: datetime,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Validate spec integrity with mtime optimization.
+
+        Returns:
+            Tuple of (spec_data, error_message). spec_data is None on error.
+        """
+        try:
+            # Find spec file
+            spec_path = self._find_spec_path(session.spec_id)
+            if not spec_path:
+                return None, f"Spec not found: {session.spec_id}"
+
+            # Get current file metadata
+            current_metadata = get_spec_file_metadata(spec_path)
+            if current_metadata is None:
+                return None, f"Could not read spec file metadata: {session.spec_id}"
+
+            # Fast path: mtime optimization - skip re-hash if unchanged
+            needs_rehash = True
+            if (
+                session.spec_file_mtime == current_metadata.mtime
+                and session.spec_file_size == current_metadata.file_size
+            ):
+                needs_rehash = False
+                logger.debug("Spec mtime unchanged, skipping re-hash")
+
+            # Re-hash at phase boundaries or if mtime changed
+            if needs_rehash or session.active_phase_id is None:
+                spec_data = self._load_spec_file(spec_path)
+                if spec_data is None:
+                    return None, f"Could not load spec: {session.spec_id}"
+
+                new_hash = compute_spec_structure_hash(spec_data)
+                if new_hash != session.spec_structure_hash:
+                    logger.warning(
+                        "Spec structure changed: old=%s new=%s",
+                        session.spec_structure_hash[:16],
+                        new_hash[:16],
+                    )
+                    return None, (
+                        f"Spec structure has changed. Use session-rebase to reconcile. "
+                        f"Old hash: {session.spec_structure_hash[:16]}..., "
+                        f"New hash: {new_hash[:16]}..."
+                    )
+
+                # Update cached metadata
+                session.spec_file_mtime = current_metadata.mtime
+                session.spec_file_size = current_metadata.file_size
+
+                # Populate spec cache for subsequent calls
+                self._spec_cache = (
+                    session.spec_id,
+                    current_metadata.mtime,
+                    current_metadata.file_size,
+                    spec_data,
+                )
+
+                return spec_data, None
+
+            # Fast path: return cached spec_data if available for this mtime
+            if (
+                self._spec_cache is not None
+                and self._spec_cache[0] == session.spec_id
+                and self._spec_cache[1] == current_metadata.mtime
+                and self._spec_cache[2] == current_metadata.file_size
+            ):
+                return self._spec_cache[3], None
+
+            # Load spec without re-hashing
+            spec_data = self._load_spec_file(spec_path)
+            if spec_data is not None:
+                self._spec_cache = (
+                    session.spec_id,
+                    current_metadata.mtime,
+                    current_metadata.file_size,
+                    spec_data,
+                )
+            return spec_data, None
+
+        except Exception as e:
+            logger.error("Spec integrity validation failed: %s", e)
+            return None, f"Spec integrity validation failed: {e}"
+
+    def _find_spec_path(self, spec_id: str) -> Optional[Path]:
+        """Find the path to a spec file using the canonical resolver."""
+        specs_dir = self.workspace_path / "specs"
+        return resolve_spec_file(spec_id, specs_dir)
+
+    def _load_spec_file(self, spec_path: Path) -> Optional[Dict[str, Any]]:
+        """Load and parse a spec file."""
+        import json
+
+        try:
+            with open(spec_path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.error("Failed to load spec %s: %s", spec_path, e)
+            return None
+
+    def _check_heartbeat_staleness(
+        self,
+        session: AutonomousSessionState,
+        now: datetime,
+    ):
+        """Check for heartbeat staleness with grace window.
+
+        Returns:
+            None if not stale, True if stale but step is active (warning only),
+            OrchestrationResult if stale and should pause
+        """
+        if session.context.last_heartbeat_at is None:
+            # No heartbeat yet - check if within grace period
+            created_delta = now - session.created_at
+            grace_delta = timedelta(minutes=session.limits.heartbeat_grace_minutes)
+            if created_delta <= grace_delta:
+                return None  # Within grace period
+        else:
+            # Check staleness against last heartbeat
+            stale_delta = now - session.context.last_heartbeat_at
+            threshold = timedelta(minutes=session.limits.heartbeat_stale_minutes)
+            if stale_delta <= threshold:
+                return None  # Not stale
+
+        # Heartbeat is stale
+        logger.warning(
+            "Heartbeat stale for session %s (last: %s)",
+            session.id,
+            session.context.last_heartbeat_at.isoformat() if session.context.last_heartbeat_at else "never",
+        )
+
+        # If step is active, include warning flag but do NOT pause/error (ADR line 662)
+        if session.last_step_issued is not None:
+            issued_delta = now - session.last_step_issued.issued_at
+            step_threshold = timedelta(minutes=session.limits.step_stale_minutes)
+            if issued_delta < step_threshold:
+                # Step is still active - signal warning to caller, do not pause
+                return True
+
+        # Pause due to heartbeat staleness
+        return self._create_pause_result(
+            session,
+            PauseReason.HEARTBEAT_STALE,
+            now,
+            "Session paused due to heartbeat staleness. Resume to continue.",
+        )
+
+    def _check_pause_guards(
+        self,
+        session: AutonomousSessionState,
+    ) -> Optional[OrchestrationResult]:
+        """Check pause guards: context, error, task limits.
+
+        Returns:
+            OrchestrationResult if guard triggered, None if OK
+        """
+        now = datetime.now(timezone.utc)
+
+        # Context limit
+        if session.context.context_usage_pct >= session.limits.context_threshold_pct:
+            logger.info(
+                "Context limit reached: %d%% >= %d%% (source: %s)",
+                session.context.context_usage_pct,
+                session.limits.context_threshold_pct,
+                session.context.context_source or "unknown",
+            )
+            return self._create_pause_result(
+                session,
+                PauseReason.CONTEXT_LIMIT,
+                now,
+                (
+                    f"Context usage at {session.context.context_usage_pct}% "
+                    f"(threshold: {session.limits.context_threshold_pct}%). "
+                    f"Resume in a new session."
+                ),
+            )
+
+        # Error threshold
+        if session.counters.consecutive_errors >= session.limits.max_consecutive_errors:
+            logger.warning(
+                "Error threshold reached: %d consecutive errors",
+                session.counters.consecutive_errors,
+            )
+            return self._create_pause_result(
+                session,
+                PauseReason.ERROR_THRESHOLD,
+                now,
+                (
+                    f"{session.counters.consecutive_errors} consecutive errors. "
+                    f"Manual intervention required."
+                ),
+            )
+
+        # Task limit
+        if session.counters.tasks_completed >= session.limits.max_tasks_per_session:
+            logger.info(
+                "Task limit reached: %d tasks",
+                session.counters.tasks_completed,
+            )
+            return self._create_pause_result(
+                session,
+                PauseReason.TASK_LIMIT,
+                now,
+                (
+                    f"Task limit ({session.limits.max_tasks_per_session}) reached. "
+                    f"Start a new session to continue."
+                ),
+            )
+
+        return None
+
+    def _check_all_blocked(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Optional[Dict[str, Any]],
+    ) -> Optional[OrchestrationResult]:
+        """Check if all remaining tasks are blocked.
+
+        Uses the shared check_all_blocked utility from core/task/_helpers.py.
+
+        Returns:
+            OrchestrationResult if all blocked, None if work available
+        """
+        if not spec_data:
+            return None
+
+        # Use shared utility to check if all pending tasks are blocked
+        if check_all_blocked(spec_data):
+            logger.warning("All remaining tasks are blocked")
+            now = datetime.now(timezone.utc)
+            return self._create_pause_result(
+                session,
+                PauseReason.BLOCKED,
+                now,
+                "All remaining tasks are blocked by dependencies. "
+                "Resolve blockers to continue.",
+            )
+
+        return None
+
+    def _check_required_gates_satisfied(
+        self,
+        session: AutonomousSessionState,
+        phase_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Check if required gates are satisfied for invariant enforcement.
+
+        Args:
+            session: Session state
+            phase_id: Specific phase to check, or None for all phases
+
+        Returns:
+            None if all required gates are satisfied, or a dict with:
+            - phase_id: Phase with unsatisfied gate
+            - gate_type: Type of the unsatisfied gate
+            - blocking_reason: Human-readable reason
+            - recovery_action: Dict with action/params to unblock
+        """
+        if phase_id:
+            # Check specific phase
+            phases_to_check = [phase_id]
+        else:
+            # Check all phases with required gates
+            phases_to_check = list(session.required_phase_gates.keys())
+
+        for check_phase_id in phases_to_check:
+            required_gates = session.required_phase_gates.get(check_phase_id, [])
+            satisfied_gates = session.satisfied_gates.get(check_phase_id, [])
+
+            for gate_type in required_gates:
+                if gate_type not in satisfied_gates:
+                    # Check if gate record shows passed/waived (alternative satisfaction)
+                    gate_record = session.phase_gates.get(check_phase_id)
+                    if gate_record and gate_record.status in (
+                        PhaseGateStatus.PASSED,
+                        PhaseGateStatus.WAIVED,
+                    ):
+                        # Gate is satisfied via record, update satisfied_gates
+                        if check_phase_id not in session.satisfied_gates:
+                            session.satisfied_gates[check_phase_id] = []
+                        if gate_type not in session.satisfied_gates[check_phase_id]:
+                            session.satisfied_gates[check_phase_id].append(gate_type)
+                        continue
+
+                    # Gate is not satisfied
+                    return {
+                        "phase_id": check_phase_id,
+                        "gate_type": gate_type,
+                        "blocking_reason": (
+                            f"Required gate '{gate_type}' for phase '{check_phase_id}' "
+                            f"is not satisfied. Phase completion blocked."
+                        ),
+                        "recovery_action": {
+                            "action": "gate-waiver",
+                            "params": {
+                                "phase_id": check_phase_id,
+                                "reason_code": "operator_override",
+                            },
+                            "description": (
+                                f"Use gate-waiver action to waive the required '{gate_type}' "
+                                f"gate for phase '{check_phase_id}'. Requires maintainer role "
+                                f"and allow_gate_waiver=true config."
+                            ),
+                        },
+                    }
+
+        return None
+
+    def _audit_required_gate_integrity(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Optional[Dict[str, Any]],
+        phase_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Independently audit gate integrity by rebuilding obligations from spec.
+
+        This method complements _check_required_gates_satisfied by independently
+        rebuilding gate obligations directly from spec phases and comparing with
+        persisted gate records. This detects tampering where gate records may
+        have been modified outside normal orchestrator flow.
+
+        Args:
+            session: Session state with persisted gate records
+            spec_data: Spec data containing phase definitions
+            phase_id: Specific phase to audit, or None for all phases
+
+        Returns:
+            None if all gates pass audit, or a dict with:
+            - phase_id: Phase with audit failure
+            - gate_type: Type of gate with failure
+            - audit_failure_type: "missing_record", "invalid_status", "tampered"
+            - details: Human-readable description of the failure
+        """
+        if not spec_data:
+            return None
+
+        # Rebuild gate obligations directly from spec phases
+        phases_to_audit = []
+        if phase_id:
+            # Find specific phase in spec
+            for phase in spec_data.get("phases", []):
+                if phase.get("id") == phase_id:
+                    phases_to_audit.append(phase)
+                    break
+        else:
+            # Audit all phases
+            phases_to_audit = spec_data.get("phases", [])
+
+        for phase in phases_to_audit:
+            check_phase_id = phase.get("id", "")
+            if not check_phase_id:
+                continue
+
+            # Check if phase requires a fidelity gate (based on spec metadata)
+            phase_metadata = phase.get("metadata", {})
+            requires_gate = phase_metadata.get("requires_gate", False)
+
+            # Also check session.required_phase_gates for this phase
+            session_required = session.required_phase_gates.get(check_phase_id, [])
+            gate_types_to_check = session_required if session_required else (["fidelity"] if requires_gate else [])
+
+            for gate_type in gate_types_to_check:
+                gate_record = session.phase_gates.get(check_phase_id)
+
+                # Check 1: Missing gate record when required
+                if not gate_record:
+                    logger.warning(
+                        "Gate audit failure: missing gate record for phase %s, gate_type %s",
+                        check_phase_id,
+                        gate_type,
+                    )
+                    return {
+                        "phase_id": check_phase_id,
+                        "gate_type": gate_type,
+                        "audit_failure_type": "missing_record",
+                        "details": (
+                            f"Required gate '{gate_type}' for phase '{check_phase_id}' "
+                            f"has no persisted gate record. Gate may have been deleted "
+                            f"or never created."
+                        ),
+                    }
+
+                # Check 2: Gate not in acceptable terminal state (passed or waived)
+                if gate_record.status not in (PhaseGateStatus.PASSED, PhaseGateStatus.WAIVED):
+                    logger.warning(
+                        "Gate audit failure: gate status %s not acceptable for phase %s",
+                        gate_record.status.value,
+                        check_phase_id,
+                    )
+                    return {
+                        "phase_id": check_phase_id,
+                        "gate_type": gate_type,
+                        "audit_failure_type": "invalid_status",
+                        "details": (
+                            f"Required gate '{gate_type}' for phase '{check_phase_id}' "
+                            f"has status '{gate_record.status.value}', but only 'passed' "
+                            f"or 'waived' are acceptable for terminal transitions."
+                        ),
+                    }
+
+                # Check 3: Verify waiver has required metadata (if waived)
+                if gate_record.status == PhaseGateStatus.WAIVED:
+                    if not gate_record.waiver_reason_code:
+                        logger.warning(
+                            "Gate audit failure: waived gate missing reason_code for phase %s",
+                            check_phase_id,
+                        )
+                        return {
+                            "phase_id": check_phase_id,
+                            "gate_type": gate_type,
+                            "audit_failure_type": "tampered",
+                            "details": (
+                                f"Gate '{gate_type}' for phase '{check_phase_id}' is waived "
+                                f"but missing required waiver_reason_code. This may indicate "
+                                f"tampering with the gate record."
+                            ),
+                        }
+
+        return None
+
+    def _get_pending_tasks(
+        self,
+        spec_data: Dict[str, Any],
+        completed_task_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Get all pending (not completed) tasks from spec."""
+        pending = []
+        for phase in spec_data.get("phases", []):
+            for task in phase.get("tasks", []):
+                task_id = task.get("id", "")
+                if task_id and task_id not in completed_task_ids:
+                    pending.append(task)
+        return pending
+
+    def _task_can_start(
+        self,
+        task: Dict[str, Any],
+        completed_task_ids: List[str],
+        spec_data: Dict[str, Any],
+    ) -> bool:
+        """Check if a task can start (all dependencies met)."""
+        deps = task.get("depends", []) or task.get("dependencies", [])
+        for dep_id in deps:
+            if dep_id not in completed_task_ids:
+                return False
+        return True
+
+    def _determine_next_step(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Optional[Dict[str, Any]],
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Determine the next step based on current state.
+
+        Implements steps 11-17 of the orchestration sequence.
+        """
+        if not spec_data:
+            return self._create_complete_spec_result(session, now)
+
+        # Get current phase info
+        current_phase = self._get_current_phase(session, spec_data)
+
+        # Step 11: Execute verification if phase tasks complete and verifications pending
+        verification_task = self._find_pending_verification(session, spec_data)
+        if verification_task:
+            return self._create_verification_step(session, verification_task, now)
+
+        # Step 12: Run fidelity gate if verifications complete and gate pending
+        if current_phase and self._should_run_fidelity_gate(session, current_phase, spec_data):
+            return self._create_fidelity_gate_step(session, current_phase, now)
+
+        # Step 13-14: Handle gate failures
+        if session.pending_gate_evidence:
+            return self._handle_gate_evidence(session, spec_data, now)
+
+        # Step 15: Gate passed + stop_on_phase_completion
+        if (
+            current_phase
+            and self._phase_gate_passed(session, current_phase)
+            and session.stop_conditions.stop_on_phase_completion
+        ):
+            # Enforce gate invariant: required gates must be satisfied
+            gate_block = self._check_required_gates_satisfied(session, current_phase.get("id"))
+            if gate_block:
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                    error_message=gate_block["blocking_reason"],
+                    should_persist=True,
+                    warnings={
+                        "gate_block": gate_block,
+                    },
+                )
+
+            # Run independent gate audit before phase-close (P1.4)
+            audit_failure = self._audit_required_gate_integrity(
+                session, spec_data, current_phase.get("id")
+            )
+            if audit_failure:
+                logger.warning(
+                    "Gate audit failure on phase-close: %s",
+                    audit_failure["details"],
+                )
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_GATE_AUDIT_FAILURE,
+                    error_message=audit_failure["details"],
+                    should_persist=True,
+                    warnings={
+                        "audit_failure": audit_failure,
+                    },
+                )
+
+            return self._create_pause_result(
+                session,
+                PauseReason.PHASE_COMPLETE,
+                now,
+                f"Phase {current_phase.get('id')} complete. Stopping as configured.",
+            )
+
+        # Step 16: Gate passed + next task exists
+        next_task = self._find_next_task(session, spec_data)
+        if next_task:
+            return self._create_implement_task_step(session, next_task, spec_data, now)
+
+        # Step 17: No remaining tasks - complete spec
+        # Enforce gate invariant: all phase gates must be satisfied
+        gate_block = self._check_required_gates_satisfied(session)
+        if gate_block:
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                error_message=gate_block["blocking_reason"],
+                should_persist=True,
+                warnings={
+                    "gate_block": gate_block,
+                },
+            )
+
+        # Run independent gate audit before spec-complete (P1.4)
+        audit_failure = self._audit_required_gate_integrity(session, spec_data)
+        if audit_failure:
+            logger.warning(
+                "Gate audit failure on spec-complete: %s",
+                audit_failure["details"],
+            )
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_GATE_AUDIT_FAILURE,
+                error_message=audit_failure["details"],
+                should_persist=True,
+                warnings={
+                    "audit_failure": audit_failure,
+                },
+            )
+
+        return self._create_complete_spec_result(session, now)
+
+    def _get_current_phase(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Get the current active phase from spec."""
+        if not session.active_phase_id:
+            # Find first phase with pending tasks
+            for phase in spec_data.get("phases", []):
+                phase_id = phase.get("id", "")
+                if phase_id:
+                    return phase
+            return None
+
+        for phase in spec_data.get("phases", []):
+            if phase.get("id") == session.active_phase_id:
+                return phase
+
+        return None
+
+    def _find_pending_verification(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Find a pending verification task in the current phase."""
+        current_phase = self._get_current_phase(session, spec_data)
+        if not current_phase:
+            return None
+
+        for task in current_phase.get("tasks", []):
+            task_id = task.get("id", "")
+            task_type = task.get("type", "task")
+            if (
+                task_type == "verify"
+                and task_id not in session.completed_task_ids
+                and task.get("status") != "completed"
+            ):
+                return task
+
+        return None
+
+    def _should_run_fidelity_gate(
+        self,
+        session: AutonomousSessionState,
+        phase: Dict[str, Any],
+        spec_data: Dict[str, Any],
+    ) -> bool:
+        """Check if fidelity gate should run for the phase."""
+        phase_id = phase.get("id", "")
+        if not phase_id:
+            return False
+
+        # Check if gate already passed
+        gate_record = session.phase_gates.get(phase_id)
+        if gate_record and gate_record.status == PhaseGateStatus.PASSED:
+            return False
+
+        # Check if all implementation tasks are complete
+        for task in phase.get("tasks", []):
+            task_type = task.get("type", "task")
+            task_id = task.get("id", "")
+            if task_type == "task" and task_id not in session.completed_task_ids:
+                return False  # Implementation tasks still pending
+
+        # Check if verifications are complete (or no verifications exist)
+        for task in phase.get("tasks", []):
+            task_type = task.get("type", "task")
+            task_id = task.get("id", "")
+            if task_type == "verify" and task_id not in session.completed_task_ids:
+                return False  # Verifications still pending
+
+        return True
+
+    def _phase_gate_passed(
+        self,
+        session: AutonomousSessionState,
+        phase: Dict[str, Any],
+    ) -> bool:
+        """Check if the phase gate has passed."""
+        phase_id = phase.get("id", "")
+        if not phase_id:
+            return False
+
+        gate_record = session.phase_gates.get(phase_id)
+        return gate_record is not None and gate_record.status == PhaseGateStatus.PASSED
+
+    def _evaluate_gate_policy(
+        self,
+        session: AutonomousSessionState,
+        evidence: PendingGateEvidence,
+    ) -> Tuple[bool, Optional[PauseReason]]:
+        """Evaluate gate verdict against the configured gate policy.
+
+        Policy behaviors:
+        - STRICT: Pass only on verdict=pass
+        - LENIENT: Pass on verdict=pass or verdict=warn
+        - MANUAL: Always pause for manual review
+
+        Returns:
+            Tuple of (should_pass, pause_reason_if_any)
+        """
+        policy = session.gate_policy
+
+        if policy == GatePolicy.MANUAL:
+            # Manual policy always requires human review
+            return False, PauseReason.GATE_REVIEW_REQUIRED
+
+        if policy == GatePolicy.STRICT:
+            # Strict: only pass on explicit pass
+            if evidence.verdict == GateVerdict.PASS:
+                return True, None
+            return False, PauseReason.GATE_FAILED
+
+        if policy == GatePolicy.LENIENT:
+            # Lenient: pass on pass or warn
+            if evidence.verdict in (GateVerdict.PASS, GateVerdict.WARN):
+                return True, None
+            return False, PauseReason.GATE_FAILED
+
+        # Default to strict behavior
+        return evidence.verdict == GateVerdict.PASS, None
+
+    def _handle_gate_evidence(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Handle pending gate evidence (steps 13-14).
+
+        Applies gate policy evaluation:
+        - STRICT: pass only on verdict=pass
+        - LENIENT: pass on pass or warn
+        - MANUAL: always pause with gate_review_required
+
+        Auto-retry behavior:
+        - If auto_retry_fidelity_gate=true and gate fails: address_fidelity_feedback → retry
+        - If auto_retry_fidelity_gate=false and gate fails: pause with gate_failed
+        """
+        evidence = session.pending_gate_evidence
+        if not evidence:
+            return self._create_complete_spec_result(session, now)
+
+        # Evaluate gate against policy
+        should_pass, pause_reason = self._evaluate_gate_policy(session, evidence)
+
+        if should_pass:
+            # Gate passed according to policy - clear evidence and continue
+            session.pending_gate_evidence = None
+            return self._determine_next_step_after_gate(session, spec_data, now)
+
+        # Gate failed or manual review required
+        if pause_reason == PauseReason.GATE_REVIEW_REQUIRED:
+            # Manual policy always requires human acknowledgment
+            return self._create_pause_result(
+                session,
+                PauseReason.GATE_REVIEW_REQUIRED,
+                now,
+                f"Manual gate review required for phase {evidence.phase_id}. "
+                f"Verdict: {evidence.verdict.value}. Acknowledge to continue.",
+            )
+
+        # Gate failed - check auto-retry setting and cycle cap (ADR line 675)
+        if (
+            session.stop_conditions.auto_retry_fidelity_gate
+            and session.counters.fidelity_review_cycles_in_active_phase
+            < session.limits.max_fidelity_review_cycles_per_phase
+        ):
+            # Create address_fidelity_feedback step for auto-retry cycle
+            return self._create_fidelity_feedback_step(session, evidence, now)
+        else:
+            # No auto-retry - pause for manual intervention
+            return self._create_pause_result(
+                session,
+                PauseReason.GATE_FAILED,
+                now,
+                f"Fidelity gate failed for phase {evidence.phase_id}. "
+                f"Verdict: {evidence.verdict.value}. Manual review required.",
+            )
+
+    def _determine_next_step_after_gate(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Determine next step after gate passes.
+
+        The fidelity cycle counter is incremented in _handle_gate_evidence
+        when the gate is accepted. This method handles phase transition
+        and task continuation.
+        """
+        # Check if we should stop on phase completion
+        if session.stop_conditions.stop_on_phase_completion:
+            # Enforce gate invariant: required gates must be satisfied
+            gate_block = self._check_required_gates_satisfied(session, session.active_phase_id)
+            if gate_block:
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                    error_message=gate_block["blocking_reason"],
+                    should_persist=True,
+                    warnings={
+                        "gate_block": gate_block,
+                    },
+                )
+
+            return self._create_pause_result(
+                session,
+                PauseReason.PHASE_COMPLETE,
+                now,
+                f"Phase {session.active_phase_id} complete. Stopping as configured.",
+            )
+
+        # Look for more tasks in the current or next phase
+        next_task = self._find_next_task(session, spec_data)
+        if next_task:
+            return self._create_implement_task_step(session, next_task, spec_data, now)
+
+        # No remaining tasks - complete spec
+        # Enforce gate invariant: all phase gates must be satisfied
+        gate_block = self._check_required_gates_satisfied(session)
+        if gate_block:
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                error_message=gate_block["blocking_reason"],
+                should_persist=True,
+                warnings={
+                    "gate_block": gate_block,
+                },
+            )
+
+        return self._create_complete_spec_result(session, now)
+
+    def _find_next_task(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
+    ) -> Optional[Dict[str, Any]]:
+        """Find the next task to implement."""
+        for phase in spec_data.get("phases", []):
+            phase_id = phase.get("id", "")
+
+            # Skip phases with failed or pending gates (if gate exists)
+            gate_record = session.phase_gates.get(phase_id)
+            if gate_record and gate_record.status == PhaseGateStatus.FAILED:
+                continue
+
+            for task in phase.get("tasks", []):
+                task_id = task.get("id", "")
+                task_type = task.get("type", "task")
+
+                # Only consider implementation tasks
+                if task_type != "task":
+                    continue
+
+                if task_id and task_id not in session.completed_task_ids:
+                    # Check if task can start
+                    if self._task_can_start(task, session.completed_task_ids, spec_data):
+                        # Check for phase advance - reset cycle counter on phase change
+                        if session.active_phase_id != phase_id:
+                            logger.info(
+                                "Phase advance detected: %s -> %s, resetting fidelity cycle counter",
+                                session.active_phase_id,
+                                phase_id,
+                            )
+                            session.counters.fidelity_review_cycles_in_active_phase = 0
+                        # Update active phase
+                        session.active_phase_id = phase_id
+                        return task
+
+        return None
+
+    def _create_pause_result(
+        self,
+        session: AutonomousSessionState,
+        reason: PauseReason,
+        now: datetime,
+        message: str,
+    ) -> OrchestrationResult:
+        """Create a pause step result."""
+        session.status = SessionStatus.PAUSED
+        session.paused_at = now
+        session.pause_reason = reason
+        session.updated_at = now
+        session.state_version += 1
+
+        step_id = f"step_{ULID()}"
+        next_step = NextStep(
+            step_id=step_id,
+            type=StepType.PAUSE,
+            task_id=None,
+            phase_id=None,
+            task_title=None,
+            gate_attempt_id=None,
+            instructions=None,
+            reason=reason,
+            message=message,
+        )
+
+        # Update last step issued and cache response
+        session.last_step_issued = LastStepIssued(
+            step_id=step_id,
+            type=StepType.PAUSE,
+            task_id=None,
+            phase_id=None,
+            issued_at=now,
+        )
+
+        return OrchestrationResult(
+            success=True,
+            session=session,
+            next_step=next_step,
+            should_persist=True,
+        )
+
+    def _create_implement_task_step(
+        self,
+        session: AutonomousSessionState,
+        task: Dict[str, Any],
+        spec_data: Dict[str, Any],
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Create an implement_task step."""
+        task_id = task.get("id", "")
+        task_title = task.get("title", "")
+        phase_id = session.active_phase_id or ""
+
+        step_id = f"step_{ULID()}"
+
+        instructions = [
+            StepInstruction(
+                tool="task",
+                action="prepare",
+                description="Load task context and acceptance criteria",
+            ),
+            StepInstruction(
+                tool="task",
+                action="update-status",
+                description="Mark task as in-progress",
+            ),
+            StepInstruction(
+                tool="task",
+                action="complete",
+                description="Mark task as complete after implementation",
+            ),
+        ]
+
+        next_step = NextStep(
+            step_id=step_id,
+            type=StepType.IMPLEMENT_TASK,
+            task_id=task_id,
+            phase_id=phase_id,
+            task_title=task_title,
+            gate_attempt_id=None,
+            instructions=instructions,
+            reason=None,
+            message=None,
+        )
+
+        # Update last step issued
+        session.last_step_issued = LastStepIssued(
+            step_id=step_id,
+            type=StepType.IMPLEMENT_TASK,
+            task_id=task_id,
+            phase_id=phase_id,
+            issued_at=now,
+        )
+        session.last_task_id = task_id
+        session.status = SessionStatus.RUNNING
+        session.updated_at = now
+        session.state_version += 1
+
+        return OrchestrationResult(
+            success=True,
+            session=session,
+            next_step=next_step,
+            should_persist=True,
+        )
+
+    def _create_verification_step(
+        self,
+        session: AutonomousSessionState,
+        task: Dict[str, Any],
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Create an execute_verification step with pending receipt."""
+        task_id = task.get("id", "")
+        task_title = task.get("title", "")
+        phase_id = session.active_phase_id or ""
+
+        step_id = f"step_{ULID()}"
+
+        # Extract verification command from task metadata for receipt
+        task_metadata = task.get("metadata", {})
+        command = task_metadata.get("command", "")
+        command_hash = hashlib.sha256(command.encode()).hexdigest() if command else ""
+
+        # Create pending verification receipt for later validation
+        if command_hash:
+            session.pending_verification_receipt = PendingVerificationReceipt(
+                step_id=step_id,
+                task_id=task_id,
+                expected_command_hash=command_hash,
+                issued_at=now,
+            )
+        else:
+            # Clear any stale pending receipt if no command
+            session.pending_verification_receipt = None
+
+        instructions = [
+            StepInstruction(
+                tool="task",
+                action="info",
+                description="Get verification task details",
+            ),
+            StepInstruction(
+                tool="verification",
+                action="run",
+                description="Execute verification commands",
+            ),
+            StepInstruction(
+                tool="task",
+                action="complete",
+                description="Record verification results",
+            ),
+        ]
+
+        next_step = NextStep(
+            step_id=step_id,
+            type=StepType.EXECUTE_VERIFICATION,
+            task_id=task_id,
+            phase_id=phase_id,
+            task_title=task_title,
+            gate_attempt_id=None,
+            instructions=instructions,
+            reason=None,
+            message=None,
+        )
+
+        session.last_step_issued = LastStepIssued(
+            step_id=step_id,
+            type=StepType.EXECUTE_VERIFICATION,
+            task_id=task_id,
+            phase_id=phase_id,
+            issued_at=now,
+        )
+        session.updated_at = now
+        session.state_version += 1
+
+        return OrchestrationResult(
+            success=True,
+            session=session,
+            next_step=next_step,
+            should_persist=True,
+        )
+
+    def _create_fidelity_gate_step(
+        self,
+        session: AutonomousSessionState,
+        phase: Dict[str, Any],
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Create a run_fidelity_gate step."""
+        phase_id = phase.get("id", "")
+        phase_title = phase.get("title", "")
+        gate_attempt_id = f"gate_{ULID()}"
+
+        step_id = f"step_{ULID()}"
+
+        # Initialize gate record if not exists
+        if phase_id not in session.phase_gates:
+            session.phase_gates[phase_id] = PhaseGateRecord(
+                required=True,
+                status=PhaseGateStatus.PENDING,
+                verdict=None,
+                gate_attempt_id=None,
+                review_path=None,
+                evaluated_at=None,
+            )
+
+        instructions = [
+            StepInstruction(
+                tool="review",
+                action="run",
+                description=f"Run fidelity review for phase {phase_title}",
+            ),
+            StepInstruction(
+                tool="task",
+                action="journal",
+                description="Record gate results",
+            ),
+        ]
+
+        next_step = NextStep(
+            step_id=step_id,
+            type=StepType.RUN_FIDELITY_GATE,
+            task_id=None,
+            phase_id=phase_id,
+            task_title=None,
+            gate_attempt_id=gate_attempt_id,
+            instructions=instructions,
+            reason=None,
+            message=None,
+        )
+
+        session.last_step_issued = LastStepIssued(
+            step_id=step_id,
+            type=StepType.RUN_FIDELITY_GATE,
+            task_id=None,
+            phase_id=phase_id,
+            issued_at=now,
+        )
+        session.phase_gates[phase_id].gate_attempt_id = gate_attempt_id
+        session.updated_at = now
+        session.state_version += 1
+
+        return OrchestrationResult(
+            success=True,
+            session=session,
+            next_step=next_step,
+            should_persist=True,
+        )
+
+    def _create_fidelity_feedback_step(
+        self,
+        session: AutonomousSessionState,
+        evidence: Any,  # PendingGateEvidence
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Create an address_fidelity_feedback step."""
+        step_id = f"step_{ULID()}"
+
+        instructions = [
+            StepInstruction(
+                tool="review",
+                action="get-findings",
+                description="Get fidelity review findings",
+            ),
+            StepInstruction(
+                tool="task",
+                action="update",
+                description="Address findings in code",
+            ),
+            StepInstruction(
+                tool="task",
+                action="complete",
+                description="Mark feedback addressed",
+            ),
+        ]
+
+        next_step = NextStep(
+            step_id=step_id,
+            type=StepType.ADDRESS_FIDELITY_FEEDBACK,
+            task_id=None,
+            phase_id=evidence.phase_id,
+            task_title=None,
+            gate_attempt_id=evidence.gate_attempt_id,
+            instructions=instructions,
+            reason=None,
+            message=None,
+        )
+
+        session.last_step_issued = LastStepIssued(
+            step_id=step_id,
+            type=StepType.ADDRESS_FIDELITY_FEEDBACK,
+            task_id=None,
+            phase_id=evidence.phase_id,
+            issued_at=now,
+        )
+        session.updated_at = now
+        session.state_version += 1
+
+        return OrchestrationResult(
+            success=True,
+            session=session,
+            next_step=next_step,
+            should_persist=True,
+        )
+
+    def _create_complete_spec_result(
+        self,
+        session: AutonomousSessionState,
+        now: datetime,
+    ) -> OrchestrationResult:
+        """Create a complete_spec result (terminal state)."""
+        session.status = SessionStatus.COMPLETED
+        session.updated_at = now
+        session.state_version += 1
+
+        step_id = f"step_{ULID()}"
+        next_step = NextStep(
+            step_id=step_id,
+            type=StepType.COMPLETE_SPEC,
+            task_id=None,
+            phase_id=None,
+            task_title=None,
+            gate_attempt_id=None,
+            instructions=None,
+            reason=None,
+            message=f"Spec {session.spec_id} execution completed. "
+            f"Total tasks: {session.counters.tasks_completed}",
+        )
+
+        session.last_step_issued = LastStepIssued(
+            step_id=step_id,
+            type=StepType.COMPLETE_SPEC,
+            task_id=None,
+            phase_id=None,
+            issued_at=now,
+        )
+
+        return OrchestrationResult(
+            success=True,
+            session=session,
+            next_step=next_step,
+            should_persist=True,
+        )
+
+
+# =============================================================================
+# Module Exports
+# =============================================================================
+
+__all__ = [
+    "StepOrchestrator",
+    "OrchestrationResult",
+    "ERROR_STEP_RESULT_REQUIRED",
+    "ERROR_STEP_MISMATCH",
+    "ERROR_INVALID_GATE_EVIDENCE",
+    "ERROR_NO_ACTIVE_SESSION",
+    "ERROR_AMBIGUOUS_ACTIVE_SESSION",
+    "ERROR_SESSION_UNRECOVERABLE",
+    "ERROR_SPEC_REBASE_REQUIRED",
+    "ERROR_HEARTBEAT_STALE",
+    "ERROR_STEP_STALE",
+    "ERROR_ALL_TASKS_BLOCKED",
+    "ERROR_GATE_BLOCKED",
+    "ERROR_REQUIRED_GATE_UNSATISFIED",
+    "ERROR_VERIFICATION_RECEIPT_MISSING",
+    "ERROR_VERIFICATION_RECEIPT_INVALID",
+    "ERROR_GATE_INTEGRITY_CHECKSUM",
+    "ERROR_GATE_AUDIT_FAILURE",
+]

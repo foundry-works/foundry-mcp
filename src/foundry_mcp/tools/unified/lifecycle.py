@@ -41,6 +41,52 @@ from foundry_mcp.tools.unified.router import (
     ActionRouter,
 )
 
+# Import write-lock helpers for autonomy session protection.
+try:
+    from foundry_mcp.core.autonomy.write_lock import (
+        check_autonomy_write_lock as _check_write_lock_impl,
+        WriteLockStatus as _WriteLockStatus,
+    )
+    _WRITE_LOCK_AVAILABLE = True
+except ImportError:
+    _check_write_lock_impl = None  # type: ignore[misc,assignment]
+    _WriteLockStatus = None  # type: ignore[misc,assignment]
+    _WRITE_LOCK_AVAILABLE = False
+
+
+def _check_autonomy_write_lock(
+    spec_id: str,
+    workspace: Optional[str],
+    bypass_autonomy_lock: bool,
+    bypass_reason: Optional[str],
+    request_id: str,
+) -> Optional[dict]:
+    """Check autonomy write-lock and return error response if blocked."""
+    if not _WRITE_LOCK_AVAILABLE or _check_write_lock_impl is None:
+        return None
+
+    result = _check_write_lock_impl(
+        spec_id=spec_id,
+        workspace=workspace,
+        bypass_flag=bypass_autonomy_lock,
+        bypass_reason=bypass_reason,
+    )
+
+    if result.status == _WriteLockStatus.LOCKED:
+        return asdict(error_response(
+            result.message or "Autonomy write lock is active for this spec",
+            error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
+            error_type=ErrorType.CONFLICT,
+            request_id=request_id,
+            details={
+                "session_id": result.session_id,
+                "session_status": result.session_status,
+                "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
+            },
+        ))
+
+    return None
+
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
 
@@ -173,6 +219,8 @@ def _handle_move(
     to_folder: Optional[str] = None,
     path: Optional[str] = None,
     force: Optional[bool] = None,  # Unused, accepted for router compatibility
+    bypass_autonomy_lock: Optional[bool] = False,
+    bypass_reason: Optional[str] = None,
 ) -> dict:
     action = "move"
     request_id = _request_id()
@@ -215,6 +263,17 @@ def _handle_move(
             message="Workspace path must be a string",
             request_id=request_id,
         )
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=path,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
 
     specs_dir, specs_err = resolve_specs_dir(config, path)
     if specs_err:
@@ -260,6 +319,8 @@ def _handle_activate(
     to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     path: Optional[str] = None,
     force: Optional[bool] = None,  # Unused, accepted for router compatibility
+    bypass_autonomy_lock: Optional[bool] = False,
+    bypass_reason: Optional[str] = None,
 ) -> dict:
     action = "activate"
     request_id = _request_id()
@@ -281,6 +342,17 @@ def _handle_activate(
             message="Workspace path must be a string",
             request_id=request_id,
         )
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=path,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
 
     specs_dir, specs_err = resolve_specs_dir(config, path)
     if specs_err:
@@ -325,6 +397,8 @@ def _handle_complete(
     to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     force: Optional[bool] = False,
     path: Optional[str] = None,
+    bypass_autonomy_lock: Optional[bool] = False,
+    bypass_reason: Optional[str] = None,
 ) -> dict:
     action = "complete"
     request_id = _request_id()
@@ -354,6 +428,17 @@ def _handle_complete(
             message="Workspace path must be a string",
             request_id=request_id,
         )
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=path,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
 
     specs_dir, specs_err = resolve_specs_dir(config, path)
     if specs_err:
@@ -399,6 +484,8 @@ def _handle_archive(
     to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
     path: Optional[str] = None,
     force: Optional[bool] = None,  # Unused, accepted for router compatibility
+    bypass_autonomy_lock: Optional[bool] = False,
+    bypass_reason: Optional[str] = None,
 ) -> dict:
     action = "archive"
     request_id = _request_id()
@@ -420,6 +507,17 @@ def _handle_archive(
             message="Workspace path must be a string",
             request_id=request_id,
         )
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=path,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+    )
+    if lock_error:
+        return lock_error
 
     specs_dir, specs_err = resolve_specs_dir(config, path)
     if specs_err:

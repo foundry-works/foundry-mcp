@@ -14,7 +14,13 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from foundry_mcp.core.authorization import (
+    check_action_allowed,
+    get_rate_limit_tracker,
+    get_server_role,
+)
 from foundry_mcp.core.context import generate_correlation_id, get_correlation_id
+from foundry_mcp.core.observability import MetricsCollector
 from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
@@ -117,15 +123,146 @@ def dispatch_with_standard_errors(
 ) -> dict:
     """Dispatch *action* through *router*, converting exceptions to envelopes.
 
+    Performs rate limit and authorization checks before dispatching to the handler.
+    Error precedence: action validation -> RATE_LIMITED -> AUTHORIZATION -> argument validation.
+
     Catches :class:`ActionRouterError` (unsupported action) and generic
     ``Exception`` and returns a well-formed error response dict.
     """
+    # First, validate that the action exists (action validation)
+    # Use allowed_actions() to check if action is registered
+    allowed = router.allowed_actions()
+    action_lower = action.lower() if action else ""
+
+    # Check if action (case-insensitive) is in allowed actions
+    action_exists = any(
+        a.lower() == action_lower for a in allowed
+    )
+
+    if not action_exists:
+        rid = request_id or build_request_id(tool_name)
+        allowed_str = ", ".join(sorted(allowed))
+        details: Optional[Dict[str, Any]] = None
+        if include_details_in_router_error:
+            details = {"action": action, "allowed_actions": list(allowed)}
+        return asdict(
+            error_response(
+                f"Unsupported {tool_name} action '{action}'. "
+                f"Allowed actions: {allowed_str}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation=f"Use one of: {allowed_str}",
+                request_id=rid,
+                details=details,
+            )
+        )
+
+    # Normalize action key for rate limiting
+    action_key = f"{tool_name}.{action}"
+
+    # Rate limit check (before authorization check)
+    rate_limit_tracker = get_rate_limit_tracker()
+    retry_after = rate_limit_tracker.check_rate_limit(action_key)
+
+    if retry_after is not None:
+        rid = request_id or build_request_id(tool_name)
+        logger.warning(
+            "Rate limited: %s.%s - retry after %.1f seconds",
+            tool_name,
+            action,
+            retry_after,
+        )
+
+        # Emit authz.rate_limited metric
+        metrics = MetricsCollector(prefix="authz")
+        metrics.counter(
+            "rate_limited",
+            labels={
+                "tool": tool_name,
+                "action": action,
+            },
+        )
+
+        return asdict(
+            error_response(
+                f"Rate limited: too many authorization denials for '{tool_name}.{action}'",
+                error_code=ErrorCode.RATE_LIMITED,
+                error_type=ErrorType.RATE_LIMIT,
+                remediation=f"Wait {int(retry_after)} seconds before retrying.",
+                request_id=rid,
+                details={
+                    "action": action_key,
+                    "retry_after": int(retry_after),
+                },
+            )
+        )
+
+    # Authorization check (after rate limit, before dispatch)
+    current_role = get_server_role()
+    authz_result = check_action_allowed(current_role, tool_name, action)
+
+    if not authz_result.allowed:
+        rid = request_id or build_request_id(tool_name)
+        logger.warning(
+            "Authorization denied for %s.%s: role=%s, required=%s",
+            tool_name,
+            action,
+            current_role,
+            authz_result.required_role,
+        )
+
+        # Record denial for rate limiting
+        rate_limit_tracker.record_denial(action_key)
+
+        # Emit authz.denied metric
+        metrics = MetricsCollector(prefix="authz")
+        metrics.counter(
+            "denied",
+            labels={
+                "role": current_role,
+                "tool": tool_name,
+                "action": action,
+            },
+        )
+
+        # Build recovery action guidance
+        if authz_result.required_role:
+            recovery = (
+                f"This action requires '{authz_result.required_role}' role. "
+                f"Current role is '{current_role}'. "
+                f"Set FOUNDRY_MCP_ROLE environment variable or configure role in settings."
+            )
+        else:
+            recovery = (
+                f"Role '{current_role}' is not authorized for this action. "
+                f"Contact administrator for access."
+            )
+
+        return asdict(
+            error_response(
+                f"Authorization denied: role '{current_role}' cannot perform '{tool_name}.{action}'",
+                error_code=ErrorCode.AUTHORIZATION,
+                error_type=ErrorType.AUTHORIZATION,
+                remediation=recovery,
+                request_id=rid,
+                details={
+                    "role": current_role,
+                    "action": f"{tool_name}.{action}",
+                    "required_role": authz_result.required_role,
+                    "recovery_action": recovery,
+                },
+            )
+        )
+
+    # Authorized - reset rate limit counter and proceed with dispatch
+    rate_limit_tracker.reset(action_key)
+
     try:
         return router.dispatch(action=action, **kwargs)
     except ActionRouterError as exc:
         rid = request_id or build_request_id(tool_name)
         allowed = ", ".join(exc.allowed_actions)
-        details: Optional[Dict[str, Any]] = None
+        details = None
         if include_details_in_router_error:
             details = {"action": action, "allowed_actions": list(exc.allowed_actions)}
         return asdict(

@@ -4,6 +4,7 @@ The CLI is organized into domain groups (e.g. `specs`, `tasks`, `test`).
 Legacy top-level aliases are intentionally not exported.
 """
 
+from foundry_mcp.cli.commands.audit import audit
 from foundry_mcp.cli.commands.cache import cache
 from foundry_mcp.cli.commands.dev import dev_group
 from foundry_mcp.cli.commands.journal import journal
@@ -17,6 +18,7 @@ from foundry_mcp.cli.commands.tasks import tasks
 from foundry_mcp.cli.commands.validate import validate_group
 
 __all__ = [
+    "audit",
     "cache",
     "dev_group",
     "journal",

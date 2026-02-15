@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.pagination import (
     CursorError,
@@ -21,6 +22,7 @@ from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
     error_response,
+    success_response,
 )
 from foundry_mcp.core.spec import load_spec
 from foundry_mcp.tools.unified.common import (
@@ -48,6 +50,43 @@ def _metric(action: str) -> str:
 
 
 _validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
+
+
+def _is_feature_enabled(config: ServerConfig, feature_name: str) -> bool:
+    """Check if a feature flag is enabled.
+
+    Args:
+        config: Server configuration
+        feature_name: Name of the feature flag to check
+
+    Returns:
+        True if the feature is explicitly enabled, False otherwise.
+    """
+    return bool(config.feature_flags.get(feature_name, False))
+
+
+def _feature_disabled_response(action: str, request_id: str, feature_flag: str = "autonomy_sessions") -> dict:
+    """Return feature disabled error response.
+
+    Args:
+        action: The action that was attempted
+        request_id: Request ID for the response
+        feature_flag: The feature flag that is disabled
+
+    Returns:
+        Error response dict with FEATURE_DISABLED error code
+    """
+    return asdict(error_response(
+        f"{feature_flag} feature is not enabled",
+        error_code=ErrorCode.FEATURE_DISABLED,
+        error_type=ErrorType.FEATURE_FLAG,
+        request_id=request_id,
+        details={
+            "action": action,
+            "feature_flag": feature_flag,
+            "hint": f"Enable {feature_flag} feature flag to use this functionality",
+        },
+    ))
 
 
 def _resolve_specs_dir(
@@ -199,3 +238,165 @@ def _match_nodes_for_batch(
 
 
 _VALID_NODE_TYPES = {"task", "verify", "phase", "subtask"}
+
+
+# ---------------------------------------------------------------------------
+# Autonomy write-lock enforcement helper
+# ---------------------------------------------------------------------------
+
+# Import write-lock helpers for autonomy session protection.
+try:
+    from foundry_mcp.core.autonomy.write_lock import (
+        check_autonomy_write_lock as _check_autonomy_write_lock_impl,
+        WriteLockStatus as _WriteLockStatus,
+    )
+    _WRITE_LOCK_AVAILABLE = True
+except ImportError:
+    _check_autonomy_write_lock_impl = None  # type: ignore[misc,assignment]
+    _WriteLockStatus = None  # type: ignore[misc,assignment]
+    _WRITE_LOCK_AVAILABLE = False
+
+
+def _check_autonomy_write_lock(
+    spec_id: str,
+    workspace: Optional[str],
+    bypass_autonomy_lock: bool,
+    bypass_reason: Optional[str],
+    request_id: str,
+    config: Optional[ServerConfig] = None,
+) -> Optional[dict]:
+    """Check autonomy write-lock and return error response if blocked.
+
+    Args:
+        spec_id: The spec ID being modified.
+        workspace: Optional workspace path.
+        bypass_autonomy_lock: If True, bypass the lock (requires bypass_reason).
+        bypass_reason: Reason for bypassing the lock.
+        request_id: Request ID for error response.
+        config: ServerConfig to check allow_lock_bypass setting.
+
+    Returns:
+        None if operation is allowed, error response dict if blocked.
+    """
+    if not _WRITE_LOCK_AVAILABLE or _check_autonomy_write_lock_impl is None:
+        return None
+
+    # Get allow_lock_bypass from config (default False - fail-closed)
+    allow_lock_bypass = False
+    if config is not None:
+        allow_lock_bypass = config.autonomy_security.allow_lock_bypass
+
+    result = _check_autonomy_write_lock_impl(
+        spec_id=spec_id,
+        workspace=workspace,
+        bypass_flag=bypass_autonomy_lock,
+        bypass_reason=bypass_reason,
+        allow_lock_bypass=allow_lock_bypass,
+    )
+
+    if result.status == _WriteLockStatus.LOCKED:
+        return asdict(error_response(
+            result.message or "Autonomy write lock is active for this spec",
+            error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
+            error_type=ErrorType.CONFLICT,
+            request_id=request_id,
+            details={
+                "session_id": result.session_id,
+                "session_status": result.session_status,
+                "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
+            },
+        ))
+
+    # ALLOWED or BYPASSED — operation can proceed
+    return None
+
+
+def _get_storage(config: ServerConfig, workspace: Optional[str] = None) -> AutonomyStorage:
+    """Get AutonomyStorage instance for session operations."""
+    ws_path = Path(workspace) if workspace else Path.cwd()
+    return AutonomyStorage(workspace_path=ws_path)
+
+
+def _session_not_found_response(
+    action: str, request_id: str, spec_id: Optional[str] = None
+) -> dict:
+    """Return session not found error response."""
+    return asdict(error_response(
+        "No active session found",
+        error_code=ErrorCode.NO_ACTIVE_SESSION,
+        error_type=ErrorType.NOT_FOUND,
+        request_id=request_id,
+        details={
+            "action": action,
+            "spec_id": spec_id,
+            "hint": "Start a session with session-start action",
+        },
+    ))
+
+
+def _resolve_session(
+    storage: AutonomyStorage,
+    action: str,
+    request_id: str,
+    session_id: Optional[str] = None,
+    spec_id: Optional[str] = None,
+) -> Tuple[Optional[Any], Optional[dict]]:
+    """Resolve a session by session_id, spec_id, or workspace scan.
+
+    Per ADR: when session_id is omitted, find the single non-terminal session.
+    If zero → NO_ACTIVE_SESSION. If multiple → AMBIGUOUS_ACTIVE_SESSION.
+
+    Args:
+        storage: AutonomyStorage instance
+        action: Action name for error messages
+        request_id: Request ID for error responses
+        session_id: Direct session ID (highest priority)
+        spec_id: Spec ID to look up active session pointer
+
+    Returns:
+        Tuple of (session, error_response). One will be None.
+    """
+    from foundry_mcp.core.autonomy.memory import ActiveSessionLookupResult
+
+    # Priority 1: Direct session_id
+    if session_id:
+        session = storage.load(session_id)
+        if not session:
+            return None, _session_not_found_response(action, request_id, spec_id)
+        return session, None
+
+    # Priority 2: Spec ID pointer lookup
+    if spec_id:
+        active_session_id = storage.get_active_session(spec_id)
+        if not active_session_id:
+            return None, _session_not_found_response(action, request_id, spec_id)
+        session = storage.load(active_session_id)
+        if not session:
+            return None, _session_not_found_response(action, request_id, spec_id)
+        return session, None
+
+    # Priority 3: Scan all non-terminal sessions
+    result, found_id = storage.lookup_active_session()
+
+    if result == ActiveSessionLookupResult.NOT_FOUND:
+        return None, _session_not_found_response(action, request_id)
+
+    if result == ActiveSessionLookupResult.AMBIGUOUS:
+        return None, asdict(error_response(
+            "Multiple active sessions found. Provide spec_id or session_id to disambiguate.",
+            error_code=ErrorCode.AMBIGUOUS_ACTIVE_SESSION,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "action": action,
+                "hint": "Provide spec_id or session_id parameter",
+            },
+        ))
+
+    # FOUND
+    if found_id is None:
+        return None, _session_not_found_response(action, request_id)
+    session = storage.load(found_id)
+    if not session:
+        return None, _session_not_found_response(action, request_id)
+    return session, None
