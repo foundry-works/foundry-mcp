@@ -51,6 +51,7 @@ from foundry_mcp.tools.unified.task_handlers.handlers_mutation import (
     _handle_update_metadata,
 )
 from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+    _handle_gate_waiver,
     _handle_session_end,
     _handle_session_heartbeat,
     _handle_session_list,
@@ -110,6 +111,7 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="session-rebase", handler=_handle_session_rebase, summary="Rebase an active session to spec changes"),
     ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="[Deprecated: use session-step-heartbeat] Update session heartbeat and context metrics"),
     ActionDefinition(name="session-reset", handler=_handle_session_reset, summary="Reset a failed session to allow retry"),
+    ActionDefinition(name="gate-waiver", handler=_handle_gate_waiver, summary="Privileged gate waiver for required-gate invariant failures (maintainer only)"),
     # Session-step actions (feature-flag guarded by autonomy_sessions)
     ActionDefinition(name="session-step-next", handler=_handle_session_step_next, summary="Get the next step to execute in a session"),
     ActionDefinition(name="session-step-report", handler=_handle_session_step_report, summary="Report the outcome of a step execution"),
@@ -217,6 +219,9 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         context_usage_pct: Optional[int] = None,
         last_step_result: Optional[Dict[str, Any]] = None,
         heartbeat: Optional[bool] = None,
+        # gate-waiver parameters
+        reason_code: Optional[str] = None,
+        reason_detail: Optional[str] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
@@ -298,6 +303,9 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "context_usage_pct": context_usage_pct,
             "last_step_result": last_step_result,
             "heartbeat": heartbeat,
+            # gate-waiver specific
+            "reason_code": reason_code,
+            "reason_detail": reason_detail,
         }
         return _dispatch_task_action(action=action, payload=payload, config=config)
 

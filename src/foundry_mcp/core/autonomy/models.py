@@ -6,6 +6,8 @@ as defined in ADR-002. Models are designed for file-backed persistence
 with schema versioning support.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -100,6 +102,20 @@ class StepOutcome(str, Enum):
     SKIPPED = "skipped"
 
 
+class OverrideReasonCode(str, Enum):
+    """Structured reason codes for privileged override actions.
+
+    Required for gate waivers and other privileged operations to ensure
+    auditability and prevent casual bypasses.
+    """
+
+    STUCK_AGENT = "stuck_agent"
+    CORRUPT_STATE = "corrupt_state"
+    OPERATOR_OVERRIDE = "operator_override"
+    INCIDENT_RESPONSE = "incident_response"
+    TESTING = "testing"
+
+
 # =============================================================================
 # Sub-models
 # =============================================================================
@@ -113,6 +129,9 @@ class LastStepIssued(BaseModel):
     task_id: Optional[str] = Field(None, description="Task ID if step involves a task")
     phase_id: Optional[str] = Field(None, description="Phase ID if step involves a phase")
     issued_at: datetime = Field(..., description="When the step was issued")
+    step_proof: Optional[str] = Field(
+        None, description="One-time proof token for this step (consumed on report)"
+    )
 
 
 class PendingGateEvidence(BaseModel):
@@ -123,6 +142,10 @@ class PendingGateEvidence(BaseModel):
     phase_id: str = Field(..., description="Phase ID this gate is for")
     verdict: GateVerdict = Field(..., description="Gate verdict from review")
     issued_at: datetime = Field(..., description="When this evidence was created")
+    integrity_checksum: Optional[str] = Field(
+        None,
+        description="HMAC-SHA256 integrity checksum keyed by server secret (gate_attempt_id + step_id + phase_id + verdict)",
+    )
 
 
 class PendingManualGateAck(BaseModel):
@@ -213,6 +236,15 @@ class PhaseGateRecord(BaseModel):
     gate_attempt_id: Optional[str] = Field(None, description="Gate attempt ID")
     review_path: Optional[str] = Field(None, description="Path to review file")
     evaluated_at: Optional[datetime] = Field(None, description="When gate was evaluated")
+    # Waiver metadata (set when status is WAIVED)
+    waiver_reason_code: Optional[OverrideReasonCode] = Field(
+        None, description="Structured reason code for gate waiver"
+    )
+    waiver_reason_detail: Optional[str] = Field(
+        None, description="Free-text detail for waiver reason"
+    )
+    waived_at: Optional[datetime] = Field(None, description="When gate was waived")
+    waived_by_role: Optional[str] = Field(None, description="Role that waived the gate")
 
 
 class LastStepResult(BaseModel):
@@ -226,6 +258,13 @@ class LastStepResult(BaseModel):
     note: Optional[str] = Field(None, description="Free-text note about outcome")
     files_touched: Optional[List[str]] = Field(None, description="Files modified during step")
     gate_attempt_id: Optional[str] = Field(None, description="Gate attempt ID for gate steps")
+    step_proof: Optional[str] = Field(
+        None, description="One-time proof token from the issued step (required for proof-enforced steps)"
+    )
+    verification_receipt: Optional[VerificationReceipt] = Field(
+        None,
+        description="Server-issued receipt for execute_verification steps (required when outcome='success')",
+    )
 
     @model_validator(mode="after")
     def validate_fields_by_step_type(self) -> "LastStepResult":
@@ -285,6 +324,118 @@ class PendingTaskSummary(BaseModel):
 
 
 # =============================================================================
+# Step Proof Models (P1.1 - One-time step proof tokens)
+# =============================================================================
+
+
+class StepProofRecord(BaseModel):
+    """Record of a consumed step proof for replay protection.
+
+    Persisted atomically to enable replay-safe exactly-once semantics
+    across process restarts.
+    """
+
+    step_proof: str = Field(..., description="One-time proof token")
+    step_id: str = Field(..., description="Step ID this proof is bound to")
+    payload_hash: str = Field(..., description="SHA-256 hash of the original request payload")
+    consumed_at: datetime = Field(..., description="When this proof was consumed")
+    grace_expires_at: datetime = Field(..., description="When the replay grace window expires")
+    response_hash: Optional[str] = Field(
+        None, description="SHA-256 hash of the response for replay validation"
+    )
+    cached_response: Optional[Dict[str, Any]] = Field(
+        None, description="Cached response for idempotent replay within grace window"
+    )
+
+
+# =============================================================================
+# Verification Receipt Models (P1.2 - Proof-carrying verification receipts)
+# =============================================================================
+
+
+class VerificationReceipt(BaseModel):
+    """Server-issued verification receipt for execute_verification steps.
+
+    Contains cryptographic hashes of command, exit code, and output to enable
+    tamper-evident verification of test execution results. The receipt is
+    issued by the server when verification completes and must be included
+    in last_step_result when reporting outcome='success'.
+    """
+
+    command_hash: str = Field(
+        ..., description="SHA-256 hash of the verification command executed"
+    )
+    exit_code: int = Field(..., description="Exit code from the verification command")
+    output_digest: str = Field(
+        ..., description="SHA-256 hash of the combined stdout/stderr output"
+    )
+    issued_at: datetime = Field(..., description="When this receipt was issued")
+    step_id: str = Field(..., description="Step ID this receipt is bound to")
+
+
+class PendingVerificationReceipt(BaseModel):
+    """Pending verification receipt data stored in session state.
+
+    When the orchestrator issues an EXECUTE_VERIFICATION step, it stores
+    the expected receipt data here. When the caller reports the step result,
+    the receipt validation checks that the provided receipt matches the
+    expected values.
+    """
+
+    step_id: str = Field(..., description="Step ID this pending receipt is bound to")
+    task_id: str = Field(..., description="Verification task ID")
+    expected_command_hash: str = Field(
+        ..., description="Expected SHA-256 hash of the verification command"
+    )
+    issued_at: datetime = Field(..., description="When this pending receipt was created")
+
+
+def issue_verification_receipt(
+    step_id: str,
+    command: str,
+    exit_code: int,
+    output: str,
+) -> VerificationReceipt:
+    """Issue a verification receipt for an execute_verification step.
+
+    This function creates a tamper-evident receipt containing cryptographic
+    hashes of the verification command, exit code, and output. The receipt
+    should be included in last_step_result when reporting outcome='success'.
+
+    Args:
+        step_id: Step ID this receipt is bound to
+        command: The verification command that was executed
+        exit_code: Exit code from the verification command
+        output: Combined stdout/stderr output from the command
+
+    Returns:
+        VerificationReceipt with command_hash, exit_code, output_digest
+
+    Example:
+        >>> receipt = issue_verification_receipt(
+        ...     step_id="step_01HXYZ",
+        ...     command="pytest tests/",
+        ...     exit_code=0,
+        ...     output="3 passed",
+        ... )
+        >>> # Include receipt in last_step_result
+        >>> result.verification_receipt = receipt
+    """
+    import hashlib
+
+    command_hash = hashlib.sha256(command.encode()).hexdigest()
+    output_digest = hashlib.sha256(output.encode()).hexdigest()
+
+    return VerificationReceipt(
+        command_hash=command_hash,
+        exit_code=exit_code,
+        output_digest=output_digest,
+        issued_at=datetime.now(timezone.utc),
+        step_id=step_id,
+    )
+
+
+# =============================================================================
 # Response Models
 # =============================================================================
 
@@ -303,6 +454,9 @@ class NextStep(BaseModel):
     )
     reason: Optional[PauseReason] = Field(None, description="Pause reason for pause steps")
     message: Optional[str] = Field(None, description="Human-readable message")
+    step_proof: Optional[str] = Field(
+        None, description="One-time proof token for this step (must match in report)"
+    )
 
 
 class ResumeContext(BaseModel):
@@ -365,6 +519,16 @@ class SessionStepResponseData(BaseModel):
     status: SessionStatus = Field(..., description="Session status")
     state_version: int = Field(..., description="Monotonic state version")
     next_step: Optional[NextStep] = Field(None, description="Next step to execute")
+    # Gate invariant observability fields
+    required_phase_gates: Optional[List[str]] = Field(
+        None, description="IDs of required phase gates for this session"
+    )
+    satisfied_gates: Optional[List[str]] = Field(
+        None, description="IDs of gates that are passed or waived"
+    )
+    missing_required_gates: Optional[List[str]] = Field(
+        None, description="IDs of required gates that are pending or failed"
+    )
 
 
 # =============================================================================
@@ -387,7 +551,7 @@ class AutonomousSessionState(BaseModel):
     """
 
     # Schema versioning (serialized as _schema_version for ADR compliance)
-    schema_version: int = Field(default=2, alias="_schema_version", description="Schema version")
+    schema_version: int = Field(default=3, alias="_schema_version", description="Schema version")
 
     # Core identifiers
     id: str = Field(..., description="ULID-format session identifier")
@@ -424,6 +588,9 @@ class AutonomousSessionState(BaseModel):
     pending_manual_gate_ack: Optional[PendingManualGateAck] = Field(
         None, description="Pending manual gate acknowledgment"
     )
+    pending_verification_receipt: Optional[PendingVerificationReceipt] = Field(
+        None, description="Pending verification receipt for execute_verification steps"
+    )
 
     # Counters and limits
     counters: SessionCounters = Field(default_factory=SessionCounters, description="Session counters")
@@ -442,6 +609,18 @@ class AutonomousSessionState(BaseModel):
     # Phase gates (phase_id -> PhaseGateRecord)
     phase_gates: Dict[str, PhaseGateRecord] = Field(
         default_factory=dict, description="Phase gate records"
+    )
+
+    # Required gate obligations and satisfaction tracking (v3 schema)
+    # Maps phase_id -> list of required gate types (e.g., ["fidelity"])
+    required_phase_gates: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Required gate types per phase (phase_id -> gate_types)",
+    )
+    # Maps phase_id -> list of satisfied gate types (passed or waived)
+    satisfied_gates: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Satisfied gate types per phase (phase_id -> gate_types)",
     )
 
     # Completed tasks

@@ -971,6 +971,7 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
         GatePolicy,
         PendingGateEvidence,
     )
+    from foundry_mcp.core.autonomy.server_secret import compute_integrity_checksum
     from foundry_mcp.core.discovery import get_capabilities
 
     start_time = time.perf_counter()
@@ -1107,12 +1108,22 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
 
     # Write pending gate evidence to session
     now = datetime.now(timezone.utc)
+
+    # Compute integrity checksum for tamper detection (P1.3)
+    integrity_checksum = compute_integrity_checksum(
+        gate_attempt_id=gate_attempt_id,
+        step_id=str(step_id),
+        phase_id=str(phase_id),
+        verdict=verdict.value,
+    )
+
     session.pending_gate_evidence = PendingGateEvidence(
         gate_attempt_id=gate_attempt_id,
         step_id=str(step_id),  # Validated non-None above
         phase_id=str(phase_id),  # Validated non-None above
         verdict=verdict,
         issued_at=now,
+        integrity_checksum=integrity_checksum,
     )
     session.updated_at = now
     session.state_version += 1

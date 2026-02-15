@@ -818,3 +818,193 @@ class TestTerminalStates:
         else:
             # Error from spec integrity or another check - not terminal short-circuit
             assert result.error_code is not None
+
+
+# =============================================================================
+# Gate Invariant Enforcement Tests (HB-13)
+# =============================================================================
+
+
+class TestGateInvariantEnforcement:
+    """Test that required phase gates cannot be bypassed (HB-13).
+
+    These tests verify the gate invariant enforcement ensures:
+    1. Orchestrator cannot complete spec when required phase gate is skipped
+    2. Phase progression is blocked when required gate is unsatisfied
+    3. Gate waiver (privileged path) allows progression
+
+    Note: These tests directly call _check_required_gates_satisfied to test
+    the gate invariant logic in isolation from the full orchestration flow.
+    """
+
+    def test_required_gate_blocks_spec_completion(self, tmp_path):
+        """Spec completion is blocked when required phase gate is unsatisfied."""
+        from foundry_mcp.core.autonomy.orchestrator import (
+            ERROR_REQUIRED_GATE_UNSATISFIED,
+            StepOrchestrator,
+        )
+
+        workspace = _make_workspace(tmp_path)
+        orch = _make_orchestrator(workspace)
+
+        # Session with all tasks completed but phase-1 gate unsatisfied
+        session = make_session(
+            active_phase_id="phase-2",
+            completed_task_ids=["task-1", "verify-1", "task-2"],
+            # Phase-1 has required gate but it's PENDING (not satisfied)
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PENDING,
+                ),
+            },
+            required_phase_gates={"phase-1": ["fidelity"]},
+            satisfied_gates={},  # Nothing satisfied
+        )
+
+        # Directly test the gate check method
+        gate_block = orch._check_required_gates_satisfied(session)
+
+        # Should return blocking info
+        assert gate_block is not None
+        assert gate_block["phase_id"] == "phase-1"
+        assert "gate" in gate_block["blocking_reason"].lower()
+
+    def test_required_gate_blocks_phase_progression(self, tmp_path):
+        """Phase progression is blocked when required gate is unsatisfied."""
+        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
+
+        workspace = _make_workspace(tmp_path)
+        orch = _make_orchestrator(workspace)
+
+        # Session with phase-1 tasks done but gate not satisfied
+        session = make_session(
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PENDING,
+                ),
+            },
+            required_phase_gates={"phase-1": ["fidelity"]},
+            satisfied_gates={},
+        )
+
+        # Check gates for phase-1 specifically
+        gate_block = orch._check_required_gates_satisfied(session, "phase-1")
+
+        # Should return blocking info
+        assert gate_block is not None
+        assert gate_block["phase_id"] == "phase-1"
+
+    def test_gate_pass_allows_phase_progression(self, tmp_path):
+        """Passed gate allows phase progression."""
+        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
+
+        workspace = _make_workspace(tmp_path)
+        orch = _make_orchestrator(workspace)
+
+        # Session with phase-1 tasks done AND gate PASSED
+        session = make_session(
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PASSED,
+                ),
+            },
+            required_phase_gates={"phase-1": ["fidelity"]},
+            satisfied_gates={"phase-1": ["fidelity"]},
+        )
+
+        # Check gates for phase-1
+        gate_block = orch._check_required_gates_satisfied(session, "phase-1")
+
+        # Should return None (no block)
+        assert gate_block is None
+
+    def test_gate_waiver_allows_spec_completion(self, tmp_path):
+        """Waived gate allows spec completion (privileged path)."""
+        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
+
+        workspace = _make_workspace(tmp_path)
+        orch = _make_orchestrator(workspace)
+
+        # Session with required gate WAIVED
+        session = make_session(
+            active_phase_id="phase-2",
+            completed_task_ids=["task-1", "task-2"],
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.WAIVED,
+                ),
+            },
+            required_phase_gates={"phase-1": ["fidelity"]},
+            satisfied_gates={"phase-1": ["fidelity"]},  # Waived counts as satisfied
+        )
+
+        # Check all gates
+        gate_block = orch._check_required_gates_satisfied(session)
+
+        # Should return None (waived = satisfied)
+        assert gate_block is None
+
+    def test_no_required_gate_allows_unrestricted_progression(self, tmp_path):
+        """No required gates means unrestricted phase progression."""
+        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
+
+        workspace = _make_workspace(tmp_path)
+        orch = _make_orchestrator(workspace)
+
+        # Session with NO required gates
+        session = make_session(
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=False,  # Not required
+                    status=PhaseGateStatus.PENDING,
+                ),
+            },
+            required_phase_gates={},  # No required gates
+            satisfied_gates={},
+        )
+
+        # Check gates
+        gate_block = orch._check_required_gates_satisfied(session)
+
+        # Should return None (no required gates to check)
+        assert gate_block is None
+
+    def test_phase_gate_status_overrides_satisfied_gates(self, tmp_path):
+        """PhaseGateStatus.PASSED/WAIVED overrides missing satisfied_gates entry."""
+        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
+
+        workspace = _make_workspace(tmp_path)
+        orch = _make_orchestrator(workspace)
+
+        # Session with gate PASSED but NOT in satisfied_gates
+        # This tests the fallback logic that checks PhaseGateRecord.status
+        session = make_session(
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PASSED,  # Passed!
+                ),
+            },
+            required_phase_gates={"phase-1": ["fidelity"]},
+            satisfied_gates={},  # Empty - but gate record shows PASSED
+        )
+
+        # Check gates - should auto-populate satisfied_gates from gate record
+        gate_block = orch._check_required_gates_satisfied(session, "phase-1")
+
+        # Should return None (gate record status overrides missing satisfied_gates)
+        assert gate_block is None
+        # The method should have populated satisfied_gates
+        assert "fidelity" in session.satisfied_gates.get("phase-1", [])

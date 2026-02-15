@@ -31,10 +31,9 @@ Usage:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, Optional, Set
+from typing import Any, Dict, FrozenSet, Optional
 
 import logging
 
@@ -44,6 +43,8 @@ from foundry_mcp.core.responses import (
     error_response,
     ToolResponse,
 )
+from foundry_mcp.core.observability import get_metrics
+from foundry_mcp.core.authorization import get_server_role, Role
 
 
 logger = logging.getLogger(__name__)
@@ -272,7 +273,8 @@ def _write_bypass_journal_entry(
     """
     Write a journal entry for bypass usage.
 
-    This provides an audit trail for write-lock bypasses.
+    Uses the existing journal system (add_journal_entry + save_spec)
+    to avoid direct spec file mutation and associated race conditions.
 
     Args:
         spec_id: The spec ID
@@ -287,21 +289,18 @@ def _write_bypass_journal_entry(
     """
     try:
         from foundry_mcp.core.journal import add_journal_entry
+        from foundry_mcp.core.spec import load_spec, save_spec
 
-        # Load spec data for journaling
-        spec_path = _find_spec_path(spec_id, workspace)
-        if not spec_path:
+        ws_path = Path(workspace) if workspace else Path.cwd()
+        specs_dir = ws_path / "specs"
+
+        spec_data = load_spec(spec_id, specs_dir)
+        if spec_data is None:
             logger.debug(
                 "Spec not found for bypass journal entry",
                 extra={"spec_id": spec_id}
             )
             return False
-
-        import json
-        with open(spec_path, "r") as f:
-            spec_data = json.load(f)
-
-        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         # Add journal entry
         add_journal_entry(
@@ -322,10 +321,8 @@ def _write_bypass_journal_entry(
             },
         )
 
-        # Save the updated spec
-        with open(spec_path, "w") as f:
-            json.dump(spec_data, f, indent=2)
-
+        save_spec(spec_id, spec_data, specs_dir)
+        logger.debug("Wrote bypass journal entry for %s", spec_id)
         return True
 
     except Exception as e:
@@ -340,48 +337,6 @@ def _write_bypass_journal_entry(
         return False
 
 
-def _find_spec_path(spec_id: str, workspace: Optional[str]) -> Optional[Path]:
-    """
-    Find the path to a spec file.
-
-    Args:
-        spec_id: The spec ID
-        workspace: Path to workspace
-
-    Returns:
-        Path to spec file, or None if not found
-    """
-    search_dirs = []
-
-    if workspace:
-        ws_path = Path(workspace)
-        for folder in ["active", "pending", "completed", "archived"]:
-            search_dirs.append(ws_path / "specs" / folder)
-
-    # Search for the spec
-    for search_dir in search_dirs:
-        if not search_dir.exists():
-            continue
-
-        # Check for exact match
-        spec_path = search_dir / f"{spec_id}.json"
-        if spec_path.exists():
-            return spec_path
-
-        # Check for files containing the spec_id
-        for spec_file in search_dir.glob("*.json"):
-            try:
-                import json
-                with open(spec_file, "r") as f:
-                    data = json.load(f)
-                if data.get("spec_id") == spec_id:
-                    return spec_file
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    return None
-
-
 def check_autonomy_write_lock(
     spec_id: str,
     workspace: Optional[str],
@@ -389,6 +344,7 @@ def check_autonomy_write_lock(
     bypass_reason: Optional[str] = None,
     action_name: Optional[str] = None,
     action_category: str = "task",
+    allow_lock_bypass: bool = False,
 ) -> WriteLockResult:
     """
     Check if an autonomy write lock is active for a spec.
@@ -404,6 +360,7 @@ def check_autonomy_write_lock(
         bypass_reason: Reason for bypassing the lock (required if bypass_flag is True)
         action_name: Name of the action being performed (for logging)
         action_category: Category of action ("task" or "lifecycle")
+        allow_lock_bypass: Config setting to allow bypass (default False - fail-closed)
 
     Returns:
         WriteLockResult with lock status and metadata
@@ -415,23 +372,25 @@ def check_autonomy_write_lock(
         ...     # Reject with AUTONOMY_WRITE_LOCK_ACTIVE error
         ...     pass
 
-        >>> # Check lock with valid bypass
+        >>> # Check lock with valid bypass (only works if allow_lock_bypass=True)
         >>> result = check_autonomy_write_lock(
         ...     "my-spec",
         ...     "/workspace",
         ...     bypass_flag=True,
         ...     bypass_reason="Manual intervention required",
+        ...     allow_lock_bypass=True,
         ... )
         >>> if result.status == WriteLockStatus.BYPASSED:
         ...     # Allow the operation
         ...     pass
 
-        >>> # Invalid bypass (no reason)
+        >>> # Bypass denied by config
         >>> result = check_autonomy_write_lock(
         ...     "my-spec",
         ...     "/workspace",
         ...     bypass_flag=True,
-        ...     bypass_reason=None,
+        ...     bypass_reason="Manual intervention required",
+        ...     allow_lock_bypass=False,  # Default - bypass denied
         ... )
         >>> # result.status == WriteLockStatus.LOCKED
     """
@@ -464,6 +423,77 @@ def check_autonomy_write_lock(
 
     # Lock is active - check for bypass
     if bypass_flag:
+        # Role check: Only maintainer can bypass lock, even when config allows it
+        # This prevents autonomy_runner from bypassing locks during autonomous execution
+        current_role = get_server_role()
+        if current_role != Role.MAINTAINER.value:
+            _metrics = get_metrics()
+            if _metrics:
+                _metrics.counter(
+                    "write_lock.bypass_denied_role",
+                    value=1,
+                    labels={"spec_id": spec_id, "session_id": session_id, "role": current_role},
+                )
+
+            logger.warning(
+                "Write-lock bypass denied for non-maintainer role",
+                extra={
+                    "spec_id": spec_id,
+                    "session_id": session_id,
+                    "action_name": action_name,
+                    "role": current_role,
+                    "event_type": "write_lock_bypass_denied_role",
+                },
+            )
+
+            return WriteLockResult(
+                status=WriteLockStatus.LOCKED,
+                lock_active=True,
+                session_id=session_id,
+                session_status=session_status,
+                message=f"Bypass denied: role '{current_role}' cannot bypass lock. Only maintainer role allowed.",
+                metadata={
+                    "error": "bypass_denied_role",
+                    "session_id": session_id,
+                    "configured_role": current_role,
+                    "required_role": Role.MAINTAINER.value,
+                },
+            )
+
+        # Second check: Is bypass permitted by config? (fail-closed by default)
+        if not allow_lock_bypass:
+            # Emit metric for denied bypass attempt
+            _metrics = get_metrics()
+            if _metrics:
+                _metrics.counter(
+                    "write_lock.bypass_denied",
+                    value=1,
+                    labels={"spec_id": spec_id, "session_id": session_id},
+                )
+
+            logger.warning(
+                "Write-lock bypass denied by config (allow_lock_bypass=False)",
+                extra={
+                    "spec_id": spec_id,
+                    "session_id": session_id,
+                    "action_name": action_name,
+                    "event_type": "write_lock_bypass_denied",
+                },
+            )
+
+            return WriteLockResult(
+                status=WriteLockStatus.LOCKED,
+                lock_active=True,
+                session_id=session_id,
+                session_status=session_status,
+                message="Bypass denied: allow_lock_bypass is disabled in configuration",
+                metadata={
+                    "error": "bypass_denied_by_config",
+                    "session_id": session_id,
+                    "config_allow_lock_bypass": False,
+                },
+            )
+
         # Bypass requires a reason — intentional deviation from ADR (which
         # only requires bypass_flag=true).  Mandatory reason improves audit
         # traceability for manual overrides during autonomous sessions.
@@ -576,6 +606,7 @@ def check_and_enforce_write_lock(
     bypass_flag: bool = False,
     bypass_reason: Optional[str] = None,
     request_id: Optional[str] = None,
+    allow_lock_bypass: bool = False,
 ) -> Optional[ToolResponse]:
     """
     Check write lock and return error response if blocked.
@@ -591,6 +622,7 @@ def check_and_enforce_write_lock(
         bypass_flag: If True, allow bypassing the lock
         bypass_reason: Reason for bypassing (required if bypass_flag is True)
         request_id: Optional request correlation ID
+        allow_lock_bypass: Config setting to allow bypass (default False - fail-closed)
 
     Returns:
         None if operation is allowed, ToolResponse error if blocked
@@ -604,6 +636,7 @@ def check_and_enforce_write_lock(
         ...     action_category="task",
         ...     bypass_flag=bypass_autonomy_lock,
         ...     bypass_reason=bypass_reason,
+        ...     allow_lock_bypass=config.autonomy_security.allow_lock_bypass,
         ... )
         >>> if error:
         ...     return error  # Return the error response
@@ -621,6 +654,7 @@ def check_and_enforce_write_lock(
         bypass_reason=bypass_reason,
         action_name=action_name,
         action_category=action_category,
+        allow_lock_bypass=allow_lock_bypass,
     )
 
     # If locked and not bypassed, return error

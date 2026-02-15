@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from dataclasses import dataclass
 
 from foundry_mcp.core.responses import ErrorCode
 from foundry_mcp.tools.unified.common import (
@@ -14,6 +15,16 @@ from foundry_mcp.tools.unified.common import (
     resolve_specs_dir,
 )
 from foundry_mcp.tools.unified.router import ActionRouter
+
+
+# Helper to create mock authorization results
+@dataclass
+class MockAuthzResult:
+    """Mock authorization result for testing."""
+    allowed: bool
+    denied_action: str = ""
+    configured_role: str = "observer"
+    required_role: str = ""
 
 
 # -----------------------------------------------------------------------
@@ -178,15 +189,24 @@ class TestDispatchWithStandardErrors:
             actions={"do-thing": handler},
         )
 
+    def _mock_authz_allowed(self):
+        """Return patchers for authorized state."""
+        return patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        )
+
     def test_success_passthrough(self):
         router = self._make_router()
-        result = dispatch_with_standard_errors(
-            router, "test", "do-thing", config="cfg"
-        )
+        with self._mock_authz_allowed():
+            result = dispatch_with_standard_errors(
+                router, "test", "do-thing", config="cfg"
+            )
         assert result["success"] is True
 
     def test_unsupported_action_returns_error(self):
         router = self._make_router()
+        # Unsupported actions fail before authorization check
         result = dispatch_with_standard_errors(router, "test", "bad-action")
         assert result["success"] is False
         assert "Unsupported" in result["error"]
@@ -208,13 +228,15 @@ class TestDispatchWithStandardErrors:
             raise ValueError("something broke")
 
         router = self._make_router(handler=boom)
-        result = dispatch_with_standard_errors(router, "test", "do-thing")
+        with self._mock_authz_allowed():
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
         assert result["success"] is False
         assert "something broke" in result["error"]
         assert result["data"]["error_code"] == "INTERNAL_ERROR"
 
     def test_uses_provided_request_id(self):
         router = self._make_router()
+        # Unsupported actions fail before authorization check
         result = dispatch_with_standard_errors(
             router,
             "test",
@@ -228,8 +250,76 @@ class TestDispatchWithStandardErrors:
             raise RuntimeError()
 
         router = self._make_router(handler=boom)
-        result = dispatch_with_standard_errors(router, "test", "do-thing")
+        with self._mock_authz_allowed():
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
         assert "RuntimeError" in result["error"]
+
+    def test_authorization_denied_for_observer_role(self):
+        """Test that observer role is denied access to non-readonly actions."""
+        router = self._make_router()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
+        assert result["success"] is False
+        assert "Authorization denied" in result["error"]
+        assert result["data"]["error_code"] == "AUTHORIZATION"
+        assert result["data"]["details"]["role"] == "observer"
+
+    def test_authorization_denied_includes_required_role(self):
+        """Test that authorization denial includes required role."""
+        router = self._make_router()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
+        assert result["data"]["details"]["required_role"] == "maintainer"
+        assert "recovery_action" in result["data"]["details"]
+
+    def test_authorization_denied_emits_metric(self):
+        """Test that authorization denial emits authz.denied metric."""
+        router = self._make_router()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ), patch(
+            "foundry_mcp.tools.unified.common.MetricsCollector"
+        ) as mock_metrics_class:
+            mock_collector = MagicMock()
+            mock_metrics_class.return_value = mock_collector
+
+            dispatch_with_standard_errors(router, "test", "do-thing")
+
+            mock_metrics_class.assert_called_once_with(prefix="authz")
+            mock_collector.counter.assert_called_once_with(
+                "denied",
+                labels={"role": "observer", "tool": "test", "action": "do-thing"},
+            )
+
+    def test_authorization_allowed_for_maintainer(self):
+        """Test that maintainer role has access to all actions."""
+        router = self._make_router()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
+        assert result["success"] is True
+
+    def test_authorization_check_after_action_validation(self):
+        """Test that authorization check happens after action validation."""
+        router = self._make_router()
+        # Request for non-existent action should fail with VALIDATION_ERROR,
+        # not AUTHORIZATION
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = dispatch_with_standard_errors(router, "test", "nonexistent")
+        assert result["data"]["error_code"] == "VALIDATION_ERROR"
+        assert "Unsupported" in result["error"]
 
 
 # -----------------------------------------------------------------------

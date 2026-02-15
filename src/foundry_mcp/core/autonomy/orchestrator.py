@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -41,6 +42,7 @@ from foundry_mcp.core.autonomy.models import (
     NextStep,
     PauseReason,
     PendingGateEvidence,
+    PendingVerificationReceipt,
     PhaseGateRecord,
     PhaseGateStatus,
     SessionStatus,
@@ -48,10 +50,15 @@ from foundry_mcp.core.autonomy.models import (
     StepInstruction,
     StepOutcome,
     StepType,
+    VerificationReceipt,
 )
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,
+)
+from foundry_mcp.core.autonomy.server_secret import (
+    compute_integrity_checksum,
+    verify_integrity_checksum,
 )
 from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.core.task._helpers import check_all_blocked
@@ -73,6 +80,12 @@ ERROR_SPEC_REBASE_REQUIRED = "SPEC_REBASE_REQUIRED"
 ERROR_HEARTBEAT_STALE = "HEARTBEAT_STALE"
 ERROR_STEP_STALE = "STEP_STALE"
 ERROR_ALL_TASKS_BLOCKED = "ALL_TASKS_BLOCKED"
+ERROR_GATE_BLOCKED = "GATE_BLOCKED"
+ERROR_REQUIRED_GATE_UNSATISFIED = "REQUIRED_GATE_UNSATISFIED"
+ERROR_VERIFICATION_RECEIPT_MISSING = "VERIFICATION_RECEIPT_MISSING"
+ERROR_VERIFICATION_RECEIPT_INVALID = "VERIFICATION_RECEIPT_INVALID"
+ERROR_GATE_INTEGRITY_CHECKSUM = "GATE_INTEGRITY_CHECKSUM"
+ERROR_GATE_AUDIT_FAILURE = "GATE_AUDIT_FAILURE"
 
 
 # =============================================================================
@@ -252,6 +265,22 @@ class StepOrchestrator:
                     should_persist=False,
                 )
 
+        # Validate verification receipt for EXECUTE_VERIFICATION steps
+        if last_step_result is not None and last_step_result.step_type == StepType.EXECUTE_VERIFICATION:
+            receipt_error = self._validate_verification_receipt(session, last_step_result)
+            if receipt_error:
+                error_code = ERROR_VERIFICATION_RECEIPT_MISSING
+                if last_step_result.verification_receipt is not None:
+                    error_code = ERROR_VERIFICATION_RECEIPT_INVALID
+                logger.warning("%s: %s", error_code, receipt_error)
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=error_code,
+                    error_message=receipt_error,
+                    should_persist=False,
+                )
+
         # =================================================================
         # Step 3: Record Step Outcome
         # =================================================================
@@ -374,11 +403,27 @@ class StepOrchestrator:
 
         # Cache the response for replay-safe exactly-once semantics
         if next_step_result.success and next_step_result.next_step is not None:
+            # Compute gate invariant fields for observability
+            required_phase_gates: list[str] = []
+            satisfied_gates: list[str] = []
+            missing_required_gates: list[str] = []
+
+            for phase_id, gate_record in session.phase_gates.items():
+                if gate_record.required:
+                    required_phase_gates.append(phase_id)
+                    if gate_record.status in (PhaseGateStatus.PASSED, PhaseGateStatus.WAIVED):
+                        satisfied_gates.append(phase_id)
+                    elif gate_record.status in (PhaseGateStatus.PENDING, PhaseGateStatus.FAILED):
+                        missing_required_gates.append(phase_id)
+
             response_data = SessionStepResponseData(
                 session_id=session.id,
                 status=session.status,
                 state_version=session.state_version,
                 next_step=next_step_result.next_step,
+                required_phase_gates=required_phase_gates if required_phase_gates else None,
+                satisfied_gates=satisfied_gates if satisfied_gates else None,
+                missing_required_gates=missing_required_gates if missing_required_gates else None,
             )
             session.last_issued_response = response_data.model_dump(
                 mode="json", by_alias=True
@@ -474,6 +519,110 @@ class StepOrchestrator:
                 f"Gate evidence phase binding mismatch: evidence bound to phase {evidence.phase_id}, "
                 f"but result is for phase {result.phase_id}"
             )
+
+        # Validate integrity checksum (P1.3)
+        if evidence.integrity_checksum:
+            if not verify_integrity_checksum(
+                evidence.gate_attempt_id,
+                evidence.step_id,
+                evidence.phase_id,
+                evidence.verdict.value,
+                evidence.integrity_checksum,
+            ):
+                logger.warning(
+                    "Gate evidence integrity checksum mismatch for gate_attempt_id %s",
+                    evidence.gate_attempt_id,
+                )
+                return (
+                    f"Gate evidence integrity checksum verification failed. "
+                    f"The evidence may have been tampered with or the server secret was rotated. "
+                    f"Gate attempt ID: {evidence.gate_attempt_id}"
+                )
+
+        return None
+
+    def _validate_verification_receipt(
+        self,
+        session: AutonomousSessionState,
+        result: LastStepResult,
+    ) -> Optional[str]:
+        """Validate verification receipt for EXECUTE_VERIFICATION steps.
+
+        Per P1.2: outcome='success' requires a valid receipt with matching
+        command hash, exit code, and output digest. Missing or invalid
+        receipts yield deterministic validation errors with recovery guidance.
+
+        Args:
+            session: Current session state
+            result: Step result being reported
+
+        Returns:
+            None if valid, error message if validation fails
+        """
+        # Only validate for EXECUTE_VERIFICATION steps with outcome='success'
+        if result.step_type != StepType.EXECUTE_VERIFICATION:
+            return None
+
+        if result.outcome != StepOutcome.SUCCESS:
+            return None
+
+        # Check for pending receipt data
+        pending = session.pending_verification_receipt
+        if not pending:
+            logger.warning(
+                "VERIFICATION_RECEIPT_MISSING: no pending receipt for step %s",
+                result.step_id,
+            )
+            return (
+                f"Verification receipt required for execute_verification step with outcome='success'. "
+                f"No pending receipt found for step {result.step_id}. "
+                f"This may indicate the step was not properly issued by the orchestrator."
+            )
+
+        # Validate step binding
+        if result.step_id != pending.step_id:
+            return (
+                f"Verification receipt step mismatch: expected step {pending.step_id}, "
+                f"got step {result.step_id}"
+            )
+
+        # Check receipt presence
+        receipt = result.verification_receipt
+        if not receipt:
+            logger.warning(
+                "VERIFICATION_RECEIPT_MISSING: step %s reported success without receipt",
+                result.step_id,
+            )
+            return (
+                f"Verification receipt is required when outcome='success' for execute_verification steps. "
+                f"Include verification_receipt with command_hash, exit_code, and output_digest in last_step_result."
+            )
+
+        # Validate step binding in receipt
+        if receipt.step_id != result.step_id:
+            return (
+                f"Verification receipt step_id mismatch: expected {result.step_id}, "
+                f"got {receipt.step_id}"
+            )
+
+        # Validate command hash matches expected
+        if receipt.command_hash != pending.expected_command_hash:
+            return (
+                f"Verification receipt command_hash mismatch: "
+                f"expected {pending.expected_command_hash[:16]}..., "
+                f"got {receipt.command_hash[:16]}.... "
+                f"The verification command may have been modified or a different verification was run."
+            )
+
+        logger.info(
+            "Verification receipt validated for step %s: command_hash=%s, exit_code=%d",
+            result.step_id,
+            receipt.command_hash[:16],
+            receipt.exit_code,
+        )
+
+        # Clear pending receipt after successful validation
+        session.pending_verification_receipt = None
 
         return None
 
@@ -858,6 +1007,186 @@ class StepOrchestrator:
 
         return None
 
+    def _check_required_gates_satisfied(
+        self,
+        session: AutonomousSessionState,
+        phase_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Check if required gates are satisfied for invariant enforcement.
+
+        Args:
+            session: Session state
+            phase_id: Specific phase to check, or None for all phases
+
+        Returns:
+            None if all required gates are satisfied, or a dict with:
+            - phase_id: Phase with unsatisfied gate
+            - gate_type: Type of the unsatisfied gate
+            - blocking_reason: Human-readable reason
+            - recovery_action: Dict with action/params to unblock
+        """
+        if phase_id:
+            # Check specific phase
+            phases_to_check = [phase_id]
+        else:
+            # Check all phases with required gates
+            phases_to_check = list(session.required_phase_gates.keys())
+
+        for check_phase_id in phases_to_check:
+            required_gates = session.required_phase_gates.get(check_phase_id, [])
+            satisfied_gates = session.satisfied_gates.get(check_phase_id, [])
+
+            for gate_type in required_gates:
+                if gate_type not in satisfied_gates:
+                    # Check if gate record shows passed/waived (alternative satisfaction)
+                    gate_record = session.phase_gates.get(check_phase_id)
+                    if gate_record and gate_record.status in (
+                        PhaseGateStatus.PASSED,
+                        PhaseGateStatus.WAIVED,
+                    ):
+                        # Gate is satisfied via record, update satisfied_gates
+                        if check_phase_id not in session.satisfied_gates:
+                            session.satisfied_gates[check_phase_id] = []
+                        if gate_type not in session.satisfied_gates[check_phase_id]:
+                            session.satisfied_gates[check_phase_id].append(gate_type)
+                        continue
+
+                    # Gate is not satisfied
+                    return {
+                        "phase_id": check_phase_id,
+                        "gate_type": gate_type,
+                        "blocking_reason": (
+                            f"Required gate '{gate_type}' for phase '{check_phase_id}' "
+                            f"is not satisfied. Phase completion blocked."
+                        ),
+                        "recovery_action": {
+                            "action": "gate-waiver",
+                            "params": {
+                                "phase_id": check_phase_id,
+                                "reason_code": "operator_override",
+                            },
+                            "description": (
+                                f"Use gate-waiver action to waive the required '{gate_type}' "
+                                f"gate for phase '{check_phase_id}'. Requires maintainer role "
+                                f"and allow_gate_waiver=true config."
+                            ),
+                        },
+                    }
+
+        return None
+
+    def _audit_required_gate_integrity(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Optional[Dict[str, Any]],
+        phase_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Independently audit gate integrity by rebuilding obligations from spec.
+
+        This method complements _check_required_gates_satisfied by independently
+        rebuilding gate obligations directly from spec phases and comparing with
+        persisted gate records. This detects tampering where gate records may
+        have been modified outside normal orchestrator flow.
+
+        Args:
+            session: Session state with persisted gate records
+            spec_data: Spec data containing phase definitions
+            phase_id: Specific phase to audit, or None for all phases
+
+        Returns:
+            None if all gates pass audit, or a dict with:
+            - phase_id: Phase with audit failure
+            - gate_type: Type of gate with failure
+            - audit_failure_type: "missing_record", "invalid_status", "tampered"
+            - details: Human-readable description of the failure
+        """
+        if not spec_data:
+            return None
+
+        # Rebuild gate obligations directly from spec phases
+        phases_to_audit = []
+        if phase_id:
+            # Find specific phase in spec
+            for phase in spec_data.get("phases", []):
+                if phase.get("id") == phase_id:
+                    phases_to_audit.append(phase)
+                    break
+        else:
+            # Audit all phases
+            phases_to_audit = spec_data.get("phases", [])
+
+        for phase in phases_to_audit:
+            check_phase_id = phase.get("id", "")
+            if not check_phase_id:
+                continue
+
+            # Check if phase requires a fidelity gate (based on spec metadata)
+            phase_metadata = phase.get("metadata", {})
+            requires_gate = phase_metadata.get("requires_gate", False)
+
+            # Also check session.required_phase_gates for this phase
+            session_required = session.required_phase_gates.get(check_phase_id, [])
+            gate_types_to_check = session_required if session_required else (["fidelity"] if requires_gate else [])
+
+            for gate_type in gate_types_to_check:
+                gate_record = session.phase_gates.get(check_phase_id)
+
+                # Check 1: Missing gate record when required
+                if not gate_record:
+                    logger.warning(
+                        "Gate audit failure: missing gate record for phase %s, gate_type %s",
+                        check_phase_id,
+                        gate_type,
+                    )
+                    return {
+                        "phase_id": check_phase_id,
+                        "gate_type": gate_type,
+                        "audit_failure_type": "missing_record",
+                        "details": (
+                            f"Required gate '{gate_type}' for phase '{check_phase_id}' "
+                            f"has no persisted gate record. Gate may have been deleted "
+                            f"or never created."
+                        ),
+                    }
+
+                # Check 2: Gate not in acceptable terminal state (passed or waived)
+                if gate_record.status not in (PhaseGateStatus.PASSED, PhaseGateStatus.WAIVED):
+                    logger.warning(
+                        "Gate audit failure: gate status %s not acceptable for phase %s",
+                        gate_record.status.value,
+                        check_phase_id,
+                    )
+                    return {
+                        "phase_id": check_phase_id,
+                        "gate_type": gate_type,
+                        "audit_failure_type": "invalid_status",
+                        "details": (
+                            f"Required gate '{gate_type}' for phase '{check_phase_id}' "
+                            f"has status '{gate_record.status.value}', but only 'passed' "
+                            f"or 'waived' are acceptable for terminal transitions."
+                        ),
+                    }
+
+                # Check 3: Verify waiver has required metadata (if waived)
+                if gate_record.status == PhaseGateStatus.WAIVED:
+                    if not gate_record.waiver_reason_code:
+                        logger.warning(
+                            "Gate audit failure: waived gate missing reason_code for phase %s",
+                            check_phase_id,
+                        )
+                        return {
+                            "phase_id": check_phase_id,
+                            "gate_type": gate_type,
+                            "audit_failure_type": "tampered",
+                            "details": (
+                                f"Gate '{gate_type}' for phase '{check_phase_id}' is waived "
+                                f"but missing required waiver_reason_code. This may indicate "
+                                f"tampering with the gate record."
+                            ),
+                        }
+
+        return None
+
     def _get_pending_tasks(
         self,
         spec_data: Dict[str, Any],
@@ -920,6 +1249,40 @@ class StepOrchestrator:
             and self._phase_gate_passed(session, current_phase)
             and session.stop_conditions.stop_on_phase_completion
         ):
+            # Enforce gate invariant: required gates must be satisfied
+            gate_block = self._check_required_gates_satisfied(session, current_phase.get("id"))
+            if gate_block:
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                    error_message=gate_block["blocking_reason"],
+                    should_persist=True,
+                    warnings={
+                        "gate_block": gate_block,
+                    },
+                )
+
+            # Run independent gate audit before phase-close (P1.4)
+            audit_failure = self._audit_required_gate_integrity(
+                session, spec_data, current_phase.get("id")
+            )
+            if audit_failure:
+                logger.warning(
+                    "Gate audit failure on phase-close: %s",
+                    audit_failure["details"],
+                )
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_GATE_AUDIT_FAILURE,
+                    error_message=audit_failure["details"],
+                    should_persist=True,
+                    warnings={
+                        "audit_failure": audit_failure,
+                    },
+                )
+
             return self._create_pause_result(
                 session,
                 PauseReason.PHASE_COMPLETE,
@@ -933,6 +1296,38 @@ class StepOrchestrator:
             return self._create_implement_task_step(session, next_task, spec_data, now)
 
         # Step 17: No remaining tasks - complete spec
+        # Enforce gate invariant: all phase gates must be satisfied
+        gate_block = self._check_required_gates_satisfied(session)
+        if gate_block:
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                error_message=gate_block["blocking_reason"],
+                should_persist=True,
+                warnings={
+                    "gate_block": gate_block,
+                },
+            )
+
+        # Run independent gate audit before spec-complete (P1.4)
+        audit_failure = self._audit_required_gate_integrity(session, spec_data)
+        if audit_failure:
+            logger.warning(
+                "Gate audit failure on spec-complete: %s",
+                audit_failure["details"],
+            )
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_GATE_AUDIT_FAILURE,
+                error_message=audit_failure["details"],
+                should_persist=True,
+                warnings={
+                    "audit_failure": audit_failure,
+                },
+            )
+
         return self._create_complete_spec_result(session, now)
 
     def _get_current_phase(
@@ -1130,6 +1525,20 @@ class StepOrchestrator:
         """
         # Check if we should stop on phase completion
         if session.stop_conditions.stop_on_phase_completion:
+            # Enforce gate invariant: required gates must be satisfied
+            gate_block = self._check_required_gates_satisfied(session, session.active_phase_id)
+            if gate_block:
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                    error_message=gate_block["blocking_reason"],
+                    should_persist=True,
+                    warnings={
+                        "gate_block": gate_block,
+                    },
+                )
+
             return self._create_pause_result(
                 session,
                 PauseReason.PHASE_COMPLETE,
@@ -1143,6 +1552,20 @@ class StepOrchestrator:
             return self._create_implement_task_step(session, next_task, spec_data, now)
 
         # No remaining tasks - complete spec
+        # Enforce gate invariant: all phase gates must be satisfied
+        gate_block = self._check_required_gates_satisfied(session)
+        if gate_block:
+            return OrchestrationResult(
+                success=False,
+                session=session,
+                error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+                error_message=gate_block["blocking_reason"],
+                should_persist=True,
+                warnings={
+                    "gate_block": gate_block,
+                },
+            )
+
         return self._create_complete_spec_result(session, now)
 
     def _find_next_task(
@@ -1297,12 +1720,29 @@ class StepOrchestrator:
         task: Dict[str, Any],
         now: datetime,
     ) -> OrchestrationResult:
-        """Create an execute_verification step."""
+        """Create an execute_verification step with pending receipt."""
         task_id = task.get("id", "")
         task_title = task.get("title", "")
         phase_id = session.active_phase_id or ""
 
         step_id = f"step_{ULID()}"
+
+        # Extract verification command from task metadata for receipt
+        task_metadata = task.get("metadata", {})
+        command = task_metadata.get("command", "")
+        command_hash = hashlib.sha256(command.encode()).hexdigest() if command else ""
+
+        # Create pending verification receipt for later validation
+        if command_hash:
+            session.pending_verification_receipt = PendingVerificationReceipt(
+                step_id=step_id,
+                task_id=task_id,
+                expected_command_hash=command_hash,
+                issued_at=now,
+            )
+        else:
+            # Clear any stale pending receipt if no command
+            session.pending_verification_receipt = None
 
         instructions = [
             StepInstruction(
@@ -1531,4 +1971,10 @@ __all__ = [
     "ERROR_HEARTBEAT_STALE",
     "ERROR_STEP_STALE",
     "ERROR_ALL_TASKS_BLOCKED",
+    "ERROR_GATE_BLOCKED",
+    "ERROR_REQUIRED_GATE_UNSATISFIED",
+    "ERROR_VERIFICATION_RECEIPT_MISSING",
+    "ERROR_VERIFICATION_RECEIPT_INVALID",
+    "ERROR_GATE_INTEGRITY_CHECKSUM",
+    "ERROR_GATE_AUDIT_FAILURE",
 ]

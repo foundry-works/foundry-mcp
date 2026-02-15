@@ -103,6 +103,16 @@ from .spec_hash import (
     get_spec_file_metadata,
     compute_structural_diff,
 )
+from .audit import (
+    AuditEventType,
+    AuditEvent,
+    AuditLedger,
+    VerificationResult,
+    append_event,
+    verify_chain,
+    get_ledger_path,
+    GENESIS_HASH,
+)
 
 
 __all__ = [
@@ -186,4 +196,13 @@ __all__ = [
     "compute_spec_structure_hash",
     "get_spec_file_metadata",
     "compute_structural_diff",
+    # Audit module
+    "AuditEventType",
+    "AuditEvent",
+    "AuditLedger",
+    "VerificationResult",
+    "append_event",
+    "verify_chain",
+    "get_ledger_path",
+    "GENESIS_HASH",
 ]

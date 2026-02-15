@@ -36,7 +36,7 @@ from typing import Any, Callable, Optional
 logger = logging.getLogger(__name__)
 
 # Current schema version for AutonomousSessionState
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 # Schema version field name in state dict (matches ADR-002 specification)
 SCHEMA_VERSION_KEY = "_schema_version"
@@ -137,6 +137,40 @@ def migrate_v1_to_v2(state: dict[str, Any]) -> dict[str, Any]:
 
 
 MIGRATIONS[(1, 2)] = migrate_v1_to_v2
+
+
+def migrate_v2_to_v3(state: dict[str, Any]) -> dict[str, Any]:
+    """Migrate state from v2 to v3.
+
+    Adds required_phase_gates and satisfied_gates fields for gate obligation
+    and satisfaction tracking. Defaults to one fidelity gate required per
+    existing phase (based on phase_gates keys), with no gates satisfied.
+    """
+    migrated = deepcopy(state)
+
+    # Get existing phase IDs from phase_gates
+    existing_phases = set(migrated.get("phase_gates", {}).keys())
+
+    # Also check active_phase_id
+    active_phase = migrated.get("active_phase_id")
+    if active_phase:
+        existing_phases.add(active_phase)
+
+    # Initialize required_phase_gates with default fidelity gate per phase
+    required_gates = migrated.setdefault("required_phase_gates", {})
+    for phase_id in existing_phases:
+        # Default: one fidelity gate required per phase
+        if phase_id not in required_gates:
+            required_gates[phase_id] = ["fidelity"]
+
+    # Initialize satisfied_gates as empty (no gates satisfied yet)
+    migrated.setdefault("satisfied_gates", {})
+
+    set_schema_version(migrated, 3)
+    return migrated
+
+
+MIGRATIONS[(2, 3)] = migrate_v2_to_v3
 
 
 # =============================================================================
@@ -325,6 +359,23 @@ def _recover_state(
         limits.setdefault("avg_pct_per_step", 3)
         limits.setdefault("context_staleness_threshold", 5)
         limits.setdefault("context_staleness_penalty_pct", 5)
+
+    # Apply v3 defaults
+    if target_version >= 3:
+        # Get existing phase IDs to populate required_phase_gates defaults
+        existing_phases = set(recovered.get("phase_gates", {}).keys())
+        active_phase = recovered.get("active_phase_id")
+        if active_phase:
+            existing_phases.add(active_phase)
+
+        # Initialize required_phase_gates with fidelity gate per phase
+        required_gates = recovered.setdefault("required_phase_gates", {})
+        for phase_id in existing_phases:
+            if phase_id not in required_gates:
+                required_gates[phase_id] = ["fidelity"]
+
+        # Initialize satisfied_gates as empty
+        recovered.setdefault("satisfied_gates", {})
 
     # Set schema version
     set_schema_version(recovered, target_version)

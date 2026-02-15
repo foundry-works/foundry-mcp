@@ -14,7 +14,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ulid import ULID
 
@@ -39,8 +39,10 @@ from foundry_mcp.core.autonomy.models import (
     CompletedPhaseSummary,
     PendingTaskSummary,
     PhaseGateStatus,
+    PhaseGateRecord,
     RebaseResultDetail,
     GatePolicy,
+    OverrideReasonCode,
 )
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
@@ -55,6 +57,11 @@ from foundry_mcp.core.responses import (
     success_response,
 )
 from foundry_mcp.core.spec import load_spec, resolve_spec_file
+from foundry_mcp.core.authorization import (
+    get_server_role,
+    check_action_allowed,
+    Role,
+)
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
@@ -63,6 +70,8 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _session_not_found_response,
     _validation_error,
     _resolve_specs_dir,
+    _is_feature_enabled,
+    _feature_disabled_response,
 )
 
 import logging
@@ -87,21 +96,6 @@ ERROR_IDEMPOTENCY_MISMATCH = "IDEMPOTENCY_MISMATCH"
 # =============================================================================
 # Helper Functions
 # =============================================================================
-
-
-def _feature_disabled_response(action: str, request_id: str) -> dict:
-    """Return feature disabled error response."""
-    return asdict(error_response(
-        "autonomy_sessions feature is not enabled",
-        error_code=ErrorCode.FEATURE_DISABLED,
-        error_type=ErrorType.FEATURE_FLAG,
-        request_id=request_id,
-        details={
-            "action": action,
-            "feature_flag": "autonomy_sessions",
-            "hint": "Enable autonomy_sessions feature flag to use session management",
-        },
-    ))
 
 
 def _invalid_transition_response(
@@ -346,6 +340,123 @@ def _write_session_journal(
         return False
 
 
+def _compute_required_gates_from_spec(
+    spec_data: Dict[str, Any],
+    session: AutonomousSessionState,
+) -> Dict[str, List[str]]:
+    """Compute required gate types for each phase from spec structure.
+
+    Derives the minimum required gate types based on phase composition:
+    - Phases with verification tasks require "fidelity" gate
+    - Phases without verification tasks require "manual_review" gate
+    - Spec authors can expand but minimum gate types cannot be removed
+
+    Args:
+        spec_data: Parsed spec data with phases
+        session: Current session state (for existing requirements)
+
+    Returns:
+        Dict mapping phase_id -> list of required gate types
+    """
+    required_gates: Dict[str, List[str]] = {}
+
+    phases = spec_data.get("phases", [])
+    if not isinstance(phases, list):
+        return required_gates
+
+    for phase in phases:
+        if not isinstance(phase, dict):
+            continue
+
+        phase_id = phase.get("id", "")
+        if not phase_id:
+            continue
+
+        # Check if phase has verification tasks
+        tasks = phase.get("tasks", [])
+        has_verify_task = False
+
+        if isinstance(tasks, list):
+            for task in tasks:
+                if isinstance(task, dict) and task.get("type") == "verify":
+                    has_verify_task = True
+                    break
+
+        # Minimum gate type based on phase composition
+        if has_verify_task:
+            minimum_gate = "fidelity"
+        else:
+            minimum_gate = "manual_review"
+
+        # Preserve existing requirements if they include the minimum
+        existing = session.required_phase_gates.get(phase_id, [])
+        if minimum_gate in existing:
+            # Keep existing (may have additional gates from spec author)
+            required_gates[phase_id] = existing
+        else:
+            # Ensure minimum is present
+            required_gates[phase_id] = [minimum_gate]
+
+    return required_gates
+
+
+def _reconcile_gates_on_rebase(
+    session: AutonomousSessionState,
+    new_required_gates: Dict[str, List[str]],
+    diff: "StructuralDiff",
+) -> None:
+    """Reconcile required and satisfied gates after rebase.
+
+    Preserves satisfied gates for unchanged phases, marks new/changed
+    requirements as unsatisfied. Prevents removal of minimum gate types.
+
+    Args:
+        session: Session state to update
+        new_required_gates: New required gates computed from updated spec
+        diff: Structural diff from rebase
+    """
+    # Preserve satisfied gates for unchanged phases
+    old_satisfied = session.satisfied_gates.copy()
+
+    # Update required gates
+    session.required_phase_gates = new_required_gates
+
+    # Clear satisfied gates for new phases (they need to pass gates)
+    for phase_id in diff.added_phases:
+        if phase_id in session.satisfied_gates:
+            del session.satisfied_gates[phase_id]
+
+    # Clear satisfied gates for phases with new/changed tasks
+    for task_id in diff.added_tasks:
+        # Extract phase_id from task_id pattern (e.g., "task-1-2" -> "phase-1")
+        # or look up from spec - for simplicity, clear all satisfied for affected phases
+        # This is conservative but safe
+        pass  # Handled by phase check below
+
+    # For phases that still exist, preserve satisfied gates that match requirements
+    preserved_satisfied: Dict[str, List[str]] = {}
+
+    for phase_id, required in new_required_gates.items():
+        old_satisfied_for_phase = old_satisfied.get(phase_id, [])
+
+        # Only preserve satisfied gates that are still in requirements
+        preserved = [g for g in old_satisfied_for_phase if g in required]
+
+        # For phases with added tasks, clear satisfied to force re-verification
+        phase_had_changes = any(
+            task_id.startswith(f"{phase_id}-") or f"-{phase_id.split('-')[-1]}-" in task_id
+            for task_id in diff.added_tasks
+        )
+
+        if phase_had_changes:
+            preserved = []
+
+        if preserved:
+            preserved_satisfied[phase_id] = preserved
+
+    session.satisfied_gates = preserved_satisfied
+
+
 # =============================================================================
 # Session Start Handler
 # =============================================================================
@@ -401,6 +512,10 @@ def _handle_session_start(
         Response dict with session details or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-start", request_id)
 
     if not spec_id:
         return _validation_error(
@@ -562,6 +677,9 @@ def _handle_session_start(
             gate_policy=resolved_gate_policy,
         )
 
+        # Compute required gates from spec structure
+        session.required_phase_gates = _compute_required_gates_from_spec(spec_data, session)
+
         # Step 5: Save state (atomic write)
         try:
             storage.save(session)
@@ -600,6 +718,34 @@ def _handle_session_start(
         # Step 7: Write pointer
         storage.set_active_session(spec_id, session.id)
 
+        # Step 7.5: Auto-verify audit chain for existing trails (P2.1)
+        audit_warning = None
+        try:
+            from foundry_mcp.core.autonomy.audit import get_ledger_path, verify_chain
+            from pathlib import Path as _Path
+
+            ws_path = _Path(workspace) if workspace else _Path.cwd()
+            ledger_path = get_ledger_path(spec_id=spec_id, workspace_path=ws_path)
+
+            if ledger_path.exists():
+                result = verify_chain(spec_id=spec_id, workspace_path=ws_path)
+                if not result.valid:
+                    audit_warning = {
+                        "code": "AUDIT_CHAIN_BROKEN",
+                        "divergence_point": result.divergence_point,
+                        "divergence_type": result.divergence_type,
+                        "detail": result.divergence_detail,
+                    }
+                    logger.warning(
+                        "Audit chain verification failed for spec %s: %s at sequence %d",
+                        spec_id,
+                        result.divergence_type,
+                        result.divergence_point,
+                    )
+        except Exception as e:
+            # Non-blocking - audit verification failure should not prevent session start
+            logger.debug("Audit verification skipped (non-critical): %s", e)
+
         # Lock released by context manager
 
     # Step 8: GC (best effort)
@@ -610,7 +756,13 @@ def _handle_session_start(
 
     logger.info("Started session %s for spec %s", session.id, spec_id)
 
-    return _build_session_response(session, request_id)
+    response = _build_session_response(session, request_id)
+
+    # Include audit warning if verification failed (P2.1)
+    if audit_warning:
+        response["data"]["audit_warning"] = audit_warning
+
+    return response
 
 
 # =============================================================================
@@ -642,6 +794,10 @@ def _handle_session_status(
         Response dict with session status or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-status", request_id)
 
     storage = _get_storage(config, workspace)
 
@@ -683,6 +839,10 @@ def _handle_session_pause(
         Response dict with updated session state or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-pause", request_id)
 
     storage = _get_storage(config, workspace)
 
@@ -765,6 +925,10 @@ def _handle_session_resume(
         Response dict with session state and next step or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-resume", request_id)
 
     storage = _get_storage(config, workspace)
 
@@ -886,6 +1050,8 @@ def _handle_session_end(
     config: ServerConfig,
     spec_id: Optional[str] = None,
     session_id: Optional[str] = None,
+    reason_code: Optional[str] = None,
+    reason_detail: Optional[str] = None,
     workspace: Optional[str] = None,
     **payload: Any,
 ) -> dict:
@@ -894,10 +1060,14 @@ def _handle_session_end(
     Ends an autonomous session (terminal state).
     Valid transitions: running/paused/failed -> ended
 
+    Requires reason_code (OverrideReasonCode enum) for audit trail.
+
     Args:
         config: Server configuration
         spec_id: Spec ID of the session
         session_id: Session ID (optional, alternative to spec_id)
+        reason_code: Required structured reason code (OverrideReasonCode enum)
+        reason_detail: Optional free-text detail for reason
         workspace: Workspace path
         **payload: Additional parameters
 
@@ -905,6 +1075,31 @@ def _handle_session_end(
         Response dict confirming session ended or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-end", request_id)
+
+    # Validate reason_code is provided
+    if not reason_code:
+        return _validation_error(
+            action="session-end",
+            field="reason_code",
+            message="reason_code is required for session-end",
+            request_id=request_id,
+        )
+
+    # Validate reason_code is a valid OverrideReasonCode
+    try:
+        validated_reason_code = OverrideReasonCode(reason_code)
+    except ValueError:
+        valid_codes = [e.value for e in OverrideReasonCode]
+        return _validation_error(
+            action="session-end",
+            field="reason_code",
+            message=f"Invalid reason_code: {reason_code}. Must be one of: {', '.join(valid_codes)}",
+            request_id=request_id,
+        )
 
     storage = _get_storage(config, workspace)
 
@@ -924,6 +1119,7 @@ def _handle_session_end(
 
     # Capture previous status before mutation for journal
     previous_status = session.status
+    current_role = get_server_role()
 
     # Update session
     session.status = SessionStatus.ENDED
@@ -935,16 +1131,22 @@ def _handle_session_end(
     # Remove pointer
     storage.remove_active_session(session.spec_id)
 
-    # Write journal
+    # Write journal with reason code and role
     _write_session_journal(
         spec_id=session.spec_id,
         action="end",
-        summary=f"Session ended (was {previous_status.value})",
+        summary=f"Session ended (was {previous_status.value}): {validated_reason_code.value}",
         session_id=session.id,
         workspace=workspace,
+        metadata={
+            "reason_code": validated_reason_code.value,
+            "reason_detail": reason_detail,
+            "server_role": current_role,
+            "previous_status": previous_status.value,
+        },
     )
 
-    logger.info("Ended session %s for spec %s", session.id, session.spec_id)
+    logger.info("Ended session %s for spec %s: %s", session.id, session.spec_id, validated_reason_code.value)
 
     return _build_session_response(session, request_id)
 
@@ -982,6 +1184,10 @@ def _handle_session_list(
         Response dict with session list or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-list", request_id)
 
     # Validate limit
     limit = max(1, min(limit, 100))
@@ -1114,6 +1320,10 @@ def _handle_session_rebase(
     """
     request_id = _request_id()
 
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-rebase", request_id)
+
     storage = _get_storage(config, workspace)
 
     session, err = _resolve_session(storage, "session-rebase", request_id, session_id, spec_id)
@@ -1165,6 +1375,9 @@ def _handle_session_rebase(
         session.paused_at = None
         session.updated_at = now
         session.state_version += 1
+
+        # Update required gates (spec author may have added gate requirements)
+        session.required_phase_gates = _compute_required_gates_from_spec(current_spec_data, session)
 
         storage.save(session)
 
@@ -1241,6 +1454,10 @@ def _handle_session_rebase(
     session.paused_at = None
     session.updated_at = now
     session.state_version += 1
+
+    # Reconcile required and satisfied gates
+    new_required_gates = _compute_required_gates_from_spec(current_spec_data, session)
+    _reconcile_gates_on_rebase(session, new_required_gates, diff)
 
     storage.save(session)
 
@@ -1319,6 +1536,10 @@ def _handle_session_heartbeat(
     """
     request_id = _request_id()
 
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-heartbeat", request_id)
+
     # Validate context_usage_pct
     if context_usage_pct is not None:
         if not isinstance(context_usage_pct, int) or not (0 <= context_usage_pct <= 100):
@@ -1386,6 +1607,8 @@ def _handle_session_reset(
     *,
     config: ServerConfig,
     session_id: Optional[str] = None,
+    reason_code: Optional[str] = None,
+    reason_detail: Optional[str] = None,
     workspace: Optional[str] = None,
     **payload: Any,
 ) -> dict:
@@ -1395,10 +1618,13 @@ def _handle_session_reset(
     Only failed sessions can be reset.
 
     Per ADR: reset always requires explicit session_id (no active-session lookup).
+    Requires reason_code (OverrideReasonCode enum) for audit trail.
 
     Args:
         config: Server configuration
         session_id: Session ID to reset (required)
+        reason_code: Required structured reason code (OverrideReasonCode enum)
+        reason_detail: Optional free-text detail for reason
         workspace: Workspace path
         **payload: Additional parameters
 
@@ -1406,6 +1632,31 @@ def _handle_session_reset(
         Response dict confirming reset or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-reset", request_id)
+
+    # Validate reason_code is provided
+    if not reason_code:
+        return _validation_error(
+            action="session-reset",
+            field="reason_code",
+            message="reason_code is required for session-reset",
+            request_id=request_id,
+        )
+
+    # Validate reason_code is a valid OverrideReasonCode
+    try:
+        validated_reason_code = OverrideReasonCode(reason_code)
+    except ValueError:
+        valid_codes = [e.value for e in OverrideReasonCode]
+        return _validation_error(
+            action="session-reset",
+            field="reason_code",
+            message=f"Invalid reason_code: {reason_code}. Must be one of: {', '.join(valid_codes)}",
+            request_id=request_id,
+        )
 
     if not session_id:
         return _validation_error(
@@ -1435,26 +1686,262 @@ def _handle_session_reset(
     # This is the escape hatch for corrupt state.
     deleted_session_id = session.id
     deleted_spec_id = session.spec_id
+    current_role = get_server_role()
 
     storage.delete(session.id)
     storage.remove_active_session(session.spec_id)
 
-    # Write journal
+    # Write journal with reason code and role
     _write_session_journal(
         spec_id=deleted_spec_id,
         action="reset",
-        summary=f"Session {deleted_session_id} deleted via reset (was failed)",
+        summary=f"Session {deleted_session_id} deleted via reset: {validated_reason_code.value}",
         session_id=deleted_session_id,
         workspace=workspace,
+        metadata={
+            "reason_code": validated_reason_code.value,
+            "reason_detail": reason_detail,
+            "server_role": current_role,
+        },
     )
 
-    logger.info("Reset (deleted) session %s for spec %s", deleted_session_id, deleted_spec_id)
+    logger.info("Reset (deleted) session %s for spec %s: %s", deleted_session_id, deleted_spec_id, validated_reason_code.value)
 
     return asdict(success_response(
         data={
             "session_id": deleted_session_id,
             "spec_id": deleted_spec_id,
             "result": "deleted",
+            "reason_code": validated_reason_code.value,
         },
+        request_id=request_id,
+    ))
+
+
+# =============================================================================
+# Gate Waiver Handler
+# =============================================================================
+
+
+ERROR_GATE_WAIVER_DISABLED = "GATE_WAIVER_DISABLED"
+ERROR_GATE_WAIVER_UNAUTHORIZED = "GATE_WAIVER_UNAUTHORIZED"
+ERROR_GATE_NOT_FOUND = "GATE_NOT_FOUND"
+ERROR_GATE_ALREADY_WAIVED = "GATE_ALREADY_WAIVED"
+ERROR_GATE_ALREADY_PASSED = "GATE_ALREADY_PASSED"
+
+
+def _handle_gate_waiver(
+    *,
+    config: ServerConfig,
+    spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    phase_id: Optional[str] = None,
+    reason_code: Optional[str] = None,
+    reason_detail: Optional[str] = None,
+    workspace: Optional[str] = None,
+    **payload: Any,
+) -> dict:
+    """Handle gate-waiver action.
+
+    Privileged break-glass override for required-gate invariant failures.
+    Restricted to maintainer role and requires structured reason codes.
+
+    Globally disabled unless allow_gate_waiver=true in config.
+    Never available to autonomy_runner or observer roles.
+
+    Args:
+        config: Server configuration
+        spec_id: Spec ID of the session
+        session_id: Session ID (optional, alternative to spec_id)
+        phase_id: Phase ID to waive the gate for
+        reason_code: Required structured reason code (OverrideReasonCode enum)
+        reason_detail: Optional free-text detail for waiver reason
+        workspace: Workspace path
+        **payload: Additional parameters
+
+    Returns:
+        Response dict with waiver result or error
+    """
+    request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("gate-waiver", request_id)
+
+    # Check if gate waiver is globally enabled
+    if not config.autonomy_security.allow_gate_waiver:
+        return asdict(error_response(
+            "Gate waiver is disabled",
+            error_code=ErrorCode.FORBIDDEN,
+            error_type=ErrorType.AUTHORIZATION,
+            request_id=request_id,
+            details={
+                "action": "gate-waiver",
+                "hint": "Enable allow_gate_waiver=true in autonomy_security config",
+            },
+        ))
+
+    # Role check - only maintainer can waive gates
+    current_role = get_server_role()
+    authz_result = check_action_allowed(current_role, "session", "gate-waiver")
+
+    # Explicitly deny autonomy_runner and observer roles
+    if current_role in (Role.AUTONOMY_RUNNER.value, Role.OBSERVER.value):
+        return asdict(error_response(
+            f"Gate waiver denied for role: {current_role}",
+            error_code=ErrorCode.FORBIDDEN,
+            error_type=ErrorType.AUTHORIZATION,
+            request_id=request_id,
+            details={
+                "action": "gate-waiver",
+                "configured_role": current_role,
+                "required_role": Role.MAINTAINER.value,
+                "hint": "Only maintainer role can waive required gates",
+            },
+        ))
+
+    if not authz_result.allowed:
+        return asdict(error_response(
+            f"Gate waiver denied: {authz_result.denied_action}",
+            error_code=ErrorCode.FORBIDDEN,
+            error_type=ErrorType.AUTHORIZATION,
+            request_id=request_id,
+            details={
+                "action": "gate-waiver",
+                "configured_role": current_role,
+                "required_role": authz_result.required_role,
+            },
+        ))
+
+    # Validate required parameters
+    if not phase_id:
+        return _validation_error(
+            action="gate-waiver",
+            field="phase_id",
+            message="phase_id is required",
+            request_id=request_id,
+        )
+
+    if not reason_code:
+        return _validation_error(
+            action="gate-waiver",
+            field="reason_code",
+            message="reason_code is required for gate waiver",
+            request_id=request_id,
+        )
+
+    # Validate reason_code is a valid OverrideReasonCode
+    try:
+        validated_reason_code = OverrideReasonCode(reason_code)
+    except ValueError:
+        valid_codes = [e.value for e in OverrideReasonCode]
+        return _validation_error(
+            action="gate-waiver",
+            field="reason_code",
+            message=f"Invalid reason_code: {reason_code}. Must be one of: {', '.join(valid_codes)}",
+            request_id=request_id,
+        )
+
+    storage = _get_storage(config, workspace)
+
+    session, err = _resolve_session(storage, "gate-waiver", request_id, session_id, spec_id)
+    if err:
+        return err
+
+    # Check if phase gate exists
+    if phase_id not in session.phase_gates:
+        return asdict(error_response(
+            f"No gate record found for phase: {phase_id}",
+            error_code=ErrorCode.NOT_FOUND,
+            error_type=ErrorType.NOT_FOUND,
+            request_id=request_id,
+            details={
+                "action": "gate-waiver",
+                "phase_id": phase_id,
+                "available_phases": list(session.phase_gates.keys()),
+            },
+        ))
+
+    gate_record = session.phase_gates[phase_id]
+
+    # Check if gate is already passed
+    if gate_record.status == PhaseGateStatus.PASSED:
+        return asdict(error_response(
+            f"Gate already passed for phase: {phase_id}",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "action": "gate-waiver",
+                "phase_id": phase_id,
+                "current_status": gate_record.status.value,
+                "hint": "Cannot waive a gate that has already passed",
+            },
+        ))
+
+    # Check if gate is already waived
+    if gate_record.status == PhaseGateStatus.WAIVED:
+        return asdict(error_response(
+            f"Gate already waived for phase: {phase_id}",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "action": "gate-waiver",
+                "phase_id": phase_id,
+                "current_status": gate_record.status.value,
+                "waiver_reason_code": gate_record.waiver_reason_code.value if gate_record.waiver_reason_code else None,
+                "hint": "Gate is already waived",
+            },
+        ))
+
+    # Apply waiver
+    now = datetime.now(timezone.utc)
+    gate_record.status = PhaseGateStatus.WAIVED
+    gate_record.waiver_reason_code = validated_reason_code
+    gate_record.waiver_reason_detail = reason_detail
+    gate_record.waived_at = now
+    gate_record.waived_by_role = current_role
+
+    session.updated_at = now
+    session.state_version += 1
+
+    storage.save(session)
+
+    # Write journal entry
+    _write_session_journal(
+        spec_id=session.spec_id,
+        action="gate-waiver",
+        summary=f"Gate waived for phase {phase_id}: {validated_reason_code.value}",
+        session_id=session.id,
+        workspace=workspace,
+        metadata={
+            "phase_id": phase_id,
+            "reason_code": validated_reason_code.value,
+            "reason_detail": reason_detail,
+            "waived_by_role": current_role,
+        },
+    )
+
+    logger.info(
+        "Gate waived for phase %s in session %s by role %s: %s",
+        phase_id,
+        session.id,
+        current_role,
+        validated_reason_code.value,
+    )
+
+    response_data = {
+        "session_id": session.id,
+        "phase_id": phase_id,
+        "gate_status": PhaseGateStatus.WAIVED.value,
+        "reason_code": validated_reason_code.value,
+        "reason_detail": reason_detail,
+        "waived_at": now.isoformat(),
+        "waived_by_role": current_role,
+    }
+
+    return asdict(success_response(
+        data=response_data,
         request_id=request_id,
     ))

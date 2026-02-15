@@ -17,12 +17,13 @@ import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.autonomy.models import (
     LastStepResult,
     NextStep,
+    PhaseGateStatus,
     SessionStatus,
     SessionStepResponseData,
     StepOutcome,
@@ -39,6 +40,8 @@ from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_ALL_TASKS_BLOCKED,
     ERROR_SESSION_UNRECOVERABLE,
     ERROR_INVALID_GATE_EVIDENCE,
+    ERROR_GATE_BLOCKED,
+    ERROR_REQUIRED_GATE_UNSATISFIED,
 )
 from foundry_mcp.core.responses import (
     ErrorCode,
@@ -54,6 +57,8 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _resolve_session,
     _session_not_found_response,
     _validation_error,
+    _is_feature_enabled,
+    _feature_disabled_response,
 )
 
 logger = logging.getLogger(__name__)
@@ -65,6 +70,8 @@ def _map_orchestrator_error_to_response(
     request_id: str,
     session_id: Optional[str] = None,
     state_version: Optional[int] = None,
+    missing_required_gates: Optional[List[str]] = None,
+    gate_block: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """Map orchestrator error codes to response format."""
     # Map orchestrator error codes to ErrorCode enum
@@ -77,6 +84,8 @@ def _map_orchestrator_error_to_response(
         ERROR_ALL_TASKS_BLOCKED: ErrorCode.RESOURCE_BUSY,
         ERROR_SESSION_UNRECOVERABLE: ErrorCode.INTERNAL_ERROR,
         ERROR_INVALID_GATE_EVIDENCE: ErrorCode.VALIDATION_ERROR,
+        ERROR_GATE_BLOCKED: ErrorCode.VALIDATION_ERROR,
+        ERROR_REQUIRED_GATE_UNSATISFIED: ErrorCode.FORBIDDEN,
     }
 
     # Map to error types
@@ -89,6 +98,8 @@ def _map_orchestrator_error_to_response(
         ERROR_ALL_TASKS_BLOCKED: ErrorType.UNAVAILABLE,
         ERROR_SESSION_UNRECOVERABLE: ErrorType.INTERNAL,
         ERROR_INVALID_GATE_EVIDENCE: ErrorType.VALIDATION,
+        ERROR_GATE_BLOCKED: ErrorType.VALIDATION,
+        ERROR_REQUIRED_GATE_UNSATISFIED: ErrorType.AUTHORIZATION,
     }
 
     mapped_code = error_code_map.get(error_code or "", ErrorCode.INTERNAL_ERROR)
@@ -114,6 +125,26 @@ def _map_orchestrator_error_to_response(
         details["remediation"] = "Resolve task blockers to continue execution"
     elif error_code == ERROR_INVALID_GATE_EVIDENCE:
         details["remediation"] = "Provide valid gate evidence via fidelity-gate action"
+    elif error_code == ERROR_GATE_BLOCKED:
+        details["blocked_by_gate"] = True
+        if missing_required_gates:
+            details["missing_required_gates"] = missing_required_gates
+        details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
+    elif error_code == ERROR_REQUIRED_GATE_UNSATISFIED:
+        details["blocked_by_gate"] = True
+        # Include gate_block details if available
+        if gate_block:
+            details["phase_id"] = gate_block.get("phase_id")
+            details["gate_type"] = gate_block.get("gate_type")
+            details["blocking_reason"] = gate_block.get("blocking_reason")
+            recovery_action = gate_block.get("recovery_action")
+            if recovery_action:
+                details["recovery_action"] = recovery_action
+                details["remediation"] = recovery_action.get("description", "Use gate-waiver to unblock")
+            else:
+                details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
+        else:
+            details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
 
     return asdict(error_response(
         error_message,
@@ -137,7 +168,10 @@ def _build_next_step_response(
             "session_id": "...",
             "status": "running" | "paused" | "completed" | "failed",
             "state_version": 7,
-            "next_step": { ... } | null
+            "next_step": { ... } | null,
+            "required_phase_gates": [...],
+            "satisfied_gates": [...],
+            "missing_required_gates": [...]
         },
         "error": null,
         "meta": {"version": "response-v2", "request_id": "..."}
@@ -145,12 +179,28 @@ def _build_next_step_response(
     """
     session = result.session
 
+    # Compute gate invariant fields for observability
+    required_phase_gates: list[str] = []
+    satisfied_gates: list[str] = []
+    missing_required_gates: list[str] = []
+
+    for phase_id, gate_record in session.phase_gates.items():
+        if gate_record.required:
+            required_phase_gates.append(phase_id)
+            if gate_record.status in (PhaseGateStatus.PASSED, PhaseGateStatus.WAIVED):
+                satisfied_gates.append(phase_id)
+            elif gate_record.status in (PhaseGateStatus.PENDING, PhaseGateStatus.FAILED):
+                missing_required_gates.append(phase_id)
+
     # Build response data - pass NextStep model directly
     response_data = SessionStepResponseData(
         session_id=session.id,
         status=session.status,
         state_version=session.state_version,
         next_step=result.next_step,  # Pass the NextStep model directly
+        required_phase_gates=required_phase_gates if required_phase_gates else None,
+        satisfied_gates=satisfied_gates if satisfied_gates else None,
+        missing_required_gates=missing_required_gates if missing_required_gates else None,
     )
 
     return asdict(success_response(
@@ -205,6 +255,10 @@ def _handle_session_step_next(
         - next_step: Next step object or null if terminal/paused
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-step-next", request_id)
 
     storage = _get_storage(config, workspace)
 
@@ -308,12 +362,18 @@ def _handle_session_step_next(
 
     # Return error or success response
     if not result.success:
+        # Extract gate_block from warnings if present
+        gate_block = None
+        if result.warnings and isinstance(result.warnings, dict):
+            gate_block = result.warnings.get("gate_block")
+
         return _map_orchestrator_error_to_response(
             error_code=result.error_code,
             error_message=result.error_message or "Orchestration failed",
             request_id=request_id,
             session_id=session.id,
             state_version=session.state_version,
+            gate_block=gate_block,
         )
 
     return _build_next_step_response(result, request_id)
@@ -354,6 +414,10 @@ def _handle_session_step_report(
         Response dict with next step or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-step-report", request_id)
 
     if not spec_id:
         return _validation_error(
@@ -435,6 +499,10 @@ def _handle_session_step_replay(
         Response dict with last issued response or error
     """
     request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-step-replay", request_id)
 
     storage = _get_storage(config, workspace)
 

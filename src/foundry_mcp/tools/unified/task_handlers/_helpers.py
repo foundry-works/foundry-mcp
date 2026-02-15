@@ -22,6 +22,7 @@ from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
     error_response,
+    success_response,
 )
 from foundry_mcp.core.spec import load_spec
 from foundry_mcp.tools.unified.common import (
@@ -49,6 +50,43 @@ def _metric(action: str) -> str:
 
 
 _validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
+
+
+def _is_feature_enabled(config: ServerConfig, feature_name: str) -> bool:
+    """Check if a feature flag is enabled.
+
+    Args:
+        config: Server configuration
+        feature_name: Name of the feature flag to check
+
+    Returns:
+        True if the feature is explicitly enabled, False otherwise.
+    """
+    return bool(config.feature_flags.get(feature_name, False))
+
+
+def _feature_disabled_response(action: str, request_id: str, feature_flag: str = "autonomy_sessions") -> dict:
+    """Return feature disabled error response.
+
+    Args:
+        action: The action that was attempted
+        request_id: Request ID for the response
+        feature_flag: The feature flag that is disabled
+
+    Returns:
+        Error response dict with FEATURE_DISABLED error code
+    """
+    return asdict(error_response(
+        f"{feature_flag} feature is not enabled",
+        error_code=ErrorCode.FEATURE_DISABLED,
+        error_type=ErrorType.FEATURE_FLAG,
+        request_id=request_id,
+        details={
+            "action": action,
+            "feature_flag": feature_flag,
+            "hint": f"Enable {feature_flag} feature flag to use this functionality",
+        },
+    ))
 
 
 def _resolve_specs_dir(
@@ -225,6 +263,7 @@ def _check_autonomy_write_lock(
     bypass_autonomy_lock: bool,
     bypass_reason: Optional[str],
     request_id: str,
+    config: Optional[ServerConfig] = None,
 ) -> Optional[dict]:
     """Check autonomy write-lock and return error response if blocked.
 
@@ -234,6 +273,7 @@ def _check_autonomy_write_lock(
         bypass_autonomy_lock: If True, bypass the lock (requires bypass_reason).
         bypass_reason: Reason for bypassing the lock.
         request_id: Request ID for error response.
+        config: ServerConfig to check allow_lock_bypass setting.
 
     Returns:
         None if operation is allowed, error response dict if blocked.
@@ -241,11 +281,17 @@ def _check_autonomy_write_lock(
     if not _WRITE_LOCK_AVAILABLE or _check_autonomy_write_lock_impl is None:
         return None
 
+    # Get allow_lock_bypass from config (default False - fail-closed)
+    allow_lock_bypass = False
+    if config is not None:
+        allow_lock_bypass = config.autonomy_security.allow_lock_bypass
+
     result = _check_autonomy_write_lock_impl(
         spec_id=spec_id,
         workspace=workspace,
         bypass_flag=bypass_autonomy_lock,
         bypass_reason=bypass_reason,
+        allow_lock_bypass=allow_lock_bypass,
     )
 
     if result.status == _WriteLockStatus.LOCKED:

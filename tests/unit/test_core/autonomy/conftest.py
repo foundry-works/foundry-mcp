@@ -48,7 +48,7 @@ def make_session(
     """Factory for creating test session states with sensible defaults."""
     now = datetime.now(timezone.utc)
     return AutonomousSessionState(
-        **{"_schema_version": 2},
+        **{"_schema_version": 3},
         id=session_id,
         spec_id=spec_id,
         spec_structure_hash=spec_structure_hash,
@@ -66,6 +66,8 @@ def make_session(
         completed_task_ids=completed_task_ids or [],
         phase_gates=phase_gates or {},
         pause_reason=pause_reason,
+        required_phase_gates=kwargs.pop("required_phase_gates", {}),
+        satisfied_gates=kwargs.pop("satisfied_gates", {}),
         **kwargs,
     )
 

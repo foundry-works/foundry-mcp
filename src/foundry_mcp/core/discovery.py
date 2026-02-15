@@ -378,6 +378,8 @@ class ServerCapabilities:
         feature_flags_enabled: Whether feature flags are active
         autonomy_sessions: Whether autonomous session management is supported
         autonomy_fidelity_gates: Whether fidelity gates for autonomous execution are enabled
+        autonomy_gate_invariants: Whether gate invariant observability is exposed in responses
+        gate_enforcement_default: Default gate enforcement mode (strict, lenient, disabled)
     """
 
     response_version: str = "response-v2"
@@ -390,6 +392,8 @@ class ServerCapabilities:
     feature_flags_enabled: bool = False
     autonomy_sessions: bool = False
     autonomy_fidelity_gates: bool = False
+    autonomy_gate_invariants: bool = True
+    gate_enforcement_default: str = "strict"
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -409,6 +413,8 @@ class ServerCapabilities:
             "feature_flags": self.feature_flags_enabled,
             "autonomy_sessions": self.autonomy_sessions,
             "autonomy_fidelity_gates": self.autonomy_fidelity_gates,
+            "autonomy_gate_invariants": self.autonomy_gate_invariants,
+            "gate_enforcement_default": self.gate_enforcement_default,
         }
 
 
@@ -479,6 +485,7 @@ def negotiate_capabilities(
         "feature_flags": _capabilities.feature_flags_enabled,
         "autonomy_sessions": _capabilities.autonomy_sessions,
         "autonomy_fidelity_gates": _capabilities.autonomy_fidelity_gates,
+        "autonomy_gate_invariants": _capabilities.autonomy_gate_invariants,
     }
 
     if requested_features:
@@ -1634,6 +1641,14 @@ AUTONOMY_FEATURE_FLAGS: Dict[str, FeatureFlagDescriptor] = {
         percentage_rollout=0,
         dependencies=["autonomy_sessions"],
     ),
+    "autonomy_gate_invariants": FeatureFlagDescriptor(
+        name="autonomy_gate_invariants",
+        description="Gate invariant observability - exposes required/satisfied/missing gates in API responses",
+        state="beta",
+        default_enabled=True,
+        percentage_rollout=100,
+        dependencies=["autonomy_sessions"],
+    ),
 }
 
 
@@ -1650,6 +1665,12 @@ def get_autonomy_capabilities() -> Dict[str, Any]:
             "description": "Autonomous execution with session persistence and fidelity gates",
             "actions": ["session", "session-step"],
             "tools": ["task"],
+        },
+        "gate_invariants": {
+            "supported": True,
+            "description": "Required/satisfied/missing gate exposure in session-step responses",
+            "response_fields": ["required_phase_gates", "satisfied_gates", "missing_required_gates"],
+            "config_fields": ["enforce_required_phase_gates", "allow_gate_waiver"],
         },
         "feature_flags": {
             name: flag.to_dict() for name, flag in AUTONOMY_FEATURE_FLAGS.items()

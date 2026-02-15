@@ -145,6 +145,7 @@ class TestCheckAutonomyWriteLock:
                 "/workspace",
                 bypass_flag=True,
                 bypass_reason="Emergency fix needed",
+                allow_lock_bypass=True,  # Must be enabled for bypass to work
             )
         assert result.status == WriteLockStatus.BYPASSED
         assert result.lock_active is True
@@ -171,6 +172,45 @@ class TestCheckAutonomyWriteLock:
                 "spec-1", "/workspace", bypass_flag=True, bypass_reason="   "
             )
         assert result.status == WriteLockStatus.LOCKED
+
+    def test_bypass_denied_by_config(self):
+        """Bypass is denied when allow_lock_bypass=False (default)."""
+        session_data = {"id": "session-1", "status": "running", "write_lock_enforced": True}
+        with patch(
+            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+            return_value=session_data,
+        ):
+            # Default allow_lock_bypass=False should deny bypass
+            result = check_autonomy_write_lock(
+                "spec-1",
+                "/workspace",
+                bypass_flag=True,
+                bypass_reason="Emergency fix needed",
+                allow_lock_bypass=False,  # Explicit default
+            )
+        assert result.status == WriteLockStatus.LOCKED
+        assert result.lock_active is True
+        assert result.metadata.get("error") == "bypass_denied_by_config"
+
+    def test_bypass_allowed_when_config_permits(self):
+        """Bypass works when allow_lock_bypass=True."""
+        session_data = {"id": "session-1", "status": "running", "write_lock_enforced": True}
+        with patch(
+            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+            return_value=session_data,
+        ), patch(
+            "foundry_mcp.core.autonomy.write_lock._write_bypass_journal_entry",
+            return_value=True,
+        ):
+            result = check_autonomy_write_lock(
+                "spec-1",
+                "/workspace",
+                bypass_flag=True,
+                bypass_reason="Emergency fix needed",
+                allow_lock_bypass=True,  # Explicitly enabled
+            )
+        assert result.status == WriteLockStatus.BYPASSED
+        assert result.bypass_logged is True
 
     def test_write_lock_not_enforced_returns_allowed(self):
         session_data = {
