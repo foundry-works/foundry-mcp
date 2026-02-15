@@ -1,0 +1,666 @@
+{
+  "spec_id": "autonomy-boundary-hardening-2026-02-15-001",
+  "title": "autonomy-boundary-hardening",
+  "generated": "2026-02-15T14:20:09.122233Z",
+  "last_updated": "2026-02-15T14:22:54.544541Z",
+  "metadata": {
+    "description": "Three-phase hardening plan: P0 constrains authority (role model, feature gating, escape hatch hardening, required phase gates), P1 requires proof-carrying progress (step proofs, verification receipts, gate evidence HMAC, independent audit), P2 adds tamper resistance (append-only audit ledger, runtime isolation). Each phase ships enforced with no feature flags or compatibility windows.",
+    "mission": "Harden the autonomous spec execution boundary so an orchestrating agent that is confused, stuck, or adversarial cannot silently bypass sequencing and quality controls",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 0,
+    "assumptions": [
+      "Single process, single host deployment \u2014 no multi-host or remote executor trust required",
+      "MCP server runs over stdio transport with no HTTP layer and no per-request credential exchange",
+      "Caller identity determined by process-level configuration at startup, immutable for server lifetime",
+      "Local filesystem trusted for durability but not for cryptographic immutability",
+      "Each phase ships enforced \u2014 no feature flags, no compatibility windows, no rollback path",
+      "Step proof format: opaque random nonce (sufficient for single-host); upgrade to HMAC if remote executors added",
+      "Verification receipt granularity: command-level (command + exit code + output digest); richer artifact checks layered later without contract changes"
+    ],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "autonomy-boundary-hardening",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3"
+      ],
+      "total_tasks": 20,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Constrain Authority (P0 Immediate Hardening)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "task-1-4",
+        "task-1-5",
+        "task-1-6",
+        "task-1-7",
+        "task-1-8",
+        "task-1-9",
+        "task-1-10",
+        "task-1-11",
+        "verify-1-1"
+      ],
+      "total_tasks": 12,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Ensure an orchestrating agent cannot unilaterally bypass policy just because it has general MCP access. Constrains who can do what by enforcing fail-closed gating, role-based authorization, escape hatch hardening, and required phase-gate invariants."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "HB-01: Fail-closed feature gating for autonomy handlers",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add explicit autonomy_sessions feature-flag checks at all 13 session/session-step handler entrypoints. The helper _feature_disabled_response() exists in handlers_session.py but is not consistently called. Make feature_flags a first-class ServerConfig field. Add or share _feature_disabled_response helper for handlers_session_step.py.\n\nHandlers to gate:\n- handlers_session.py: session-start, session-pause, session-resume, session-end, session-status, session-list, session-rebase, session-heartbeat, session-reset (9 handlers)\n- handlers_session_step.py: session-step-next, session-step-report, session-step-replay, session-step-heartbeat (4 handlers)\n\nDone when: Every session and session-step handler returns FEATURE_DISABLED when autonomy_sessions is off. No autonomy state is created or mutated when the feature is disabled.",
+        "file_path": "src/foundry_mcp/tools/unified/task_handlers/handlers_session.py",
+        "acceptance_criteria": [
+          "All 9 session handlers in handlers_session.py check autonomy_sessions feature flag at entrypoint",
+          "All 4 session-step handlers in handlers_session_step.py check autonomy_sessions feature flag at entrypoint",
+          "feature_flags is a first-class ServerConfig field with default of {}",
+          "_feature_disabled_response helper available to both session and session-step handlers",
+          "Returns deterministic FEATURE_DISABLED error when flag is off",
+          "No autonomy state created or mutated when feature is disabled",
+          "Unit tests: pytest -k feature_disabled pass for both handler files"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "HB-02: Restrict write-lock bypass by default",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add config toggle autonomy.security.allow_lock_bypass (default false). When disabled, reject bypass_autonomy_lock=true regardless of caller input in check_autonomy_write_lock(). Emit write_lock.bypass_denied metric on rejected attempts. Existing bypass_reason validation remains as second layer when bypass is enabled.\n\nNo changes needed in individual mutation handlers - they already pass bypass_autonomy_lock through to the shared check function.",
+        "file_path": "src/foundry_mcp/core/autonomy/write_lock.py",
+        "acceptance_criteria": [
+          "allow_lock_bypass config field added with default false",
+          "bypass_autonomy_lock=true rejected when config disallows it",
+          "Returns WriteLockStatus.LOCKED with descriptive error when bypass denied by config",
+          "write_lock.bypass_denied metric emitted on denied attempts",
+          "Bypass works when allow_lock_bypass=true is explicitly set",
+          "Unit tests: pytest -k bypass_denied_by_config and bypass_allowed_when_config_permits pass"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "HB-03: Authorization module + process-level role model",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create src/foundry_mcp/core/authorization.py with:\n- check_action_allowed(role, tool_name, action) -> AuthzResult dataclass (allowed, denied_action, configured_role, required_role)\n- get_role_allowlist(role) -> set[str]\n- Role allowlists loaded once from config at init time\n\nConfig additions:\n- autonomy.role (default 'observer'), overridden by FOUNDRY_MCP_ROLE env var\n- autonomy.roles.* sections with allowed_actions lists\n\nRole definitions:\n- autonomy_runner: session + session-step + fidelity-gate actions only\n- maintainer: full mutation surfaces (wildcard)\n- observer: read-only operations\n\nContext additions:\n- server_role_var ContextVar with default 'observer'\n- get_server_role() accessor\n\nServer init: Read role from config, set server_role_var at process start, log configured role.",
+        "file_path": "src/foundry_mcp/core/authorization.py",
+        "acceptance_criteria": [
+          "authorization.py created with check_action_allowed() and get_role_allowlist()",
+          "AuthzResult dataclass with allowed, denied_action, configured_role, required_role fields",
+          "autonomy_runner allowlist: session-start, session-resume, session-step-next, session-step-report, session-heartbeat, session-rebase, run_fidelity_gate",
+          "maintainer allowlist: wildcard (*)",
+          "observer allowlist: list, get, view, status, search, progress",
+          "FOUNDRY_MCP_ROLE env var overrides config file value",
+          "Unconfigured role defaults to observer (fail-closed to read-only)",
+          "server_role_var ContextVar added to context.py",
+          "Unit tests: test_authorization.py covers all roles and env override"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-4": {
+      "type": "task",
+      "title": "HB-04: Integrate authorization into dispatch chain",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Wire check_action_allowed() into dispatch_with_standard_errors() in common.py. After action validation and before router.dispatch(), check authorization. On denial, return AUTHORIZATION error response with role, action, required_role in details plus recovery_action guidance.\n\nError precedence order: FEATURE_DISABLED -> action validation -> AUTHORIZATION -> argument validation.\n\nAdd AUTHORIZATION error code to responses.py if not present. Add parametrized tests across routers confirming restricted roles cannot call privileged actions.",
+        "file_path": "src/foundry_mcp/tools/unified/common.py",
+        "acceptance_criteria": [
+          "check_action_allowed() called in dispatch_with_standard_errors() before handler execution",
+          "AUTHORIZATION error response includes role, action, required_role, and recovery_action",
+          "Error precedence: FEATURE_DISABLED -> action validation -> AUTHORIZATION -> argument validation",
+          "authz.denied metrics emitted on denial",
+          "Tests across routers confirm restricted roles blocked from privileged actions",
+          "AUTHORIZATION error code added to responses.py"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-5": {
+      "type": "task",
+      "title": "HB-05: Rate limiting on authorization denials",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add RateLimitTracker class to authorization.py:\n- Tracks consecutive denials per action within sliding window\n- check_rate_limit(action) -> Optional[float] (retry_after seconds if limited, None if allowed)\n- record_denial(action) - increments counter\n- reset(action) - called on successful dispatch to clear counter\n- State is in-memory only (resets on process restart)\n\nConfig: autonomy.rate_limit.max_consecutive_denials (default 10), denial_window_seconds (default 60), retry_after_seconds (default 5).\n\nIn dispatch: check rate limit before auth check. If limited, return RATE_LIMITED with retry_after. On denial, record_denial(). On success, reset().",
+        "file_path": "src/foundry_mcp/core/authorization.py",
+        "acceptance_criteria": [
+          "RateLimitTracker class with check_rate_limit, record_denial, reset methods",
+          "Rate limit triggers after max_consecutive_denials within denial_window_seconds",
+          "RATE_LIMITED response includes retry_after field",
+          "Rate limit resets on successful dispatch",
+          "Rate limit window expires naturally after denial_window_seconds",
+          "authz.rate_limited metric emitted",
+          "Config fields added for rate limit thresholds"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-6": {
+      "type": "task",
+      "title": "HB-06: Harden escape hatch policy",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Require maintainer role for session-end and session-reset (already restricted at dispatch by allowlist from HB-03/HB-04, this adds reason code requirement as second layer inside handlers).\n\nAdd OverrideReasonCode enum to models.py: STUCK_AGENT, CORRUPT_STATE, OPERATOR_OVERRIDE, INCIDENT_RESPONSE, TESTING. Free-text reason_detail is optional but enum code is mandatory.\n\nIn _handle_session_end and _handle_session_reset: validate reason_code present and valid enum member. Return VALIDATION_ERROR if missing/invalid.\n\nIn check_autonomy_write_lock(): when bypass allowed by config and bypass_flag=true, additionally require maintainer role. Reject bypass for autonomy_runner even when config allows it.\n\nAudit: journal entries for end/reset/bypass include reason code and configured role.",
+        "file_path": "src/foundry_mcp/tools/unified/task_handlers/handlers_session.py",
+        "acceptance_criteria": [
+          "OverrideReasonCode enum added to models.py with 5 members",
+          "session-end requires valid OverrideReasonCode",
+          "session-reset requires valid OverrideReasonCode",
+          "Missing or invalid reason code returns VALIDATION_ERROR",
+          "Lock bypass requires maintainer role even when config allows bypass",
+          "Journal entries include reason code and server role",
+          "autonomy_runner denied bypass even when allow_lock_bypass=true"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-7": {
+      "type": "task",
+      "title": "HB-07: Required-gate state model + migration",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add per-phase required gate obligation and satisfaction tracking fields to AutonomousSessionState model. Fields needed: required_phase_gates (dict phase_id -> list of required gate types), satisfied_gates (dict phase_id -> list of satisfied gate types), minimum default of one fidelity gate per phase.\n\nBump schema_version from 2 to 3. Add migration function in state_migrations.py to populate new fields for v2 sessions with sensible defaults (one fidelity gate required per phase, no gates satisfied). Update test factories in conftest.py.",
+        "file_path": "src/foundry_mcp/core/autonomy/models.py",
+        "acceptance_criteria": [
+          "required_phase_gates field added to AutonomousSessionState",
+          "satisfied_gates field added to AutonomousSessionState",
+          "Default: at least one fidelity gate required per phase",
+          "schema_version bumped to 3",
+          "Migration from v2 to v3 populates defaults",
+          "Legacy v2 session payloads migrate cleanly",
+          "New fields serialize/deserialize correctly with model_dump(by_alias=True)",
+          "Test factories updated with new default fields"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-8": {
+      "type": "task",
+      "title": "HB-08: Compute required gates at session start/rebase",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add shared helper in handlers_session.py to derive required gates from spec phases. Invoke on session-start after loading spec structure and on session-rebase after reconciliation.\n\nOn rebase: preserve satisfied gates for unchanged phases, mark new/changed requirements as unsatisfied. Phases with no verification steps must still require at least a manual_review gate. Spec author can expand but not remove minimum gate type.",
+        "file_path": "src/foundry_mcp/tools/unified/task_handlers/handlers_session.py",
+        "acceptance_criteria": [
+          "Helper function derives required gates from spec phases",
+          "session-start populates required_phase_gates for all phases",
+          "session-rebase reconciles gates: preserves satisfied for unchanged, marks new as unsatisfied",
+          "Every phase has at least one required gate type",
+          "Spec-level expansion allowed but removal of minimum gate type blocked",
+          "Unit tests: -k session_start and required_gate, -k session_rebase and required_gate"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-9": {
+      "type": "task",
+      "title": "HB-09: Enforce phase/spec completion invariants in orchestrator",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add invariant checks in orchestrator.py before _create_pause_result(...PHASE_COMPLETE...) and _create_complete_spec_result(). Block transitions when required gates unsatisfied.\n\nAdd explicit orchestrator error code(s) for unsatisfied required gates. Extend _map_orchestrator_error_to_response to surface machine-readable gate-block details (phase_id, gate_type, blocking_reason, recovery_action).\n\nAll blocking errors include recovery_action field per Recovery Protocol Requirements.",
+        "file_path": "src/foundry_mcp/core/autonomy/orchestrator.py",
+        "acceptance_criteria": [
+          "Phase-complete blocked when required gates unsatisfied",
+          "Spec-complete blocked when any phase has unsatisfied gates",
+          "Orchestrator error code for REQUIRED_GATE_UNSATISFIED",
+          "Error response includes phase_id, gate_type, blocking_reason",
+          "Error response includes recovery_action with specific action/params to unblock",
+          "_map_orchestrator_error_to_response handles gate-block errors",
+          "Unit tests: -k required_gate and (phase_complete or complete_spec)"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-10": {
+      "type": "task",
+      "title": "HB-10: Privileged gate-waiver path (default off)",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add controlled break-glass override for required-gate invariant failures. Restrict waiver to maintainer role and structured reason codes (reuse OverrideReasonCode from HB-06). Record waiver metadata on phase gate record and in session journal.\n\nGlobally disabled unless allow_gate_waiver=true in config. Never available to autonomy_runner role.",
+        "file_path": "src/foundry_mcp/tools/unified/task_handlers/handlers_session.py",
+        "acceptance_criteria": [
+          "Gate waiver action path exists for maintainer role",
+          "Waiver denied when allow_gate_waiver=false (default)",
+          "Waiver denied for autonomy_runner and observer roles",
+          "Waiver requires valid OverrideReasonCode",
+          "Waiver recorded in phase gate record and session journal",
+          "Unit tests: -k gate_waiver for authorization and functionality"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-11": {
+      "type": "task",
+      "title": "HB-12: Contract + observability updates for gate invariants",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Expose required-gate status in API responses: required_phase_gates, satisfied_gates, missing_required_gates fields. Add structured error details for gate-blocked transitions.\n\nAdd config fields: enforce_required_phase_gates (default true), allow_gate_waiver (default false). Update discovery metadata for client capability detection.",
+        "file_path": "src/foundry_mcp/tools/unified/task_handlers/handlers_session_step.py",
+        "acceptance_criteria": [
+          "Response metadata includes required_phase_gates, satisfied_gates, missing_required_gates",
+          "Gate-blocked transitions return structured error details",
+          "Config fields enforce_required_phase_gates and allow_gate_waiver added",
+          "Discovery metadata updated with gate invariant capabilities",
+          "Clients can detect missing required gates from API data alone"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "HB-13: End-to-end gate invariant integration test",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Integration test proving orchestrator cannot complete spec when required phase gate is skipped. Build multi-phase spec fixture. Execute session progression through session-step-next/report flow. Attempt to bypass gate completion and assert hard block. Then satisfy/waive gate (privileged path) and assert progression succeeds.",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Proof-Carrying Progress (P1)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "task-2-3",
+        "task-2-4",
+        "verify-2-1"
+      ],
+      "total_tasks": 5,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Move from claim-based progress to verifiable progress. Introduces one-time step proof tokens, verification receipts, gate evidence integrity checksums, and independent gate-audit recomputation at terminal transitions. Step proofs and verification receipts are always enforced once shipped \u2014 no toggle."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "P1.1: One-time step proof tokens",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Extend step model with step_proof field on NextStep/LastStepIssued. Require same token in last_step_result. Consume token exactly once.\n\nIdempotency: Accept re-submission of identical (step_proof, payload_hash) within 30s grace window and return same response. Reject same step_proof with different payload as PROOF_CONFLICT. After grace window or new step issued, reject as PROOF_EXPIRED.\n\nDurability: Persist proof state in session storage as atomic record (step_proof, payload_hash, consumed_at, grace_expires_at, response_hash, cached response). Use per-session file lock for critical section. Replay acceptance after process restart uses persisted record.\n\nKnown limitation: 30s grace window timing side channel \u2014 low risk in single-host stdio model, document for future multi-host adaptation.\n\nImplementation touchpoints: models.py, orchestrator.py, memory.py, handlers_session_step.py",
+        "file_path": "src/foundry_mcp/core/autonomy/models.py",
+        "acceptance_criteria": [
+          "step_proof field added to NextStep/LastStepIssued models",
+          "last_step_result requires matching step_proof",
+          "Token consumed exactly once under normal flow",
+          "Identical re-submission within 30s grace window returns original response (idempotent)",
+          "Same proof with different payload rejected as PROOF_CONFLICT",
+          "After grace window, re-submission rejected as PROOF_EXPIRED",
+          "Proof state persisted atomically in session storage",
+          "Per-session file lock guards proof consumption critical section",
+          "Replay behavior correct after process restart",
+          "Concurrent submissions for same proof yield exactly one state transition"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "P1.2: Proof-carrying verification receipts",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "For execute_verification steps, introduce server-issued verification receipt containing hash of command + exit code + output digest. Require valid receipt in last_step_result when outcome='success'.\n\nExtend verification tool output with receipt. Validate receipt in orchestrator before marking verification task complete. Missing or invalid receipt yields deterministic validation error with recovery guidance.",
+        "file_path": "src/foundry_mcp/core/autonomy/orchestrator.py",
+        "acceptance_criteria": [
+          "Server-issued verification receipt with command + exit code + output digest hash",
+          "outcome='success' requires valid receipt in last_step_result",
+          "Missing receipt with success outcome returns validation error",
+          "Invalid receipt returns validation error with recovery guidance",
+          "Receipt validation happens in orchestrator before marking task complete"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-3": {
+      "type": "task",
+      "title": "P1.3: Gate evidence integrity signature (single-host HMAC)",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Upgrade pending_gate_evidence with integrity checksum keyed by server secret. Verify checksum during run_fidelity_gate outcome consumption.\n\nServer secret provisioning:\n- Auto-generate 32-byte random key on first start if not present\n- Store in $FOUNDRY_DATA_DIR/.server_secret (outside repo tree, mode 0600)\n- Override via FOUNDRY_MCP_GATE_SECRET env var for deterministic testing\n- On rotation: in-flight gate evidence becomes invalid \u2014 orchestrator must re-request gate step (acceptable: gate evidence is short-lived and rotation is operator-initiated)",
+        "file_path": "src/foundry_mcp/core/autonomy/orchestrator.py",
+        "acceptance_criteria": [
+          "pending_gate_evidence includes HMAC integrity checksum",
+          "Checksum verified during gate outcome consumption",
+          "Modified gate evidence rejected with explicit error",
+          "Server secret auto-generated on first start (32-byte random key)",
+          "Secret stored in $FOUNDRY_DATA_DIR/.server_secret with mode 0600",
+          "FOUNDRY_MCP_GATE_SECRET env var overrides for testing",
+          "Rotation invalidates in-flight evidence gracefully"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-4": {
+      "type": "task",
+      "title": "P1.4/HB-11: Independent gate-audit checker",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add server-side _audit_required_gate_integrity() that recomputes required gate obligations from spec + phase model and compares with recorded evidence before allowing terminal transitions.\n\nRun checker on phase-close and spec-complete transitions. Return deterministic blocking errors identifying unmet phase and gate type. Detects mismatches between obligation model and persisted phase gate records.\n\nThis complements HB-09 enforcement by independently verifying gate state hasn't been tampered with.",
+        "file_path": "src/foundry_mcp/core/autonomy/orchestrator.py",
+        "acceptance_criteria": [
+          "_audit_required_gate_integrity() rebuilds obligations from spec phases",
+          "Validates each required gate has acceptable terminal evidence (passed or waived)",
+          "Detects mismatches between obligation model and persisted records",
+          "Runs on phase-close and spec-complete transitions",
+          "Tampered/missing gate records block terminal transitions",
+          "Audit failures return deterministic error details with phase and gate type"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Phase 2 verification: Proof-carrying progress integration test",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify that step proofs, verification receipts, gate evidence signatures, and independent gate audit all work together. Test replay rejection, concurrent submission handling, receipt validation, and tamper detection.",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Tamper Resistance + Operations (P2)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "verify-3-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Make policy evasion operationally difficult, visible, and recoverable by humans. Adds append-only hash-linked audit logs and restricted runtime profiles for autonomy runner processes. On single-host deployment, append-only is tamper detection not prevention \u2014 the value is post-hoc auditability."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "P2.1: Append-only autonomy event ledger",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add append-only log for autonomy state transitions with hash chain (prev_hash, event_hash). Events: step issued, step consumed, pause/resume, bypass/override, reset/end. Each entry includes timestamp, configured server role, server instance ID, action, and payload digest.\n\nStore under specs/.autonomy/audit/ (or configurable secure path).\n\nIntegrity verification:\n- foundry audit verify CLI command walks hash chain and reports breaks\n- CLI and programmatic check share single implementation\n- Verification runs automatically on session-start for existing trails\n- Broken chains produce warning (not hard block) \u2014 log is forensic, not a gate\n\nScope clarification: On single-host, 'append-only' is tamper detection not prevention. Any process with filesystem access can modify the log. Value is post-hoc auditability and making tampering visible.",
+        "file_path": "src/foundry_mcp/core/autonomy/audit.py",
+        "acceptance_criteria": [
+          "Append-only log with hash chain (prev_hash, event_hash)",
+          "Events logged: step issued/consumed, pause/resume, bypass/override, reset/end",
+          "Each entry: timestamp, role, instance ID, action, payload digest",
+          "Storage at specs/.autonomy/audit/ or configurable path",
+          "foundry audit verify CLI command detects hash chain breaks",
+          "CLI and programmatic checker share single implementation",
+          "Auto-verify on session-start for existing trails",
+          "Broken chains produce warning not hard block",
+          "Verification reports exact point of divergence"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "P2.2: Runtime isolation profiles for autonomy runner",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Application-level hardening for autonomy_runner role:\n\n1. workspace_root config: all file operations validated against this path prefix\n2. Tool permission filtering: runner's MCP session only exposes tools in role allowlist (from P0.3), enforced at session initialization not just dispatch\n3. Shell execution: runs with restricted PATH, kills subprocesses blocking on stdin for >30s (configurable timeout)\n4. Path traversal: deny .. in all file path arguments for runner-scoped requests\n\nScope clarification: This is application-level restriction, not OS-level sandboxing (seccomp/AppArmor/chroot).",
+        "file_path": "src/foundry_mcp/core/authorization.py",
+        "acceptance_criteria": [
+          "workspace_root config restricts runner file operations to path prefix",
+          "Runner MCP session only exposes allowed tools at session level",
+          "Shell execution uses restricted PATH",
+          "Interactive/blocking subprocesses terminated after configurable timeout (default 30s)",
+          "Path traversal (.. in paths) rejected with explicit error for runner requests",
+          "Runner cannot read/write outside configured workspace root"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Phase 3 verification: Tamper resistance integration test",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Verify audit ledger integrity verification works end-to-end and runtime isolation prevents workspace escape. Test hash chain validation, tamper detection, path traversal rejection, and subprocess timeout enforcement.",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": []
+}
