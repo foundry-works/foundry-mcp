@@ -157,6 +157,15 @@ class SessionLimits(BaseModel):
     max_fidelity_review_cycles_per_phase: int = Field(
         default=3, ge=1, description="Max fidelity review cycles per phase"
     )
+    avg_pct_per_step: int = Field(
+        default=3, ge=1, le=20, description="Estimated context growth per step for Tier 3 estimation"
+    )
+    context_staleness_threshold: int = Field(
+        default=5, ge=1, description="Consecutive identical context reports before staleness penalty"
+    )
+    context_staleness_penalty_pct: int = Field(
+        default=5, ge=1, le=20, description="Penalty percentage added when context reports are stale"
+    )
 
 
 class StopConditions(BaseModel):
@@ -178,6 +187,21 @@ class SessionContext(BaseModel):
     )
     estimated_tokens_used: Optional[int] = Field(None, ge=0, description="Estimated tokens used")
     last_heartbeat_at: Optional[datetime] = Field(None, description="Last heartbeat timestamp")
+    context_source: Optional[str] = Field(
+        None, description="Source of context usage: sidecar, caller, or estimated"
+    )
+    last_context_report_at: Optional[datetime] = Field(
+        None, description="When context usage was last reported"
+    )
+    last_context_report_pct: Optional[int] = Field(
+        None, ge=0, le=100, description="Previous context usage value for monotonicity check"
+    )
+    consecutive_same_reports: int = Field(
+        default=0, ge=0, description="Counter for consecutive identical context reports"
+    )
+    steps_since_last_report: int = Field(
+        default=0, ge=0, description="Steps since last context usage report"
+    )
 
 
 class PhaseGateRecord(BaseModel):
@@ -363,7 +387,7 @@ class AutonomousSessionState(BaseModel):
     """
 
     # Schema versioning (serialized as _schema_version for ADR compliance)
-    schema_version: int = Field(default=1, alias="_schema_version", description="Schema version")
+    schema_version: int = Field(default=2, alias="_schema_version", description="Schema version")
 
     # Core identifiers
     id: str = Field(..., description="ULID-format session identifier")

@@ -170,7 +170,7 @@ class TestSaveLoadRoundTrip:
         # Read raw JSON to verify _schema_version key
         path = storage._get_session_path("sess-1")
         raw = json.loads(path.read_text())
-        assert raw.get("_schema_version") == 1
+        assert raw.get("_schema_version") == 2
 
     def test_atomic_write_no_partial_files(self, storage):
         """Verify no temp files remain after successful save."""

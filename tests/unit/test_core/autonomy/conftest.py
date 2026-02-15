@@ -48,7 +48,7 @@ def make_session(
     """Factory for creating test session states with sensible defaults."""
     now = datetime.now(timezone.utc)
     return AutonomousSessionState(
-        **{"_schema_version": 1},
+        **{"_schema_version": 2},
         id=session_id,
         spec_id=spec_id,
         spec_structure_hash=spec_structure_hash,

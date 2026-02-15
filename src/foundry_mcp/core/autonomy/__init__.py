@@ -89,6 +89,10 @@ from .write_lock import (
     make_write_lock_error_response,
     check_and_enforce_write_lock,
 )
+from .context_tracker import (
+    ContextTracker,
+    is_sandbox_mode,
+)
 from .memory import (
     AutonomyStorage,
 )
@@ -171,6 +175,9 @@ __all__ = [
     "check_autonomy_write_lock",
     "make_write_lock_error_response",
     "check_and_enforce_write_lock",
+    # Context tracker
+    "ContextTracker",
+    "is_sandbox_mode",
     # Storage
     "AutonomyStorage",
     # Spec hash module

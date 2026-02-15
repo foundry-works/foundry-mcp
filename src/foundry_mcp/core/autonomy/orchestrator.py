@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ulid import ULID
 
+from foundry_mcp.core.autonomy.context_tracker import ContextTracker
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models import (
     AutonomousSessionState,
@@ -150,6 +151,7 @@ class StepOrchestrator:
         self.workspace_path = workspace_path or Path.cwd()
         # Cache: (spec_id, mtime, file_size) -> spec_data
         self._spec_cache: Optional[Tuple[str, float, int, Dict[str, Any]]] = None
+        self._context_tracker = ContextTracker(self.workspace_path)
 
     def compute_next_step(
         self,
@@ -172,13 +174,18 @@ class StepOrchestrator:
         Returns:
             OrchestrationResult with next step or error
         """
-        # Update context if provided
-        if context_usage_pct is not None:
-            session.context.context_usage_pct = context_usage_pct
+        now = datetime.now(timezone.utc)
+
+        # Update context usage via the tracker (Tier 1/2/3 fallthrough)
+        effective_pct, source = self._context_tracker.get_effective_context_pct(
+            session, context_usage_pct, now
+        )
+        session.context.context_usage_pct = effective_pct
+        session.context.context_source = source
+        self._context_tracker.update_step_counter(session)
+
         if heartbeat_at is not None:
             session.context.last_heartbeat_at = heartbeat_at
-
-        now = datetime.now(timezone.utc)
 
         # =================================================================
         # Step 0: Replay Detection
@@ -772,9 +779,10 @@ class StepOrchestrator:
         # Context limit
         if session.context.context_usage_pct >= session.limits.context_threshold_pct:
             logger.info(
-                "Context limit reached: %d%% >= %d%%",
+                "Context limit reached: %d%% >= %d%% (source: %s)",
                 session.context.context_usage_pct,
                 session.limits.context_threshold_pct,
+                session.context.context_source or "unknown",
             )
             return self._create_pause_result(
                 session,

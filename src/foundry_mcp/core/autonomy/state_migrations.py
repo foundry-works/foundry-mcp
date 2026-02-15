@@ -36,7 +36,7 @@ from typing import Any, Callable, Optional
 logger = logging.getLogger(__name__)
 
 # Current schema version for AutonomousSessionState
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 # Schema version field name in state dict (matches ADR-002 specification)
 SCHEMA_VERSION_KEY = "_schema_version"
@@ -107,19 +107,36 @@ def set_schema_version(state: dict[str, Any], version: int) -> None:
 # =============================================================================
 
 # Registry of migration functions: (from_version, to_version) -> migration_fn
-# Empty for v1 since this is the initial version - infrastructure ready for future migrations
 MIGRATIONS: dict[tuple[int, int], Callable[[dict[str, Any]], dict[str, Any]]] = {}
 
-# Future migrations will be added here, e.g.:
-# def migrate_v1_to_v2(state: dict[str, Any]) -> dict[str, Any]:
-#     """Migrate state from v1 to v2."""
-#     migrated = deepcopy(state)
-#     # Add new v2 fields with defaults
-#     # ...
-#     set_schema_version(migrated, 2)
-#     return migrated
-#
-# MIGRATIONS[(1, 2)] = migrate_v1_to_v2
+
+def migrate_v1_to_v2(state: dict[str, Any]) -> dict[str, Any]:
+    """Migrate state from v1 to v2.
+
+    Adds context tracking fields to SessionContext and new limit fields
+    to SessionLimits for robust context usage tracking.
+    """
+    migrated = deepcopy(state)
+
+    # Add new context tracking fields
+    context = migrated.setdefault("context", {})
+    context.setdefault("context_source", None)
+    context.setdefault("last_context_report_at", None)
+    context.setdefault("last_context_report_pct", None)
+    context.setdefault("consecutive_same_reports", 0)
+    context.setdefault("steps_since_last_report", 0)
+
+    # Add new limit fields
+    limits = migrated.setdefault("limits", {})
+    limits.setdefault("avg_pct_per_step", 3)
+    limits.setdefault("context_staleness_threshold", 5)
+    limits.setdefault("context_staleness_penalty_pct", 5)
+
+    set_schema_version(migrated, 2)
+    return migrated
+
+
+MIGRATIONS[(1, 2)] = migrate_v1_to_v2
 
 
 # =============================================================================
@@ -294,6 +311,20 @@ def _recover_state(
             recovered["write_lock_enforced"] = True
         if "gate_policy" not in recovered:
             recovered["gate_policy"] = "strict"
+
+    # Apply v2 defaults
+    if target_version >= 2:
+        context = recovered.setdefault("context", {})
+        context.setdefault("context_source", None)
+        context.setdefault("last_context_report_at", None)
+        context.setdefault("last_context_report_pct", None)
+        context.setdefault("consecutive_same_reports", 0)
+        context.setdefault("steps_since_last_report", 0)
+
+        limits = recovered.setdefault("limits", {})
+        limits.setdefault("avg_pct_per_step", 3)
+        limits.setdefault("context_staleness_threshold", 5)
+        limits.setdefault("context_staleness_penalty_pct", 5)
 
     # Set schema version
     set_schema_version(recovered, target_version)

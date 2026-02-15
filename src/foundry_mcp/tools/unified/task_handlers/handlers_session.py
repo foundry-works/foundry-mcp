@@ -369,6 +369,9 @@ def _handle_session_start(
     heartbeat_grace_minutes: Optional[int] = None,
     step_stale_minutes: Optional[int] = None,
     max_fidelity_review_cycles_per_phase: Optional[int] = None,
+    avg_pct_per_step: Optional[int] = None,
+    context_staleness_threshold: Optional[int] = None,
+    context_staleness_penalty_pct: Optional[int] = None,
     enforce_autonomy_write_lock: Optional[bool] = None,
     **payload: Any,
 ) -> dict:
@@ -514,6 +517,12 @@ def _handle_session_start(
             limits_kwargs["step_stale_minutes"] = step_stale_minutes
         if max_fidelity_review_cycles_per_phase is not None:
             limits_kwargs["max_fidelity_review_cycles_per_phase"] = max_fidelity_review_cycles_per_phase
+        if avg_pct_per_step is not None:
+            limits_kwargs["avg_pct_per_step"] = avg_pct_per_step
+        if context_staleness_threshold is not None:
+            limits_kwargs["context_staleness_threshold"] = context_staleness_threshold
+        if context_staleness_penalty_pct is not None:
+            limits_kwargs["context_staleness_penalty_pct"] = context_staleness_penalty_pct
 
         # Build stop conditions from payload
         stop_kwargs = {}
@@ -1332,8 +1341,18 @@ def _handle_session_heartbeat(
     session.updated_at = now
     session.state_version += 1
 
+    # Route context_usage_pct through ContextTracker for validation/hardening
     if context_usage_pct is not None:
-        session.context.context_usage_pct = context_usage_pct
+        from foundry_mcp.core.autonomy.context_tracker import ContextTracker
+
+        ws_path = Path(workspace) if workspace else Path.cwd()
+        tracker = ContextTracker(ws_path)
+        effective_pct, source = tracker.get_effective_context_pct(
+            session, context_usage_pct, now
+        )
+        session.context.context_usage_pct = effective_pct
+        session.context.context_source = source
+
     if estimated_tokens_used is not None:
         session.context.estimated_tokens_used = estimated_tokens_used
 
@@ -1348,6 +1367,7 @@ def _handle_session_heartbeat(
         "session_id": session.id,
         "heartbeat_at": now.isoformat(),
         "context_usage_pct": session.context.context_usage_pct,
+        "context_source": session.context.context_source,
     }
 
     return asdict(success_response(
