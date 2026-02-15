@@ -17,7 +17,7 @@ foundry-mcp exposes 14 unified tools with an `action` parameter that switches be
 | `authoring` | Spec authoring and mutations | `spec-create`, `spec-template`, `spec-update-frontmatter`, `phase-add`, `phase-add-bulk`, `phase-remove`, `phase-move`, `phase-template`, `phase-update-metadata`, `assumption-add`, `assumption-list`, `revision-add`, `spec-find-replace`, `spec-rollback`, `intake-add`, `intake-list`, `intake-dismiss` |
 | `lifecycle` | Spec lifecycle transitions | `move`, `activate`, `complete`, `archive`, `state` |
 | `plan` | Planning helpers | `create`, `list`, `review` |
-| `review` | LLM-assisted review workflows | `spec`, `fidelity`, `parse-feedback`, `list-tools`, `list-plan-tools` |
+| `review` | LLM-assisted review workflows | `spec`, `fidelity`, `fidelity-gate`, `parse-feedback`, `list-tools`, `list-plan-tools` |
 | `verification` | Verification definition and execution | `add`, `execute` |
 | `journal` | Journaling helpers | `add`, `list`, `list-unjournaled` |
 | `provider` | LLM provider discovery | `list`, `status`, `execute` |
@@ -301,6 +301,7 @@ LLM-assisted review workflows.
 |--------|-------------|
 | `spec` | Review a specification |
 | `fidelity` | Compare implementation to spec |
+| `fidelity-gate` | Run autonomous phase gate review and write gate evidence |
 | `parse-feedback` | Parse review feedback |
 | `list-tools` | List review toolchains |
 | `list-plan-tools` | List plan review tools |
@@ -311,6 +312,9 @@ LLM-assisted review workflows.
 |-----------|------|----------|---------|-------------|
 | `action` | string | Yes | - | Review action |
 | `spec_id` | string | Varies | - | Target spec ID |
+| `phase_id` | string | Varies | - | Phase ID (required for phase-scoped fidelity runs) |
+| `session_id` | string | Varies | - | Session ID (required for `fidelity-gate`) |
+| `step_id` | string | Varies | - | Session step ID from `task(action=session-step-next)` (required for `fidelity-gate`) |
 | `review_type` | string | No | `full` | Review type (`quick`, `full`, `security`, `feasibility`) |
 | `ai_provider` | string | No | - | AI provider to use |
 | `ai_timeout` | number | No | 360 | Consultation timeout |
@@ -322,6 +326,7 @@ LLM-assisted review workflows.
 ```json
 {"action": "spec", "spec_id": "my-spec", "review_type": "security"}
 {"action": "fidelity", "spec_id": "my-spec", "task_id": "task-1-2"}
+{"action": "fidelity-gate", "spec_id": "my-spec", "phase_id": "phase-1", "session_id": "session_01", "step_id": "step_01"}
 ```
 
 **CLI equivalent:** `foundry-cli review spec`

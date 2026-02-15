@@ -1017,6 +1017,61 @@ class TestCreateStepHelpers:
         assert result.next_step.type == StepType.ADDRESS_FIDELITY_FEEDBACK
         assert result.next_step.phase_id == "phase-1"
 
+    def test_emitted_step_instructions_match_registered_router_actions(self, tmp_path):
+        from foundry_mcp.tools.unified.review import _REVIEW_ROUTER
+        from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
+        from foundry_mcp.tools.unified.verification import _VERIFICATION_ROUTER
+
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(active_phase_id="phase-1")
+        now = datetime.now(timezone.utc)
+
+        implement_result = orch._create_implement_task_step(
+            session,
+            {"id": "task-1", "title": "Implement feature"},
+            make_spec_data(),
+            now,
+        )
+        verification_result = orch._create_verification_step(
+            session,
+            {"id": "verify-1", "title": "Run tests"},
+            now,
+        )
+        gate_result = orch._create_fidelity_gate_step(
+            session,
+            {"id": "phase-1", "title": "Phase 1"},
+            now,
+        )
+        feedback_result = orch._create_fidelity_feedback_step(
+            session,
+            PendingGateEvidence(
+                gate_attempt_id="gate-001",
+                step_id="s1",
+                phase_id="phase-1",
+                verdict=GateVerdict.FAIL,
+                issued_at=now,
+            ),
+            now,
+        )
+
+        allowed_actions = {
+            "task": set(_TASK_ROUTER.allowed_actions()),
+            "review": set(_REVIEW_ROUTER.allowed_actions()),
+            "verification": set(_VERIFICATION_ROUTER.allowed_actions()),
+        }
+
+        emitted = (
+            (implement_result.next_step.instructions or [])
+            + (verification_result.next_step.instructions or [])
+            + (gate_result.next_step.instructions or [])
+            + (feedback_result.next_step.instructions or [])
+        )
+        assert emitted, "Expected at least one emitted step instruction"
+
+        for instruction in emitted:
+            assert instruction.tool in allowed_actions
+            assert instruction.action in allowed_actions[instruction.tool]
+
 
 # =============================================================================
 # Gate Evidence Handling (steps 13-14)

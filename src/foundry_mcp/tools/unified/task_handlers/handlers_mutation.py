@@ -180,6 +180,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -336,6 +337,7 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -494,6 +496,7 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -676,6 +679,7 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason_param,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -856,6 +860,7 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -987,6 +992,7 @@ def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -1118,6 +1124,7 @@ def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -1249,6 +1256,7 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error

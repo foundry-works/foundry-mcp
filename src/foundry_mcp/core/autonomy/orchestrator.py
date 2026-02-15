@@ -1752,7 +1752,7 @@ class StepOrchestrator:
             ),
             StepInstruction(
                 tool="verification",
-                action="run",
+                action="execute",
                 description="Execute verification commands",
             ),
             StepInstruction(
@@ -1818,13 +1818,13 @@ class StepOrchestrator:
         instructions = [
             StepInstruction(
                 tool="review",
-                action="run",
+                action="fidelity-gate",
                 description=f"Run fidelity review for phase {phase_title}",
             ),
             StepInstruction(
                 tool="task",
-                action="journal",
-                description="Record gate results",
+                action="session-step-next",
+                description="Report gate outcome and request the next step",
             ),
         ]
 
@@ -1870,18 +1870,18 @@ class StepOrchestrator:
         instructions = [
             StepInstruction(
                 tool="review",
-                action="get-findings",
-                description="Get fidelity review findings",
+                action="fidelity",
+                description="Inspect phase fidelity findings before remediation",
             ),
             StepInstruction(
                 tool="task",
-                action="update",
-                description="Address findings in code",
+                action="prepare",
+                description="Load task context to implement remediation",
             ),
             StepInstruction(
                 tool="task",
-                action="complete",
-                description="Mark feedback addressed",
+                action="session-step-next",
+                description="Report remediation progress and request a gate retry",
             ),
         ]
 

@@ -1000,6 +1000,106 @@ class TestSessionRebase:
         assert data["status"] == "running"
         assert data.get("rebase_result", {}).get("result") == "success"
 
+    def test_rebase_preserves_unaffected_phase_gates(self, tmp_path):
+        """Added tasks clear gate satisfaction only for the impacted phase."""
+        from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.status = SessionStatus.PAUSED
+        session.pause_reason = PauseReason.USER
+        session.satisfied_gates = {
+            "phase-1": ["fidelity"],
+            "phase-2": ["manual_review"],
+        }
+
+        spec_path = workspace / "specs" / "active" / "test-spec-001.json"
+        old_spec_data = json.loads(spec_path.read_text())
+        session.spec_structure_hash = compute_spec_structure_hash(old_spec_data)
+
+        backup_dir = workspace / "specs" / ".backups" / "test-spec-001"
+        backup_dir.mkdir(parents=True)
+        (backup_dir / "backup-001.json").write_text(json.dumps(old_spec_data))
+        storage.save(session)
+
+        spec_data = json.loads(spec_path.read_text())
+        spec_data["phases"][1]["tasks"].append(
+            {"id": "task-new-phase-2", "title": "New phase 2 task", "type": "task", "status": "pending"}
+        )
+        spec_path.write_text(json.dumps(spec_data, indent=2))
+
+        resp = _handle_session_rebase(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        _assert_success(resp)
+
+        updated = storage.load(session_id)
+        assert updated is not None
+        assert updated.satisfied_gates == {"phase-1": ["fidelity"]}
+
+    def test_rebase_without_old_snapshot_clears_gate_satisfaction(self, tmp_path):
+        """When old structure is unavailable, rebase resets satisfied gates conservatively."""
+        from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.status = SessionStatus.PAUSED
+        session.pause_reason = PauseReason.USER
+        session.satisfied_gates = {
+            "phase-1": ["fidelity"],
+            "phase-2": ["manual_review"],
+        }
+
+        # Keep a stale hash and avoid writing a matching backup snapshot.
+        spec_path = workspace / "specs" / "active" / "test-spec-001.json"
+        old_spec_data = json.loads(spec_path.read_text())
+        old_hash = compute_spec_structure_hash(old_spec_data)
+        session.spec_structure_hash = "0" * len(old_hash)
+        storage.save(session)
+
+        spec_data = json.loads(spec_path.read_text())
+        spec_data["phases"][0]["tasks"].append(
+            {"id": "task-new-phase-1", "title": "New phase 1 task", "type": "task", "status": "pending"}
+        )
+        spec_path.write_text(json.dumps(spec_data, indent=2))
+
+        resp = _handle_session_rebase(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        _assert_success(resp)
+
+        updated = storage.load(session_id)
+        assert updated is not None
+        assert updated.satisfied_gates == {}
+
     def test_rebase_completed_task_removal_guarded(self, tmp_path):
         """Rebase with removed completed tasks returns error without force."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (

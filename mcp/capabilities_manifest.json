@@ -1117,6 +1117,7 @@
             "enum": [
               "spec",
               "fidelity",
+              "fidelity-gate",
               "parse-feedback",
               "list-tools",
               "list-plan-tools"
@@ -1128,6 +1129,24 @@
             "type": "string",
             "required": false,
             "description": "Target spec ID (required for spec/fidelity actions)"
+          },
+          {
+            "name": "phase_id",
+            "type": "string",
+            "required": false,
+            "description": "Target phase ID (required for phase-scoped fidelity actions)"
+          },
+          {
+            "name": "session_id",
+            "type": "string",
+            "required": false,
+            "description": "Autonomy session ID (required for action=fidelity-gate)"
+          },
+          {
+            "name": "step_id",
+            "type": "string",
+            "required": false,
+            "description": "Session step ID from task(action=session-step-next) (required for action=fidelity-gate)"
           }
         ],
         "version": "1.0.0",

@@ -60,16 +60,22 @@ def _check_autonomy_write_lock(
     bypass_autonomy_lock: bool,
     bypass_reason: Optional[str],
     request_id: str,
+    config: Optional[ServerConfig] = None,
 ) -> Optional[dict]:
     """Check autonomy write-lock and return error response if blocked."""
     if not _WRITE_LOCK_AVAILABLE or _check_write_lock_impl is None:
         return None
+
+    allow_lock_bypass = False
+    if config is not None:
+        allow_lock_bypass = config.autonomy_security.allow_lock_bypass
 
     result = _check_write_lock_impl(
         spec_id=spec_id,
         workspace=workspace,
         bypass_flag=bypass_autonomy_lock,
         bypass_reason=bypass_reason,
+        allow_lock_bypass=allow_lock_bypass,
     )
 
     if result.status == _WriteLockStatus.LOCKED:
@@ -271,6 +277,7 @@ def _handle_move(
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -350,6 +357,7 @@ def _handle_activate(
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -436,6 +444,7 @@ def _handle_complete(
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -515,6 +524,7 @@ def _handle_archive(
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error

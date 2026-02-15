@@ -40,7 +40,7 @@ class TestRoleAllowlists:
     def test_autonomy_runner_allowlist(self):
         assert "session-start" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-step-next" in AUTONOMY_RUNNER_ALLOWLIST
-        assert "run_fidelity_gate" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "review-fidelity-gate" in AUTONOMY_RUNNER_ALLOWLIST
 
     def test_maintainer_allowlist_has_wildcard(self):
         assert "*" in MAINTAINER_ALLOWLIST
@@ -118,6 +118,10 @@ class TestCheckActionAllowed:
     def test_autonomy_runner_cannot_mutate_tasks(self):
         result = check_action_allowed("autonomy_runner", "task", "complete")
         assert result.allowed is False
+
+    def test_autonomy_runner_can_execute_fidelity_gate_review(self):
+        result = check_action_allowed("autonomy_runner", "review", "fidelity-gate")
+        assert result.allowed is True
 
     def test_unknown_role_denied(self):
         result = check_action_allowed("unknown", "task", "complete")

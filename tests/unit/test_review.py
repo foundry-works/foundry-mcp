@@ -11,8 +11,16 @@ from pathlib import Path
 import pytest
 
 from foundry_mcp.config import ServerConfig
+from foundry_mcp.core.authorization import set_server_role
 from foundry_mcp.server import create_server
 from tests.conftest import extract_response_dict
+
+
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    set_server_role("maintainer")
+    yield
+    set_server_role("observer")
 
 
 def test_get_llm_status_handles_import_error(monkeypatch):
@@ -54,7 +62,32 @@ def test_review_list_tools_returns_envelope(test_config: ServerConfig):
     server = create_server(test_config)
     tools = server._tool_manager._tools
 
-    result = extract_response_dict(tools["review"].fn(action="list-tools"))
+    set_server_role("maintainer")
+    try:
+        result = extract_response_dict(tools["review"].fn(action="list-tools"))
+    finally:
+        set_server_role("observer")
     assert result["success"] is True
     assert "tools" in result["data"]
     assert "review_types" in result["data"]
+
+
+def test_fidelity_gate_uses_runtime_feature_flag(test_config: ServerConfig):
+    from foundry_mcp.tools.unified.review import _dispatch_review_action
+
+    disabled = _dispatch_review_action(
+        action="fidelity-gate",
+        payload={},
+        config=test_config,
+    )
+    assert disabled["success"] is False
+    assert disabled["data"]["error_code"] == "FEATURE_DISABLED"
+
+    test_config.feature_flags["autonomy_fidelity_gates"] = True
+    enabled = _dispatch_review_action(
+        action="fidelity-gate",
+        payload={"spec_id": "spec-001"},
+        config=test_config,
+    )
+    assert enabled["success"] is False
+    assert enabled["data"]["error_code"] != "FEATURE_DISABLED"

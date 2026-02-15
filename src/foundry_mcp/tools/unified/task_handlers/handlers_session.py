@@ -404,53 +404,89 @@ def _reconcile_gates_on_rebase(
     session: AutonomousSessionState,
     new_required_gates: Dict[str, List[str]],
     diff: "StructuralDiff",
+    *,
+    old_spec_data: Optional[Dict[str, Any]] = None,
+    new_spec_data: Optional[Dict[str, Any]] = None,
+    unknown_structural_changes: bool = False,
 ) -> None:
     """Reconcile required and satisfied gates after rebase.
 
-    Preserves satisfied gates for unchanged phases, marks new/changed
-    requirements as unsatisfied. Prevents removal of minimum gate types.
+    Preserves satisfied gates for unchanged phases, and clears satisfied gates for
+    phases impacted by structural edits.
 
     Args:
         session: Session state to update
         new_required_gates: New required gates computed from updated spec
         diff: Structural diff from rebase
+        old_spec_data: Previous spec structure (used to map removed/moved tasks)
+        new_spec_data: Current spec structure (used to map added/moved tasks)
+        unknown_structural_changes: True when structure hash changed but no old
+            structure snapshot is available. In this case, gate satisfaction is
+            conservatively reset for all phases.
     """
-    # Preserve satisfied gates for unchanged phases
-    old_satisfied = session.satisfied_gates.copy()
+    def _task_phase_map(spec_data: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        mapping: Dict[str, str] = {}
+        if not isinstance(spec_data, dict):
+            return mapping
 
-    # Update required gates
+        phases = spec_data.get("phases", [])
+        if not isinstance(phases, list):
+            return mapping
+
+        for phase in phases:
+            if not isinstance(phase, dict):
+                continue
+            phase_id = phase.get("id")
+            if not isinstance(phase_id, str) or not phase_id:
+                continue
+            tasks = phase.get("tasks", [])
+            if not isinstance(tasks, list):
+                continue
+            for task in tasks:
+                if not isinstance(task, dict):
+                    continue
+                task_id = task.get("id")
+                if isinstance(task_id, str) and task_id:
+                    mapping[task_id] = phase_id
+
+        return mapping
+
+    old_satisfied = session.satisfied_gates.copy()
     session.required_phase_gates = new_required_gates
 
-    # Clear satisfied gates for new phases (they need to pass gates)
-    for phase_id in diff.added_phases:
-        if phase_id in session.satisfied_gates:
-            del session.satisfied_gates[phase_id]
+    affected_phases = set(diff.added_phases)
+    affected_phases.update(diff.removed_phases)
 
-    # Clear satisfied gates for phases with new/changed tasks
+    new_task_phase = _task_phase_map(new_spec_data)
+    old_task_phase = _task_phase_map(old_spec_data)
+
     for task_id in diff.added_tasks:
-        # Extract phase_id from task_id pattern (e.g., "task-1-2" -> "phase-1")
-        # or look up from spec - for simplicity, clear all satisfied for affected phases
-        # This is conservative but safe
-        pass  # Handled by phase check below
+        phase_id = new_task_phase.get(task_id)
+        if phase_id:
+            affected_phases.add(phase_id)
 
-    # For phases that still exist, preserve satisfied gates that match requirements
+    for task_id in diff.removed_tasks:
+        phase_id = old_task_phase.get(task_id)
+        if phase_id:
+            affected_phases.add(phase_id)
+
+    # Detect renamed/moved task placement (same task id, different phase).
+    for task_id in set(old_task_phase).intersection(new_task_phase):
+        old_phase = old_task_phase[task_id]
+        new_phase = new_task_phase[task_id]
+        if old_phase != new_phase:
+            affected_phases.add(old_phase)
+            affected_phases.add(new_phase)
+
+    if unknown_structural_changes:
+        affected_phases.update(new_required_gates.keys())
+
     preserved_satisfied: Dict[str, List[str]] = {}
-
     for phase_id, required in new_required_gates.items():
+        if phase_id in affected_phases:
+            continue
         old_satisfied_for_phase = old_satisfied.get(phase_id, [])
-
-        # Only preserve satisfied gates that are still in requirements
-        preserved = [g for g in old_satisfied_for_phase if g in required]
-
-        # For phases with added tasks, clear satisfied to force re-verification
-        phase_had_changes = any(
-            task_id.startswith(f"{phase_id}-") or f"-{phase_id.split('-')[-1]}-" in task_id
-            for task_id in diff.added_tasks
-        )
-
-        if phase_had_changes:
-            preserved = []
-
+        preserved = [gate for gate in old_satisfied_for_phase if gate in required]
         if preserved:
             preserved_satisfied[phase_id] = preserved
 
@@ -1457,7 +1493,14 @@ def _handle_session_rebase(
 
     # Reconcile required and satisfied gates
     new_required_gates = _compute_required_gates_from_spec(current_spec_data, session)
-    _reconcile_gates_on_rebase(session, new_required_gates, diff)
+    _reconcile_gates_on_rebase(
+        session,
+        new_required_gates,
+        diff,
+        old_spec_data=old_spec_data,
+        new_spec_data=current_spec_data,
+        unknown_structural_changes=old_spec_data is None,
+    )
 
     storage.save(session)
 

@@ -972,14 +972,11 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
         PendingGateEvidence,
     )
     from foundry_mcp.core.autonomy.server_secret import compute_integrity_checksum
-    from foundry_mcp.core.discovery import get_capabilities
 
     start_time = time.perf_counter()
 
-    # Check feature flag
-    capabilities_response = get_capabilities()
-    capabilities_data = capabilities_response.get("capabilities", {})
-    if not capabilities_data.get("autonomy_fidelity_gates", False):
+    # Enforce the runtime feature flag from server config.
+    if not bool(config.feature_flags.get("autonomy_fidelity_gates", False)):
         return asdict(
             error_response(
                 "Fidelity gates feature is not enabled",

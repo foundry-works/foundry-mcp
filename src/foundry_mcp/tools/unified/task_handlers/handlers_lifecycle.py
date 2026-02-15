@@ -102,6 +102,7 @@ def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -215,6 +216,7 @@ def _handle_start(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -337,6 +339,7 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -503,6 +506,7 @@ def _handle_block(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
@@ -612,6 +616,7 @@ def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
+        config=config,
     )
     if lock_error:
         return lock_error
