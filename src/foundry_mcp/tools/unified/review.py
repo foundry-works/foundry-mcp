@@ -932,7 +932,234 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     return asdict(
         success_response(
-            **response_data,
+            data=response_data,
+            telemetry={"duration_ms": round(duration_ms, 2)},
+        )
+    )
+
+
+def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
+    """Run a phase fidelity review for autonomous gate enforcement.
+
+    This action is designed for the autonomous execution system. It runs a
+    fidelity review for a phase and writes gate evidence to the session state.
+    The orchestrator (via session-step command="next") validates and applies
+    gate policy based on this evidence.
+
+    Request fields:
+    - spec_id (required): Spec ID
+    - session_id (required): Session ID
+    - phase_id (required): Phase ID to review
+    - step_id (required): Step ID from the run_fidelity_gate next_step
+    - Existing fidelity inputs (ai_tools, model, consensus_threshold, etc.)
+
+    Response data:
+    - spec_id, session_id, phase_id, step_id
+    - gate_attempt_id: Unique ID for this review attempt
+    - verdict: pass | fail | warn
+    - gate_policy: Echo of active session policy
+    - gate_passed_preview: bool preview (command="next" recomputes authoritatively)
+    - review_path: Path to review file (if written)
+    - findings: Summary of issues (if any)
+    """
+    from datetime import datetime, timezone
+    from ulid import ULID
+
+    from foundry_mcp.core.autonomy.memory import AutonomyStorage
+    from foundry_mcp.core.autonomy.models import (
+        GateVerdict,
+        GatePolicy,
+        PendingGateEvidence,
+    )
+    from foundry_mcp.core.autonomy.server_secret import compute_integrity_checksum
+
+    start_time = time.perf_counter()
+
+    # Enforce the runtime feature flag from server config.
+    if not bool(config.feature_flags.get("autonomy_fidelity_gates", False)):
+        return asdict(
+            error_response(
+                "Fidelity gates feature is not enabled",
+                error_code=ErrorCode.FEATURE_DISABLED,
+                error_type=ErrorType.UNAVAILABLE,
+                remediation="Enable autonomy_fidelity_gates feature flag to use this action.",
+            )
+        )
+
+    # Required parameters
+    spec_id = payload.get("spec_id")
+    session_id = payload.get("session_id")
+    phase_id = payload.get("phase_id")
+    step_id = payload.get("step_id")
+
+    # Validate required parameters
+    for field_name, field_value in [
+        ("spec_id", spec_id),
+        ("session_id", session_id),
+        ("phase_id", phase_id),
+        ("step_id", step_id),
+    ]:
+        if not isinstance(field_value, str) or not field_value.strip():
+            return asdict(
+                error_response(
+                    f"{field_name} is required for fidelity-gate action",
+                    error_code=ErrorCode.MISSING_REQUIRED,
+                    error_type=ErrorType.VALIDATION,
+                    remediation=f"Provide a valid {field_name}.",
+                )
+            )
+
+    # Security validation for string inputs
+    for field_name, field_value in [
+        ("spec_id", spec_id),
+        ("session_id", session_id),
+        ("phase_id", phase_id),
+        ("step_id", step_id),
+    ]:
+        if isinstance(field_value, str) and is_prompt_injection(field_value):
+            return asdict(
+                error_response(
+                    f"Input validation failed for {field_name}",
+                    error_code=ErrorCode.VALIDATION_ERROR,
+                    error_type=ErrorType.VALIDATION,
+                    remediation="Remove instruction-like patterns from input.",
+                )
+            )
+
+    workspace = payload.get("workspace")
+    ws_path = (
+        Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
+    )
+
+    # Load session to get gate_policy
+    storage = AutonomyStorage(workspace_path=ws_path)
+    session = storage.load(str(session_id))
+
+    if session is None:
+        return asdict(
+            error_response(
+                f"Session not found: {session_id}",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                remediation="Verify the session ID exists.",
+            )
+        )
+
+    if session.spec_id != spec_id:
+        return asdict(
+            error_response(
+                f"Session {session_id} is for spec {session.spec_id}, not {spec_id}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Ensure session_id matches the spec_id.",
+            )
+        )
+
+    # Build fidelity review payload (reuse existing handler)
+    fidelity_payload = {
+        "spec_id": spec_id,
+        "phase_id": phase_id,
+        "ai_tools": payload.get("ai_tools"),
+        "model": payload.get("model"),
+        "consensus_threshold": payload.get("consensus_threshold", 2),
+        "include_tests": payload.get("include_tests", True),
+        "workspace": workspace,
+        "files": payload.get("files"),
+        "incremental": payload.get("incremental", False),
+        "base_branch": payload.get("base_branch", "main"),
+    }
+
+    # Run the fidelity review
+    fidelity_result = _handle_fidelity(config=config, payload=fidelity_payload)
+
+    # Extract verdict from fidelity result
+    if fidelity_result.get("success"):
+        verdict_str = fidelity_result.get("data", {}).get("verdict", "unknown")
+        review_path = fidelity_result.get("data", {}).get("review_path")
+        deviations = fidelity_result.get("data", {}).get("deviations", [])
+    else:
+        # Fidelity review failed - treat as fail verdict
+        verdict_str = "fail"
+        review_path = None
+        deviations = [{"error": fidelity_result.get("error", "Unknown error")}]
+
+    # Normalize verdict to enum value
+    verdict_map = {
+        "pass": GateVerdict.PASS,
+        "warn": GateVerdict.WARN,
+        "fail": GateVerdict.FAIL,
+    }
+    verdict = verdict_map.get(verdict_str.lower(), GateVerdict.FAIL)
+
+    # Generate gate_attempt_id
+    gate_attempt_id = f"gate_{ULID()}"
+
+    # Compute gate_passed_preview based on policy and verdict
+    gate_policy = session.gate_policy
+    if gate_policy == GatePolicy.STRICT:
+        gate_passed_preview = verdict == GateVerdict.PASS
+    elif gate_policy == GatePolicy.LENIENT:
+        gate_passed_preview = verdict in (GateVerdict.PASS, GateVerdict.WARN)
+    else:  # MANUAL
+        gate_passed_preview = False  # Manual always requires human review
+
+    # Write pending gate evidence to session
+    now = datetime.now(timezone.utc)
+
+    # Compute integrity checksum for tamper detection (P1.3)
+    integrity_checksum = compute_integrity_checksum(
+        gate_attempt_id=gate_attempt_id,
+        step_id=str(step_id),
+        phase_id=str(phase_id),
+        verdict=verdict.value,
+    )
+
+    session.pending_gate_evidence = PendingGateEvidence(
+        gate_attempt_id=gate_attempt_id,
+        step_id=str(step_id),  # Validated non-None above
+        phase_id=str(phase_id),  # Validated non-None above
+        verdict=verdict,
+        issued_at=now,
+        integrity_checksum=integrity_checksum,
+    )
+    session.updated_at = now
+    session.state_version += 1
+
+    # Save session
+    storage.save(session)
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+
+    # Build findings from deviations
+    findings = []
+    if deviations:
+        for dev in deviations[:10]:  # Cap at 10 for response size
+            if isinstance(dev, dict):
+                findings.append({
+                    "type": dev.get("type", "unknown"),
+                    "description": dev.get("description", str(dev)),
+                })
+            else:
+                findings.append({"type": "issue", "description": str(dev)})
+
+    response_data = {
+        "spec_id": spec_id,
+        "session_id": session_id,
+        "phase_id": phase_id,
+        "step_id": step_id,
+        "gate_attempt_id": gate_attempt_id,
+        "verdict": verdict.value,
+        "gate_policy": gate_policy.value,
+        "gate_passed_preview": gate_passed_preview,
+        "findings": findings,
+    }
+
+    if review_path:
+        response_data["review_path"] = review_path
+
+    return asdict(
+        success_response(
+            data=response_data,
             telemetry={"duration_ms": round(duration_ms, 2)},
         )
     )
@@ -944,6 +1171,11 @@ _ACTIONS = [
         name="fidelity",
         handler=_handle_fidelity,
         summary="Run a fidelity review",
+    ),
+    ActionDefinition(
+        name="fidelity-gate",
+        handler=_handle_fidelity_gate,
+        summary="Run a fidelity gate review for autonomous execution",
     ),
     ActionDefinition(
         name="parse-feedback",
@@ -1000,6 +1232,8 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
         workspace: Optional[str] = None,
         review_path: Optional[str] = None,
         output_path: Optional[str] = None,
+        session_id: Optional[str] = None,
+        step_id: Optional[str] = None,
     ) -> dict:
         payload = {
             "spec_id": spec_id,
@@ -1022,6 +1256,8 @@ def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "workspace": workspace,
             "review_path": review_path,
             "output_path": output_path,
+            "session_id": session_id,
+            "step_id": step_id,
         }
         return _dispatch_review_action(action=action, payload=payload, config=config)
 

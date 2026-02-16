@@ -71,6 +71,14 @@ def mock_memory():
 class TestResearchDispatch:
     """Tests for action dispatch logic."""
 
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
     def test_dispatch_to_chat(self, mock_config, mock_memory):
         """Should dispatch 'chat' action and call chat workflow."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
@@ -669,6 +677,14 @@ class TestResponseEnvelope:
 class TestFeatureFlag:
     """Tests for feature flag handling."""
 
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
     def test_feature_flag_error_response_format(
         self, mock_config, mock_memory
     ):
@@ -712,6 +728,14 @@ class TestFeatureFlag:
 
 class TestErrorConditions:
     """Tests for error handling."""
+
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
 
     def test_workflow_exception_handled(
         self, mock_config, mock_memory

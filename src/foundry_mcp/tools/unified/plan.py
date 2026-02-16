@@ -817,9 +817,14 @@ _PLAN_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_plan_action(action: str, payload: Dict[str, Any]) -> dict:
+def _dispatch_plan_action(
+    action: str,
+    payload: Dict[str, Any],
+    *,
+    config: Optional[ServerConfig] = None,
+) -> dict:
     return dispatch_with_standard_errors(
-        _PLAN_ROUTER, "plan", action, **payload
+        _PLAN_ROUTER, "plan", action, config=config, **payload
     )
 
 
@@ -854,7 +859,7 @@ def register_unified_plan_tool(mcp: FastMCP, config: ServerConfig) -> None:
             "consultation_cache": consultation_cache,
             "dry_run": dry_run,
         }
-        return _dispatch_plan_action(action=action, payload=payload)
+        return _dispatch_plan_action(action=action, payload=payload, config=config)
 
     logger.debug("Registered unified plan tool")
 

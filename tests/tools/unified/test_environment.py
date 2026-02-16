@@ -26,6 +26,7 @@ class TestEnvironmentDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError("File system error")
 
             result = _dispatch_environment_action(
@@ -48,6 +49,7 @@ class TestEnvironmentDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_environment_action(
@@ -70,6 +72,7 @@ class TestEnvironmentDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["info"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_environment_action(

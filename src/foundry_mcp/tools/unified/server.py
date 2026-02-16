@@ -379,8 +379,67 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 def _handle_capabilities(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     request_id = _request_id()
     try:
-        caps = get_capabilities()
-        return asdict(success_response(data=caps, request_id=request_id))
+        caps = get_capabilities(feature_flags=config.feature_flags)
+        runtime_warnings = caps.pop("runtime_warnings", None)
+        runtime = caps.setdefault("runtime", {})
+        autonomy_runtime = runtime.setdefault("autonomy", {})
+        autonomy_runtime["posture_profile"] = config.autonomy_posture.profile
+        autonomy_runtime["security"] = {
+            "role": config.autonomy_security.role,
+            "allow_lock_bypass": config.autonomy_security.allow_lock_bypass,
+            "allow_gate_waiver": config.autonomy_security.allow_gate_waiver,
+            "enforce_required_phase_gates": (
+                config.autonomy_security.enforce_required_phase_gates
+            ),
+        }
+        autonomy_runtime["session_defaults"] = {
+            "gate_policy": config.autonomy_session_defaults.gate_policy,
+            "stop_on_phase_completion": (
+                config.autonomy_session_defaults.stop_on_phase_completion
+            ),
+            "auto_retry_fidelity_gate": (
+                config.autonomy_session_defaults.auto_retry_fidelity_gate
+            ),
+            "max_tasks_per_session": (
+                config.autonomy_session_defaults.max_tasks_per_session
+            ),
+            "max_consecutive_errors": (
+                config.autonomy_session_defaults.max_consecutive_errors
+            ),
+            "max_fidelity_review_cycles_per_phase": (
+                config.autonomy_session_defaults.max_fidelity_review_cycles_per_phase
+            ),
+        }
+
+        conventions = runtime.setdefault("conventions", {})
+        conventions["role_preflight"] = {
+            "recommended_call": {
+                "tool": "task",
+                "params": {"action": "session", "command": "list", "limit": 1},
+            },
+            "legacy_fallback": {
+                "tool": "task",
+                "params": {"action": "session-list", "limit": 1},
+            },
+            "fail_fast_on": ["AUTHORIZATION", "FEATURE_DISABLED"],
+            "guidance": (
+                "Run role preflight before session-start and stop immediately "
+                "when authorization or feature gates are denied."
+            ),
+        }
+
+        warnings: list[str] = []
+        if isinstance(runtime_warnings, list):
+            warnings.extend(str(w) for w in runtime_warnings)
+        if config.startup_warnings:
+            warnings.extend(config.startup_warnings)
+        return asdict(
+            success_response(
+                data=caps,
+                request_id=request_id,
+                warnings=warnings or None,
+            )
+        )
     except Exception as exc:
         logger.exception("Error getting capabilities")
         return asdict(

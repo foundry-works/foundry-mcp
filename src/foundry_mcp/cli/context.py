@@ -93,13 +93,15 @@ class ContextSession:
     - Session identification across CLI invocations
     - Tracking consultation usage against limits
     - Providing context budget information
+
+    Note: Autonomous mode tracking has been migrated to the autonomy module
+    (AutonomousSessionState in core/autonomy/models.py).
     """
     session_id: str
     started_at: str
     limits: SessionLimits = field(default_factory=SessionLimits)
     stats: SessionStats = field(default_factory=SessionStats)
     metadata: Dict[str, Any] = field(default_factory=dict)
-    autonomous: Optional[AutonomousSession] = None
 
     @property
     def consultations_remaining(self) -> int:
@@ -167,7 +169,6 @@ class ContextSession:
                 "at_limit": self.at_limit,
             },
             "metadata": self.metadata,
-            "autonomous": self.autonomous.to_dict() if self.autonomous else None,
         }
 
 

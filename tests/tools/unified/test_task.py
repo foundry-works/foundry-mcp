@@ -26,6 +26,7 @@ class TestTaskDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError("Task storage failed")
 
             result = _dispatch_task_action(
@@ -48,6 +49,7 @@ class TestTaskDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_task_action(
@@ -70,6 +72,7 @@ class TestTaskDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["list"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_task_action(

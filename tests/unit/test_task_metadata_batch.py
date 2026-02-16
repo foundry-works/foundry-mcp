@@ -5,6 +5,8 @@ Tests batch metadata updates with flexible AND-based filtering.
 """
 
 import json
+from unittest.mock import patch
+
 import pytest
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
@@ -45,6 +47,16 @@ def test_specs_dir(tmp_path):
 @pytest.fixture
 def test_config(test_specs_dir):
     return ServerConfig(server_name="test", server_version="0.1.0", specs_dir=test_specs_dir, log_level="WARNING")
+
+
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    """Run metadata-batch tests with maintainer permissions."""
+    with patch(
+        "foundry_mcp.tools.unified.common.get_server_role",
+        return_value="maintainer",
+    ):
+        yield
 
 
 @pytest.fixture

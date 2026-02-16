@@ -25,6 +25,7 @@ from foundry_mcp.core.task import (
 )
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
+    _check_autonomy_write_lock,
     _load_spec_data,
     _metric,
     _metrics,
@@ -39,6 +40,8 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     action = "add"
     spec_id = payload.get("spec_id")
     parent = payload.get("parent")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     title = payload.get("title")
     description = payload.get("description")
@@ -169,6 +172,19 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -275,6 +291,8 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
     spec_id = payload.get("spec_id")
     task_id = payload.get("task_id")
     cascade = payload.get("cascade", False)
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -311,6 +329,19 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -397,6 +428,8 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
     task_id = payload.get("task_id")
     estimated_hours = payload.get("estimated_hours")
     complexity = payload.get("complexity")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -455,6 +488,19 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -550,6 +596,8 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
     action = "update-metadata"
     spec_id = payload.get("spec_id")
     task_id = payload.get("task_id")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason_param = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -623,6 +671,19 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason_param,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -740,6 +801,8 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     task_id = payload.get("task_id")
     new_parent = payload.get("parent")
     position = payload.get("position")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -789,6 +852,19 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -861,6 +937,8 @@ def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     task_id = payload.get("task_id")
     target_id = payload.get("target_id")
     dependency_type = payload.get("dependency_type", "blocks")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -906,6 +984,19 @@ def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -978,6 +1069,8 @@ def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     task_id = payload.get("task_id")
     target_id = payload.get("target_id")
     dependency_type = payload.get("dependency_type", "blocks")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -1023,6 +1116,19 @@ def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
@@ -1087,6 +1193,8 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
     task_id = payload.get("task_id")
     requirement_type = payload.get("requirement_type")
     text = payload.get("text")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -1140,6 +1248,19 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err

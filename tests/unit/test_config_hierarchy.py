@@ -506,3 +506,509 @@ level = "INFO"
                     assert config.disabled_tools == ["health"]
                 finally:
                     os.chdir(original_cwd)
+
+    def test_autonomy_security_rate_limit_loaded_from_toml(self, tmp_path):
+        """Autonomy security rate-limit fields are loaded from TOML."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_security]
+rate_limit_max_consecutive_denials = 7
+rate_limit_denial_window_seconds = 45
+rate_limit_retry_after_seconds = 12
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_security.rate_limit_max_consecutive_denials == 7
+                    assert config.autonomy_security.rate_limit_denial_window_seconds == 45
+                    assert config.autonomy_security.rate_limit_retry_after_seconds == 12
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_security_rate_limit_env_overrides(self, tmp_path):
+        """Environment variables override autonomy security rate-limit values."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_security]
+rate_limit_max_consecutive_denials = 7
+rate_limit_denial_window_seconds = 45
+rate_limit_retry_after_seconds = 12
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS": "3",
+                    "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_DENIAL_WINDOW_SECONDS": "22",
+                    "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_RETRY_AFTER_SECONDS": "9",
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_security.rate_limit_max_consecutive_denials == 3
+                    assert config.autonomy_security.rate_limit_denial_window_seconds == 22
+                    assert config.autonomy_security.rate_limit_retry_after_seconds == 9
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flags_loaded_from_toml(self, tmp_path):
+        """[feature_flags] table is parsed from TOML config."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[feature_flags]
+autonomy_sessions = true
+autonomy_fidelity_gates = false
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags["autonomy_sessions"] is True
+                    assert config.feature_flags["autonomy_fidelity_gates"] is False
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flags_env_overrides_toml(self, tmp_path):
+        """FOUNDRY_MCP_FEATURE_FLAGS overrides TOML feature flags."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[feature_flags]
+autonomy_sessions = false
+autonomy_fidelity_gates = false
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_sessions=true,autonomy_fidelity_gates=true"
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags["autonomy_sessions"] is True
+                    assert config.feature_flags["autonomy_fidelity_gates"] is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flag_per_flag_env_overrides_bulk_env(self, tmp_path):
+        """FOUNDRY_MCP_FEATURE_FLAG_<NAME> takes precedence over bulk env."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_sessions=true,autonomy_fidelity_gates=true",
+                    "FOUNDRY_MCP_FEATURE_FLAG_AUTONOMY_FIDELITY_GATES": "false",
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags["autonomy_sessions"] is True
+                    assert config.feature_flags["autonomy_fidelity_gates"] is False
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flag_dependency_error(self, tmp_path):
+        """Startup raises ValueError when flag dependencies are violated."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_fidelity_gates=true"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    with pytest.raises(ValueError, match="autonomy_fidelity_gates"):
+                        ServerConfig.from_env()
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flag_dependency_satisfied(self, tmp_path):
+        """No error when flag dependencies are satisfied."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_sessions=true,autonomy_fidelity_gates=true"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags.get("autonomy_fidelity_gates") is True
+                    assert config.feature_flags.get("autonomy_sessions") is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_profile_expands_defaults(self, tmp_path):
+        """[autonomy_posture] profile applies role/security/session defaults."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_posture]
+profile = "unattended"
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "unattended"
+                    assert config.autonomy_security.role == "autonomy_runner"
+                    assert config.autonomy_security.allow_lock_bypass is False
+                    assert config.autonomy_security.allow_gate_waiver is False
+                    assert config.autonomy_security.enforce_required_phase_gates is True
+                    assert config.autonomy_session_defaults.gate_policy == "strict"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_supervised_profile_expands_defaults(self, tmp_path):
+        """[autonomy_posture] supervised profile keeps guardrails with escape hatches enabled."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_posture]
+profile = "supervised"
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "supervised"
+                    assert config.autonomy_security.role == "maintainer"
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert config.autonomy_security.allow_gate_waiver is True
+                    assert config.autonomy_security.enforce_required_phase_gates is True
+                    assert config.autonomy_session_defaults.gate_policy == "strict"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_allows_direct_override_with_unsafe_warning(self, tmp_path):
+        """Direct security/session defaults can override profile and trigger safety warnings."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_posture]
+profile = "unattended"
+
+[autonomy_security]
+role = "maintainer"
+allow_lock_bypass = true
+allow_gate_waiver = true
+enforce_required_phase_gates = false
+
+[autonomy_session_defaults]
+gate_policy = "manual"
+stop_on_phase_completion = false
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "unattended"
+                    assert config.autonomy_security.role == "maintainer"
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert config.autonomy_security.allow_gate_waiver is True
+                    assert config.autonomy_security.enforce_required_phase_gates is False
+                    assert config.autonomy_session_defaults.gate_policy == "manual"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is False
+                    assert any(
+                        "UNSAFE unattended posture configuration" in warning
+                        for warning in config.startup_warnings
+                    )
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_env_applies_debug_defaults(self, tmp_path):
+        """FOUNDRY_MCP_AUTONOMY_POSTURE applies debug profile defaults."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_AUTONOMY_POSTURE": "debug"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "debug"
+                    assert config.autonomy_security.role == "maintainer"
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert config.autonomy_security.allow_gate_waiver is True
+                    assert config.autonomy_session_defaults.gate_policy == "manual"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is False
+                finally:
+                    os.chdir(original_cwd)
+
+
+class TestConfigProvenanceLogging:
+    """H4: Verify security-relevant config settings log their provenance."""
+
+    def test_role_env_var_logs_provenance(self, tmp_path, caplog):
+        """FOUNDRY_MCP_ROLE env var logs its provenance at INFO level."""
+        import logging
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_ROLE": "autonomy_runner"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
+                        config = ServerConfig.from_env()
+                    assert config.autonomy_security.role == "autonomy_runner"
+                    assert any(
+                        "autonomy_security.role = autonomy_runner" in msg
+                        and "FOUNDRY_MCP_ROLE" in msg
+                        for msg in caplog.messages
+                    ), f"Expected provenance log for role, got: {caplog.messages}"
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_allow_lock_bypass_env_var_logs_provenance(self, tmp_path, caplog):
+        """FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS logs provenance."""
+        import logging
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS": "true"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
+                        config = ServerConfig.from_env()
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert any(
+                        "allow_lock_bypass" in msg and "env var" in msg
+                        for msg in caplog.messages
+                    ), f"Expected provenance log for allow_lock_bypass, got: {caplog.messages}"
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_posture_profile_logs_provenance(self, tmp_path, caplog):
+        """Posture profile application logs provenance and overrides."""
+        import logging
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_AUTONOMY_POSTURE": "unattended"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
+                        config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "unattended"
+                    assert any(
+                        "autonomy_posture.profile = unattended" in msg
+                        for msg in caplog.messages
+                    ), f"Expected posture profile provenance log, got: {caplog.messages}"
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_env_var_overrides_posture_and_logs(self, tmp_path, caplog):
+        """Env var security setting applied after posture logs its provenance."""
+        import logging
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_AUTONOMY_POSTURE": "unattended",
+                    "FOUNDRY_MCP_ROLE": "maintainer",
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
+                        config = ServerConfig.from_env()
+                    # Env var wins over posture default
+                    assert config.autonomy_security.role == "maintainer"
+                    # Both provenance logs should be present
+                    assert any(
+                        "autonomy_security.role = maintainer" in msg
+                        and "FOUNDRY_MCP_ROLE" in msg
+                        for msg in caplog.messages
+                    ), f"Expected role env var provenance log, got: {caplog.messages}"
+                finally:
+                    os.chdir(original_cwd)
+
+
+class TestConfigEnvVarOverridesToml:
+    """T5: Verify env vars override TOML values for security-sensitive settings."""
+
+    def test_role_env_overrides_toml(self, tmp_path):
+        """FOUNDRY_MCP_ROLE env var overrides TOML role = 'maintainer'."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        (project_dir / "foundry-mcp.toml").write_text(
+            '[autonomy_security]\nrole = "maintainer"\n'
+        )
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_ROLE": "autonomy_runner"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_security.role == "autonomy_runner"
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_allow_lock_bypass_env_overrides_toml(self, tmp_path):
+        """FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS env overrides TOML."""
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        (project_dir / "foundry-mcp.toml").write_text(
+            "[autonomy_security]\nallow_lock_bypass = true\n"
+        )
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS": "false"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_security.allow_lock_bypass is False
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_provenance_logged_for_override(self, tmp_path, caplog):
+        """Provenance log mentions setting name and source when env overrides TOML."""
+        import logging
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        (project_dir / "foundry-mcp.toml").write_text(
+            '[autonomy_security]\nrole = "maintainer"\n'
+        )
+        with patch.object(Path, "home", return_value=tmp_path):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_ROLE": "observer"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
+                        config = ServerConfig.from_env()
+                    assert config.autonomy_security.role == "observer"
+                    assert any(
+                        "autonomy_security.role" in msg and "FOUNDRY_MCP_ROLE" in msg
+                        for msg in caplog.messages
+                    ), f"Expected provenance log for role override, got: {caplog.messages}"
+                finally:
+                    os.chdir(original_cwd)

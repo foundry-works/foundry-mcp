@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Autonomous Spec Execution (ADR-002)**: Durable session management for autonomous spec-driven task execution with replay-safe semantics
+  - Session lifecycle: `session-start`, `session-pause`, `session-resume`, `session-end`, `session-reset`, `session-rebase`, `session-heartbeat`, `session-status`, `session-list`
+  - Step orchestration: 18-step priority sequence (`session-step-next`, `session-step-report`, `session-step-replay`) driving task progression with exactly-once semantics
+  - Fidelity gates: per-phase quality gates with strict/lenient/manual policies, auto-retry with cycle caps, and human acknowledgment flow
+  - Write-lock enforcement: prevents concurrent mutations to specs under active autonomous sessions, with bypass mechanism for emergency overrides
+  - File-backed persistence (`AutonomyStorage`): atomic writes, per-spec pointer files, cursor-based pagination, TTL-based garbage collection
+  - Spec integrity validation: structure hashing with mtime fast-path optimization, rebase recovery for mid-session spec edits
+  - Resume context: provides completed/pending task summaries, journal hints, and phase progress on session resume
+  - State migrations infrastructure for schema versioning
+- **Capabilities manifest**: `autonomy_sessions` and `autonomy_fidelity_gates` registered as experimental feature flags
+- **Discovery module**: Autonomy capabilities exposed for tool discovery
+
+### Fixed
+
+- **Terminal states check**: Removed `FAILED` from terminal states in orchestrator — only `COMPLETED` and `ENDED` are truly terminal per ADR state transition table; `FAILED` can transition to `running` via resume or rebase
+- **Auto-retry cycle cap**: Added cycle cap check before scheduling `address_fidelity_feedback` to prevent exceeding `max_fidelity_review_cycles_per_phase`
+- **State version increments**: Added missing `state_version` increments in rebase handler (both no-change and success paths), heartbeat handler, and force-end on start
+- **Reset handler safety**: Reset now requires explicit `session_id` parameter — no active-session lookup allowed, per ADR safety constraint
+- **Session override contract enforcement**: `session-end` and `session-reset` now require `reason_code` (`OverrideReasonCode`) from callers/tests; validation errors are returned when missing or invalid
+- **GC spec-lock cleanup**: `cleanup_expired()` now removes orphaned spec-lock files in addition to session locks and pointer files
+- **`AutonomyStorage` export**: Added `AutonomyStorage` to `core/autonomy/__init__.py` public API exports
+- **`LastStepResult` validation**: Added cross-field model validator ensuring required fields per step type (`task_id` for implement/verify, `phase_id`+`gate_attempt_id` for gate steps)
+
+### Changed
+
+- **Autonomy posture profiles**: Added fixed posture profiles (`unattended`, `supervised`, `debug`) with runtime defaults for role, escape-hatch policy, and session-start defaults.
+- **Capability response enhancements**: `server(action="capabilities")` now includes runtime posture/security/session-default details and a role-preflight convention contract for consumers.
+- **Session-start default expansion**: `task(action="session", command="start")` now uses config-driven session defaults (`gate_policy`, stop/retry behavior, bounded limits) when request fields are omitted.
+
+### Migration
+
+- **Legacy session action names remain supported** but are now on an explicit removal window: **3 months or 2 minor releases (whichever is later)**.
+- Legacy action responses include machine-readable deprecation metadata:
+  - `meta.deprecated.action`
+  - `meta.deprecated.replacement`
+  - `meta.deprecated.removal_target`
+- Server logs now emit `WARN` entries for legacy action invocations to support migration tracking.
+
 ## [0.11.1] - 2026-02-15
 
 ### Changed

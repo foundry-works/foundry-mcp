@@ -35,13 +35,13 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.spec import save_spec
 from foundry_mcp.core.task import check_dependencies
-from foundry_mcp.cli.context import get_context_tracker
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
     _TASK_DEFAULT_PAGE_SIZE,
     _TASK_MAX_PAGE_SIZE,
     _attach_meta,
+    _check_autonomy_write_lock,
     _load_spec_data,
     _metric,
     _metrics,
@@ -59,6 +59,8 @@ def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:
     task_id = payload.get("task_id")
     status = payload.get("status")
     note = payload.get("note")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -92,6 +94,19 @@ def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
@@ -166,6 +181,8 @@ def _handle_start(*, config: ServerConfig, **payload: Any) -> dict:
     spec_id = payload.get("spec_id")
     task_id = payload.get("task_id")
     note = payload.get("note")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -191,6 +208,19 @@ def _handle_start(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
@@ -275,6 +305,8 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
     spec_id = payload.get("spec_id")
     task_id = payload.get("task_id")
     completion_note = payload.get("completion_note")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -299,6 +331,19 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
@@ -373,24 +418,8 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
 
     completed_at = task_data.get("metadata", {}).get("completed_at")
 
-    # Update autonomous session tracking for batch mode
-    tracker = get_context_tracker()
-    session = tracker.get_session()
-    autonomous_state = None
-    batch_paused = False
-
-    if session and session.autonomous and session.autonomous.enabled:
-        session.autonomous.tasks_completed += 1
-
-        # Check batch mode limits
-        if session.autonomous.batch_mode and session.autonomous.batch_remaining is not None:
-            session.autonomous.batch_remaining -= 1
-            if session.autonomous.batch_remaining <= 0:
-                session.autonomous.pause_reason = "batch"
-                session.autonomous.enabled = False
-                batch_paused = True
-
-        autonomous_state = session.autonomous.to_dict()
+    # Note: Autonomous session tracking has been migrated to the autonomy module.
+    # Batch mode is now handled by AutonomousSessionState in core/autonomy/models.py.
 
     progress = get_progress_summary(spec_data)
     elapsed_ms = (time.perf_counter() - start) * 1000
@@ -411,16 +440,6 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
         "telemetry": {"duration_ms": round(elapsed_ms, 2)},
     }
 
-    # Include autonomous state if available
-    if autonomous_state is not None:
-        response_kwargs["autonomous"] = autonomous_state
-        if batch_paused:
-            response_kwargs["batch_paused"] = True
-            response_kwargs["batch_pause_message"] = (
-                "Batch limit reached. Call task(action='session-config', auto_mode=true) "
-                "to resume autonomous execution."
-            )
-
     response = success_response(**response_kwargs)
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
@@ -435,6 +454,8 @@ def _handle_block(*, config: ServerConfig, **payload: Any) -> dict:
     reason = payload.get("reason")
     blocker_type = payload.get("blocker_type", "dependency")
     ticket = payload.get("ticket")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     valid_types = {"dependency", "technical", "resource", "decision"}
 
@@ -477,6 +498,19 @@ def _handle_block(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:
@@ -545,6 +579,8 @@ def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
     spec_id = payload.get("spec_id")
     task_id = payload.get("task_id")
     resolution = payload.get("resolution")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     if not isinstance(spec_id, str) or not spec_id.strip():
         return _validation_error(
@@ -572,6 +608,19 @@ def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     workspace = payload.get("workspace")
+
+    # Check autonomy write-lock before proceeding with protected mutation
+    lock_error = _check_autonomy_write_lock(
+        spec_id=spec_id.strip(),
+        workspace=workspace,
+        bypass_autonomy_lock=bool(bypass_autonomy_lock),
+        bypass_reason=bypass_reason,
+        request_id=request_id,
+        config=config,
+    )
+    if lock_error:
+        return lock_error
+
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
     spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
     if error:

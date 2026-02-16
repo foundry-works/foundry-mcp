@@ -75,9 +75,9 @@ def _call_dispatch(module_name, dispatch_fn_name, call_style, action, mock_confi
     if call_style == "kw":
         return fn(action=action, payload={}, config=mock_config)
     elif call_style == "pos":
-        return fn(action, {})
+        return fn(action, {}, config=mock_config)
     elif call_style == "health":
-        return fn(action=action)
+        return fn(action=action, config=mock_config)
     elif call_style == "research":
         return fn(action=action)
     else:
@@ -163,7 +163,11 @@ class TestInternalErrorEnvelope:
         tool_name, call_style, valid_action,
     ):
         patch_target = f"foundry_mcp.tools.unified.{module_name}.{router_const}"
-        with patch(patch_target) as mock_router:
+        with patch(patch_target) as mock_router, patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            mock_router.allowed_actions.return_value = [valid_action]
             mock_router.dispatch.side_effect = RuntimeError("boom")
             result = _call_dispatch(
                 module_name, dispatch_fn_name, call_style,
@@ -176,7 +180,53 @@ class TestInternalErrorEnvelope:
 
 
 # ---------------------------------------------------------------------------
-# 3. Full-envelope snapshot tests for representative routers
+# 3. Authorization parity tests (all 14 routers)
+# ---------------------------------------------------------------------------
+
+class TestAuthorizationParity:
+    """Every router should enforce authorization consistently."""
+
+    @pytest.mark.parametrize(
+        "module_name, dispatch_fn_name, router_const, tool_name, call_style, valid_action",
+        DISPATCH_BASELINES,
+        ids=_BASELINE_IDS,
+    )
+    def test_router_enforces_authorization(
+        self, mock_config, module_name, dispatch_fn_name, router_const,
+        tool_name, call_style, valid_action,
+    ):
+        patch_target = f"foundry_mcp.tools.unified.{module_name}.{router_const}"
+        with patch(patch_target) as mock_router, patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+        ) as mock_tracker_factory, patch(
+            "foundry_mcp.tools.unified.common.check_action_allowed",
+        ) as mock_check_action_allowed:
+            mock_router.allowed_actions.return_value = [valid_action]
+            mock_router.dispatch.return_value = {"success": True, "data": {}}
+
+            mock_tracker = MagicMock()
+            mock_tracker.check_rate_limit.return_value = None
+            mock_tracker_factory.return_value = mock_tracker
+            mock_check_action_allowed.return_value = MagicMock(
+                allowed=False,
+                required_role="maintainer",
+            )
+
+            result = _call_dispatch(
+                module_name, dispatch_fn_name, call_style,
+                valid_action, mock_config,
+            )
+
+        assert_error_envelope(result)
+        assert result["data"]["error_code"] == "AUTHORIZATION"
+        mock_router.dispatch.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 4. Full-envelope snapshot tests for representative routers
 # ---------------------------------------------------------------------------
 
 class TestEnvelopeSnapshots:
@@ -226,7 +276,11 @@ class TestEnvelopeSnapshots:
         """Server: full envelope for internal error."""
         with patch(
             "foundry_mcp.tools.unified.server._SERVER_ROUTER"
-        ) as mock_router:
+        ) as mock_router, patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            mock_router.allowed_actions.return_value = ["tools"]
             mock_router.dispatch.side_effect = ValueError("db connection lost")
             result = _call_dispatch(
                 "server", "_dispatch_server_action", "kw",
@@ -262,6 +316,7 @@ class TestEnvelopeSnapshots:
         with patch(
             "foundry_mcp.tools.unified.task._TASK_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
             result = _call_dispatch(
                 "task", "_dispatch_task_action", "kw",

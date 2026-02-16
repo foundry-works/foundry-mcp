@@ -78,6 +78,16 @@ def mock_provider_context(mock_provider_result):
     return context
 
 
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    """Run research E2E integration flows with maintainer authorization."""
+    with patch(
+        "foundry_mcp.tools.unified.common.get_server_role",
+        return_value="maintainer",
+    ):
+        yield
+
+
 # =============================================================================
 # Chat Workflow E2E Tests
 # =============================================================================

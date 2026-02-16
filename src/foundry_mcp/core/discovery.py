@@ -376,6 +376,10 @@ class ServerCapabilities:
         rate_limit_headers: Whether responses include rate limit headers
         supported_formats: List of supported response formats
         feature_flags_enabled: Whether feature flags are active
+        autonomy_sessions: Whether autonomous session management is supported
+        autonomy_fidelity_gates: Whether fidelity gates for autonomous execution are enabled
+        autonomy_gate_invariants: Whether gate invariant observability is exposed in responses
+        gate_enforcement_default: Default gate enforcement mode (strict, lenient, disabled)
     """
 
     response_version: str = "response-v2"
@@ -386,6 +390,10 @@ class ServerCapabilities:
     rate_limit_headers: bool = True
     supported_formats: List[str] = field(default_factory=lambda: ["json"])
     feature_flags_enabled: bool = False
+    autonomy_sessions: bool = False
+    autonomy_fidelity_gates: bool = False
+    autonomy_gate_invariants: bool = True
+    gate_enforcement_default: str = "strict"
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -403,6 +411,10 @@ class ServerCapabilities:
             "rate_limit_headers": self.rate_limit_headers,
             "formats": self.supported_formats,
             "feature_flags": self.feature_flags_enabled,
+            "autonomy_sessions": self.autonomy_sessions,
+            "autonomy_fidelity_gates": self.autonomy_fidelity_gates,
+            "autonomy_gate_invariants": self.autonomy_gate_invariants,
+            "gate_enforcement_default": self.gate_enforcement_default,
         }
 
 
@@ -410,7 +422,75 @@ class ServerCapabilities:
 _capabilities: Optional[ServerCapabilities] = None
 
 
-def get_capabilities() -> Dict[str, Any]:
+_AUTONOMY_CAPABILITY_DEPENDENCIES: Dict[str, List[str]] = {
+    "autonomy_fidelity_gates": ["autonomy_sessions"],
+}
+
+
+def _normalize_feature_flag_key(raw_key: str) -> str:
+    return raw_key.strip().lower().replace("-", "_")
+
+
+def _coerce_feature_flags(
+    feature_flags: Optional[Dict[str, Any]],
+) -> Dict[str, bool]:
+    if not feature_flags:
+        return {}
+    normalized: Dict[str, bool] = {}
+    for raw_key, raw_value in feature_flags.items():
+        if not isinstance(raw_key, str):
+            continue
+        normalized[_normalize_feature_flag_key(raw_key)] = bool(raw_value)
+    return normalized
+
+
+def _derive_autonomy_runtime_state(
+    *,
+    base: ServerCapabilities,
+    configured_flags: Dict[str, bool],
+) -> Dict[str, Any]:
+    """Compute configured/effective autonomy state for capability responses."""
+    configured = {
+        "autonomy_sessions": configured_flags.get(
+            "autonomy_sessions", bool(base.autonomy_sessions)
+        ),
+        "autonomy_fidelity_gates": configured_flags.get(
+            "autonomy_fidelity_gates", bool(base.autonomy_fidelity_gates)
+        ),
+        "autonomy_gate_invariants": configured_flags.get(
+            "autonomy_gate_invariants", bool(base.autonomy_gate_invariants)
+        ),
+    }
+
+    effective = dict(configured)
+    runtime_warnings: List[str] = []
+    for feature, dependencies in _AUTONOMY_CAPABILITY_DEPENDENCIES.items():
+        if not configured.get(feature, False):
+            continue
+        missing = [dep for dep in dependencies if not configured.get(dep, False)]
+        if missing:
+            effective[feature] = False
+            runtime_warnings.append(
+                f"Feature '{feature}' is configured enabled but inactive because dependencies are disabled: {', '.join(missing)}"
+            )
+
+    supported_by_binary = {
+        "autonomy_sessions": True,
+        "autonomy_fidelity_gates": True,
+        "autonomy_gate_invariants": True,
+    }
+
+    return {
+        "configured": configured,
+        "effective": effective,
+        "supported_by_binary": supported_by_binary,
+        "runtime_warnings": runtime_warnings,
+    }
+
+
+def get_capabilities(
+    *, feature_flags: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Get server capabilities for client negotiation.
 
@@ -424,12 +504,51 @@ def get_capabilities() -> Dict[str, Any]:
     if _capabilities is None:
         _capabilities = ServerCapabilities()
 
-    return {
+    configured_flags = _coerce_feature_flags(feature_flags)
+    autonomy_state = _derive_autonomy_runtime_state(
+        base=_capabilities,
+        configured_flags=configured_flags,
+    )
+
+    capabilities = _capabilities.to_dict()
+    capabilities["feature_flags"] = bool(configured_flags) or bool(
+        capabilities.get("feature_flags")
+    )
+    capabilities["autonomy_sessions"] = autonomy_state["effective"][
+        "autonomy_sessions"
+    ]
+    capabilities["autonomy_fidelity_gates"] = autonomy_state["effective"][
+        "autonomy_fidelity_gates"
+    ]
+    capabilities["autonomy_gate_invariants"] = autonomy_state["effective"][
+        "autonomy_gate_invariants"
+    ]
+
+    response = {
         "schema_version": SCHEMA_VERSION,
-        "capabilities": _capabilities.to_dict(),
+        "capabilities": capabilities,
+        "runtime": {
+            "autonomy": {
+                "supported_by_binary": autonomy_state["supported_by_binary"],
+                "enabled_now": autonomy_state["effective"],
+                "configured_flags": autonomy_state["configured"],
+            },
+            "conventions": {
+                "discovery_as_hints": True,
+                "responses_as_truth": True,
+                "description": (
+                    "Manifest/discovery metadata describes support; runtime action "
+                    "responses and capability payloads report currently enabled state."
+                ),
+            },
+        },
         "server_version": "1.0.0",
         "api_version": "2024-11-01",
     }
+    if autonomy_state["runtime_warnings"]:
+        response["runtime_warnings"] = autonomy_state["runtime_warnings"]
+
+    return response
 
 
 def negotiate_capabilities(
@@ -471,6 +590,9 @@ def negotiate_capabilities(
         "pagination": _capabilities.supports_pagination,
         "rate_limit_headers": _capabilities.rate_limit_headers,
         "feature_flags": _capabilities.feature_flags_enabled,
+        "autonomy_sessions": _capabilities.autonomy_sessions,
+        "autonomy_fidelity_gates": _capabilities.autonomy_fidelity_gates,
+        "autonomy_gate_invariants": _capabilities.autonomy_gate_invariants,
     }
 
     if requested_features:
@@ -1601,3 +1723,89 @@ def get_provider_tool_metadata(tool_name: str) -> Optional[ToolMetadata]:
         ToolMetadata if found, None otherwise
     """
     return PROVIDER_TOOL_METADATA.get(tool_name)
+
+
+# =============================================================================
+# Autonomy Feature Flags for Discovery
+# =============================================================================
+
+
+# Autonomy feature flags for capability negotiation
+AUTONOMY_FEATURE_FLAGS: Dict[str, FeatureFlagDescriptor] = {
+    "autonomy_sessions": FeatureFlagDescriptor(
+        name="autonomy_sessions",
+        description="Autonomous session management for continuous task execution with persistence",
+        state="experimental",
+        default_enabled=False,
+        percentage_rollout=0,
+        dependencies=[],
+    ),
+    "autonomy_fidelity_gates": FeatureFlagDescriptor(
+        name="autonomy_fidelity_gates",
+        description="Fidelity gates for autonomous execution - quality checkpoints between phases",
+        state="experimental",
+        default_enabled=False,
+        percentage_rollout=0,
+        dependencies=["autonomy_sessions"],
+    ),
+    "autonomy_gate_invariants": FeatureFlagDescriptor(
+        name="autonomy_gate_invariants",
+        description="Gate invariant observability - exposes required/satisfied/missing gates in API responses",
+        state="beta",
+        default_enabled=True,
+        percentage_rollout=100,
+        dependencies=["autonomy_sessions"],
+    ),
+}
+
+
+def get_autonomy_capabilities() -> Dict[str, Any]:
+    """
+    Get autonomy-related capabilities for capability negotiation.
+
+    Returns:
+        Dict with autonomy feature flags and session management support.
+    """
+    return {
+        "autonomy": {
+            "supported": True,
+            "description": "Autonomous execution with session persistence and fidelity gates",
+            "actions": ["session", "session-step"],
+            "tools": ["task"],
+        },
+        "gate_invariants": {
+            "supported": True,
+            "description": "Required/satisfied/missing gate exposure in session-step responses",
+            "response_fields": ["required_phase_gates", "satisfied_gates", "missing_required_gates"],
+            "config_fields": ["enforce_required_phase_gates", "allow_gate_waiver"],
+        },
+        "feature_flags": {
+            name: flag.to_dict() for name, flag in AUTONOMY_FEATURE_FLAGS.items()
+        },
+    }
+
+
+def is_autonomy_feature_flag(flag_name: str) -> bool:
+    """
+    Check if a flag name is an autonomy feature flag.
+
+    Args:
+        flag_name: Name of the flag to check
+
+    Returns:
+        True if flag is an autonomy feature flag
+    """
+    return flag_name in AUTONOMY_FEATURE_FLAGS
+
+
+def get_autonomy_feature_flag(flag_name: str) -> Optional[FeatureFlagDescriptor]:
+    """
+    Get descriptor for a specific autonomy feature flag.
+
+    Args:
+        flag_name: Name of the autonomy feature flag
+
+    Returns:
+        FeatureFlagDescriptor if found, None otherwise
+    """
+    return AUTONOMY_FEATURE_FLAGS.get(flag_name)

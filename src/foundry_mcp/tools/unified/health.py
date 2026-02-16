@@ -181,13 +181,19 @@ def _build_router() -> ActionRouter:
 _HEALTH_ROUTER = _build_router()
 
 
-def _dispatch_health_action(action: str, *, include_details: bool = True) -> dict:
+def _dispatch_health_action(
+    action: str,
+    *,
+    include_details: bool = True,
+    config: Optional[ServerConfig] = None,
+) -> dict:
     kwargs: Dict[str, Any] = {}
     if action.lower() == "check":
         kwargs["include_details"] = include_details
     return dispatch_with_standard_errors(
         _HEALTH_ROUTER, "health", action,
         include_details_in_router_error=True,
+        config=config,
         **kwargs,
     )
 
@@ -207,7 +213,11 @@ def register_unified_health_tool(mcp: FastMCP, config: ServerConfig) -> None:
             include_details: When action is "check", controls dependency output.
         """
 
-        return _dispatch_health_action(action=action, include_details=include_details)
+        return _dispatch_health_action(
+            action=action,
+            include_details=include_details,
+            config=config,
+        )
 
     logger.debug("Registered unified health tool")
 
