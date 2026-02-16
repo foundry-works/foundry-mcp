@@ -7,7 +7,7 @@
 
 ## 1. Declarative Parameter Validation Framework — IN PROGRESS
 
-### Status: Waves 1-2 complete (16/46 handlers migrated)
+### Status: Waves 1-3 complete (44/46 handlers migrated)
 
 **Framework built** (`tools/unified/param_schema.py`, ~270 lines):
 - 6 schema types: `Str`, `Num`, `Bool`, `List_`, `Dict_`, `AtLeastOne`
@@ -26,11 +26,19 @@
 - `handlers_metadata.py` — 3 handlers (`assumption_add`, `assumption_list`, `revision_add`)
 - `handlers_intake.py` — 3 handlers (partial: `intake_add`, `intake_list`, `intake_dismiss`)
 
+**Wave 3 migrated** (28 task handlers, ~110 `_validation_error` calls eliminated):
+- `handlers_lifecycle.py` — 6 handlers (19 calls eliminated)
+- `handlers_query.py` — 8 handlers (19 calls eliminated); `_handle_session_config` skipped (0 calls)
+- `handlers_session_rebase.py` — 1 handler (`gate_waiver`, 3 calls); `_handle_session_rebase` unchanged
+- `handlers_session_step.py` — 1 handler (`session_step_report`, 4 calls); uses `AtLeastOne` cross-field rule
+- `handlers_batch.py` — 6 handlers (6 schemas, imperative remainders for per-element loops and AtLeastOne)
+- `handlers_mutation.py` — 7 handlers (6 schemas, imperative remainders for AtLeastOne and conditional research validation)
+- `handlers_session_lifecycle.py` — 3 handlers (`session_start`, `session_end`, `session_reset`; 6 calls eliminated); `_resolve_session_config` stays imperative (derived value validation)
+
 **Known framework limitation**: Schema supports single `error_code` per field. Fields needing `MISSING_REQUIRED` for absence but `INVALID_FORMAT` for type errors must stay imperative (e.g., `phase_move.position`). Fields with strip-or-None semantics (`description.strip() or None`) also stay imperative since schema strips but doesn't convert empty to None.
 
-**Remaining work** (30 handlers across 2 waves):
-- Wave 3: 28 task handlers (`handlers_mutation.py`, `handlers_lifecycle.py`, `handlers_query.py`, `handlers_batch.py`)
-- Wave 4: 21 handlers in other tool modules (`spec.py`, `lifecycle.py`, `verification.py`, `provider.py`); plus 20 deferred (`research.py`, `plan.py`, `review.py`)
+**Remaining work** (Wave 4):
+- 21 handlers in other tool modules (`spec.py`, `lifecycle.py`, `verification.py`, `provider.py`); plus 20 deferred (`research.py`, `plan.py`, `review.py`)
 
 ### Original Scale
 
@@ -341,7 +349,7 @@ return handler(diag, spec_data) if handler else None
 
 | Priority | Item | Status | Effort | Impact |
 |----------|------|--------|--------|--------|
-| 1 | Declarative parameter validation framework | **In progress** (16/46 handlers, Waves 1-2 done) | 5-7 days remaining | Highest ROI, ~15-20% handler reduction |
+| 1 | Declarative parameter validation framework | **In progress** (44/46 handlers, Waves 1-3 done) | 2-3 days remaining (Wave 4) | Highest ROI, ~15-20% handler reduction |
 | 2 | Unify error hierarchies | **Done** | — | Prerequisite for cleaner error handling |
 | 3 | Split god objects | **Done** (Waves 1-4) | — | Improves testability and maintainability |
 | 4 | Research sub-handlers | Pending | 2-3 days | Consistency win, follows existing pattern |

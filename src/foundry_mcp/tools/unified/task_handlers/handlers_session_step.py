@@ -63,19 +63,31 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.spec import load_spec
 
+from foundry_mcp.tools.unified.param_schema import AtLeastOne, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
     _request_id,
     _resolve_session,
     _session_not_found_response,
     _validate_context_usage_pct,
-    _validation_error,
     _is_feature_enabled,
     _feature_disabled_response,
     attach_loop_metadata,
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_STEP_REPORT_SCHEMA = {
+    "spec_id": Str(),
+    "session_id": Str(),
+    "step_id": Str(required=True),
+    "step_type": Str(required=True),
+    "outcome": Str(required=True),
+}
 
 
 def _hash_last_step_result_payload(last_step_result: LastStepResult) -> str:
@@ -729,45 +741,14 @@ def _handle_session_step_report(
             _feature_disabled_response("session-step-report", request_id)
         )
 
-    if not spec_id and not session_id:
-        return _attach_loop_fields(
-            _validation_error(
-                action="session-step-report",
-                field="spec_id/session_id",
-                message="Provide spec_id or session_id",
-                request_id=request_id,
-            )
-        )
-
-    if not step_id:
-        return _attach_loop_fields(
-            _validation_error(
-                action="session-step-report",
-                field="step_id",
-                message="step_id is required",
-                request_id=request_id,
-            )
-        )
-
-    if not outcome:
-        return _attach_loop_fields(
-            _validation_error(
-                action="session-step-report",
-                field="outcome",
-                message="outcome is required",
-                request_id=request_id,
-            )
-        )
-
-    if not step_type:
-        return _attach_loop_fields(
-            _validation_error(
-                action="session-step-report",
-                field="step_type",
-                message="step_type is required",
-                request_id=request_id,
-            )
-        )
+    params = {"spec_id": spec_id, "session_id": session_id,
+              "step_id": step_id, "step_type": step_type, "outcome": outcome}
+    err = validate_payload(params, _STEP_REPORT_SCHEMA,
+                           tool_name="task", action="session-step-report",
+                           request_id=request_id,
+                           cross_field_rules=[AtLeastOne(fields=("spec_id", "session_id"))])
+    if err:
+        return _attach_loop_fields(err)
 
     # Build last_step_result and delegate to next handler
     last_step_result: Dict[str, Any] = {

@@ -46,6 +46,7 @@ from foundry_mcp.core.authorization import (
     Role,
 )
 
+from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
     _request_id,
@@ -66,6 +67,25 @@ from foundry_mcp.tools.unified.task_handlers._session_common import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Declarative parameter schemas
+# ---------------------------------------------------------------------------
+
+_OVERRIDE_REASON_CHOICES = frozenset(e.value for e in OverrideReasonCode)
+
+_SESSION_START_SCHEMA = {
+    "spec_id": Str(required=True),
+}
+
+_SESSION_END_SCHEMA = {
+    "reason_code": Str(required=True, choices=_OVERRIDE_REASON_CHOICES),
+}
+
+_SESSION_RESET_SCHEMA = {
+    "reason_code": Str(required=True, choices=_OVERRIDE_REASON_CHOICES),
+    "session_id": Str(required=True),
+}
 
 
 # =============================================================================
@@ -407,11 +427,12 @@ def _handle_session_start(
     if not _is_feature_enabled(config, "autonomy_sessions"):
         return _feature_disabled_response("session-start", request_id)
 
-    if not spec_id:
-        return _validation_error(
-            action="session-start", field="spec_id",
-            message="spec_id is required", request_id=request_id,
-        )
+    params = {"spec_id": spec_id}
+    err = validate_payload(params, _SESSION_START_SCHEMA,
+                           tool_name="task", action="session-start",
+                           request_id=request_id)
+    if err:
+        return err
 
     posture_err = _validate_posture_constraints(
         config, gate_policy=gate_policy,
@@ -823,26 +844,13 @@ def _handle_session_end(
     if not _is_feature_enabled(config, "autonomy_sessions"):
         return _feature_disabled_response("session-end", request_id)
 
-    # Validate reason_code is provided
-    if not reason_code:
-        return _validation_error(
-            action="session-end",
-            field="reason_code",
-            message="reason_code is required for session-end",
-            request_id=request_id,
-        )
-
-    # Validate reason_code is a valid OverrideReasonCode
-    try:
-        validated_reason_code = OverrideReasonCode(reason_code)
-    except ValueError:
-        valid_codes = [e.value for e in OverrideReasonCode]
-        return _validation_error(
-            action="session-end",
-            field="reason_code",
-            message=f"Invalid reason_code: {reason_code}. Must be one of: {', '.join(valid_codes)}",
-            request_id=request_id,
-        )
+    params = {"reason_code": reason_code}
+    err = validate_payload(params, _SESSION_END_SCHEMA,
+                           tool_name="task", action="session-end",
+                           request_id=request_id)
+    if err:
+        return err
+    validated_reason_code = OverrideReasonCode(params["reason_code"])
 
     # Validate reason_detail length
     reason_detail_err = _validate_reason_detail(reason_detail, "session-end", request_id)
@@ -948,39 +956,18 @@ def _handle_session_reset(
     if not _is_feature_enabled(config, "autonomy_sessions"):
         return _feature_disabled_response("session-reset", request_id)
 
-    # Validate reason_code is provided
-    if not reason_code:
-        return _validation_error(
-            action="session-reset",
-            field="reason_code",
-            message="reason_code is required for session-reset",
-            request_id=request_id,
-        )
-
-    # Validate reason_code is a valid OverrideReasonCode
-    try:
-        validated_reason_code = OverrideReasonCode(reason_code)
-    except ValueError:
-        valid_codes = [e.value for e in OverrideReasonCode]
-        return _validation_error(
-            action="session-reset",
-            field="reason_code",
-            message=f"Invalid reason_code: {reason_code}. Must be one of: {', '.join(valid_codes)}",
-            request_id=request_id,
-        )
+    params = {"reason_code": reason_code, "session_id": session_id}
+    err = validate_payload(params, _SESSION_RESET_SCHEMA,
+                           tool_name="task", action="session-reset",
+                           request_id=request_id)
+    if err:
+        return err
+    validated_reason_code = OverrideReasonCode(params["reason_code"])
 
     # Validate reason_detail length
     reason_detail_err = _validate_reason_detail(reason_detail, "session-reset", request_id)
     if reason_detail_err:
         return reason_detail_err
-
-    if not session_id:
-        return _validation_error(
-            action="session-reset",
-            field="session_id",
-            message="session_id is required for reset (no active-session lookup allowed)",
-            request_id=request_id,
-        )
 
     # Role check - only maintainer can reset sessions
     # Deferred import: tests mock-patch get_server_role on the handlers_session shim module

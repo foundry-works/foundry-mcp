@@ -24,7 +24,7 @@ from foundry_mcp.core.task import (
     update_task_requirements,
 )
 
-from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
+from foundry_mcp.tools.unified.param_schema import Bool, Dict_, List_, Num, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _check_autonomy_write_lock,
     _load_spec_data,
@@ -46,6 +46,52 @@ _ADD_SCHEMA = {
     "file_path": Str(),
     "dry_run": Bool(default=False),
     "workspace": Str(),
+}
+
+_REMOVE_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+    "cascade": Bool(default=False),
+    "dry_run": Bool(default=False),
+}
+
+_UPDATE_ESTIMATE_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+    "estimated_hours": Num(),
+    "complexity": Str(),
+    "dry_run": Bool(default=False),
+}
+
+_UPDATE_METADATA_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+    "dry_run": Bool(default=False),
+    "custom_metadata": Dict_(),
+    "acceptance_criteria": List_(),
+}
+
+_MOVE_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+    "position": Num(integer_only=True, min_val=1),
+    "dry_run": Bool(default=False),
+}
+
+_DEPENDENCY_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+    "target_id": Str(required=True),
+    "dependency_type": Str(choices=frozenset(("blocks", "blocked_by", "depends"))),
+    "dry_run": Bool(default=False),
+}
+
+_ADD_REQUIREMENT_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+    "requirement_type": Str(required=True, choices=frozenset(REQUIREMENT_TYPES)),
+    "text": Str(required=True),
+    "dry_run": Bool(default=False),
 }
 
 
@@ -127,7 +173,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -143,19 +189,19 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     if dry_run_bool:
-        spec_data, spec_error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+        spec_data, spec_error = _load_spec_data(spec_id, specs_dir, request_id)
         if spec_error:
             return spec_error
 
         hierarchy = (spec_data or {}).get("hierarchy", {})
         parent_node = (
-            hierarchy.get(parent.strip()) if isinstance(hierarchy, dict) else None
+            hierarchy.get(parent) if isinstance(hierarchy, dict) else None
         )
         if not isinstance(parent_node, dict):
             elapsed_ms = (time.perf_counter() - start) * 1000
             return asdict(
                 error_response(
-                    f"Parent node '{parent.strip()}' not found",
+                    f"Parent node '{parent}' not found",
                     error_code=ErrorCode.NOT_FOUND,
                     error_type=ErrorType.NOT_FOUND,
                     remediation="Verify the parent node ID exists in the specification",
@@ -166,12 +212,12 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         dry_run_data: Dict[str, Any] = {
-            "spec_id": spec_id.strip(),
-            "parent": parent.strip(),
-            "title": title.strip(),
+            "spec_id": spec_id,
+            "parent": parent,
+            "title": title,
             "task_type": task_type,
             "position": position,
-            "file_path": file_path.strip() if file_path else None,
+            "file_path": file_path,
             "dry_run": True,
         }
         # Include research parameters in dry_run response
@@ -191,9 +237,9 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
         return asdict(response)
 
     result, error = add_task(
-        spec_id=spec_id.strip(),
-        parent_id=parent.strip(),
-        title=title.strip(),
+        spec_id=spec_id,
+        parent_id=parent,
+        title=title,
         description=description,
         task_type=task_type,
         estimated_hours=float(estimated_hours) if estimated_hours is not None else None,
@@ -228,7 +274,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
 
     response = success_response(
         **result,
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         request_id=request_id,
         telemetry={"duration_ms": round(elapsed_ms, 2)},
     )
@@ -240,51 +286,25 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "remove"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
-    cascade = payload.get("cascade", False)
+
+    err = validate_payload(payload, _REMOVE_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
+    cascade = payload["cascade"]
+    dry_run_bool = payload["dry_run"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
-    if not isinstance(cascade, bool):
-        return _validation_error(
-            field="cascade",
-            action=action,
-            message="cascade must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -300,17 +320,17 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     if dry_run_bool:
-        spec_data, spec_error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+        spec_data, spec_error = _load_spec_data(spec_id, specs_dir, request_id)
         if spec_error:
             return spec_error
 
         hierarchy = (spec_data or {}).get("hierarchy", {})
-        node = hierarchy.get(task_id.strip()) if isinstance(hierarchy, dict) else None
+        node = hierarchy.get(task_id) if isinstance(hierarchy, dict) else None
         if not isinstance(node, dict):
             elapsed_ms = (time.perf_counter() - start) * 1000
             return asdict(
                 error_response(
-                    f"Task '{task_id.strip()}' not found",
+                    f"Task '{task_id}' not found",
                     error_code=ErrorCode.TASK_NOT_FOUND,
                     error_type=ErrorType.NOT_FOUND,
                     remediation="Verify the task ID exists in the specification",
@@ -322,8 +342,8 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
         elapsed_ms = (time.perf_counter() - start) * 1000
         response = success_response(
             data={
-                "spec_id": spec_id.strip(),
-                "task_id": task_id.strip(),
+                "spec_id": spec_id,
+                "task_id": task_id,
                 "cascade": cascade,
                 "dry_run": True,
             },
@@ -337,8 +357,8 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
         return asdict(response)
 
     result, error = remove_task(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
+        spec_id=spec_id,
+        task_id=task_id,
         cascade=cascade,
         specs_dir=specs_dir,
     )
@@ -376,55 +396,22 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-estimate"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
+
+    err = validate_payload(payload, _UPDATE_ESTIMATE_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
     estimated_hours = payload.get("estimated_hours")
     complexity = payload.get("complexity")
+    dry_run_bool = payload["dry_run"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
-    if estimated_hours is not None and not isinstance(estimated_hours, (int, float)):
-        return _validation_error(
-            field="estimated_hours",
-            action=action,
-            message="estimated_hours must be a number",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    if complexity is not None and not isinstance(complexity, str):
-        return _validation_error(
-            field="complexity",
-            action=action,
-            message="complexity must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
-
+    # Complexity uses custom normalization (lowercase + empty→None)
     normalized_complexity: Optional[str] = None
     if isinstance(complexity, str):
         normalized_complexity = complexity.strip().lower() or None
@@ -443,7 +430,7 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -459,16 +446,16 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     if dry_run_bool:
-        spec_data, spec_error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+        spec_data, spec_error = _load_spec_data(spec_id, specs_dir, request_id)
         if spec_error:
             return spec_error
 
         hierarchy = (spec_data or {}).get("hierarchy", {})
-        task = hierarchy.get(task_id.strip()) if isinstance(hierarchy, dict) else None
+        task = hierarchy.get(task_id) if isinstance(hierarchy, dict) else None
         if not isinstance(task, dict):
             return asdict(
                 error_response(
-                    f"Task '{task_id.strip()}' not found",
+                    f"Task '{task_id}' not found",
                     error_code=ErrorCode.TASK_NOT_FOUND,
                     error_type=ErrorType.NOT_FOUND,
                     remediation="Verify the task ID exists in the specification",
@@ -482,8 +469,8 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
         else:
             metadata = {}
         data: Dict[str, Any] = {
-            "spec_id": spec_id.strip(),
-            "task_id": task_id.strip(),
+            "spec_id": spec_id,
+            "task_id": task_id,
             "dry_run": True,
             "previous_hours": metadata.get("estimated_hours"),
             "previous_complexity": metadata.get("complexity"),
@@ -506,8 +493,8 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
         return asdict(response)
 
     result, error = update_estimate(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
+        spec_id=spec_id,
+        task_id=task_id,
         estimated_hours=float(estimated_hours) if estimated_hours is not None else None,
         complexity=normalized_complexity,
         specs_dir=specs_dir,
@@ -546,57 +533,20 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-metadata"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
+
+    err = validate_payload(payload, _UPDATE_METADATA_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
+    dry_run_bool = payload["dry_run"]
+    custom_metadata = payload.get("custom_metadata")
+    acceptance_criteria = payload.get("acceptance_criteria")
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason_param = payload.get("bypass_reason")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
-
-    custom_metadata = payload.get("custom_metadata")
-    if custom_metadata is not None and not isinstance(custom_metadata, dict):
-        return _validation_error(
-            field="custom_metadata",
-            action=action,
-            message="custom_metadata must be an object",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation="Provide custom_metadata as a JSON object",
-        )
-
-    acceptance_criteria = payload.get("acceptance_criteria")
-    if acceptance_criteria is not None and not isinstance(acceptance_criteria, list):
-        return _validation_error(
-            field="acceptance_criteria",
-            action=action,
-            message="acceptance_criteria must be a list of strings",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     update_fields = [
         payload.get("title"),
@@ -626,7 +576,7 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason_param,
@@ -642,16 +592,16 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     if dry_run_bool:
-        spec_data, spec_error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+        spec_data, spec_error = _load_spec_data(spec_id, specs_dir, request_id)
         if spec_error:
             return spec_error
 
         hierarchy = (spec_data or {}).get("hierarchy", {})
-        task = hierarchy.get(task_id.strip()) if isinstance(hierarchy, dict) else None
+        task = hierarchy.get(task_id) if isinstance(hierarchy, dict) else None
         if not isinstance(task, dict):
             return asdict(
                 error_response(
-                    f"Task '{task_id.strip()}' not found",
+                    f"Task '{task_id}' not found",
                     error_code=ErrorCode.TASK_NOT_FOUND,
                     error_type=ErrorType.NOT_FOUND,
                     remediation="Verify the task ID exists in the specification",
@@ -684,8 +634,8 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
         elapsed_ms = (time.perf_counter() - start) * 1000
         response = success_response(
             data={
-                "spec_id": spec_id.strip(),
-                "task_id": task_id.strip(),
+                "spec_id": spec_id,
+                "task_id": task_id,
                 "fields_updated": fields_updated,
                 "dry_run": True,
             },
@@ -699,8 +649,8 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
         return asdict(response)
 
     result, error = update_task_metadata(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
+        spec_id=spec_id,
+        task_id=task_id,
         title=payload.get("title"),
         file_path=payload.get("file_path"),
         description=payload.get("description"),
@@ -749,28 +699,22 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     """Move a task to a new position or parent."""
     request_id = _request_id()
     action = "move"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
+
+    err = validate_payload(payload, _MOVE_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
     new_parent = payload.get("parent")
     position = payload.get("position")
+    dry_run_bool = payload["dry_run"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
-
+    # Schema can't reject empty optional strings
     if new_parent is not None and (
         not isinstance(new_parent, str) or not new_parent.strip()
     ):
@@ -782,32 +726,11 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    if position is not None:
-        if not isinstance(position, int) or position < 1:
-            return _validation_error(
-                field="position",
-                action=action,
-                message="position must be a positive integer (1-based)",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
-
     workspace = payload.get("workspace")
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -824,8 +747,8 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     start = time.perf_counter()
 
     result, error, warnings = move_task(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
+        spec_id=spec_id,
+        task_id=task_id,
         new_parent=new_parent.strip() if new_parent else None,
         position=position,
         dry_run=dry_run_bool,
@@ -885,61 +808,30 @@ def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     """Add a dependency relationship between two tasks."""
     request_id = _request_id()
     action = "add-dependency"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
-    target_id = payload.get("target_id")
-    dependency_type = payload.get("dependency_type", "blocks")
+
+    # Default dependency_type before validation so choices check works
+    if payload.get("dependency_type") is None:
+        payload["dependency_type"] = "blocks"
+
+    err = validate_payload(payload, _DEPENDENCY_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
+    target_id = payload["target_id"]
+    dependency_type = payload["dependency_type"]
+    dry_run_bool = payload["dry_run"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty source task identifier",
-            request_id=request_id,
-        )
-    if not isinstance(target_id, str) or not target_id.strip():
-        return _validation_error(
-            field="target_id",
-            action=action,
-            message="Provide a non-empty target task identifier",
-            request_id=request_id,
-        )
-
-    valid_types = ("blocks", "blocked_by", "depends")
-    if dependency_type not in valid_types:
-        return _validation_error(
-            field="dependency_type",
-            action=action,
-            message=f"Must be one of: {', '.join(valid_types)}",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -956,9 +848,9 @@ def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     start = time.perf_counter()
 
     result, error = manage_task_dependency(
-        spec_id=spec_id.strip(),
-        source_task_id=task_id.strip(),
-        target_task_id=target_id.strip(),
+        spec_id=spec_id,
+        source_task_id=task_id,
+        target_task_id=target_id,
         dependency_type=dependency_type,
         action="add",
         dry_run=dry_run_bool,
@@ -1017,61 +909,30 @@ def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     """Remove a dependency relationship between two tasks."""
     request_id = _request_id()
     action = "remove-dependency"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
-    target_id = payload.get("target_id")
-    dependency_type = payload.get("dependency_type", "blocks")
+
+    # Default dependency_type before validation so choices check works
+    if payload.get("dependency_type") is None:
+        payload["dependency_type"] = "blocks"
+
+    err = validate_payload(payload, _DEPENDENCY_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
+    target_id = payload["target_id"]
+    dependency_type = payload["dependency_type"]
+    dry_run_bool = payload["dry_run"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty source task identifier",
-            request_id=request_id,
-        )
-    if not isinstance(target_id, str) or not target_id.strip():
-        return _validation_error(
-            field="target_id",
-            action=action,
-            message="Provide a non-empty target task identifier",
-            request_id=request_id,
-        )
-
-    valid_types = ("blocks", "blocked_by", "depends")
-    if dependency_type not in valid_types:
-        return _validation_error(
-            field="dependency_type",
-            action=action,
-            message=f"Must be one of: {', '.join(valid_types)}",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -1088,9 +949,9 @@ def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     start = time.perf_counter()
 
     result, error = manage_task_dependency(
-        spec_id=spec_id.strip(),
-        source_task_id=task_id.strip(),
-        target_task_id=target_id.strip(),
+        spec_id=spec_id,
+        source_task_id=task_id,
+        target_task_id=target_id,
         dependency_type=dependency_type,
         action="remove",
         dry_run=dry_run_bool,
@@ -1141,69 +1002,31 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
     """Add a structured requirement to a task's metadata."""
     request_id = _request_id()
     action = "add-requirement"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
-    requirement_type = payload.get("requirement_type")
-    text = payload.get("text")
+
+    # Lowercase requirement_type before validation so choices check works
+    rt = payload.get("requirement_type")
+    if isinstance(rt, str):
+        payload["requirement_type"] = rt.lower().strip()
+
+    err = validate_payload(payload, _ADD_REQUIREMENT_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
+    requirement_type_lower = payload["requirement_type"]
+    text = payload["text"]
+    dry_run_bool = payload["dry_run"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
-    if not isinstance(requirement_type, str) or not requirement_type.strip():
-        return _validation_error(
-            field="requirement_type",
-            action=action,
-            message="Provide a requirement type",
-            request_id=request_id,
-        )
-
-    requirement_type_lower = requirement_type.lower().strip()
-    if requirement_type_lower not in REQUIREMENT_TYPES:
-        return _validation_error(
-            field="requirement_type",
-            action=action,
-            message=f"Must be one of: {', '.join(REQUIREMENT_TYPES)}",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if not isinstance(text, str) or not text.strip():
-        return _validation_error(
-            field="text",
-            action=action,
-            message="Provide non-empty requirement text",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
 
     workspace = payload.get("workspace")
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -1220,11 +1043,11 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
     start = time.perf_counter()
 
     result, error = update_task_requirements(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
+        spec_id=spec_id,
+        task_id=task_id,
         action="add",
         requirement_type=requirement_type_lower,
-        text=text.strip(),
+        text=text,
         dry_run=dry_run_bool,
         specs_dir=specs_dir,
     )

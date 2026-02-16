@@ -34,6 +34,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
     _TASK_DEFAULT_PAGE_SIZE,
@@ -46,30 +47,63 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _pagination_warnings,
     _request_id,
     _resolve_specs_dir,
-    _validation_error,
 )
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_SPEC_ONLY_SCHEMA = {
+    "spec_id": Str(required=True),
+}
+
+_PREPARE_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(),
+}
+
+_SPEC_TASK_REQUIRED_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_id": Str(required=True),
+}
+
+_PROGRESS_SCHEMA = {
+    "spec_id": Str(required=True),
+    "node_id": Str(required=True),
+    "include_phases": Bool(default=True),
+}
+
+_LIST_SCHEMA = {
+    "spec_id": Str(required=True),
+    "status_filter": Str(choices=frozenset(_ALLOWED_STATUS)),
+    "include_completed": Bool(default=True),
+}
+
+_QUERY_SCHEMA = {
+    "spec_id": Str(required=True),
+    "status": Str(choices=frozenset(_ALLOWED_STATUS)),
+    "parent": Str(),
+}
+
+_HIERARCHY_SCHEMA = {
+    "spec_id": Str(required=True),
+    "max_depth": Num(integer_only=True, min_val=0, max_val=10),
+    "include_metadata": Bool(default=False),
+}
 
 
 def _handle_prepare(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "prepare"
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    task_id = payload.get("task_id")
-    if task_id is not None and (not isinstance(task_id, str) or not task_id.strip()):
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="task_id must be a non-empty string",
-            request_id=request_id,
-        )
 
+    err = validate_payload(payload, _PREPARE_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload.get("task_id")
     workspace = payload.get("workspace")
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
@@ -77,7 +111,7 @@ def _handle_prepare(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     result = core_prepare_task(
-        spec_id=spec_id.strip(), specs_dir=specs_dir, task_id=task_id
+        spec_id=spec_id, specs_dir=specs_dir, task_id=task_id
     )
     elapsed_ms = (time.perf_counter() - start) * 1000
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
@@ -88,17 +122,17 @@ def _handle_prepare(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "next"
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
+
+    err = validate_payload(payload, _SPEC_ONLY_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
@@ -111,7 +145,7 @@ def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
     if next_task:
         task_id, task_data = next_task
         response = success_response(
-            spec_id=spec_id.strip(),
+            spec_id=spec_id,
             found=True,
             task_id=task_id,
             title=task_data.get("title", ""),
@@ -131,7 +165,7 @@ def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
         completed = sum(1 for node in all_tasks if node.get("status") == "completed")
         pending = sum(1 for node in all_tasks if node.get("status") == "pending")
         response = success_response(
-            spec_id=spec_id.strip(),
+            spec_id=spec_id,
             found=False,
             spec_complete=pending == 0 and completed > 0,
             message="All tasks completed"
@@ -148,35 +182,27 @@ def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_info(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "info"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
 
+    err = validate_payload(payload, _SPEC_TASK_REQUIRED_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
 
-    task = spec_data.get("hierarchy", {}).get(task_id.strip())
+    task = spec_data.get("hierarchy", {}).get(task_id)
     if task is None:
         return asdict(
             error_response(
-                f"Task not found: {task_id.strip()}",
+                f"Task not found: {task_id}",
                 error_code=ErrorCode.TASK_NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
                 remediation="Verify the task ID exists in the hierarchy",
@@ -185,8 +211,8 @@ def _handle_info(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     response = success_response(
-        spec_id=spec_id.strip(),
-        task_id=task_id.strip(),
+        spec_id=spec_id,
+        task_id=task_id,
         task=task,
         request_id=request_id,
     )
@@ -197,36 +223,28 @@ def _handle_info(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_check_deps(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "check-deps"
-    spec_id = payload.get("spec_id")
-    task_id = payload.get("task_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(task_id, str) or not task_id.strip():
-        return _validation_error(
-            field="task_id",
-            action=action,
-            message="Provide a non-empty task identifier",
-            request_id=request_id,
-        )
 
+    err = validate_payload(payload, _SPEC_TASK_REQUIRED_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_id = payload["task_id"]
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
 
     start = time.perf_counter()
-    deps = check_dependencies(spec_data, task_id.strip())
+    deps = check_dependencies(spec_data, task_id)
     elapsed_ms = (time.perf_counter() - start) * 1000
     response = success_response(
         **deps,
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         request_id=request_id,
         telemetry={"duration_ms": round(elapsed_ms, 2)},
     )
@@ -238,41 +256,29 @@ def _handle_check_deps(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_progress(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "progress"
-    spec_id = payload.get("spec_id")
-    node_id = payload.get("node_id", "spec-root")
-    include_phases = payload.get("include_phases", True)
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(node_id, str) or not node_id.strip():
-        return _validation_error(
-            field="node_id",
-            action=action,
-            message="Provide a non-empty node identifier",
-            request_id=request_id,
-        )
-    if not isinstance(include_phases, bool):
-        return _validation_error(
-            field="include_phases",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
+    # Set defaults before validation
+    if payload.get("node_id") is None:
+        payload["node_id"] = "spec-root"
+
+    err = validate_payload(payload, _PROGRESS_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    node_id = payload["node_id"]
+    include_phases = payload["include_phases"]
 
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
 
-    progress = get_progress_summary(spec_data, node_id.strip())
+    progress = get_progress_summary(spec_data, node_id)
     if include_phases:
         progress["phases"] = list_phases(spec_data)
 
@@ -287,36 +293,18 @@ def _handle_progress(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "list"
-    spec_id = payload.get("spec_id")
+
+    err = validate_payload(payload, _LIST_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
     status_filter = payload.get("status_filter")
-    include_completed = payload.get("include_completed", True)
+    include_completed = payload["include_completed"]
     limit = payload.get("limit")
     cursor = payload.get("cursor")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if status_filter is not None:
-        if not isinstance(status_filter, str) or status_filter not in _ALLOWED_STATUS:
-            return _validation_error(
-                field="status_filter",
-                action=action,
-                message=f"Status must be one of: {sorted(_ALLOWED_STATUS)}",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-    if not isinstance(include_completed, bool):
-        return _validation_error(
-            field="include_completed",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     page_size = normalize_page_size(
         limit,
@@ -341,7 +329,7 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
 
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
@@ -394,7 +382,7 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
     warnings = _pagination_warnings(total_count, has_more)
     response = paginated_response(
         data={
-            "spec_id": spec_id.strip(),
+            "spec_id": spec_id,
             "tasks": page_tasks,
             "count": len(page_tasks),
         },
@@ -412,36 +400,18 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "query"
-    spec_id = payload.get("spec_id")
+
+    err = validate_payload(payload, _QUERY_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
     status = payload.get("status")
     parent = payload.get("parent")
     limit = payload.get("limit")
     cursor = payload.get("cursor")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if status is not None:
-        if not isinstance(status, str) or status not in _ALLOWED_STATUS:
-            return _validation_error(
-                field="status",
-                action=action,
-                message=f"Status must be one of: {sorted(_ALLOWED_STATUS)}",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-    if parent is not None and (not isinstance(parent, str) or not parent.strip()):
-        return _validation_error(
-            field="parent",
-            action=action,
-            message="Parent must be a non-empty string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     page_size = normalize_page_size(
         limit,
@@ -466,7 +436,7 @@ def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
 
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
@@ -516,7 +486,7 @@ def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
     warnings = _pagination_warnings(total_count, has_more)
     response = paginated_response(
         data={
-            "spec_id": spec_id.strip(),
+            "spec_id": spec_id,
             "tasks": page_tasks,
             "count": len(page_tasks),
         },
@@ -535,35 +505,22 @@ def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
 def _handle_hierarchy(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "hierarchy"
-    spec_id = payload.get("spec_id")
-    max_depth = payload.get("max_depth", 2)
-    include_metadata = payload.get("include_metadata", False)
+
+    # Set defaults before validation
+    if payload.get("max_depth") is None:
+        payload["max_depth"] = 2
+
+    err = validate_payload(payload, _HIERARCHY_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    max_depth = payload["max_depth"]
+    include_metadata = payload["include_metadata"]
     limit = payload.get("limit")
     cursor = payload.get("cursor")
-
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(max_depth, int) or max_depth < 0 or max_depth > 10:
-        return _validation_error(
-            field="max_depth",
-            action=action,
-            message="max_depth must be between 0 and 10",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    if not isinstance(include_metadata, bool):
-        return _validation_error(
-            field="include_metadata",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     page_size = normalize_page_size(
         limit,
@@ -588,7 +545,7 @@ def _handle_hierarchy(*, config: ServerConfig, **payload: Any) -> dict:
 
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
@@ -620,7 +577,7 @@ def _handle_hierarchy(*, config: ServerConfig, **payload: Any) -> dict:
     warnings = _pagination_warnings(len(filtered), has_more)
     response = paginated_response(
         data={
-            "spec_id": spec_id.strip(),
+            "spec_id": spec_id,
             "hierarchy": hierarchy_page,
             "node_count": len(hierarchy_page),
             "total_nodes": len(filtered),

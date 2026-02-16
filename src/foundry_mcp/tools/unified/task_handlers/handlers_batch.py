@@ -27,6 +27,7 @@ from foundry_mcp.core.spec import save_spec
 from foundry_mcp.core.task import batch_update_tasks
 from foundry_mcp.core.validation.constants import VALID_VERIFICATION_TYPES
 
+from foundry_mcp.tools.unified.param_schema import Bool, Dict_, List_, Num, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
     _TASK_WARNING_THRESHOLD,
@@ -42,6 +43,48 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _validation_error,
 )
 
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_PREPARE_BATCH_SCHEMA = {
+    "spec_id": Str(required=True),
+    "max_tasks": Num(integer_only=True, min_val=1),
+    "token_budget": Num(integer_only=True, min_val=1000),
+}
+
+_START_BATCH_SCHEMA = {
+    "spec_id": Str(required=True),
+    "task_ids": List_(required=True, min_items=1),
+}
+
+_COMPLETE_BATCH_SCHEMA = {
+    "spec_id": Str(required=True),
+    "completions": List_(required=True, min_items=1),
+}
+
+_RESET_BATCH_SCHEMA = {
+    "spec_id": Str(required=True),
+}
+
+_METADATA_BATCH_SCHEMA = {
+    "spec_id": Str(required=True),
+    "status_filter": Str(choices=frozenset(_ALLOWED_STATUS)),
+    "description": Str(),
+    "file_path": Str(),
+    "estimated_hours": Num(min_val=0),
+    "category": Str(),
+    "labels": Dict_(),
+    "owners": List_(),
+    "update_metadata": Dict_(),
+    "dry_run": Bool(default=False),
+}
+
+_FIX_VERIFICATION_TYPES_SCHEMA = {
+    "spec_id": Str(required=True),
+    "dry_run": Bool(default=False),
+}
+
 
 def _handle_prepare_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
@@ -51,35 +94,22 @@ def _handle_prepare_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
     request_id = _request_id()
     action = "prepare-batch"
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
 
-    # Optional parameters with defaults
-    max_tasks = payload.get("max_tasks", DEFAULT_MAX_TASKS)
-    if not isinstance(max_tasks, int) or max_tasks < 1:
-        return _validation_error(
-            field="max_tasks",
-            action=action,
-            message="max_tasks must be a positive integer",
-            request_id=request_id,
-            code=ErrorCode.VALIDATION_ERROR,
-        )
+    # Defaults before validation
+    if payload.get("max_tasks") is None:
+        payload["max_tasks"] = DEFAULT_MAX_TASKS
+    if payload.get("token_budget") is None:
+        payload["token_budget"] = DEFAULT_TOKEN_BUDGET
 
-    token_budget = payload.get("token_budget", DEFAULT_TOKEN_BUDGET)
-    if not isinstance(token_budget, int) or token_budget < 1000:
-        return _validation_error(
-            field="token_budget",
-            action=action,
-            message="token_budget must be an integer >= 1000",
-            request_id=request_id,
-            code=ErrorCode.VALIDATION_ERROR,
-        )
+    err = validate_payload(payload, _PREPARE_BATCH_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    max_tasks = payload["max_tasks"]
+    token_budget = payload["token_budget"]
 
     workspace = payload.get("workspace")
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
@@ -88,7 +118,7 @@ def _handle_prepare_batch(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     result, error = prepare_batch_context(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         max_tasks=max_tasks,
         token_budget=token_budget,
         specs_dir=specs_dir,
@@ -111,7 +141,7 @@ def _handle_prepare_batch(*, config: ServerConfig, **payload: Any) -> dict:
 
     # Build response with batch context
     response = success_response(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         tasks=result.get("tasks", []),
         task_count=result.get("task_count", 0),
         spec_complete=result.get("spec_complete", False),
@@ -140,27 +170,19 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
     request_id = _request_id()
     action = "start-batch"
-    spec_id = payload.get("spec_id")
+
+    err = validate_payload(payload, _START_BATCH_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    task_ids = payload["task_ids"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
 
-    task_ids = payload.get("task_ids")
-    if not isinstance(task_ids, list) or not task_ids:
-        return _validation_error(
-            field="task_ids",
-            action=action,
-            message="Provide a non-empty list of task IDs",
-            request_id=request_id,
-        )
-
-    # Validate all task_ids are strings
+    # Per-element string validation (schema validates list, not elements)
     for i, tid in enumerate(task_ids):
         if not isinstance(tid, str) or not tid.strip():
             return _validation_error(
@@ -175,7 +197,7 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -191,7 +213,7 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     result, error = start_batch(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         task_ids=[tid.strip() for tid in task_ids],
         specs_dir=specs_dir,
     )
@@ -214,7 +236,7 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
     _metrics.counter(_metric(action), labels={"status": "success"})
 
     response = success_response(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         started=result.get("started", []),
         started_count=result.get("started_count", 0),
         started_at=result.get("started_at"),
@@ -228,21 +250,23 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """Handle complete-batch action for completing multiple tasks with partial failure support."""
     request_id = _request_id()
     action = "complete-batch"
-    spec_id = payload.get("spec_id")
+
+    err = validate_payload(payload, _COMPLETE_BATCH_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    completions = payload["completions"]
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(field="spec_id", action=action, message="Provide a non-empty spec identifier", request_id=request_id)
-
-    completions = payload.get("completions")
-    if not isinstance(completions, list) or not completions:
-        return _validation_error(field="completions", action=action, message="Provide a non-empty list of completions", request_id=request_id)
 
     workspace = payload.get("workspace")
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -257,7 +281,7 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
         return specs_err
 
     start = time.perf_counter()
-    result, error = complete_batch(spec_id=spec_id.strip(), completions=completions, specs_dir=specs_dir)
+    result, error = complete_batch(spec_id=spec_id, completions=completions, specs_dir=specs_dir)
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     if error:
@@ -268,7 +292,7 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
     _metrics.counter(_metric(action), labels={"status": "success"})
 
     response = success_response(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         results=result.get("results", {}),
         completed_count=result.get("completed_count", 0),
         failed_count=result.get("failed_count", 0),
@@ -288,14 +312,14 @@ def _handle_reset_batch(*, config: ServerConfig, **payload: Any) -> dict:
     """
     request_id = _request_id()
     action = "reset-batch"
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
+
+    err = validate_payload(payload, _RESET_BATCH_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
 
     # Optional: specific task IDs to reset
     task_ids = payload.get("task_ids")
@@ -336,7 +360,7 @@ def _handle_reset_batch(*, config: ServerConfig, **payload: Any) -> dict:
 
     start = time.perf_counter()
     result, error = reset_batch(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         task_ids=task_ids,
         threshold_hours=float(threshold_hours),
         specs_dir=specs_dir,
@@ -359,7 +383,7 @@ def _handle_reset_batch(*, config: ServerConfig, **payload: Any) -> dict:
     _metrics.counter(_metric(action), labels={"status": "success"})
 
     response = success_response(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         reset=result.get("reset", []),
         reset_count=result.get("reset_count", 0),
         errors=result.get("errors"),
@@ -386,34 +410,18 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
     action = "metadata-batch"
     start = time.perf_counter()
 
-    # Required: spec_id
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _METADATA_BATCH_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    # Extract filter parameters
+    spec_id = payload["spec_id"]
     status_filter = payload.get("status_filter")
     parent_filter = payload.get("parent_filter")
     pattern = payload.get("pattern")
 
-    # Validate status_filter
-    if status_filter is not None:
-        if not isinstance(status_filter, str) or status_filter not in _ALLOWED_STATUS:
-            return _validation_error(
-                field="status_filter",
-                action=action,
-                message=f"status_filter must be one of: {sorted(_ALLOWED_STATUS)}",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-
-    # Validate parent_filter
+    # Validate parent_filter (schema can't reject empty optional strings)
     if parent_filter is not None:
         if not isinstance(parent_filter, str) or not parent_filter.strip():
             return _validation_error(
@@ -425,7 +433,7 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
             )
         parent_filter = parent_filter.strip()
 
-    # Validate pattern
+    # Validate pattern (non-empty + regex compilation)
     if pattern is not None:
         if not isinstance(pattern, str) or not pattern.strip():
             return _validation_error(
@@ -458,90 +466,33 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
             remediation="Specify status_filter, parent_filter, and/or pattern to target tasks",
         )
 
-    # Extract metadata fields
+    # Extract metadata fields (type-checked by schema)
     description = payload.get("description")
     file_path = payload.get("file_path")
     estimated_hours = payload.get("estimated_hours")
     category = payload.get("category")
     labels = payload.get("labels")
     owners = payload.get("owners")
-    update_metadata = payload.get("update_metadata")  # Dict for custom fields
-    dry_run = payload.get("dry_run", False)
+    update_metadata = payload.get("update_metadata")
+    dry_run = payload["dry_run"]
 
-    # Validate metadata fields
-    if description is not None and not isinstance(description, str):
+    # Content validation for labels and owners (schema checks type only)
+    if labels is not None and not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
+    ):
         return _validation_error(
-            field="description",
+            field="labels",
             action=action,
-            message="description must be a string",
+            message="labels must be a dict with string keys and values",
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
 
-    if file_path is not None and not isinstance(file_path, str):
+    if owners is not None and not all(isinstance(o, str) for o in owners):
         return _validation_error(
-            field="file_path",
+            field="owners",
             action=action,
-            message="file_path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if estimated_hours is not None:
-        if not isinstance(estimated_hours, (int, float)) or estimated_hours < 0:
-            return _validation_error(
-                field="estimated_hours",
-                action=action,
-                message="estimated_hours must be a non-negative number",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-
-    if category is not None and not isinstance(category, str):
-        return _validation_error(
-            field="category",
-            action=action,
-            message="category must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if labels is not None:
-        if not isinstance(labels, dict) or not all(
-            isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
-        ):
-            return _validation_error(
-                field="labels",
-                action=action,
-                message="labels must be a dict with string keys and values",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-
-    if owners is not None:
-        if not isinstance(owners, list) or not all(isinstance(o, str) for o in owners):
-            return _validation_error(
-                field="owners",
-                action=action,
-                message="owners must be a list of strings",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-
-    if update_metadata is not None and not isinstance(update_metadata, dict):
-        return _validation_error(
-            field="update_metadata",
-            action=action,
-            message="update_metadata must be a dict",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
+            message="owners must be a list of strings",
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
@@ -673,31 +624,19 @@ def _handle_fix_verification_types(
     request_id = _request_id()
     action = "fix-verification-types"
 
-    # Required: spec_id
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
+    err = validate_payload(payload, _FIX_VERIFICATION_TYPES_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
+    spec_id = payload["spec_id"]
+    dry_run_bool = payload["dry_run"]
 
     # Load spec
     workspace = payload.get("workspace")
     specs_dir, _specs_err = _resolve_specs_dir(config, workspace)
-    spec_data, error = _load_spec_data(spec_id.strip(), specs_dir, request_id)
+    spec_data, error = _load_spec_data(spec_id, specs_dir, request_id)
     if error:
         return error
     assert spec_data is not None
@@ -747,7 +686,7 @@ def _handle_fix_verification_types(
 
     # Save if not dry_run and there were fixes
     if not dry_run_bool and fixes:
-        if specs_dir is None or not save_spec(spec_id.strip(), spec_data, specs_dir):
+        if specs_dir is None or not save_spec(spec_id, spec_data, specs_dir):
             return asdict(
                 error_response(
                     "Failed to save spec after fixing verification types",
@@ -765,7 +704,7 @@ def _handle_fix_verification_types(
     invalid_count = sum(1 for f in fixes if f["issue"] == "invalid")
 
     response = success_response(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         total_fixes=len(fixes),
         applied_count=len(fixes) if not dry_run_bool else 0,
         fixes=fixes,

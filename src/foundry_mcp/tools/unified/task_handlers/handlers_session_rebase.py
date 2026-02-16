@@ -38,11 +38,11 @@ from foundry_mcp.core.authorization import (
     Role,
 )
 
+from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
     _request_id,
     _resolve_session,
-    _validation_error,
     _validate_reason_detail,
     _is_feature_enabled,
     _feature_disabled_response,
@@ -57,6 +57,15 @@ from foundry_mcp.tools.unified.task_handlers._session_common import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_GATE_WAIVER_PARAMS_SCHEMA = {
+    "phase_id": Str(required=True),
+    "reason_code": Str(required=True, choices=frozenset(e.value for e in OverrideReasonCode)),
+}
 
 
 # =============================================================================
@@ -586,34 +595,14 @@ def _handle_gate_waiver(
             },
         ))
 
-    # Validate required parameters
-    if not phase_id:
-        return _validation_error(
-            action="gate-waiver",
-            field="phase_id",
-            message="phase_id is required",
-            request_id=request_id,
-        )
-
-    if not reason_code:
-        return _validation_error(
-            action="gate-waiver",
-            field="reason_code",
-            message="reason_code is required for gate waiver",
-            request_id=request_id,
-        )
-
-    # Validate reason_code is a valid OverrideReasonCode
-    try:
-        validated_reason_code = OverrideReasonCode(reason_code)
-    except ValueError:
-        valid_codes = [e.value for e in OverrideReasonCode]
-        return _validation_error(
-            action="gate-waiver",
-            field="reason_code",
-            message=f"Invalid reason_code: {reason_code}. Must be one of: {', '.join(valid_codes)}",
-            request_id=request_id,
-        )
+    # Validate required parameters via schema
+    params = {"phase_id": phase_id, "reason_code": reason_code}
+    err = validate_payload(params, _GATE_WAIVER_PARAMS_SCHEMA,
+                           tool_name="task", action="gate-waiver",
+                           request_id=request_id)
+    if err:
+        return err
+    validated_reason_code = OverrideReasonCode(params["reason_code"])
 
     # Validate reason_detail length
     reason_detail_err = _validate_reason_detail(reason_detail, "gate-waiver", request_id)
