@@ -806,8 +806,11 @@ _PAUSED_NEEDS_ATTENTION_REASONS = frozenset(
 _BLOCKED_RUNTIME_ERROR_CODES = frozenset(
     {
         "REQUIRED_GATE_UNSATISFIED",
+        "ERROR_REQUIRED_GATE_UNSATISFIED",
         "GATE_AUDIT_FAILURE",
+        "ERROR_GATE_AUDIT_FAILURE",
         "GATE_INTEGRITY_CHECKSUM",
+        "ERROR_GATE_INTEGRITY_CHECKSUM",
         "FEATURE_DISABLED",
         "AUTHORIZATION",
         "STEP_PROOF_MISSING",
@@ -853,12 +856,7 @@ def derive_loop_signal(
     ):
         return LoopSignal.SPEC_COMPLETE
 
-    if (
-        normalized_error_code in _BLOCKED_RUNTIME_ERROR_CODES
-        or normalized_error_code == "ERROR_REQUIRED_GATE_UNSATISFIED"
-        or normalized_error_code == "ERROR_GATE_AUDIT_FAILURE"
-        or normalized_error_code == "ERROR_GATE_INTEGRITY_CHECKSUM"
-    ):
+    if normalized_error_code in _BLOCKED_RUNTIME_ERROR_CODES:
         return LoopSignal.BLOCKED_RUNTIME
 
     if normalized_error_code in {"INVALID_GATE_EVIDENCE", "ERROR_INVALID_GATE_EVIDENCE"}:

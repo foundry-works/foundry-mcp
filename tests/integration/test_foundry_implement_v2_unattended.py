@@ -81,7 +81,7 @@ def test_foundry_implement_v2_completes_single_phase_in_unattended_posture(tmp_p
             "autonomy_fidelity_gates": True,
         },
     )
-    config._apply_autonomy_posture_profile("unattended", source="test")
+    config.apply_autonomy_posture_profile("unattended", source="test")
     config._validate_startup_configuration()
     assert config.autonomy_posture.profile == "unattended"
     assert config.autonomy_security.role == "autonomy_runner"

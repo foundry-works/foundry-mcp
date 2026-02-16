@@ -1869,7 +1869,7 @@ class ServerConfig:
             if "autonomy_posture" in data:
                 posture_data = data["autonomy_posture"]
                 if isinstance(posture_data, dict):
-                    self._apply_autonomy_posture_profile(
+                    self.apply_autonomy_posture_profile(
                         posture_data.get("profile"),
                         source=f"{path}: [autonomy_posture].profile",
                     )
@@ -2125,7 +2125,7 @@ class ServerConfig:
 
         # Autonomy posture profile defaults (can be overridden by explicit env vars below)
         if posture_profile := os.environ.get(_AUTONOMY_POSTURE_ENV_VAR):
-            self._apply_autonomy_posture_profile(
+            self.apply_autonomy_posture_profile(
                 posture_profile,
                 source=_AUTONOMY_POSTURE_ENV_VAR,
             )
@@ -2274,7 +2274,7 @@ class ServerConfig:
         if message and message not in self.startup_warnings:
             self.startup_warnings.append(message)
 
-    def _apply_autonomy_posture_profile(
+    def apply_autonomy_posture_profile(
         self,
         profile_value: Any,
         *,

@@ -1884,3 +1884,66 @@ class TestSessionResolution:
         )
         data = _assert_success(resp)
         assert data["spec_id"] == "test-spec-001"
+
+
+class TestSessionEventsBenchmark:
+    """Performance benchmark for session-events at design-scale (WS4 200ms target)."""
+
+    @pytest.mark.benchmark
+    def test_events_query_under_200ms_at_10k_entries(self, tmp_path):
+        """session-events query must stay under 200ms with 10k journal entries.
+
+        Design target from PLAN.md WS4: 10 concurrent sessions, each polled
+        at 10-30s intervals, with journal volumes up to 10,000 entries per session.
+        """
+        import time as time_mod
+
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        # Write 10,000 journal entries directly for speed.
+        spec_path = workspace / "specs" / "active" / "test-spec-001.json"
+        spec_data = json.loads(spec_path.read_text())
+        journal = spec_data.setdefault("journal", [])
+        base_time = datetime.now(timezone.utc)
+        for i in range(10_000):
+            ts = (base_time + timedelta(seconds=i)).isoformat().replace("+00:00", "Z")
+            journal.append({
+                "timestamp": ts,
+                "entry_type": "session",
+                "title": f"Step {i}",
+                "content": f"Executed step {i}",
+                "author": "autonomy",
+                "metadata": {
+                    "session_id": session_id,
+                    "action": "step",
+                },
+            })
+        spec_path.write_text(json.dumps(spec_data))
+
+        # Benchmark: first page query should be under 200ms.
+        start = time_mod.perf_counter()
+        resp = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+            limit=50,
+        )
+        elapsed_ms = (time_mod.perf_counter() - start) * 1000
+
+        data = _assert_success(resp)
+        assert len(data["events"]) == 50
+        assert resp["meta"]["telemetry"]["journal_entries_scanned"] == 10_000
+        assert elapsed_ms < 200, (
+            f"session-events query took {elapsed_ms:.1f}ms, exceeds 200ms design target"
+        )
