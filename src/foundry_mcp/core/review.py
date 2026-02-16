@@ -78,24 +78,46 @@ class ReviewContext:
 
 def get_llm_status() -> Dict[str, Any]:
     """
-    Get LLM configuration status.
+    Get AI consultation provider status.
+
+    Reports the consultation orchestrator's available providers, which is the
+    system that actually handles AI-powered reviews. Falls back to legacy
+    LLM config status if the consultation layer is unavailable.
 
     Returns:
-        Dict with configured, provider, and model info
+        Dict with available flag, providers list, and config source info
     """
+    try:
+        from foundry_mcp.core.llm_config import get_consultation_config
+        from foundry_mcp.core.providers import available_providers
+
+        config = get_consultation_config()
+        providers = available_providers()
+        return {
+            "configured": bool(config.priority) or bool(providers),
+            "available": bool(providers),
+            "providers": providers,
+            "priority": config.priority,
+        }
+    except ImportError:
+        pass
+    except Exception as e:
+        return {"configured": False, "available": False, "error": str(e)}
+
+    # Fallback to legacy LLM config if consultation layer unavailable
     try:
         from foundry_mcp.core.llm_config import get_llm_config
 
         config = get_llm_config()
         return {
             "configured": config.get_api_key() is not None,
+            "available": config.get_api_key() is not None,
             "provider": config.provider.value,
             "model": config.get_model(),
+            "legacy": True,
         }
-    except ImportError:
-        return {"configured": False, "error": "LLM config not available"}
-    except Exception as e:
-        return {"configured": False, "error": str(e)}
+    except Exception:
+        return {"configured": False, "available": False, "error": "No AI config available"}
 
 
 def prepare_review_context(

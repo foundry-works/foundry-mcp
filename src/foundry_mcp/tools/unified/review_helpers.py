@@ -284,6 +284,16 @@ def _run_ai_review(
         content = getattr(result, "content", None)
         consensus = {"mode": "single_model"}
 
+    # Validate that the consultation actually produced content
+    if not content or not content.strip():
+        error_detail = getattr(result, "error", None) or "empty response"
+        return asdict(
+            ai_provider_error(
+                provider_id or ai_provider or "unknown",
+                f"AI consultation returned empty content: {error_detail}",
+            )
+        )
+
     total_tasks = context.stats.totals.get("tasks", 0) if context.stats else 0
     completed_tasks = (
         context.stats.status_counts.get("completed", 0) if context.stats else 0

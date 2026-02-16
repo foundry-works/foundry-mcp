@@ -47,6 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `meta.deprecated.removal_target`
 - Server logs now emit `WARN` entries for legacy action invocations to support migration tracking.
 
+## [0.11.1] - 2026-02-15
+
+### Changed
+
+- **Unified config search paths**: Centralized config file discovery into `_default_config_search_paths()` with priority-ordered search (bundled defaults → XDG → home dotfile → project dotfile → project config). "Last match wins" replaces "first match breaks" for proper layered config.
+- **Bundled default config**: Package wheel now includes `samples/foundry-mcp.toml` as a fallback default, ensuring sensible defaults even without user config files.
+- **AI status reporting**: `get_llm_status()` now reports consultation orchestrator provider availability first, falling back to legacy LLM config only when the consultation layer is unavailable.
+
+### Fixed
+
+- **Empty AI consultation guard**: Review helpers now validate that AI consultation returned non-empty content before processing, returning a structured error instead of silently proceeding with empty results.
+- **Review status test**: Fixed `test_get_llm_status_handles_import_error` to patch both consultation and legacy config paths.
+
 ## [0.11.0] - 2026-02-14
 
 ### Removed

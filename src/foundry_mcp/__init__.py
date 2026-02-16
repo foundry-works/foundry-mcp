@@ -6,7 +6,7 @@ try:
     __version__ = version("foundry-mcp")
 except PackageNotFoundError:
     # Package not installed (development mode without editable install)
-    __version__ = "0.10.2"
+    __version__ = "0.11.1"
 
 from foundry_mcp.server import create_server, main
 

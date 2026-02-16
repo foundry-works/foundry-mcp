@@ -42,6 +42,58 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _get_bundled_default_config() -> Optional[Path]:
+    """Locate the bundled default config shipped with the package.
+
+    Returns:
+        Path to the bundled default-config.toml, or None if not found.
+    """
+    # In development: samples/foundry-mcp.toml relative to repo root
+    # In installed package: foundry_mcp/resources/default-config.toml
+    resources_dir = Path(__file__).parent.parent / "resources"
+    bundled = resources_dir / "default-config.toml"
+    if bundled.exists():
+        return bundled
+
+    # Development fallback: walk up from this file to find samples/
+    candidate = Path(__file__).parent.parent.parent.parent / "samples" / "foundry-mcp.toml"
+    if candidate.exists():
+        return candidate
+
+    return None
+
+
+def _default_config_search_paths() -> List[Path]:
+    """Return the standard config file search paths (lowest to highest priority).
+
+    Order matches ServerConfig.load() for consistency:
+    1. Bundled sample defaults (last resort)
+    2. XDG config (~/.config/foundry-mcp/config.toml)
+    3. User home config (~/.foundry-mcp.toml)
+    4. Project dotfile config (./.foundry-mcp.toml)
+    5. Project config (./foundry-mcp.toml)
+    """
+    paths: List[Path] = []
+
+    # Bundled sample defaults (last resort)
+    bundled = _get_bundled_default_config()
+    if bundled:
+        paths.append(bundled)
+
+    # XDG config
+    xdg_config_home = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
+    paths.append(Path(xdg_config_home) / "foundry-mcp" / "config.toml")
+
+    # User home config
+    paths.append(Path.home() / ".foundry-mcp.toml")
+
+    # Project configs (cwd)
+    paths.append(Path(".foundry-mcp.toml"))
+    paths.append(Path("foundry-mcp.toml"))
+
+    return paths
+
+
 # =============================================================================
 # Provider Specification (Unified Priority Notation)
 # =============================================================================
@@ -491,19 +543,16 @@ def load_llm_config(
         except Exception as e:
             logger.warning(f"Failed to load LLM config from {config_file}: {e}")
     else:
-        # Try default locations
-        default_paths = [
-            Path("foundry-mcp.toml"),
-            Path(".foundry-mcp.toml"),
-            Path.home() / ".config" / "foundry-mcp" / "config.toml",
-        ]
-        for path in default_paths:
+        # Try default locations (lowest to highest priority — last match wins)
+        for path in _default_config_search_paths():
             if path.exists():
                 try:
-                    config = LLMConfig.from_toml(path)
+                    loaded = LLMConfig.from_toml(path)
+                    # Only use if the file actually has an [llm] section
+                    # (check if it differs from bare defaults)
+                    config = loaded
                     toml_loaded = True
                     logger.debug(f"Loaded LLM config from {path}")
-                    break
                 except Exception as e:
                     logger.debug(f"Failed to load from {path}: {e}")
 
@@ -1263,18 +1312,12 @@ def load_consultation_config(
         except Exception as e:
             logger.warning(f"Failed to load consultation config from {config_file}: {e}")
     else:
-        # Try default locations
-        default_paths = [
-            Path("foundry-mcp.toml"),
-            Path(".foundry-mcp.toml"),
-            Path.home() / ".config" / "foundry-mcp" / "config.toml",
-        ]
-        for path in default_paths:
+        # Try default locations (lowest to highest priority — last match wins)
+        for path in _default_config_search_paths():
             if path.exists():
                 try:
                     config = ConsultationConfig.from_toml(path)
                     logger.debug(f"Loaded consultation config from {path}")
-                    break
                 except Exception as e:
                     logger.debug(f"Failed to load from {path}: {e}")
 

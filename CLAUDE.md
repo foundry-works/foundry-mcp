@@ -27,7 +27,16 @@ You are operating inside the `foundry-mcp` repository, which adheres to the MCP 
 - Confirm every modified surface adheres to envelopes/helpers ([dev_docs/mcp_best_practices/02-envelopes-metadata.md](dev_docs/mcp_best_practices/02-envelopes-metadata.md), [dev_docs/mcp_best_practices/03-serialization-helpers.md](dev_docs/mcp_best_practices/03-serialization-helpers.md)), validation/sanitization ([dev_docs/mcp_best_practices/04-validation-input-hygiene.md](dev_docs/mcp_best_practices/04-validation-input-hygiene.md), [dev_docs/mcp_best_practices/08-security-trust-boundaries.md](dev_docs/mcp_best_practices/08-security-trust-boundaries.md)), pagination/error semantics ([dev_docs/mcp_best_practices/06-pagination-streaming.md](dev_docs/mcp_best_practices/06-pagination-streaming.md), [dev_docs/mcp_best_practices/07-error-semantics.md](dev_docs/mcp_best_practices/07-error-semantics.md)), observability/resilience ([dev_docs/mcp_best_practices/05-observability-telemetry.md](dev_docs/mcp_best_practices/05-observability-telemetry.md), [dev_docs/mcp_best_practices/12-timeout-resilience.md](dev_docs/mcp_best_practices/12-timeout-resilience.md)), concurrency/cancellation guidance ([dev_docs/mcp_best_practices/15-concurrency-patterns.md](dev_docs/mcp_best_practices/15-concurrency-patterns.md)), and testing/spec sync ([dev_docs/mcp_best_practices/09-spec-driven-development.md](dev_docs/mcp_best_practices/09-spec-driven-development.md), [dev_docs/mcp_best_practices/10-testing-fixtures.md](dev_docs/mcp_best_practices/10-testing-fixtures.md)).
 - Reference the consulted sections explicitly in the PR description or review comments for traceability.
 
-## 4. Operational Reminders
+## 4. Git Mode (foundry-sandbox)
+
+If you are working inside a foundry sandbox, `cast git-mode <sandbox-name> --mode <host|sandbox>` toggles the sandbox's git config between host-friendly and proxy-compatible layouts:
+
+- **`--mode host`** — sets `core.worktree` to the real host path so IDE and shell tools work normally
+- **`--mode sandbox`** — sets `core.worktree` to `/git-workspace` (container path) for proxy-routed git operations
+
+The command validates paths, updates `.git/config.worktree`, and syncs the running proxy container immediately. The sandbox name is auto-detected if you run it from inside a worktree.
+
+## 5. Operational Reminders
 
 - Keep responses concise and structured for LLM consumption per [dev_docs/mcp_best_practices/11-ai-llm-integration.md](dev_docs/mcp_best_practices/11-ai-llm-integration.md); use progressive disclosure and tool-chaining-friendly outputs.
 - When documenting or exposing tools, update discovery metadata per [dev_docs/mcp_best_practices/13-tool-discovery.md](dev_docs/mcp_best_practices/13-tool-discovery.md) (usage examples, tags, rate limits, capability negotiation).
