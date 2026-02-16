@@ -19,12 +19,10 @@ from foundry_mcp.cli.resilience import (
 
 logger = get_cli_logger()
 from foundry_mcp.core.spec import load_spec, find_spec_file
-from foundry_mcp.core.validation import (
-    apply_fixes,
-    calculate_stats,
-    get_fix_actions,
-    validate_spec,
-)
+from foundry_mcp.core.validation.application import apply_fixes
+from foundry_mcp.core.validation.stats import calculate_stats
+from foundry_mcp.core.validation.fixes import get_fix_actions
+from foundry_mcp.core.validation.rules import validate_spec
 
 
 @click.group("validate")

@@ -20,7 +20,7 @@ from foundry_mcp.core.responses import (
     success_response,
 )
 from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
-from foundry_mcp.core.validation import add_verification, execute_verification
+from foundry_mcp.core.validation.verification import add_verification, execute_verification
 from foundry_mcp.tools.unified.common import (
     build_request_id,
     dispatch_with_standard_errors,

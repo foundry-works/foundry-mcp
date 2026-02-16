@@ -1443,11 +1443,11 @@ class TestConsultationOrchestrator:
         from unittest.mock import patch
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=False,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=[],
             ):
                 assert orchestrator.is_available() is False
@@ -1457,7 +1457,7 @@ class TestConsultationOrchestrator:
         from unittest.mock import patch
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             assert orchestrator.is_available() is True
@@ -1470,7 +1470,7 @@ class TestConsultationOrchestrator:
             return provider_id == "gemini"
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             side_effect=mock_check,
         ):
             assert orchestrator.is_available("gemini") is True
@@ -1481,7 +1481,7 @@ class TestConsultationOrchestrator:
         from unittest.mock import patch
 
         with patch(
-            "foundry_mcp.core.ai_consultation.available_providers",
+            "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
             return_value=["claude", "gemini", "openai"],
         ):
             providers = orchestrator.get_available_providers()
@@ -1533,15 +1533,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1577,15 +1577,15 @@ class TestConsultationOrchestrator:
         )
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1610,11 +1610,11 @@ class TestConsultationOrchestrator:
         from foundry_mcp.core.ai_consultation import ConsultationRequest
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=False,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=[],
             ):
                 request = ConsultationRequest(
@@ -1639,11 +1639,11 @@ class TestConsultationOrchestrator:
         from foundry_mcp.core.ai_consultation import ConsultationRequest
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 # Request with invalid/missing context will cause prompt build error
@@ -1687,15 +1687,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.side_effect = mock_generate
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1755,15 +1755,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1797,15 +1797,15 @@ class TestConsultationOrchestrator:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1889,15 +1889,15 @@ class TestConsultationOrchestratorMultiModel:
         mock_provider.generate.return_value = mock_provider_result()
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -1952,15 +1952,15 @@ class TestConsultationOrchestratorMultiModel:
         mock_provider.generate.side_effect = mock_generate
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude", "openai"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(
@@ -2003,15 +2003,15 @@ class TestConsultationOrchestratorMultiModel:
         )
 
         with patch(
-            "foundry_mcp.core.ai_consultation.check_provider_available",
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
             return_value=True,
         ):
             with patch(
-                "foundry_mcp.core.ai_consultation.available_providers",
+                "foundry_mcp.core.ai_consultation.orchestrator.available_providers",
                 return_value=["gemini", "claude"],
             ):
                 with patch(
-                    "foundry_mcp.core.ai_consultation.resolve_provider",
+                    "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
                     return_value=mock_provider,
                 ):
                     request = ConsultationRequest(

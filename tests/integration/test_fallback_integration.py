@@ -110,10 +110,10 @@ def test_single_model_fallback_respects_priority_order(tmp_path):
         return providers[provider_id]
 
     with patch(
-        "foundry_mcp.core.ai_consultation.check_provider_available",
+        "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
         return_value=True,
     ), patch(
-        "foundry_mcp.core.ai_consultation.resolve_provider",
+        "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
         side_effect=_resolve,
     ):
         outcome = orchestrator.consult(request, use_cache=False)
@@ -154,10 +154,10 @@ def test_single_model_retries_before_fallback(tmp_path):
         return providers[provider_id]
 
     with patch(
-        "foundry_mcp.core.ai_consultation.check_provider_available",
+        "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
         return_value=True,
     ), patch(
-        "foundry_mcp.core.ai_consultation.resolve_provider",
+        "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
         side_effect=_resolve,
     ):
         outcome = orchestrator.consult(request, use_cache=False)
@@ -219,7 +219,7 @@ def test_parallel_fallback_stops_once_min_models_met(tmp_path):
     orchestrator._execute_single_provider_async = _fake_execute  # type: ignore[method-assign]
 
     with patch(
-        "foundry_mcp.core.ai_consultation.check_provider_available",
+        "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
         return_value=True,
     ):
         outcome = orchestrator.consult(request, use_cache=False)

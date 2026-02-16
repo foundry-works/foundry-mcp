@@ -25,7 +25,7 @@ from foundry_mcp.core.responses import (
 )
 from foundry_mcp.core.spec import save_spec
 from foundry_mcp.core.task import batch_update_tasks
-from foundry_mcp.core.validation import VALID_VERIFICATION_TYPES
+from foundry_mcp.core.validation.constants import VALID_VERIFICATION_TYPES
 
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,

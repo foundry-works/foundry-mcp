@@ -150,7 +150,7 @@ def add_task(
 
     # Validate research-specific parameters
     if task_type == "research":
-        from foundry_mcp.core.validation import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
+        from foundry_mcp.core.validation.constants import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
 
         if research_type and research_type not in VALID_RESEARCH_TYPES:
             return None, f"Invalid research_type '{research_type}'. Must be one of: {', '.join(sorted(VALID_RESEARCH_TYPES))}"

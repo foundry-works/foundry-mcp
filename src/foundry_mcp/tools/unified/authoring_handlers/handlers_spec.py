@@ -25,7 +25,7 @@ from foundry_mcp.core.spec import (
     rollback_spec,
     update_frontmatter,
 )
-from foundry_mcp.core.validation import validate_spec
+from foundry_mcp.core.validation.rules import validate_spec
 
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _metric_name,

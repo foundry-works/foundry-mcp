@@ -7,19 +7,21 @@ Tests validation functions, auto-fix capabilities, and statistics calculation.
 import copy
 
 import pytest
-from foundry_mcp.core.validation import (
-    validate_spec,
-    get_fix_actions,
-    apply_fixes,
-    calculate_stats,
-    add_verification,
-    execute_verification,
-    format_verification_summary,
-    Diagnostic,
+from foundry_mcp.core.validation.constants import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_VERIFICATION_TYPES,
     VERIFICATION_RESULTS,
+)
+from foundry_mcp.core.validation.models import Diagnostic
+from foundry_mcp.core.validation.rules import validate_spec
+from foundry_mcp.core.validation.fixes import get_fix_actions
+from foundry_mcp.core.validation.application import apply_fixes
+from foundry_mcp.core.validation.stats import calculate_stats
+from foundry_mcp.core.validation.verification import (
+    add_verification,
+    execute_verification,
+    format_verification_summary,
 )
 
 

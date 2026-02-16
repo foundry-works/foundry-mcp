@@ -47,16 +47,16 @@ from foundry_mcp.tools.unified.common import (
     dispatch_with_standard_errors,
     resolve_specs_dir,
 )
-from foundry_mcp.core.validation import (
+from foundry_mcp.core.validation.constants import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_TASK_CATEGORIES,
     VALID_VERIFICATION_TYPES,
-    apply_fixes,
-    calculate_stats,
-    get_fix_actions,
-    validate_spec,
 )
+from foundry_mcp.core.validation.application import apply_fixes
+from foundry_mcp.core.validation.stats import calculate_stats
+from foundry_mcp.core.validation.fixes import get_fix_actions
+from foundry_mcp.core.validation.rules import validate_spec
 from foundry_mcp.core.journal import (
     VALID_BLOCKER_TYPES,
     VALID_ENTRY_TYPES,

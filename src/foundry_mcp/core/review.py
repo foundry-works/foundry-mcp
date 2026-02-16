@@ -10,12 +10,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from foundry_mcp.core.spec import load_spec, find_specs_directory
-from foundry_mcp.core.validation import (
-    ValidationResult,
-    validate_spec,
-    calculate_stats,
-    SpecStats,
-)
+from foundry_mcp.core.validation.models import ValidationResult, SpecStats
+from foundry_mcp.core.validation.rules import validate_spec
+from foundry_mcp.core.validation.stats import calculate_stats
 from foundry_mcp.core.progress import get_progress_summary, list_phases
 
 

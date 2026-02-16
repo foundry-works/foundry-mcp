@@ -33,17 +33,17 @@ from foundry_mcp.core.progress import (
     get_task_counts_by_status,
 )
 
-from foundry_mcp.core.validation import (
+from foundry_mcp.core.validation.models import (
     Diagnostic,
     ValidationResult,
     FixAction,
     FixReport,
     SpecStats,
-    validate_spec,
-    get_fix_actions,
-    apply_fixes,
-    calculate_stats,
 )
+from foundry_mcp.core.validation.rules import validate_spec
+from foundry_mcp.core.validation.fixes import get_fix_actions
+from foundry_mcp.core.validation.application import apply_fixes
+from foundry_mcp.core.validation.stats import calculate_stats
 
 from foundry_mcp.core.journal import (
     JournalEntry,

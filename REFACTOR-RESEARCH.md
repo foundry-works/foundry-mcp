@@ -49,35 +49,21 @@
 
 ---
 
-## 2. God Object Decomposition (High)
+## 2. God Object Decomposition — DONE
 
-### Problem
+### Status: Waves 1-4 complete (2026-02-16)
 
-Three core modules violate SRP and are too large to maintain, test, or review effectively.
+Three core modules decomposed into sub-module packages with backward-compatible re-exports.
 
-### Modules
+**Wave 1** — Decomposed `core/validation.py` (2,342 lines) → `core/validation/` package (10 sub-modules: constants, models, normalization, input, rules, fixes, application, stats, verification, `__init__`). 62 unit + 34 property + 241 integration tests passing.
 
-| File | Lines | Functions/Classes | Recommended Split |
-|------|-------|-------------------|-------------------|
-| `core/validation.py` | 2,342 | 39 functions (12 validators, 15 fix-builders, 5 dataclasses) | `validation/{models,rules,fixes,stats}.py` |
-| `core/ai_consultation.py` | 1,773 | 10+ classes | `ai/{orchestrator,workflows,caching,results}.py` |
-| `core/observability.py` | 1,218 | 17 classes (ObservabilityManager, MetricsCollector, AuditLogger, decorators) | `observability/{manager,metrics,audit,decorators}.py` |
+**Wave 2** — Decomposed `core/ai_consultation.py` (1,774 lines) → `core/ai_consultation/` package (4 sub-modules: types, cache, orchestrator, `__init__`). 3,078 unit + 241 integration tests passing.
 
-### `validation.py` Details
+**Wave 3** — Decomposed `core/observability.py` (1,218 lines) → `core/observability/` package (6 sub-modules: manager, metrics, audit, redaction, decorators, `__init__`). 34 prod importers verified via re-exports.
 
-- 5 dataclasses: `Diagnostic`, `ValidationResult`, `FixAction`, `FixReport`, `SpecStats`
-- 12 private `_validate_*` functions (structural, metadata, timestamps)
-- 15 private `_build_*_fix` functions (auto-repair logic)
-- Mixed concerns: structural validation, metadata normalization, auto-repair, statistics
-- `_build_fix_action()` at line 1164 uses 12 sequential `if code ==` statements instead of a dispatch dict
+**Wave 4** — Migrated 12 caller files (10 prod + 2 test) to canonical sub-module import paths for `validation/`. All callers now import from specific sub-modules (e.g., `validation.rules`, `validation.constants`) instead of `validation.__init__`. 3,353 tests passing, 42 skipped. `__init__.py` re-exports preserved for third-party consumers.
 
-### `observability.py` Details
-
-- `ObservabilityManager` orchestrates logging, metrics, tracing, auditing
-- `MetricsCollector` handles metric ingestion
-- `AuditLogger` + `AuditEvent` handle audit trail
-- `@mcp_tool` and `@mcp_resource` decorators for automatic instrumentation
-- Imports 5 internal modules, creating coupling hub
+**Remaining**: Waves 5-6 (caller import migration for ai_consultation + observability, cleanup + validation dispatch dict) are optional follow-ups.
 
 ---
 
@@ -357,7 +343,7 @@ return handler(diag, spec_data) if handler else None
 |----------|------|--------|--------|--------|
 | 1 | Declarative parameter validation framework | **In progress** (16/46 handlers, Waves 1-2 done) | 5-7 days remaining | Highest ROI, ~15-20% handler reduction |
 | 2 | Unify error hierarchies | **Done** | — | Prerequisite for cleaner error handling |
-| 3 | Split god objects | Pending | 4-5 days | Improves testability and maintainability |
+| 3 | Split god objects | **Done** (Waves 1-4) | — | Improves testability and maintainability |
 | 4 | Research sub-handlers | Pending | 2-3 days | Consistency win, follows existing pattern |
 | 5 | Tool signature cleanup | Pending | 1-2 days | Small effort, ~500 lines removed |
 | 6 | Test fixture consolidation | Pending | 2-3 days | Reduces test maintenance friction |

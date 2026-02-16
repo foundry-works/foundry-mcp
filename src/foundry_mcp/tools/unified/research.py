@@ -882,7 +882,7 @@ def _handle_node_record(
     """Record research findings to spec node."""
     from datetime import datetime, timezone
     from foundry_mcp.core.spec import save_spec, find_specs_directory
-    from foundry_mcp.core.validation import VALID_RESEARCH_RESULTS
+    from foundry_mcp.core.validation.constants import VALID_RESEARCH_RESULTS
 
     if not spec_id:
         return _validation_error("spec_id", "node-record", "Required")

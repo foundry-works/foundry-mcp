@@ -80,7 +80,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     query = payload.get("query")
 
     if task_type == "research":
-        from foundry_mcp.core.validation import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
+        from foundry_mcp.core.validation.constants import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
 
         if research_type is not None and not isinstance(research_type, str):
             return _validation_error(
