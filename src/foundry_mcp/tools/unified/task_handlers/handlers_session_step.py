@@ -32,8 +32,6 @@ from foundry_mcp.core.autonomy.models import (
     SessionStepResponseData,
     StepOutcome,
     StepType,
-    derive_loop_signal,
-    derive_recommended_actions,
 )
 from foundry_mcp.core.autonomy.orchestrator import (
     OrchestrationResult,
@@ -74,6 +72,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _validation_error,
     _is_feature_enabled,
     _feature_disabled_response,
+    attach_loop_metadata,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,48 +126,7 @@ def _persist_step_proof_response(
         )
 
 
-def _attach_loop_fields(response: dict) -> dict:
-    """Attach loop_signal + recommended_actions to session-step responses."""
-    data = response.get("data")
-    if not isinstance(data, dict):
-        return response
-
-    success = bool(response.get("success"))
-    details = data.get("details")
-    if not isinstance(details, dict):
-        details = {}
-
-    error_code = None
-    if not success:
-        error_code = details.get("error_code") or data.get("error_code")
-    repeated_invalid_gate_evidence = bool(details.get("repeated_invalid_gate_evidence"))
-    if not repeated_invalid_gate_evidence:
-        attempts = details.get("invalid_gate_evidence_attempts")
-        if isinstance(attempts, int) and attempts >= 3:
-            repeated_invalid_gate_evidence = True
-
-    loop_signal = derive_loop_signal(
-        status=data.get("status"),
-        pause_reason=data.get("pause_reason"),
-        error_code=error_code,
-        is_unrecoverable_error=(error_code == ERROR_SESSION_UNRECOVERABLE),
-        repeated_invalid_gate_evidence=repeated_invalid_gate_evidence,
-    )
-    if loop_signal is None:
-        return response
-
-    data["loop_signal"] = loop_signal.value
-    recommended_actions = derive_recommended_actions(
-        loop_signal=loop_signal,
-        pause_reason=data.get("pause_reason"),
-        error_code=error_code,
-    )
-    if recommended_actions:
-        data["recommended_actions"] = [
-            action.model_dump(mode="json", by_alias=True)
-            for action in recommended_actions
-        ]
-    return response
+_attach_loop_fields = attach_loop_metadata  # local alias for backward compat
 
 
 def _map_orchestrator_error_to_response(
@@ -354,12 +312,8 @@ def _build_next_step_response(
             elif gate_record.status in (PhaseGateStatus.PENDING, PhaseGateStatus.FAILED):
                 missing_required_gates.append(phase_id)
 
-    loop_signal = derive_loop_signal(
-        status=session.status,
-        pause_reason=session.pause_reason,
-    )
-
-    # Build response data - pass NextStep model directly
+    # Build response data — loop_signal and recommended_actions are
+    # attached by attach_loop_metadata() as a post-processing step.
     response_data = SessionStepResponseData(
         session_id=session.id,
         status=session.status,
@@ -368,18 +322,18 @@ def _build_next_step_response(
         required_phase_gates=required_phase_gates if required_phase_gates else None,
         satisfied_gates=satisfied_gates if satisfied_gates else None,
         missing_required_gates=missing_required_gates if missing_required_gates else None,
-        loop_signal=loop_signal,
-        recommended_actions=derive_recommended_actions(
-            loop_signal=loop_signal,
-            pause_reason=session.pause_reason,
-        )
-        or None,
     )
+
+    data = response_data.model_dump(mode="json", by_alias=True)
+    # Inject pause_reason so attach_loop_metadata can derive loop_signal
+    # from the response dict alone (SessionStepResponseData omits it).
+    if session.pause_reason is not None:
+        data["pause_reason"] = session.pause_reason.value
 
     return _attach_loop_fields(
         asdict(
             success_response(
-                data=response_data.model_dump(mode="json", by_alias=True),
+                data=data,
                 request_id=request_id,
             )
         )

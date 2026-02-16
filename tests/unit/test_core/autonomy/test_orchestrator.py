@@ -1803,3 +1803,79 @@ class TestSpecCacheInvalidation:
 
         orch.invalidate_spec_cache()
         assert orch._spec_cache is None
+
+
+# =============================================================================
+# T3: Verification Receipt Timing Boundary Tests
+# =============================================================================
+
+
+class TestVerificationReceiptTimingBoundaries:
+    """Boundary tests for receipt.issued_at vs pending.issued_at validation."""
+
+    def _make_session_and_result(
+        self,
+        pending_issued_at: datetime,
+        receipt_issued_at: datetime,
+    ):
+        """Build a session + result pair for receipt timing validation."""
+        cmd_hash = "a" * 64
+        session = make_session(
+            status=SessionStatus.RUNNING,
+            last_step_issued=LastStepIssued(
+                step_id="step-v1",
+                type=StepType.EXECUTE_VERIFICATION,
+                task_id="task-v1",
+                phase_id="phase-1",
+                issued_at=pending_issued_at,
+            ),
+        )
+        session.pending_verification_receipt = PendingVerificationReceipt(
+            step_id="step-v1",
+            task_id="task-v1",
+            expected_command_hash=cmd_hash,
+            issued_at=pending_issued_at,
+        )
+        result = _result(
+            step_id="step-v1",
+            step_type=StepType.EXECUTE_VERIFICATION,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-v1",
+            phase_id="phase-1",
+            verification_receipt={
+                "command_hash": cmd_hash,
+                "exit_code": 0,
+                "output_digest": "b" * 64,
+                "issued_at": receipt_issued_at.isoformat(),
+                "step_id": "step-v1",
+            },
+        )
+        return session, result
+
+    def test_receipt_at_exact_issuance_time_is_valid(self, tmp_path):
+        """receipt.issued_at == pending.issued_at — valid (not strictly less)."""
+        orch = _make_orchestrator(tmp_path)
+        t0 = datetime.now(timezone.utc)
+        session, result = self._make_session_and_result(t0, t0)
+
+        error = orch._validate_verification_receipt(session, result)
+        assert error is None
+
+    def test_receipt_just_after_issuance_is_valid(self, tmp_path):
+        """receipt.issued_at == pending.issued_at + 1s — valid."""
+        orch = _make_orchestrator(tmp_path)
+        t0 = datetime.now(timezone.utc)
+        session, result = self._make_session_and_result(t0, t0 + timedelta(seconds=1))
+
+        error = orch._validate_verification_receipt(session, result)
+        assert error is None
+
+    def test_receipt_before_issuance_is_invalid(self, tmp_path):
+        """receipt.issued_at == pending.issued_at - 1s — invalid."""
+        orch = _make_orchestrator(tmp_path)
+        t0 = datetime.now(timezone.utc)
+        session, result = self._make_session_and_result(t0, t0 - timedelta(seconds=1))
+
+        error = orch._validate_verification_receipt(session, result)
+        assert error is not None
+        assert "earlier" in error.lower()

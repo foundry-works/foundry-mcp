@@ -206,6 +206,16 @@ class SessionLimits(BaseModel):
         default=120, ge=10, le=600, description="Maximum age in seconds for a sidecar file to be considered fresh"
     )
 
+    @model_validator(mode="after")
+    def validate_heartbeat_ordering(self) -> "SessionLimits":
+        """Assert heartbeat_grace_minutes < heartbeat_stale_minutes."""
+        if self.heartbeat_grace_minutes >= self.heartbeat_stale_minutes:
+            raise ValueError(
+                f"heartbeat_grace_minutes ({self.heartbeat_grace_minutes}) must be "
+                f"less than heartbeat_stale_minutes ({self.heartbeat_stale_minutes})"
+            )
+        return self
+
 
 class StopConditions(BaseModel):
     """Configurable stop conditions for the session."""
@@ -370,6 +380,16 @@ class StepProofRecord(BaseModel):
     cached_response: Optional[Dict[str, Any]] = Field(
         None, description="Cached response for idempotent replay within grace window"
     )
+
+    @model_validator(mode="after")
+    def validate_grace_after_consumed(self) -> "StepProofRecord":
+        """Assert grace_expires_at > consumed_at."""
+        if self.grace_expires_at <= self.consumed_at:
+            raise ValueError(
+                f"grace_expires_at ({self.grace_expires_at.isoformat()}) must be "
+                f"after consumed_at ({self.consumed_at.isoformat()})"
+            )
+        return self
 
 
 # =============================================================================
@@ -754,6 +774,25 @@ class AutonomousSessionState(BaseModel):
                 "idempotency_key must contain only alphanumeric characters, hyphens, and underscores"
             )
         return v
+
+    @model_validator(mode="after")
+    def validate_satisfied_gates_subset(self) -> "AutonomousSessionState":
+        """Verify satisfied_gates is a subset of required_phase_gates per phase."""
+        for phase_id, satisfied in self.satisfied_gates.items():
+            if phase_id not in self.required_phase_gates:
+                raise ValueError(
+                    f"satisfied_gates references unknown phase '{phase_id}' "
+                    f"not in required_phase_gates"
+                )
+            required = set(self.required_phase_gates[phase_id])
+            satisfied_set = set(satisfied)
+            extra = satisfied_set - required
+            if extra:
+                raise ValueError(
+                    f"satisfied_gates for phase '{phase_id}' contains gates "
+                    f"not in required_phase_gates: {sorted(extra)}"
+                )
+        return self
 
     model_config = {
         "populate_by_name": True,

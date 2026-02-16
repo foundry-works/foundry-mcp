@@ -49,6 +49,10 @@ GC_TTL_DAYS: Dict[SessionStatus, int] = {
     SessionStatus.FAILED: 30,
 }
 
+# Proof store bounds
+MAX_PROOF_RECORDS = 500
+PROOF_TTL_SECONDS = 3600  # 1 hour
+
 class SessionCorrupted(Exception):
     """Raised when a session file exists but cannot be parsed or validated."""
 
@@ -56,6 +60,18 @@ class SessionCorrupted(Exception):
         self.session_id = session_id
         self.reason = reason
         super().__init__(f"Session {session_id} is corrupted: {reason}")
+
+
+class VersionConflictError(Exception):
+    """Raised when optimistic version check fails during save."""
+
+    def __init__(self, session_id: str, expected: int, actual: int) -> None:
+        self.session_id = session_id
+        self.expected_version = expected
+        self.actual_version = actual
+        super().__init__(
+            f"Version conflict for session {session_id}: expected {expected}, on-disk {actual}"
+        )
 
 
 class ActiveSessionLookupResult(Enum):
@@ -267,19 +283,39 @@ class AutonomyStorage:
     # CRUD Operations
     # =========================================================================
 
-    def save(self, session: AutonomousSessionState) -> None:
+    def save(
+        self,
+        session: AutonomousSessionState,
+        *,
+        expected_version: Optional[int] = None,
+    ) -> None:
         """Save a session with atomic write and locking.
 
         Args:
             session: Session state to save
+            expected_version: If provided, verify the on-disk state_version
+                matches before writing. Raises VersionConflictError on mismatch.
 
         Raises:
             Timeout: If lock acquisition times out
+            VersionConflictError: If expected_version doesn't match on-disk version
         """
         session_path = self._get_session_path(session.id)
         lock_path = self._get_lock_path(session.id)
 
         with FileLock(lock_path, timeout=LOCK_ACQUISITION_TIMEOUT):
+            # Optimistic version check
+            if expected_version is not None and session_path.exists():
+                try:
+                    disk_data = json.loads(session_path.read_text())
+                    disk_version = disk_data.get("state_version", 1)
+                    if disk_version != expected_version:
+                        raise VersionConflictError(
+                            session.id, expected_version, disk_version
+                        )
+                except json.JSONDecodeError:
+                    pass  # Corrupted file, allow overwrite
+
             # Atomic write: temp file + fsync + rename
             data = session.model_dump(mode="json", by_alias=True)
 
@@ -906,6 +942,56 @@ class AutonomyStorage:
         safe_id = sanitize_id(session_id)
         return self.locks_path / f"proof_{safe_id}.lock"
 
+    def _cleanup_proof_records(
+        self, records: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], int]:
+        """Evict expired and excess proof records.
+
+        Two-phase cleanup:
+        1. TTL eviction: remove records whose grace_expires_at is older than PROOF_TTL_SECONDS.
+        2. LRU eviction: if still over MAX_PROOF_RECORDS, sort by consumed_at and drop oldest.
+
+        Args:
+            records: Dict mapping step_proof to record data dicts.
+
+        Returns:
+            Tuple of (cleaned records dict, number of evicted records).
+        """
+        original_count = len(records)
+        now = datetime.now(timezone.utc)
+        ttl_cutoff = now - timedelta(seconds=PROOF_TTL_SECONDS)
+
+        # Phase 1: TTL eviction
+        surviving: Dict[str, Any] = {}
+        for key, rec in records.items():
+            grace_str = rec.get("grace_expires_at") if isinstance(rec, dict) else None
+            if grace_str:
+                try:
+                    grace_dt = datetime.fromisoformat(str(grace_str))
+                    if grace_dt.tzinfo is None:
+                        grace_dt = grace_dt.replace(tzinfo=timezone.utc)
+                    if grace_dt < ttl_cutoff:
+                        continue  # expired, skip
+                except (ValueError, TypeError):
+                    pass  # unparseable, keep it
+            surviving[key] = rec
+
+        # Phase 2: LRU eviction if still over max
+        if len(surviving) > MAX_PROOF_RECORDS:
+            def _consumed_at_key(item: Tuple[str, Any]) -> str:
+                rec = item[1]
+                if isinstance(rec, dict):
+                    return str(rec.get("consumed_at", ""))
+                return ""
+
+            sorted_items = sorted(surviving.items(), key=_consumed_at_key)
+            surviving = dict(sorted_items[-MAX_PROOF_RECORDS:])
+
+        evicted = original_count - len(surviving)
+        if evicted > 0:
+            logger.debug("Proof cleanup: evicted %d records (%d remaining)", evicted, len(surviving))
+        return surviving, evicted
+
     def load_proof_records(self, session_id: str) -> Dict[str, Any]:
         """Load all proof records for a session.
 
@@ -952,6 +1038,9 @@ class AutonomyStorage:
                     records = data.get("records", {})
                 except (json.JSONDecodeError, OSError):
                     pass
+
+            # Cleanup expired/excess records before adding new one
+            records, _ = self._cleanup_proof_records(records)
 
             # Add new record
             records[record.step_proof] = record.model_dump(mode="json")
@@ -1121,6 +1210,7 @@ class AutonomyStorage:
             )
             proof_path = self._get_proof_path(session_id)
             records = self.load_proof_records(session_id)
+            records, _ = self._cleanup_proof_records(records)
             records[step_proof] = record.model_dump(mode="json")
 
             fd, temp_path = tempfile.mkstemp(

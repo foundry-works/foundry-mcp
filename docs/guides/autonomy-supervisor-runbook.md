@@ -29,6 +29,42 @@ Run these checks before `task(action="session", command="start", ...)`:
    - Legacy fallback: `task(action="session-list", limit=1)`
 4. If preflight returns `AUTHORIZATION` or `FEATURE_DISABLED`, stop and escalate with remediation.
 
+## Agent Isolation Preflight
+
+Before launching an autonomous agent, verify the caller-side isolation controls are active. MCP authorization gates MCP tools only — native Claude Code tools (Write, Edit, Bash) require separate constraints.
+
+**Required:**
+
+1. **Hook guards installed.** Verify Claude Code hooks are configured in `.claude/settings.json`:
+   - `guard_autonomous_write.py` registered for Write and Edit tools.
+   - `guard_autonomous_bash.py` registered for Bash tool.
+   - Test hooks with a dry run before first autonomous session.
+
+2. **Environment variables set:**
+   - `FOUNDRY_AUTONOMOUS_SESSION=1` — activates git pre-commit guards.
+   - `FOUNDRY_GUARD_ALLOW_GIT_COMMIT=1` — set only if the agent should be able to commit (omit to block all git writes).
+
+3. **Config checksum recorded.** Record `sha256sum foundry-mcp.toml` before launching the agent. Compare after phase completes.
+
+**Recommended (high assurance):**
+
+4. **Filesystem mounts.** Mount `specs/` and `foundry-mcp.toml` read-only if running in a container.
+5. **Git credential scoping.** Use a credential limited to feature branch commits. Disable force-push via branch protection.
+6. **Audit storage separation.** Place `.foundry-mcp/journals/` and `.foundry-mcp/audit/` on a separate volume or set append-only attributes.
+
+For full details, see [Agent Isolation Guide](autonomy-agent-isolation.md).
+
+## Post-Phase Integrity Verification
+
+After each autonomous phase completes (any `loop_signal`), verify:
+
+1. **Config integrity:** `sha256sum foundry-mcp.toml` matches pre-session value.
+2. **Spec integrity:** No uncommitted changes to `specs/**/*.json`. No unexpected commits touching spec files.
+3. **Git history:** `git log` shows only implementation commits. No spec, config, or audit file modifications.
+4. **Audit completeness:** Journal entries are sequential with no timestamp gaps.
+
+See the `post_phase_verify.sh` script in the [Agent Isolation Guide](autonomy-agent-isolation.md#post-session-integrity-verification).
+
 ## Start Session
 
 Use canonical action shape:

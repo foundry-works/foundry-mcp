@@ -10,6 +10,7 @@ Covers:
 """
 
 import json
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +24,9 @@ from foundry_mcp.core.autonomy.memory import (
     AutonomyStorage,
     GC_TTL_DAYS,
     ListSessionsResult,
+    MAX_PROOF_RECORDS,
+    PROOF_TTL_SECONDS,
+    VersionConflictError,
     compute_filters_hash,
     decode_cursor,
     encode_cursor,
@@ -604,3 +608,359 @@ class TestConcurrentAccess:
         t2.join()
 
         assert len(errors) == 0
+
+
+# =============================================================================
+# Optimistic Version Check (C1)
+# =============================================================================
+
+
+class TestOptimisticVersionCheck:
+    """Test save() with expected_version for optimistic locking."""
+
+    def test_save_with_correct_expected_version_succeeds(self, storage):
+        """Save succeeds when expected_version matches on-disk version."""
+        session = make_session(session_id="ver-1")
+        session.state_version = 5
+        storage.save(session)
+
+        # Mutate and save with correct expected_version
+        session.state_version = 6
+        storage.save(session, expected_version=5)
+
+        loaded = storage.load("ver-1")
+        assert loaded is not None
+        assert loaded.state_version == 6
+
+    def test_save_with_wrong_expected_version_raises(self, storage):
+        """Save raises VersionConflictError when version doesn't match."""
+        session = make_session(session_id="ver-2")
+        session.state_version = 5
+        storage.save(session)
+
+        session.state_version = 6
+        with pytest.raises(VersionConflictError) as exc_info:
+            storage.save(session, expected_version=3)
+
+        assert exc_info.value.session_id == "ver-2"
+        assert exc_info.value.expected_version == 3
+        assert exc_info.value.actual_version == 5
+
+    def test_save_without_expected_version_skips_check(self, storage):
+        """Backward compat: no expected_version param always succeeds."""
+        session = make_session(session_id="ver-3")
+        session.state_version = 5
+        storage.save(session)
+
+        # Save again without expected_version — should always work
+        session.state_version = 99
+        storage.save(session)  # no expected_version, no error
+
+        loaded = storage.load("ver-3")
+        assert loaded is not None
+        assert loaded.state_version == 99
+
+    def test_concurrent_version_conflict(self, storage):
+        """Two threads racing: one should succeed, one should get VersionConflictError."""
+        session = make_session(session_id="ver-race")
+        session.state_version = 1
+        storage.save(session)
+
+        results: List[str] = []
+
+        def writer(label: str, delay: float) -> None:
+            try:
+                time.sleep(delay)
+                s = make_session(session_id="ver-race")
+                s.state_version = 2
+                storage.save(s, expected_version=1)
+                results.append(f"{label}:ok")
+            except VersionConflictError:
+                results.append(f"{label}:conflict")
+            except Exception as e:
+                results.append(f"{label}:error:{e}")
+
+        t1 = Thread(target=writer, args=("A", 0))
+        t2 = Thread(target=writer, args=("B", 0.05))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # First thread should succeed, second should see conflict
+        ok_count = sum(1 for r in results if r.endswith(":ok"))
+        conflict_count = sum(1 for r in results if r.endswith(":conflict"))
+        assert ok_count == 1
+        assert conflict_count == 1
+
+
+# =============================================================================
+# Proof Store Bounds (C3)
+# =============================================================================
+
+
+class TestProofStoreBounds:
+    """Test TTL cleanup and max record enforcement for proof records."""
+
+    def _make_proof_record_data(
+        self,
+        step_proof: str,
+        consumed_at: datetime,
+        grace_expires_at: datetime,
+    ) -> dict:
+        """Create a raw proof record dict for testing."""
+        return {
+            "step_proof": step_proof,
+            "step_id": f"step-{step_proof}",
+            "payload_hash": f"hash-{step_proof}",
+            "consumed_at": consumed_at.isoformat(),
+            "grace_expires_at": grace_expires_at.isoformat(),
+            "response_hash": None,
+            "cached_response": None,
+        }
+
+    def test_ttl_cleanup_removes_expired_records(self, storage):
+        """Records whose grace_expires_at is older than PROOF_TTL_SECONDS are removed."""
+        now = datetime.now(timezone.utc)
+        old_time = now - timedelta(seconds=PROOF_TTL_SECONDS + 600)
+
+        records = {
+            "expired-1": self._make_proof_record_data("expired-1", old_time, old_time),
+            "expired-2": self._make_proof_record_data("expired-2", old_time, old_time),
+        }
+
+        cleaned, evicted = storage._cleanup_proof_records(records)
+        assert evicted == 2
+        assert len(cleaned) == 0
+
+    def test_ttl_preserves_fresh_records(self, storage):
+        """Records still within grace window survive cleanup."""
+        now = datetime.now(timezone.utc)
+        fresh_grace = now + timedelta(seconds=30)
+
+        records = {
+            "fresh-1": self._make_proof_record_data("fresh-1", now, fresh_grace),
+            "fresh-2": self._make_proof_record_data("fresh-2", now, fresh_grace),
+        }
+
+        cleaned, evicted = storage._cleanup_proof_records(records)
+        assert evicted == 0
+        assert len(cleaned) == 2
+
+    def test_max_records_eviction(self, storage):
+        """When records exceed MAX_PROOF_RECORDS, oldest by consumed_at are evicted."""
+        now = datetime.now(timezone.utc)
+        future_grace = now + timedelta(seconds=300)
+
+        # Create MAX_PROOF_RECORDS + 50 records
+        records = {}
+        for i in range(MAX_PROOF_RECORDS + 50):
+            consumed = now - timedelta(seconds=MAX_PROOF_RECORDS + 50 - i)
+            key = f"proof-{i:04d}"
+            records[key] = self._make_proof_record_data(key, consumed, future_grace)
+
+        cleaned, evicted = storage._cleanup_proof_records(records)
+        assert len(cleaned) == MAX_PROOF_RECORDS
+        assert evicted == 50
+
+    def test_proof_store_bounded_under_load(self, storage):
+        """After 600 inserts via save_proof_record, verify <= MAX_PROOF_RECORDS remain."""
+        from foundry_mcp.core.autonomy.models import StepProofRecord as SPR
+
+        session_id = "bounded-session"
+        now = datetime.now(timezone.utc)
+
+        for i in range(600):
+            record = SPR(
+                step_proof=f"proof-{i:04d}",
+                step_id=f"step-{i}",
+                payload_hash=f"hash-{i}",
+                consumed_at=now + timedelta(milliseconds=i),
+                grace_expires_at=now + timedelta(hours=2),
+            )
+            storage.save_proof_record(session_id, record)
+
+        final_records = storage.load_proof_records(session_id)
+        assert len(final_records) <= MAX_PROOF_RECORDS + 1  # +1 for the just-added record
+
+
+# =============================================================================
+# T2: Step Proof Expiration with Time Advancement
+# =============================================================================
+
+
+class TestStepProofExpiration:
+    """Verify proof replay behavior at grace window boundaries."""
+
+    def test_replay_within_grace_window_succeeds(self, tmp_path):
+        """Proof at t0, replay at t0+15s (within 30s grace) — idempotent replay."""
+        from unittest.mock import MagicMock, patch
+
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # Consume at t0
+        mock_dt = MagicMock(wraps=datetime)
+        mock_dt.now.return_value = t0
+        with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
+            ok, rec, err = storage.consume_proof_with_lock(
+                "sess-1", "proof-1", "hash-a", grace_window_seconds=30
+            )
+        assert ok is True
+        assert rec is None
+        assert err == ""
+
+        # Replay at t0+15s (within grace)
+        mock_dt.now.return_value = t0 + timedelta(seconds=15)
+        with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
+            ok, rec, err = storage.consume_proof_with_lock(
+                "sess-1", "proof-1", "hash-a"
+            )
+        assert ok is True
+        assert rec is not None  # Returns cached record
+        assert err == ""
+
+    def test_replay_past_grace_window_fails(self, tmp_path):
+        """Proof at t0, replay at t0+31s (past 30s grace) — PROOF_EXPIRED."""
+        from unittest.mock import MagicMock, patch
+
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # Consume at t0
+        mock_dt = MagicMock(wraps=datetime)
+        mock_dt.now.return_value = t0
+        with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
+            ok, rec, err = storage.consume_proof_with_lock(
+                "sess-1", "proof-1", "hash-a", grace_window_seconds=30
+            )
+        assert ok is True
+
+        # Replay at t0+31s (past grace)
+        mock_dt.now.return_value = t0 + timedelta(seconds=31)
+        with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
+            ok, rec, err = storage.consume_proof_with_lock(
+                "sess-1", "proof-1", "hash-a"
+            )
+        assert ok is False
+        assert err == "PROOF_EXPIRED"
+
+    def test_replay_at_exact_grace_boundary_fails(self, tmp_path):
+        """Proof at t0, replay at exactly t0+30s — grace_expires_at == now is expired."""
+        from unittest.mock import MagicMock, patch
+
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # Consume at t0
+        mock_dt = MagicMock(wraps=datetime)
+        mock_dt.now.return_value = t0
+        with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
+            ok, rec, err = storage.consume_proof_with_lock(
+                "sess-1", "proof-1", "hash-a", grace_window_seconds=30
+            )
+        assert ok is True
+
+        # Replay at exactly t0+30s (grace_expires_at == now, NOT greater-than)
+        mock_dt.now.return_value = t0 + timedelta(seconds=30)
+        with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
+            ok, rec, err = storage.consume_proof_with_lock(
+                "sess-1", "proof-1", "hash-a"
+            )
+        # grace_expires_at > now check: 12:00:30 > 12:00:30 is False → PROOF_EXPIRED
+        assert ok is False
+        assert err == "PROOF_EXPIRED"
+
+
+# =============================================================================
+# T4: GC-by-TTL Verification
+# =============================================================================
+
+
+class TestGarbageCollectionByTTL:
+    """Verify GC removes sessions based on TTL per terminal status."""
+
+    @pytest.mark.parametrize(
+        "status,ttl_days",
+        [
+            (SessionStatus.COMPLETED, 7),
+            (SessionStatus.ENDED, 7),
+            (SessionStatus.FAILED, 30),
+        ],
+    )
+    def test_session_within_ttl_survives(self, tmp_path, status, ttl_days):
+        """Session at TTL-1d is not expired."""
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        session = make_session(session_id="sess-ttl", status=status)
+        storage.save(session)
+        session_path = storage._get_session_path("sess-ttl")
+        age_seconds = (ttl_days - 1) * 86400
+        old_time = time.time() - age_seconds
+        os.utime(session_path, (old_time, old_time))
+        assert not storage._is_expired(session_path)
+
+    @pytest.mark.parametrize(
+        "status,ttl_days",
+        [
+            (SessionStatus.COMPLETED, 7),
+            (SessionStatus.ENDED, 7),
+            (SessionStatus.FAILED, 30),
+        ],
+    )
+    def test_session_past_ttl_is_expired(self, tmp_path, status, ttl_days):
+        """Session at TTL+1d is expired."""
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        session = make_session(session_id="sess-ttl", status=status)
+        storage.save(session)
+        session_path = storage._get_session_path("sess-ttl")
+        age_seconds = (ttl_days + 1) * 86400
+        old_time = time.time() - age_seconds
+        os.utime(session_path, (old_time, old_time))
+        assert storage._is_expired(session_path)
+
+    @pytest.mark.parametrize("status", [SessionStatus.RUNNING, SessionStatus.PAUSED])
+    def test_non_terminal_never_expires(self, tmp_path, status):
+        """Non-terminal sessions are never GC-expired regardless of age."""
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        session = make_session(session_id="sess-alive", status=status)
+        storage.save(session)
+        session_path = storage._get_session_path("sess-alive")
+        old_time = time.time() - (365 * 86400)  # 1 year old
+        os.utime(session_path, (old_time, old_time))
+        assert not storage._is_expired(session_path)
+
+    def test_cleanup_expired_removes_all_terminal(self, tmp_path):
+        """Bulk cleanup: all terminal sessions past TTL are removed."""
+        storage = AutonomyStorage(
+            storage_path=tmp_path / "sessions", workspace_path=tmp_path
+        )
+        statuses = [
+            (SessionStatus.COMPLETED, 7),
+            (SessionStatus.ENDED, 7),
+            (SessionStatus.FAILED, 30),
+        ]
+        for i, (status, ttl_days) in enumerate(statuses):
+            session = make_session(
+                session_id=f"sess-gc-{i}",
+                status=status,
+                spec_id=f"spec-{i}",
+            )
+            storage.save(session)
+            path = storage._get_session_path(f"sess-gc-{i}")
+            old_time = time.time() - (ttl_days + 2) * 86400
+            os.utime(path, (old_time, old_time))
+
+        result = storage.cleanup_expired()
+        assert result["sessions"] == 3

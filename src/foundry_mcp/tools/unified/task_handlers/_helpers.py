@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 from dataclasses import asdict
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -211,6 +213,72 @@ _LEGACY_ACTION_DEPRECATIONS: Dict[str, Dict[str, str]] = {
 }
 
 
+def _check_deprecation_expired(
+    deprecation: Dict[str, str],
+    request_id: str,
+) -> Optional[dict]:
+    """Return a hard error if the deprecation removal target date has passed.
+
+    Parses ``removal_target`` by splitting on ``"_or_"`` to extract the ISO
+    date prefix.  If ``date.today() >= target_date``, returns an error
+    response naming the replacement.
+
+    Escape hatch: ``FOUNDRY_MCP_ALLOW_DEPRECATED_ACTIONS=true`` bypasses
+    enforcement.  Unparseable targets fail-open (log warning, skip enforcement).
+    """
+    if os.environ.get("FOUNDRY_MCP_ALLOW_DEPRECATED_ACTIONS", "").lower() == "true":
+        return None
+
+    removal_target = deprecation.get("removal_target", "")
+    if not removal_target:
+        return None
+
+    date_str = removal_target.split("_or_")[0].strip()
+    try:
+        target_date = date.fromisoformat(date_str)
+    except ValueError:
+        logger.warning(
+            "Unparseable deprecation removal_target '%s'; skipping enforcement",
+            removal_target,
+        )
+        return None
+
+    if date.today() >= target_date:
+        replacement = deprecation.get("replacement", "unknown")
+        action = deprecation.get("action", "unknown")
+        return _validation_error(
+            action=action,
+            field="action",
+            message=(
+                f"Action '{action}' was removed on {date_str}. "
+                f"Use {replacement} instead."
+            ),
+            request_id=request_id,
+            code=ErrorCode.INVALID_FORMAT,
+        )
+
+    return None
+
+
+_REASON_DETAIL_MAX_LENGTH = 2000
+
+
+def _validate_reason_detail(
+    reason_detail: Optional[str],
+    action: str,
+    request_id: str,
+) -> Optional[dict]:
+    """Validate reason_detail length. Returns error response if too long, None if valid."""
+    if reason_detail is not None and len(reason_detail) > _REASON_DETAIL_MAX_LENGTH:
+        return _validation_error(
+            action=action,
+            field="reason_detail",
+            message=f"reason_detail exceeds maximum length of {_REASON_DETAIL_MAX_LENGTH} characters ({len(reason_detail)} provided)",
+            request_id=request_id,
+        )
+    return None
+
+
 def _normalize_task_action_shape(
     *,
     action: str,
@@ -298,6 +366,10 @@ def _normalize_task_action_shape(
         return mapped_action, normalized_payload, None, None
 
     deprecation = _LEGACY_ACTION_DEPRECATIONS.get(normalized_action)
+    if deprecation:
+        expired_err = _check_deprecation_expired(deprecation, request_id)
+        if expired_err:
+            return normalized_action, normalized_payload, deprecation, expired_err
     return normalized_action, normalized_payload, deprecation, None
 
 
@@ -328,33 +400,32 @@ def _emit_legacy_action_warning(
     )
 
 
-def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
-    """Attach loop signal metadata for session-step responses.
+def attach_loop_metadata(response: dict, *, overwrite: bool = True) -> dict:
+    """Attach loop_signal + recommended_actions to a session-step response.
 
-    This post-dispatch helper ensures authorization/rate-limit/feature-flag
-    errors emitted before handlers still include machine-readable loop outcomes.
+    This is the single canonical attachment point for loop signal metadata.
+    All session-step responses (from handlers, error mappers, and dispatch
+    fallbacks) should pass through this function.
+
+    Args:
+        response: MCP response dict with ``data`` payload.
+        overwrite: When True (default), always set ``loop_signal`` and
+            ``recommended_actions``.  When False, only fill in missing
+            fields (used by the post-dispatch fallback so handler values
+            are preserved).
     """
-    normalized_action = (action or "").strip().lower()
-    if normalized_action not in {
-        "session-step-next",
-        "session-step-report",
-        "session-step-replay",
-    }:
-        return response
-
     data = response.get("data")
     if not isinstance(data, dict):
         return response
 
+    success = bool(response.get("success"))
     details = data.get("details")
     if not isinstance(details, dict):
         details = {}
 
-    success = bool(response.get("success"))
     error_code = None
     if not success:
         error_code = details.get("error_code") or data.get("error_code")
-
     repeated_invalid_gate_evidence = bool(details.get("repeated_invalid_gate_evidence"))
     if not repeated_invalid_gate_evidence:
         attempts = details.get("invalid_gate_evidence_attempts")
@@ -371,8 +442,12 @@ def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
     if loop_signal is None:
         return response
 
-    data.setdefault("loop_signal", loop_signal.value)
-    if "recommended_actions" not in data:
+    if overwrite:
+        data["loop_signal"] = loop_signal.value
+    else:
+        data.setdefault("loop_signal", loop_signal.value)
+
+    if overwrite or "recommended_actions" not in data:
         recommended_actions = derive_recommended_actions(
             loop_signal=loop_signal,
             pause_reason=data.get("pause_reason"),
@@ -380,11 +455,29 @@ def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
         )
         if recommended_actions:
             data["recommended_actions"] = [
-                action.model_dump(mode="json", by_alias=True)
-                for action in recommended_actions
+                ra.model_dump(mode="json", by_alias=True)
+                for ra in recommended_actions
             ]
 
     return response
+
+
+def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
+    """Post-dispatch fallback: attach loop signal for session-step responses.
+
+    Ensures authorization/rate-limit/feature-flag errors emitted *before*
+    handlers still include machine-readable loop outcomes.  Uses
+    ``overwrite=False`` so handler-provided values are preserved.
+    """
+    normalized_action = (action or "").strip().lower()
+    if normalized_action not in {
+        "session-step-next",
+        "session-step-report",
+        "session-step-replay",
+    }:
+        return response
+
+    return attach_loop_metadata(response, overwrite=False)
 
 
 def _is_feature_enabled(config: ServerConfig, feature_name: str) -> bool:

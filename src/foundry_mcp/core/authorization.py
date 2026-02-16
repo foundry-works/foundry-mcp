@@ -257,6 +257,13 @@ def check_action_allowed(
 
     # Unknown role - default to observer (fail-closed)
     if not allowlist and role not in _ROLE_ALLOWLISTS:
+        _log_authorization_denial(
+            role=role,
+            action=normalized_action or action or "unknown",
+            denied_action=normalized_action or action or "unknown",
+            required_role=Role.MAINTAINER.value,
+            reason="unknown_role",
+        )
         return AuthzResult(
             allowed=False,
             denied_action=normalized_action or action or "unknown",
@@ -287,11 +294,43 @@ def check_action_allowed(
         )
 
     # Action not allowed
+    _log_authorization_denial(
+        role=role,
+        action=normalized_action or raw_action,
+        denied_action=normalized_action or action or "unknown",
+        required_role=_get_required_role_for_action(normalized_action or raw_action),
+    )
     return AuthzResult(
         allowed=False,
         denied_action=normalized_action or action or "unknown",
         configured_role=role,
         required_role=_get_required_role_for_action(normalized_action or raw_action),
+    )
+
+
+def _log_authorization_denial(
+    role: str,
+    action: str,
+    denied_action: str,
+    required_role: Optional[str],
+    reason: str = "action_not_in_allowlist",
+) -> None:
+    """Emit structured warning for authorization denials."""
+    logger.warning(
+        "AUTHORIZATION_DENIED: role=%s action=%s denied_action=%s required_role=%s reason=%s",
+        role,
+        action,
+        denied_action,
+        required_role,
+        reason,
+        extra={
+            "event": "authorization_denied",
+            "role": role,
+            "action": action,
+            "denied_action": denied_action,
+            "required_role": required_role,
+            "reason": reason,
+        },
     )
 
 

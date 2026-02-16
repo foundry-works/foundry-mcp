@@ -788,7 +788,9 @@ class TestSessionStepNext:
             include_expired=True,
         )
         assert record is not None
-        record.grace_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        # Set grace_expires_at to just after consumed_at (satisfies model
+        # invariant grace > consumed) but well before now (triggers expiry).
+        record.grace_expires_at = record.consumed_at + timedelta(microseconds=1)
         storage.save_proof_record(session_id, record)
 
         expired = _handle_session_step_next(

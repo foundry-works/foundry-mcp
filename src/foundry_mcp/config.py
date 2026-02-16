@@ -2225,23 +2225,39 @@ class ServerConfig:
                     f"expected integer > 0, got {max_fidelity_cycles!r}"
                 )
 
-        # Autonomy security settings
+        # Autonomy security settings (provenance-logged per H4)
         if allow_lock_bypass := os.environ.get(
             "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS"
         ):
             self.autonomy_security.allow_lock_bypass = _parse_bool(allow_lock_bypass)
+            logger.info(
+                "Config: autonomy_security.allow_lock_bypass = %s (source: FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS env var)",
+                self.autonomy_security.allow_lock_bypass,
+            )
         if allow_gate_waiver := os.environ.get(
             "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER"
         ):
             self.autonomy_security.allow_gate_waiver = _parse_bool(allow_gate_waiver)
+            logger.info(
+                "Config: autonomy_security.allow_gate_waiver = %s (source: FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER env var)",
+                self.autonomy_security.allow_gate_waiver,
+            )
         if enforce_required_gates := os.environ.get(
             "FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES"
         ):
             self.autonomy_security.enforce_required_phase_gates = _parse_bool(
                 enforce_required_gates
             )
+            logger.info(
+                "Config: autonomy_security.enforce_required_phase_gates = %s (source: FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES env var)",
+                self.autonomy_security.enforce_required_phase_gates,
+            )
         if role := os.environ.get("FOUNDRY_MCP_ROLE"):
             self.autonomy_security.role = role.strip().lower()
+            logger.info(
+                "Config: autonomy_security.role = %s (source: FOUNDRY_MCP_ROLE env var)",
+                self.autonomy_security.role,
+            )
         if max_denials := os.environ.get(
             "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS"
         ):
@@ -2299,9 +2315,28 @@ class ServerConfig:
             return
 
         self.autonomy_posture.profile = normalized_profile
+        logger.info(
+            "Config: autonomy_posture.profile = %s (source: %s)",
+            normalized_profile, source,
+        )
 
         current_security = self.autonomy_security
         security_defaults = profile_defaults["autonomy_security"]
+
+        # Log posture overrides for security-relevant settings
+        for field_name in ("allow_lock_bypass", "allow_gate_waiver", "enforce_required_phase_gates", "role"):
+            old_val = getattr(current_security, field_name)
+            new_val = security_defaults[field_name]
+            if isinstance(old_val, bool):
+                new_val = bool(new_val)
+            else:
+                new_val = str(new_val)
+            if old_val != new_val:
+                logger.info(
+                    "Config: autonomy_security.%s overridden by %s posture (%s \u2190 %s)",
+                    field_name, normalized_profile, new_val, old_val,
+                )
+
         self.autonomy_security = AutonomySecurityConfig(
             allow_lock_bypass=bool(security_defaults["allow_lock_bypass"]),
             allow_gate_waiver=bool(security_defaults["allow_gate_waiver"]),

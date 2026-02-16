@@ -1760,6 +1760,124 @@ class TestSessionRebase:
 
 
 # =============================================================================
+# Rebase Backup Guard Tests (C2)
+# =============================================================================
+
+
+class TestRebaseBackupGuard:
+    """Tests for the backup-missing guard in rebase when completed tasks exist."""
+
+    @pytest.fixture(autouse=True)
+    def _set_maintainer_role(self):
+        """Rebase requires maintainer role."""
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
+    def test_rebase_missing_backup_with_completed_tasks_fails(self, tmp_path):
+        """Rebase fails when backup spec is missing and session has completed tasks."""
+        from foundry_mcp.core.autonomy.memory import AutonomyStorage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        # Create a session with completed tasks and a hash that won't match any backup
+        storage = AutonomyStorage(
+            storage_path=workspace / "specs" / ".autonomy" / "sessions",
+            workspace_path=workspace,
+        )
+        session = make_session(
+            session_id="rebase-guard-1",
+            spec_id="test-spec-001",
+            status=SessionStatus.PAUSED,
+            spec_structure_hash="b" * 64,  # Different from actual spec hash
+            completed_task_ids=["task-1", "task-2"],
+        )
+        storage.save(session)
+        storage.set_active_session("test-spec-001", "rebase-guard-1")
+
+        resp = _handle_session_rebase(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "REBASE_BACKUP_MISSING"
+        assert resp["data"]["details"]["completed_task_count"] == 2
+
+    def test_rebase_missing_backup_with_completed_tasks_force_succeeds(self, tmp_path):
+        """Force rebase proceeds even when backup is missing and completed tasks exist."""
+        from foundry_mcp.core.autonomy.memory import AutonomyStorage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        storage = AutonomyStorage(
+            storage_path=workspace / "specs" / ".autonomy" / "sessions",
+            workspace_path=workspace,
+        )
+        session = make_session(
+            session_id="rebase-guard-2",
+            spec_id="test-spec-001",
+            status=SessionStatus.PAUSED,
+            spec_structure_hash="b" * 64,
+            completed_task_ids=["task-1"],
+        )
+        storage.save(session)
+        storage.set_active_session("test-spec-001", "rebase-guard-2")
+
+        resp = _handle_session_rebase(
+            config=config,
+            spec_id="test-spec-001",
+            force=True,
+            workspace=str(workspace),
+        )
+
+        _assert_success(resp)
+
+    def test_rebase_missing_backup_no_completed_tasks_succeeds(self, tmp_path):
+        """Rebase proceeds when backup is missing but no completed tasks exist."""
+        from foundry_mcp.core.autonomy.memory import AutonomyStorage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        storage = AutonomyStorage(
+            storage_path=workspace / "specs" / ".autonomy" / "sessions",
+            workspace_path=workspace,
+        )
+        session = make_session(
+            session_id="rebase-guard-3",
+            spec_id="test-spec-001",
+            status=SessionStatus.PAUSED,
+            spec_structure_hash="b" * 64,
+            completed_task_ids=[],
+        )
+        storage.save(session)
+        storage.set_active_session("test-spec-001", "rebase-guard-3")
+
+        resp = _handle_session_rebase(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+
+        _assert_success(resp)
+
+
+# =============================================================================
 # Session Heartbeat Tests
 # =============================================================================
 
@@ -2587,3 +2705,116 @@ class TestSessionEventsCursorPagination:
         assert "duration_ms" in telemetry
         assert "journal_entries_scanned" in telemetry
         assert "session_events_returned" in telemetry
+
+
+# =============================================================================
+# H2: Audit Status Observability Tests
+# =============================================================================
+
+
+class TestAuditStatusObservability:
+    """Verify meta.audit_status is attached to session lifecycle responses."""
+
+    def test_start_includes_audit_status_ok(self, tmp_path):
+        """Session-start response includes audit_status=ok on successful journal write."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+
+        _assert_success(resp)
+        assert resp["meta"]["audit_status"] == "ok"
+
+    def test_pause_includes_audit_status_ok(self, tmp_path):
+        """Session-pause response includes audit_status=ok on successful journal write."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_pause,
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        start_resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        _assert_success(start_resp)
+
+        resp = _handle_session_pause(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+
+        _assert_success(resp)
+        assert resp["meta"]["audit_status"] == "ok"
+
+    def test_audit_status_failed_when_journal_write_fails(self, tmp_path):
+        """audit_status=failed when journal write returns False."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_pause,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        start_resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        _assert_success(start_resp)
+
+        # Make journal write fail by removing the spec file
+        spec_path = workspace / "specs" / "active" / "test-spec-001.json"
+        spec_path.unlink()
+
+        resp = _handle_session_pause(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+
+        _assert_success(resp)
+        assert resp["meta"]["audit_status"] == "failed"
+
+    def test_inject_audit_status_helper_partial(self):
+        """_inject_audit_status correctly reports partial when mixed results."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _inject_audit_status,
+        )
+
+        response = {"success": True, "data": {}, "error": None, "meta": {"version": "response-v2"}}
+        result = _inject_audit_status(response, True, False)
+        assert result["meta"]["audit_status"] == "partial"
+
+    def test_inject_audit_status_helper_all_ok(self):
+        """_inject_audit_status correctly reports ok when all succeed."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _inject_audit_status,
+        )
+
+        response = {"success": True, "data": {}, "error": None, "meta": {"version": "response-v2"}}
+        result = _inject_audit_status(response, True, True)
+        assert result["meta"]["audit_status"] == "ok"
+
+    def test_inject_audit_status_helper_all_failed(self):
+        """_inject_audit_status correctly reports failed when all fail."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _inject_audit_status,
+        )
+
+        response = {"success": True, "data": {}, "error": None, "meta": {"version": "response-v2"}}
+        result = _inject_audit_status(response, False, False)
+        assert result["meta"]["audit_status"] == "failed"

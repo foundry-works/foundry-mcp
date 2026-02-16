@@ -74,6 +74,28 @@ The skill verifies all MCP-level prerequisites at startup and fails fast with re
 5. **Deterministic exit.** Stop on `phase_complete` or `spec_complete`. Escalate on all other `loop_signal` values. Never continue on ambiguous state.
 6. **Bounded execution.** Enforce a hard loop iteration limit (`max_iterations=200`). If exceeded without terminal signal, stop and escalate — never spin indefinitely.
 
+## Agent Isolation Constraints
+
+The MCP server enforces authorization for MCP tool calls only. Native Claude Code tools (Write, Edit, Bash) operate outside MCP authorization. The following constraints are enforced by the caller via Claude Code hooks and environment configuration. Violations are blocked by the guard scripts before the tool executes.
+
+**Filesystem restrictions (enforced by `scripts/guard_autonomous_write.py`):**
+- Do not write to `specs/**/*.json` — use the MCP session-rebase protocol for spec changes.
+- Do not write to `foundry-mcp.toml` or `.foundry-mcp.toml` — config is read-only during autonomous execution.
+- Do not write to `.foundry-mcp/sessions/`, `.foundry-mcp/journals/`, `.foundry-mcp/audit/`, or `.foundry-mcp/proofs/` — the MCP server manages these via protocol.
+
+**Shell restrictions (enforced by `scripts/guard_autonomous_bash.py`):**
+- Do not run `git push`, `git reset`, `git rebase`, `git checkout`, `git clean`, or `git merge`.
+- `git commit` is allowed only when `FOUNDRY_GUARD_ALLOW_GIT_COMMIT=1` is set by the supervisor.
+- Do not use shell redirections to write to spec, config, or audit files.
+
+**Allowed operations:**
+- Write/Edit to source code files (`src/`, `tests/`, etc.) for `implement_task` and `address_fidelity_feedback` steps.
+- Bash for running tests, linting, and verification commands during `execute_verification` steps.
+- Read/Glob/Grep for any file (read-only access is unrestricted).
+- `git status`, `git diff`, `git log`, `git show` (read-only git operations).
+
+For full details on isolation architecture, guard scripts, and high-assurance options, see `docs/guides/autonomy-agent-isolation.md`.
+
 ## Startup Preflight
 
 All six checks must pass before session start. Any failure produces a structured error (`FoundryImplementV2Error`) with error code and remediation hint.
