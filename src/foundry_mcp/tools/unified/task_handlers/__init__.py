@@ -10,7 +10,10 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import mcp_tool
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
+from foundry_mcp.tools.unified.common import (
+    build_request_id,
+    dispatch_with_standard_errors,
+)
 from foundry_mcp.tools.unified.router import ActionDefinition, ActionRouter
 
 from foundry_mcp.tools.unified.task_handlers.handlers_lifecycle import (
@@ -53,6 +56,7 @@ from foundry_mcp.tools.unified.task_handlers.handlers_mutation import (
 from foundry_mcp.tools.unified.task_handlers.handlers_session import (
     _handle_gate_waiver,
     _handle_session_end,
+    _handle_session_events,
     _handle_session_heartbeat,
     _handle_session_list,
     _handle_session_pause,
@@ -68,8 +72,51 @@ from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
     _handle_session_step_report,
     _handle_session_step_replay,
 )
+from foundry_mcp.tools.unified.task_handlers._helpers import (
+    _attach_deprecation_metadata,
+    _attach_session_step_loop_metadata,
+    _emit_legacy_action_warning,
+    _normalize_task_action_shape,
+    _validation_error,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _handle_session_action(
+    *,
+    command: Optional[str] = None,
+    **payload: Any,
+) -> dict:
+    """Canonical session action placeholder.
+
+    Normal task dispatch rewrites action=session to concrete legacy actions
+    before routing. This handler exists so discovery surfaces canonical action
+    names even if callers bypass the normal dispatch adapter.
+    """
+    request_id = build_request_id("task")
+    return _validation_error(
+        action="session",
+        field="command",
+        message="command is required (start|status|pause|resume|rebase|end|list|reset)",
+        request_id=request_id,
+    )
+
+
+def _handle_session_step_action(
+    *,
+    command: Optional[str] = None,
+    **payload: Any,
+) -> dict:
+    """Canonical session-step action placeholder for discovery parity."""
+    request_id = build_request_id("task")
+    return _validation_error(
+        action="session-step",
+        field="command",
+        message="command is required (next|report|replay|heartbeat)",
+        request_id=request_id,
+    )
+
 
 _ACTION_DEFINITIONS = [
     ActionDefinition(name="prepare", handler=_handle_prepare, summary="Prepare next actionable task context"),
@@ -101,12 +148,15 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="query", handler=_handle_query, summary="Query tasks by status or parent"),
     ActionDefinition(name="hierarchy", handler=_handle_hierarchy, summary="Return paginated hierarchy slices"),
     ActionDefinition(name="session-config", handler=_handle_session_config, summary="Get/set autonomous session configuration"),
+    ActionDefinition(name="session", handler=_handle_session_action, summary="Canonical autonomous session lifecycle entrypoint (requires command)"),
+    ActionDefinition(name="session-step", handler=_handle_session_step_action, summary="Canonical autonomous session-step entrypoint (requires command)"),
     # Session lifecycle actions (feature-flag guarded by autonomy_sessions)
     ActionDefinition(name="session-start", handler=_handle_session_start, summary="Start a new autonomous session for a spec"),
     ActionDefinition(name="session-pause", handler=_handle_session_pause, summary="Pause an active autonomous session"),
     ActionDefinition(name="session-resume", handler=_handle_session_resume, summary="Resume a paused autonomous session"),
     ActionDefinition(name="session-end", handler=_handle_session_end, summary="End an autonomous session (terminal state)"),
     ActionDefinition(name="session-status", handler=_handle_session_status, summary="Get current status of an autonomous session"),
+    ActionDefinition(name="session-events", handler=_handle_session_events, summary="List journal-backed events for an autonomous session"),
     ActionDefinition(name="session-list", handler=_handle_session_list, summary="List autonomous sessions with optional filtering"),
     ActionDefinition(name="session-rebase", handler=_handle_session_rebase, summary="Rebase an active session to spec changes"),
     ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="[Deprecated: use session-step-heartbeat] Update session heartbeat and context metrics"),
@@ -125,9 +175,23 @@ _TASK_ROUTER = ActionRouter(tool_name="task", actions=_ACTION_DEFINITIONS)
 def _dispatch_task_action(
     *, action: str, payload: Dict[str, Any], config: ServerConfig
 ) -> dict:
-    return dispatch_with_standard_errors(
-        _TASK_ROUTER, "task", action, config=config, **payload
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str):
+        request_id = build_request_id("task")
+    normalized_action, normalized_payload, deprecation, error = _normalize_task_action_shape(
+        action=action,
+        payload=payload,
+        request_id=request_id,
     )
+    if error is not None:
+        return error
+
+    _emit_legacy_action_warning(normalized_action, deprecation)
+    response = dispatch_with_standard_errors(
+        _TASK_ROUTER, "task", normalized_action, config=config, **normalized_payload
+    )
+    response = _attach_deprecation_metadata(response, deprecation)
+    return _attach_session_step_loop_metadata(normalized_action, response)
 
 
 def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:

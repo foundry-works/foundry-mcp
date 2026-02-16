@@ -706,9 +706,6 @@
               "start-batch",
               "complete-batch",
               "reset-batch",
-              "session-config",
-              "session",
-              "session-step",
               "next",
               "info",
               "check-deps",
@@ -720,20 +717,50 @@
               "list-blocked",
               "add",
               "remove",
-              "update-estimate",
-              "update-metadata",
-              "progress",
-              "list",
-              "query",
-              "hierarchy",
               "move",
               "add-dependency",
               "remove-dependency",
               "add-requirement",
+              "update-estimate",
+              "update-metadata",
               "metadata-batch",
-              "fix-verification-types"
+              "fix-verification-types",
+              "progress",
+              "list",
+              "query",
+              "hierarchy",
+              "session-config",
+              "session",
+              "session-step",
+              "session-start",
+              "session-pause",
+              "session-resume",
+              "session-end",
+              "session-status",
+              "session-events",
+              "session-list",
+              "session-rebase",
+              "session-heartbeat",
+              "session-reset",
+              "session-step-next",
+              "session-step-report",
+              "session-step-replay",
+              "session-step-heartbeat",
+              "gate-waiver"
             ],
             "description": "Task action"
+          },
+          {
+            "name": "command",
+            "type": "string",
+            "required": false,
+            "description": "Required with action=session (start|status|pause|resume|rebase|end|list|reset) or action=session-step (next|report|replay|heartbeat)"
+          },
+          {
+            "name": "session_id",
+            "type": "string",
+            "required": false,
+            "description": "Target session ID for session/session-step actions"
           },
           {
             "name": "spec_id",
@@ -815,6 +842,21 @@
             "input": {
               "action": "prepare",
               "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Start autonomous session (canonical shape)",
+            "input": {
+              "action": "session",
+              "command": "start",
+              "spec_id": "my-feature-spec-001"
+            }
+          },
+          {
+            "description": "Session-step next (legacy compatibility)",
+            "input": {
+              "action": "session-step-next",
+              "session_id": "01HXEXAMPLESESSION"
             }
           },
           {
@@ -1253,6 +1295,12 @@
             "input": {
               "action": "tools"
             }
+          },
+          {
+            "description": "Example: server action=capabilities",
+            "input": {
+              "action": "capabilities"
+            }
           }
         ]
       },
@@ -1588,7 +1636,7 @@
     }
   },
   "server_capabilities": {
-    "_documentation": "Server capabilities returned by capability_get for client negotiation",
+    "_documentation": "Server capability contract for client negotiation. Manifest/discovery is advisory; server(action=capabilities) and runtime responses are the source of truth for currently enabled features.",
     "response_version": {
       "current": "response-v2",
       "supported": [

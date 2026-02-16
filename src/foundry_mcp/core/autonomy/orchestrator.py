@@ -72,6 +72,10 @@ logger = logging.getLogger(__name__)
 
 ERROR_STEP_RESULT_REQUIRED = "STEP_RESULT_REQUIRED"
 ERROR_STEP_MISMATCH = "STEP_MISMATCH"
+ERROR_STEP_PROOF_MISSING = "STEP_PROOF_MISSING"
+ERROR_STEP_PROOF_MISMATCH = "STEP_PROOF_MISMATCH"
+ERROR_STEP_PROOF_CONFLICT = "STEP_PROOF_CONFLICT"
+ERROR_STEP_PROOF_EXPIRED = "STEP_PROOF_EXPIRED"
 ERROR_INVALID_GATE_EVIDENCE = "INVALID_GATE_EVIDENCE"
 ERROR_NO_ACTIVE_SESSION = "NO_ACTIVE_SESSION"
 ERROR_AMBIGUOUS_ACTIVE_SESSION = "AMBIGUOUS_ACTIVE_SESSION"
@@ -205,8 +209,11 @@ class StepOrchestrator:
         # =================================================================
         if last_step_result is not None and session.last_step_issued is not None:
             if last_step_result.step_id == session.last_step_issued.step_id:
+                proof_enforced = bool(
+                    session.last_step_issued.step_proof and last_step_result.step_proof
+                )
                 # Check if we already processed this step
-                if session.last_issued_response is not None:
+                if session.last_issued_response is not None and not proof_enforced:
                     logger.info(
                         "Replay detected: returning cached response for step %s",
                         last_step_result.step_id,
@@ -239,6 +246,19 @@ class StepOrchestrator:
         # Step 2: Validate Step Identity
         # =================================================================
         if last_step_result is not None and session.last_step_issued is not None:
+            proof_error_code, proof_error_message = self._validate_step_proof(
+                session.last_step_issued,
+                last_step_result,
+            )
+            if proof_error_message:
+                logger.warning("%s: %s", proof_error_code, proof_error_message)
+                return OrchestrationResult(
+                    success=False,
+                    session=session,
+                    error_code=proof_error_code,
+                    error_message=proof_error_message,
+                    should_persist=False,
+                )
             mismatch_reason = self._validate_step_identity(
                 session.last_step_issued, last_step_result
             )
@@ -256,11 +276,14 @@ class StepOrchestrator:
         if last_step_result is not None and last_step_result.step_type == StepType.RUN_FIDELITY_GATE:
             gate_error = self._validate_gate_evidence(session, last_step_result)
             if gate_error:
-                logger.warning("INVALID_GATE_EVIDENCE: %s", gate_error)
+                gate_error_code = ERROR_INVALID_GATE_EVIDENCE
+                if "integrity checksum" in gate_error.lower():
+                    gate_error_code = ERROR_GATE_INTEGRITY_CHECKSUM
+                logger.warning("%s: %s", gate_error_code, gate_error)
                 return OrchestrationResult(
                     success=False,
                     session=session,
-                    error_code=ERROR_INVALID_GATE_EVIDENCE,
+                    error_code=gate_error_code,
                     error_message=gate_error,
                     should_persist=False,
                 )
@@ -473,6 +496,52 @@ class StepOrchestrator:
 
         return None
 
+    def _validate_step_proof(
+        self,
+        last_issued: LastStepIssued,
+        result: LastStepResult,
+    ) -> Tuple[str, Optional[str]]:
+        """Validate step-proof binding for the current step result."""
+        expected = last_issued.step_proof
+        provided = result.step_proof
+
+        if expected:
+            if not provided:
+                return (
+                    ERROR_STEP_PROOF_MISSING,
+                    (
+                        f"step_proof is required for step {last_issued.step_id}. "
+                        "Provide the one-time step_proof token from the issued step."
+                    ),
+                )
+            if provided != expected:
+                return (
+                    ERROR_STEP_PROOF_MISMATCH,
+                    (
+                        f"step_proof mismatch for step {last_issued.step_id}. "
+                        "Use the latest issued step and matching proof token."
+                    ),
+                )
+            return ("", None)
+
+        if provided:
+            return (
+                ERROR_STEP_PROOF_MISMATCH,
+                "Unexpected step_proof provided for a step that does not require proof.",
+            )
+
+        return ("", None)
+
+    def _issue_step_proof(
+        self,
+        session_id: str,
+        step_id: str,
+        now: datetime,
+    ) -> str:
+        """Issue a one-time proof token bound to a step ID."""
+        seed = f"{session_id}:{step_id}:{now.isoformat()}:{ULID()}"
+        return hashlib.sha256(seed.encode()).hexdigest()
+
     def _validate_gate_evidence(
         self,
         session: AutonomousSessionState,
@@ -585,6 +654,11 @@ class StepOrchestrator:
                 f"Verification receipt step mismatch: expected step {pending.step_id}, "
                 f"got step {result.step_id}"
             )
+        if result.task_id != pending.task_id:
+            return (
+                f"Verification receipt task mismatch: expected task {pending.task_id}, "
+                f"got task {result.task_id}"
+            )
 
         # Check receipt presence
         receipt = result.verification_receipt
@@ -612,6 +686,19 @@ class StepOrchestrator:
                 f"expected {pending.expected_command_hash[:16]}..., "
                 f"got {receipt.command_hash[:16]}.... "
                 f"The verification command may have been modified or a different verification was run."
+            )
+        if receipt.issued_at < pending.issued_at:
+            return (
+                "Verification receipt issued_at is earlier than the server-issued step receipt window. "
+                "Use the receipt generated for the currently issued execute_verification step."
+            )
+
+        now = datetime.now(timezone.utc)
+        future_skew = timedelta(minutes=5)
+        if receipt.issued_at > now + future_skew:
+            return (
+                "Verification receipt issued_at is in the future beyond allowed skew. "
+                "Ensure system clocks are synchronized and use server-issued receipt data."
             )
 
         logger.info(
@@ -1643,6 +1730,7 @@ class StepOrchestrator:
         session.state_version += 1
 
         step_id = f"step_{ULID()}"
+        step_proof = self._issue_step_proof(session.id, step_id, now)
         next_step = NextStep(
             step_id=step_id,
             type=StepType.PAUSE,
@@ -1653,6 +1741,7 @@ class StepOrchestrator:
             instructions=None,
             reason=reason,
             message=message,
+            step_proof=step_proof,
         )
 
         # Update last step issued and cache response
@@ -1662,6 +1751,7 @@ class StepOrchestrator:
             task_id=None,
             phase_id=None,
             issued_at=now,
+            step_proof=step_proof,
         )
 
         return OrchestrationResult(
@@ -1684,6 +1774,7 @@ class StepOrchestrator:
         phase_id = session.active_phase_id or ""
 
         step_id = f"step_{ULID()}"
+        step_proof = self._issue_step_proof(session.id, step_id, now)
 
         instructions = [
             StepInstruction(
@@ -1713,6 +1804,7 @@ class StepOrchestrator:
             instructions=instructions,
             reason=None,
             message=None,
+            step_proof=step_proof,
         )
 
         # Update last step issued
@@ -1722,6 +1814,7 @@ class StepOrchestrator:
             task_id=task_id,
             phase_id=phase_id,
             issued_at=now,
+            step_proof=step_proof,
         )
         session.last_task_id = task_id
         session.status = SessionStatus.RUNNING
@@ -1747,6 +1840,7 @@ class StepOrchestrator:
         phase_id = session.active_phase_id or ""
 
         step_id = f"step_{ULID()}"
+        step_proof = self._issue_step_proof(session.id, step_id, now)
 
         # Extract verification command from task metadata for receipt
         task_metadata = task.get("metadata", {})
@@ -1793,6 +1887,7 @@ class StepOrchestrator:
             instructions=instructions,
             reason=None,
             message=None,
+            step_proof=step_proof,
         )
 
         session.last_step_issued = LastStepIssued(
@@ -1801,6 +1896,7 @@ class StepOrchestrator:
             task_id=task_id,
             phase_id=phase_id,
             issued_at=now,
+            step_proof=step_proof,
         )
         session.updated_at = now
         session.state_version += 1
@@ -1824,6 +1920,7 @@ class StepOrchestrator:
         gate_attempt_id = f"gate_{ULID()}"
 
         step_id = f"step_{ULID()}"
+        step_proof = self._issue_step_proof(session.id, step_id, now)
 
         # Initialize gate record if not exists
         if phase_id not in session.phase_gates:
@@ -1859,6 +1956,7 @@ class StepOrchestrator:
             instructions=instructions,
             reason=None,
             message=None,
+            step_proof=step_proof,
         )
 
         session.last_step_issued = LastStepIssued(
@@ -1867,6 +1965,7 @@ class StepOrchestrator:
             task_id=None,
             phase_id=phase_id,
             issued_at=now,
+            step_proof=step_proof,
         )
         session.phase_gates[phase_id].gate_attempt_id = gate_attempt_id
         session.updated_at = now
@@ -1887,6 +1986,7 @@ class StepOrchestrator:
     ) -> OrchestrationResult:
         """Create an address_fidelity_feedback step."""
         step_id = f"step_{ULID()}"
+        step_proof = self._issue_step_proof(session.id, step_id, now)
 
         instructions = [
             StepInstruction(
@@ -1916,6 +2016,7 @@ class StepOrchestrator:
             instructions=instructions,
             reason=None,
             message=None,
+            step_proof=step_proof,
         )
 
         session.last_step_issued = LastStepIssued(
@@ -1924,6 +2025,7 @@ class StepOrchestrator:
             task_id=None,
             phase_id=evidence.phase_id,
             issued_at=now,
+            step_proof=step_proof,
         )
         session.updated_at = now
         session.state_version += 1
@@ -1946,6 +2048,7 @@ class StepOrchestrator:
         session.state_version += 1
 
         step_id = f"step_{ULID()}"
+        step_proof = self._issue_step_proof(session.id, step_id, now)
         next_step = NextStep(
             step_id=step_id,
             type=StepType.COMPLETE_SPEC,
@@ -1957,6 +2060,7 @@ class StepOrchestrator:
             reason=None,
             message=f"Spec {session.spec_id} execution completed. "
             f"Total tasks: {session.counters.tasks_completed}",
+            step_proof=step_proof,
         )
 
         session.last_step_issued = LastStepIssued(
@@ -1965,6 +2069,7 @@ class StepOrchestrator:
             task_id=None,
             phase_id=None,
             issued_at=now,
+            step_proof=step_proof,
         )
 
         return OrchestrationResult(
@@ -1984,6 +2089,10 @@ __all__ = [
     "OrchestrationResult",
     "ERROR_STEP_RESULT_REQUIRED",
     "ERROR_STEP_MISMATCH",
+    "ERROR_STEP_PROOF_MISSING",
+    "ERROR_STEP_PROOF_MISMATCH",
+    "ERROR_STEP_PROOF_CONFLICT",
+    "ERROR_STEP_PROOF_EXPIRED",
     "ERROR_INVALID_GATE_EVIDENCE",
     "ERROR_NO_ACTIVE_SESSION",
     "ERROR_AMBIGUOUS_ACTIVE_SESSION",

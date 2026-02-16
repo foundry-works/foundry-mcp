@@ -11,6 +11,7 @@ All actions integrate with:
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +44,9 @@ from foundry_mcp.core.autonomy.models import (
     RebaseResultDetail,
     GatePolicy,
     OverrideReasonCode,
+    ActivePhaseProgress,
+    RetryCounters,
+    derive_loop_signal,
 )
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
@@ -55,6 +59,12 @@ from foundry_mcp.core.responses import (
     ErrorType,
     error_response,
     success_response,
+)
+from foundry_mcp.core.pagination import (
+    CursorError,
+    decode_cursor,
+    encode_cursor,
+    normalize_page_size,
 )
 from foundry_mcp.core.spec import load_spec, resolve_spec_file
 from foundry_mcp.core.authorization import (
@@ -92,6 +102,10 @@ ERROR_SPEC_NOT_FOUND = "SPEC_NOT_FOUND"
 ERROR_SPEC_STRUCTURE_CHANGED = "SPEC_STRUCTURE_CHANGED"
 ERROR_IDEMPOTENCY_MISMATCH = "IDEMPOTENCY_MISMATCH"
 
+SESSION_EVENTS_DEFAULT_LIMIT = 50
+SESSION_EVENTS_MAX_LIMIT = 200
+SESSION_EVENTS_CURSOR_KIND = "session-events-v1"
+
 
 # =============================================================================
 # Helper Functions
@@ -128,6 +142,243 @@ def _compute_effective_status(session: AutonomousSessionState) -> Optional[Sessi
     """
     from foundry_mcp.core.autonomy.models import compute_effective_status
     return compute_effective_status(session)
+
+
+def _load_spec_for_session(
+    session: AutonomousSessionState,
+    workspace: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Load spec data for a session, returning None on lookup failure."""
+    ws_path = Path(workspace) if workspace else Path.cwd()
+    specs_dir = ws_path / "specs"
+    return load_spec(session.spec_id, specs_dir)
+
+
+def _build_active_phase_progress(
+    session: AutonomousSessionState,
+    spec_data: Optional[Dict[str, Any]],
+) -> Optional[ActivePhaseProgress]:
+    """Compute active phase progress from spec structure and session state."""
+    if not session.active_phase_id or not isinstance(spec_data, dict):
+        return None
+
+    phases = spec_data.get("phases", [])
+    if not isinstance(phases, list):
+        return None
+
+    active_phase: Optional[Dict[str, Any]] = None
+    for phase in phases:
+        if isinstance(phase, dict) and phase.get("id") == session.active_phase_id:
+            active_phase = phase
+            break
+    if active_phase is None:
+        return None
+
+    phase_tasks = active_phase.get("tasks", [])
+    if not isinstance(phase_tasks, list):
+        phase_tasks = []
+
+    completed_task_ids = set(session.completed_task_ids)
+    total_tasks = 0
+    completed_tasks = 0
+    blocked_tasks = 0
+
+    for task in phase_tasks:
+        if not isinstance(task, dict):
+            continue
+        task_type = task.get("type")
+        if task_type not in {"task", "verify", "subtask"}:
+            continue
+
+        total_tasks += 1
+        task_id = task.get("id")
+        status = str(task.get("status") or "").lower()
+        is_completed = bool(
+            isinstance(task_id, str) and task_id in completed_task_ids
+        ) or status == "completed"
+
+        if is_completed:
+            completed_tasks += 1
+            continue
+        if status == "blocked":
+            blocked_tasks += 1
+
+    remaining_tasks = max(total_tasks - completed_tasks, 0)
+    completion_pct = int(round((completed_tasks / total_tasks) * 100)) if total_tasks else 0
+
+    return ActivePhaseProgress(
+        phase_id=session.active_phase_id,
+        phase_title=active_phase.get("title") if isinstance(active_phase.get("title"), str) else None,
+        total_tasks=total_tasks,
+        completed_tasks=completed_tasks,
+        blocked_tasks=blocked_tasks,
+        remaining_tasks=remaining_tasks,
+        completion_pct=completion_pct,
+    )
+
+
+def _build_retry_counters(
+    session: AutonomousSessionState,
+    spec_data: Optional[Dict[str, Any]],
+) -> RetryCounters:
+    """Build retry counters including task-level retries when metadata is available."""
+    task_retry_counts: Dict[str, int] = {}
+
+    if isinstance(spec_data, dict) and session.active_phase_id:
+        phases = spec_data.get("phases", [])
+        if isinstance(phases, list):
+            for phase in phases:
+                if not isinstance(phase, dict) or phase.get("id") != session.active_phase_id:
+                    continue
+                tasks = phase.get("tasks", [])
+                if not isinstance(tasks, list):
+                    break
+                for task in tasks:
+                    if not isinstance(task, dict):
+                        continue
+                    task_id = task.get("id")
+                    if not isinstance(task_id, str) or not task_id:
+                        continue
+                    metadata = task.get("metadata")
+                    if not isinstance(metadata, dict):
+                        continue
+                    retry_count = metadata.get("retry_count")
+                    if isinstance(retry_count, int) and retry_count > 0:
+                        task_retry_counts[task_id] = retry_count
+                break
+
+    phase_retry_counts: Dict[str, int] = {}
+    if session.active_phase_id:
+        phase_retry_counts[session.active_phase_id] = (
+            session.counters.fidelity_review_cycles_in_active_phase
+        )
+
+    return RetryCounters(
+        consecutive_errors=session.counters.consecutive_errors,
+        fidelity_review_cycles_in_active_phase=session.counters.fidelity_review_cycles_in_active_phase,
+        phase_retry_counts=phase_retry_counts,
+        task_retry_counts=task_retry_counts,
+    )
+
+
+def _parse_journal_timestamp(timestamp: Optional[str]) -> datetime:
+    """Parse journal timestamp into a timezone-aware datetime for ordering."""
+    if not isinstance(timestamp, str) or not timestamp.strip():
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    normalized = timestamp.strip()
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _encode_session_events_cursor(
+    *,
+    session_id: str,
+    spec_id: str,
+    timestamp: str,
+    index: int,
+) -> str:
+    """Encode opaque cursor for session-events pagination."""
+    return encode_cursor(
+        {
+            "kind": SESSION_EVENTS_CURSOR_KIND,
+            "session_id": session_id,
+            "spec_id": spec_id,
+            "timestamp": timestamp,
+            "index": index,
+        }
+    )
+
+
+def _decode_session_events_cursor(
+    cursor: str,
+    *,
+    session_id: str,
+    spec_id: str,
+) -> tuple[datetime, int]:
+    """Decode and validate cursor for a specific session/spec pair."""
+    try:
+        cursor_data = decode_cursor(cursor)
+    except CursorError as exc:
+        raise ValueError(str(exc)) from exc
+
+    if not isinstance(cursor_data, dict):
+        raise ValueError("Cursor payload must be an object")
+    if cursor_data.get("kind") != SESSION_EVENTS_CURSOR_KIND:
+        raise ValueError("Cursor kind does not match session-events")
+    if cursor_data.get("session_id") != session_id:
+        raise ValueError("Cursor was issued for a different session_id")
+    if cursor_data.get("spec_id") != spec_id:
+        raise ValueError("Cursor was issued for a different spec_id")
+
+    timestamp = cursor_data.get("timestamp")
+    index = cursor_data.get("index")
+    if not isinstance(timestamp, str):
+        raise ValueError("Cursor timestamp is missing or invalid")
+    if not isinstance(index, int):
+        raise ValueError("Cursor index is missing or invalid")
+
+    return _parse_journal_timestamp(timestamp), index
+
+
+def _collect_session_events(
+    *,
+    session: AutonomousSessionState,
+    spec_data: Dict[str, Any],
+) -> list[dict]:
+    """Return normalized, sorted journal events scoped to a session."""
+    journal_entries = spec_data.get("journal", [])
+    if not isinstance(journal_entries, list):
+        return []
+
+    events: list[dict] = []
+
+    for index, entry in enumerate(journal_entries):
+        if not isinstance(entry, dict):
+            continue
+
+        metadata = entry.get("metadata")
+        if not isinstance(metadata, dict):
+            metadata = {}
+        if metadata.get("session_id") != session.id:
+            continue
+
+        timestamp = entry.get("timestamp")
+        if not isinstance(timestamp, str):
+            continue
+
+        event: Dict[str, Any] = {
+            "event_id": f"{session.id}:{index}",
+            "session_id": session.id,
+            "spec_id": session.spec_id,
+            "timestamp": timestamp,
+            "event_type": entry.get("entry_type") if isinstance(entry.get("entry_type"), str) else "note",
+            "action": metadata.get("action") if isinstance(metadata.get("action"), str) else None,
+            "title": entry.get("title") if isinstance(entry.get("title"), str) else "",
+            "summary": entry.get("content") if isinstance(entry.get("content"), str) else "",
+            "author": entry.get("author") if isinstance(entry.get("author"), str) else "autonomy",
+            "task_id": entry.get("task_id") if isinstance(entry.get("task_id"), str) else None,
+            "details": metadata or None,
+            "_cursor_timestamp": _parse_journal_timestamp(timestamp),
+            "_cursor_index": index,
+        }
+        events.append(event)
+
+    events.sort(
+        key=lambda event: (
+            event["_cursor_timestamp"],
+            event["_cursor_index"],
+        ),
+        reverse=True,
+    )
+    return events
 
 
 def _build_resume_context(
@@ -249,6 +500,10 @@ def _build_session_response(
 ) -> dict:
     """Build standard session response data."""
     effective_status = _compute_effective_status(session)
+    spec_data = _load_spec_for_session(session, workspace)
+    active_phase_progress = _build_active_phase_progress(session, spec_data)
+    retry_counters = _build_retry_counters(session, spec_data)
+    last_step_issued = session.last_step_issued
 
     # Build resume context if requested
     resume_context = None
@@ -267,6 +522,19 @@ def _build_session_response(
         active_phase_id=session.active_phase_id,
         last_heartbeat_at=session.context.last_heartbeat_at,
         next_action_hint=None,  # Filled by step commands
+        last_step_id=last_step_issued.step_id if last_step_issued else None,
+        last_step_type=last_step_issued.type if last_step_issued else None,
+        current_task_id=(
+            last_step_issued.task_id
+            if last_step_issued and last_step_issued.task_id
+            else session.last_task_id
+        ),
+        active_phase_progress=active_phase_progress,
+        retry_counters=retry_counters,
+        session_signal=derive_loop_signal(
+            status=session.status,
+            pause_reason=session.pause_reason,
+        ),
         resume_context=resume_context,
         rebase_result=rebase_result,
     )
@@ -584,7 +852,7 @@ def _handle_session_start(
                 # Check idempotency key match
                 if idempotency_key and existing_session.idempotency_key == idempotency_key:
                     # Idempotent - return existing session
-                    return _build_session_response(existing_session, request_id)
+                    return _build_session_response(existing_session, request_id, workspace=workspace)
 
                 if force:
                     # Force-end existing session before creating new one
@@ -651,13 +919,47 @@ def _handle_session_start(
 
         # Step 4: Create session state with caller-provided configuration
         now = datetime.now(timezone.utc)
+        session_defaults = getattr(config, "autonomy_session_defaults", None)
 
         # Build limits from payload, falling back to defaults
         limits_kwargs = {}
-        if max_tasks_per_session is not None:
-            limits_kwargs["max_tasks_per_session"] = max_tasks_per_session
-        if max_consecutive_errors is not None:
-            limits_kwargs["max_consecutive_errors"] = max_consecutive_errors
+        resolved_max_tasks_per_session = max_tasks_per_session
+        if (
+            resolved_max_tasks_per_session is None
+            and session_defaults is not None
+            and isinstance(getattr(session_defaults, "max_tasks_per_session", None), int)
+        ):
+            resolved_max_tasks_per_session = session_defaults.max_tasks_per_session
+
+        resolved_max_consecutive_errors = max_consecutive_errors
+        if (
+            resolved_max_consecutive_errors is None
+            and session_defaults is not None
+            and isinstance(getattr(session_defaults, "max_consecutive_errors", None), int)
+        ):
+            resolved_max_consecutive_errors = session_defaults.max_consecutive_errors
+
+        resolved_max_fidelity_review_cycles = max_fidelity_review_cycles_per_phase
+        if (
+            resolved_max_fidelity_review_cycles is None
+            and session_defaults is not None
+            and isinstance(
+                getattr(
+                    session_defaults,
+                    "max_fidelity_review_cycles_per_phase",
+                    None,
+                ),
+                int,
+            )
+        ):
+            resolved_max_fidelity_review_cycles = (
+                session_defaults.max_fidelity_review_cycles_per_phase
+            )
+
+        if resolved_max_tasks_per_session is not None:
+            limits_kwargs["max_tasks_per_session"] = resolved_max_tasks_per_session
+        if resolved_max_consecutive_errors is not None:
+            limits_kwargs["max_consecutive_errors"] = resolved_max_consecutive_errors
         if context_threshold_pct is not None:
             limits_kwargs["context_threshold_pct"] = context_threshold_pct
         if heartbeat_stale_minutes is not None:
@@ -666,8 +968,10 @@ def _handle_session_start(
             limits_kwargs["heartbeat_grace_minutes"] = heartbeat_grace_minutes
         if step_stale_minutes is not None:
             limits_kwargs["step_stale_minutes"] = step_stale_minutes
-        if max_fidelity_review_cycles_per_phase is not None:
-            limits_kwargs["max_fidelity_review_cycles_per_phase"] = max_fidelity_review_cycles_per_phase
+        if resolved_max_fidelity_review_cycles is not None:
+            limits_kwargs["max_fidelity_review_cycles_per_phase"] = (
+                resolved_max_fidelity_review_cycles
+            )
         if avg_pct_per_step is not None:
             limits_kwargs["avg_pct_per_step"] = avg_pct_per_step
         if context_staleness_threshold is not None:
@@ -677,23 +981,63 @@ def _handle_session_start(
 
         # Build stop conditions from payload
         stop_kwargs = {}
-        if stop_on_phase_completion is not None:
-            stop_kwargs["stop_on_phase_completion"] = stop_on_phase_completion
-        if auto_retry_fidelity_gate is not None:
-            stop_kwargs["auto_retry_fidelity_gate"] = auto_retry_fidelity_gate
+        resolved_stop_on_phase_completion = stop_on_phase_completion
+        if (
+            resolved_stop_on_phase_completion is None
+            and session_defaults is not None
+            and isinstance(
+                getattr(session_defaults, "stop_on_phase_completion", None), bool
+            )
+        ):
+            resolved_stop_on_phase_completion = (
+                session_defaults.stop_on_phase_completion
+            )
+
+        resolved_auto_retry_fidelity_gate = auto_retry_fidelity_gate
+        if (
+            resolved_auto_retry_fidelity_gate is None
+            and session_defaults is not None
+            and isinstance(
+                getattr(session_defaults, "auto_retry_fidelity_gate", None), bool
+            )
+        ):
+            resolved_auto_retry_fidelity_gate = (
+                session_defaults.auto_retry_fidelity_gate
+            )
+
+        if resolved_stop_on_phase_completion is not None:
+            stop_kwargs["stop_on_phase_completion"] = resolved_stop_on_phase_completion
+        if resolved_auto_retry_fidelity_gate is not None:
+            stop_kwargs["auto_retry_fidelity_gate"] = (
+                resolved_auto_retry_fidelity_gate
+            )
 
         # Resolve gate policy
-        resolved_gate_policy = GatePolicy.STRICT
+        resolved_gate_policy_raw = "strict"
+        if (
+            gate_policy is None
+            and session_defaults is not None
+            and isinstance(getattr(session_defaults, "gate_policy", None), str)
+        ):
+            resolved_gate_policy_raw = session_defaults.gate_policy
+        elif gate_policy is not None:
+            resolved_gate_policy_raw = gate_policy
+
         if gate_policy is not None:
-            try:
-                resolved_gate_policy = GatePolicy(gate_policy)
-            except ValueError:
-                return _validation_error(
-                    action="session-start",
-                    field="gate_policy",
-                    message=f"Invalid gate_policy: {gate_policy}. Must be one of: strict, lenient, manual",
-                    request_id=request_id,
-                )
+            resolved_gate_policy_raw = gate_policy
+
+        try:
+            resolved_gate_policy = GatePolicy(str(resolved_gate_policy_raw).lower())
+        except ValueError:
+            return _validation_error(
+                action="session-start",
+                field="gate_policy",
+                message=(
+                    f"Invalid gate_policy: {resolved_gate_policy_raw}. "
+                    "Must be one of: strict, lenient, manual"
+                ),
+                request_id=request_id,
+            )
 
         session = AutonomousSessionState(
             id=str(ULID()),
@@ -792,7 +1136,7 @@ def _handle_session_start(
 
     logger.info("Started session %s for spec %s", session.id, spec_id)
 
-    response = _build_session_response(session, request_id)
+    response = _build_session_response(session, request_id, workspace=workspace)
 
     # Include audit warning if verification failed (P2.1)
     if audit_warning:
@@ -841,7 +1185,159 @@ def _handle_session_status(
     if err:
         return err
 
-    return _build_session_response(session, request_id)
+    return _build_session_response(session, request_id, workspace=workspace)
+
+
+# =============================================================================
+# Session Events Handler
+# =============================================================================
+
+
+def _handle_session_events(
+    *,
+    config: ServerConfig,
+    spec_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    cursor: Optional[str] = None,
+    limit: Optional[int] = None,
+    workspace: Optional[str] = None,
+    **payload: Any,
+) -> dict:
+    """Handle session-events action.
+
+    Returns a journal-backed, session-scoped event feed with cursor pagination.
+    This is intentionally a filtered view over existing spec journal entries.
+    """
+    request_id = _request_id()
+
+    # Feature flag check - fail-closed
+    if not _is_feature_enabled(config, "autonomy_sessions"):
+        return _feature_disabled_response("session-events", request_id)
+
+    page_size = normalize_page_size(
+        limit,
+        default=SESSION_EVENTS_DEFAULT_LIMIT,
+        maximum=SESSION_EVENTS_MAX_LIMIT,
+    )
+
+    storage = _get_storage(config, workspace)
+    session, err = _resolve_session(
+        storage,
+        "session-events",
+        request_id,
+        session_id,
+        spec_id,
+    )
+    if err:
+        return err
+
+    spec_data = _load_spec_for_session(session, workspace)
+    if spec_data is None:
+        return asdict(
+            error_response(
+                f"Spec not found: {session.spec_id}",
+                error_code=ErrorCode.SPEC_NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                request_id=request_id,
+                details={
+                    "action": "session-events",
+                    "session_id": session.id,
+                    "spec_id": session.spec_id,
+                    "hint": 'Verify spec presence via spec(action="find")',
+                },
+            )
+        )
+
+    started = time.perf_counter()
+    events = _collect_session_events(session=session, spec_data=spec_data)
+
+    cursor_position: Optional[tuple[datetime, int]] = None
+    if cursor:
+        try:
+            cursor_position = _decode_session_events_cursor(
+                cursor,
+                session_id=session.id,
+                spec_id=session.spec_id,
+            )
+        except ValueError as exc:
+            return asdict(
+                error_response(
+                    f"Invalid cursor: {exc}",
+                    error_code=ErrorCode.INVALID_CURSOR,
+                    error_type=ErrorType.VALIDATION,
+                    request_id=request_id,
+                    details={
+                        "action": "session-events",
+                        "session_id": session.id,
+                        "spec_id": session.spec_id,
+                        "hint": "Reuse cursor from the previous session-events response for this same session",
+                    },
+                )
+            )
+
+    if cursor_position is not None:
+        cursor_timestamp, cursor_index = cursor_position
+        events = [
+            event
+            for event in events
+            if (
+                event["_cursor_timestamp"],
+                event["_cursor_index"],
+            ) < (
+                cursor_timestamp,
+                cursor_index,
+            )
+        ]
+
+    has_more = len(events) > page_size
+    page_events = events[:page_size]
+    next_cursor = None
+
+    if has_more and page_events:
+        last_event = page_events[-1]
+        next_cursor = _encode_session_events_cursor(
+            session_id=session.id,
+            spec_id=session.spec_id,
+            timestamp=last_event["timestamp"],
+            index=last_event["_cursor_index"],
+        )
+
+    serialized_events: List[Dict[str, Any]] = []
+    for event in page_events:
+        serialized_events.append(
+            {
+                key: value
+                for key, value in event.items()
+                if not key.startswith("_") and value is not None
+            }
+        )
+
+    duration_ms = (time.perf_counter() - started) * 1000
+
+    return asdict(
+        success_response(
+            data={
+                "session_id": session.id,
+                "spec_id": session.spec_id,
+                "events": serialized_events,
+            },
+            request_id=request_id,
+            pagination={
+                "cursor": next_cursor,
+                "has_more": has_more,
+                "page_size": page_size,
+            },
+            telemetry={
+                "duration_ms": round(duration_ms, 2),
+                "journal_entries_scanned": (
+                    len(spec_data.get("journal", []))
+                    if isinstance(spec_data.get("journal"), list)
+                    else 0
+                ),
+                "session_events_returned": len(serialized_events),
+            },
+        )
+    )
 
 
 # =============================================================================
@@ -921,7 +1417,7 @@ def _handle_session_pause(
 
     logger.info("Paused session %s for spec %s", session.id, session.spec_id)
 
-    return _build_session_response(session, request_id)
+    return _build_session_response(session, request_id, workspace=workspace)
 
 
 # =============================================================================
@@ -1184,7 +1680,7 @@ def _handle_session_end(
 
     logger.info("Ended session %s for spec %s: %s", session.id, session.spec_id, validated_reason_code.value)
 
-    return _build_session_response(session, request_id)
+    return _build_session_response(session, request_id, workspace=workspace)
 
 
 # =============================================================================

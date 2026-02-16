@@ -14,23 +14,34 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from foundry_mcp.core.autonomy.models import (
+    LastStepIssued,
     NextStep,
+    PauseReason,
+    SessionStatus,
     StepOutcome,
     StepType,
 )
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_ALL_TASKS_BLOCKED,
     ERROR_GATE_AUDIT_FAILURE,
+    ERROR_INVALID_GATE_EVIDENCE,
     ERROR_GATE_INTEGRITY_CHECKSUM,
     ERROR_HEARTBEAT_STALE,
+    ERROR_REQUIRED_GATE_UNSATISFIED,
     ERROR_SESSION_UNRECOVERABLE,
     ERROR_SPEC_REBASE_REQUIRED,
     ERROR_STEP_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
+    ERROR_STEP_PROOF_MISMATCH,
+    ERROR_STEP_PROOF_CONFLICT,
+    ERROR_STEP_PROOF_EXPIRED,
     ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
     ERROR_VERIFICATION_RECEIPT_INVALID,
@@ -132,6 +143,30 @@ class TestMapOrchestratorError:
             request_id="test-req",
         )
         assert resp["success"] is False
+
+    @pytest.mark.parametrize(
+        "error_code",
+        [
+            ERROR_STEP_PROOF_MISSING,
+            ERROR_STEP_PROOF_MISMATCH,
+            ERROR_STEP_PROOF_CONFLICT,
+            ERROR_STEP_PROOF_EXPIRED,
+        ],
+    )
+    def test_step_proof_error_mappings(self, error_code: str):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _map_orchestrator_error_to_response,
+        )
+
+        resp = _map_orchestrator_error_to_response(
+            error_code=error_code,
+            error_message="step proof issue",
+            request_id="test-req",
+        )
+        assert resp["success"] is False
+        assert resp["data"]["loop_signal"] == "blocked_runtime"
+        details = resp["data"].get("details", {})
+        assert "remediation" in details
 
     def test_spec_rebase_required_mapping(self):
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
@@ -274,6 +309,161 @@ class TestMapOrchestratorError:
             request_id="test-req",
         )
         assert resp["success"] is False
+
+    def test_required_gate_unsatisfied_maps_to_blocked_runtime_loop_signal(self):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _map_orchestrator_error_to_response,
+        )
+
+        resp = _map_orchestrator_error_to_response(
+            error_code=ERROR_REQUIRED_GATE_UNSATISFIED,
+            error_message="Required gate unsatisfied",
+            request_id="test-req",
+        )
+        assert resp["success"] is False
+        assert resp["data"]["loop_signal"] == "blocked_runtime"
+        assert resp["data"]["recommended_actions"]
+
+
+class TestLoopSignalMapping:
+    """Contract tests for loop_signal mapping rows in WS3."""
+
+    @staticmethod
+    def _attach(response: dict) -> dict:
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _attach_loop_fields,
+        )
+
+        return _attach_loop_fields(response)
+
+    def test_phase_complete_pause_maps_to_phase_complete(self):
+        resp = self._attach(
+            {
+                "success": True,
+                "data": {
+                    "status": SessionStatus.PAUSED.value,
+                    "pause_reason": PauseReason.PHASE_COMPLETE.value,
+                },
+                "error": None,
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "phase_complete"
+        assert "recommended_actions" not in resp["data"]
+
+    def test_completed_status_maps_to_spec_complete(self):
+        resp = self._attach(
+            {
+                "success": True,
+                "data": {
+                    "status": SessionStatus.COMPLETED.value,
+                    "pause_reason": None,
+                },
+                "error": None,
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "spec_complete"
+
+    def test_spec_complete_pause_reason_maps_to_spec_complete(self):
+        resp = self._attach(
+            {
+                "success": True,
+                "data": {
+                    "status": SessionStatus.PAUSED.value,
+                    "pause_reason": "spec_complete",
+                },
+                "error": None,
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "spec_complete"
+
+    @pytest.mark.parametrize(
+        "pause_reason",
+        [
+            PauseReason.FIDELITY_CYCLE_LIMIT.value,
+            PauseReason.GATE_FAILED.value,
+            PauseReason.GATE_REVIEW_REQUIRED.value,
+            PauseReason.BLOCKED.value,
+            PauseReason.ERROR_THRESHOLD.value,
+            PauseReason.CONTEXT_LIMIT.value,
+            PauseReason.HEARTBEAT_STALE.value,
+            PauseReason.STEP_STALE.value,
+            PauseReason.TASK_LIMIT.value,
+            "spec_rebase_required",
+        ],
+    )
+    def test_attention_pause_reasons_map_to_paused_needs_attention(self, pause_reason: str):
+        resp = self._attach(
+            {
+                "success": True,
+                "data": {
+                    "status": SessionStatus.PAUSED.value,
+                    "pause_reason": pause_reason,
+                },
+                "error": None,
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "paused_needs_attention"
+        assert resp["data"]["recommended_actions"]
+
+    def test_failed_status_maps_to_failed_signal(self):
+        resp = self._attach(
+            {
+                "success": True,
+                "data": {
+                    "status": SessionStatus.FAILED.value,
+                    "pause_reason": None,
+                },
+                "error": None,
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "failed"
+        assert resp["data"]["recommended_actions"]
+
+    @pytest.mark.parametrize(
+        "error_code",
+        [
+            ERROR_REQUIRED_GATE_UNSATISFIED,
+            ERROR_GATE_AUDIT_FAILURE,
+            ERROR_GATE_INTEGRITY_CHECKSUM,
+            ERROR_STEP_PROOF_MISSING,
+            ERROR_STEP_PROOF_CONFLICT,
+            "FEATURE_DISABLED",
+            "AUTHORIZATION",
+        ],
+    )
+    def test_blocked_runtime_error_codes_map_to_blocked_runtime(self, error_code: str):
+        resp = self._attach(
+            {
+                "success": False,
+                "data": {
+                    "error_code": error_code,
+                    "error_type": "authorization",
+                },
+                "error": "blocked",
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "blocked_runtime"
+        assert resp["data"]["recommended_actions"]
+
+    def test_repeated_invalid_gate_evidence_maps_to_blocked_runtime(self):
+        resp = self._attach(
+            {
+                "success": False,
+                "data": {
+                    "error_code": ERROR_INVALID_GATE_EVIDENCE,
+                    "details": {"invalid_gate_evidence_attempts": 3},
+                },
+                "error": "invalid gate evidence",
+                "meta": {"version": "response-v2"},
+            }
+        )
+        assert resp["data"]["loop_signal"] == "blocked_runtime"
 
 
 # =============================================================================
@@ -425,6 +615,191 @@ class TestSessionStepNext:
         assert parsed.verification_receipt.command_hash == "a" * 64
         assert parsed.verification_receipt.output_digest == "b" * 64
 
+    def test_next_step_proof_idempotent_replay_returns_cached_response(self, tmp_path):
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.last_step_issued = LastStepIssued(
+            step_id="step-proof-replay-1",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+            step_proof="proof-replay-1",
+        )
+        storage.save(session)
+
+        mock_result = OrchestrationResult(
+            success=True,
+            session=make_session(session_id=session_id),
+            next_step=None,
+            should_persist=False,
+        )
+        payload = {
+            "step_id": "step-proof-replay-1",
+            "step_type": "implement_task",
+            "outcome": "success",
+            "task_id": "task-1",
+            "phase_id": "phase-1",
+            "step_proof": "proof-replay-1",
+        }
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
+        ) as MockOrch:
+            MockOrch.return_value.compute_next_step.return_value = mock_result
+            first = _handle_session_step_next(
+                config=config,
+                session_id=session_id,
+                workspace=str(workspace),
+                last_step_result=payload,
+            )
+        _assert_success(first)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
+        ) as MockOrch:
+            replay = _handle_session_step_next(
+                config=config,
+                session_id=session_id,
+                workspace=str(workspace),
+                last_step_result=payload,
+            )
+            MockOrch.return_value.compute_next_step.assert_not_called()
+
+        _assert_success(replay)
+        assert replay["data"] == first["data"]
+
+    def test_next_step_proof_conflict_returns_error(self, tmp_path):
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.last_step_issued = LastStepIssued(
+            step_id="step-proof-conflict-1",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+            step_proof="proof-conflict-1",
+        )
+        storage.save(session)
+
+        mock_result = OrchestrationResult(
+            success=True,
+            session=make_session(session_id=session_id),
+            next_step=None,
+            should_persist=False,
+        )
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
+        ) as MockOrch:
+            MockOrch.return_value.compute_next_step.return_value = mock_result
+            _handle_session_step_next(
+                config=config,
+                session_id=session_id,
+                workspace=str(workspace),
+                last_step_result={
+                    "step_id": "step-proof-conflict-1",
+                    "step_type": "implement_task",
+                    "outcome": "success",
+                    "task_id": "task-1",
+                    "phase_id": "phase-1",
+                    "step_proof": "proof-conflict-1",
+                },
+            )
+
+        conflict = _handle_session_step_next(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+            last_step_result={
+                "step_id": "step-proof-conflict-1",
+                "step_type": "implement_task",
+                "outcome": "success",
+                "task_id": "task-1",
+                "phase_id": "phase-1",
+                "note": "different payload",
+                "step_proof": "proof-conflict-1",
+            },
+        )
+        assert conflict["success"] is False
+        assert conflict["data"]["details"]["error_code"] == ERROR_STEP_PROOF_CONFLICT
+
+    def test_next_step_proof_expired_returns_error(self, tmp_path):
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.last_step_issued = LastStepIssued(
+            step_id="step-proof-expired-1",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+            step_proof="proof-expired-1",
+        )
+        storage.save(session)
+
+        mock_result = OrchestrationResult(
+            success=True,
+            session=make_session(session_id=session_id),
+            next_step=None,
+            should_persist=False,
+        )
+        payload = {
+            "step_id": "step-proof-expired-1",
+            "step_type": "implement_task",
+            "outcome": "success",
+            "task_id": "task-1",
+            "phase_id": "phase-1",
+            "step_proof": "proof-expired-1",
+        }
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
+        ) as MockOrch:
+            MockOrch.return_value.compute_next_step.return_value = mock_result
+            _handle_session_step_next(
+                config=config,
+                session_id=session_id,
+                workspace=str(workspace),
+                last_step_result=payload,
+            )
+
+        record = storage.get_proof_record(
+            session_id,
+            "proof-expired-1",
+            include_expired=True,
+        )
+        assert record is not None
+        record.grace_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        storage.save_proof_record(session_id, record)
+
+        expired = _handle_session_step_next(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+            last_step_result=payload,
+        )
+        assert expired["success"] is False
+        assert expired["data"]["details"]["error_code"] == ERROR_STEP_PROOF_EXPIRED
+
     def test_next_missing_step_type_in_feedback(self, tmp_path):
         """last_step_result without step_type returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
@@ -444,6 +819,34 @@ class TestSessionStepNext:
             },
         )
         assert resp["success"] is False
+
+    def test_next_invalid_verification_receipt_shape_returns_validation_error(self, tmp_path):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, _ = _create_session_for_step_tests(tmp_path)
+        resp = _handle_session_step_next(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+            last_step_result={
+                "step_id": "step-verify-shape-1",
+                "step_type": "execute_verification",
+                "outcome": "success",
+                "task_id": "verify-1",
+                "phase_id": "phase-1",
+                "verification_receipt": {
+                    "command_hash": "not-a-sha256",
+                    "exit_code": 0,
+                    "output_digest": "b" * 64,
+                    "issued_at": datetime.now(timezone.utc).isoformat(),
+                    "step_id": "step-verify-shape-1",
+                },
+            },
+        )
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "VALIDATION_ERROR"
 
     def test_next_invalid_outcome_in_feedback(self, tmp_path):
         """Invalid outcome value returns validation error."""

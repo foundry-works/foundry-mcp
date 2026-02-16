@@ -1398,7 +1398,100 @@ class AutonomySecurityConfig:
     rate_limit_retry_after_seconds: int = 5
 
 
+@dataclass
+class AutonomySessionDefaultsConfig:
+    """Default session-start configuration for autonomous runs."""
+
+    gate_policy: str = "strict"
+    stop_on_phase_completion: bool = False
+    auto_retry_fidelity_gate: bool = True
+    max_tasks_per_session: int = 100
+    max_consecutive_errors: int = 3
+    max_fidelity_review_cycles_per_phase: int = 3
+
+
+@dataclass
+class AutonomyPostureConfig:
+    """Operator-facing posture profile selection for autonomy controls."""
+
+    profile: Optional[str] = None
+
+
 _VALID_COMMIT_CADENCE = {"manual", "task", "phase"}
+_FEATURE_FLAG_ENV_VAR = "FOUNDRY_MCP_FEATURE_FLAGS"
+_FEATURE_FLAG_ENV_PREFIX = "FOUNDRY_MCP_FEATURE_FLAG_"
+_FEATURE_FLAG_DEPENDENCIES: Dict[str, Tuple[str, ...]] = {
+    "autonomy_fidelity_gates": ("autonomy_sessions",),
+}
+_AUTONOMY_POSTURE_ENV_VAR = "FOUNDRY_MCP_AUTONOMY_POSTURE"
+_AUTONOMY_DEFAULT_GATE_POLICY_ENV_VAR = "FOUNDRY_MCP_AUTONOMY_DEFAULT_GATE_POLICY"
+_AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION_ENV_VAR = (
+    "FOUNDRY_MCP_AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION"
+)
+_AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE_ENV_VAR = (
+    "FOUNDRY_MCP_AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE"
+)
+_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR = (
+    "FOUNDRY_MCP_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION"
+)
+_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR = (
+    "FOUNDRY_MCP_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS"
+)
+_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR = (
+    "FOUNDRY_MCP_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_PER_PHASE"
+)
+_VALID_AUTONOMY_POSTURES = frozenset({"unattended", "supervised", "debug"})
+_VALID_GATE_POLICIES = frozenset({"strict", "lenient", "manual"})
+_AUTONOMY_POSTURE_DEFAULTS: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "unattended": {
+        "autonomy_security": {
+            "role": "autonomy_runner",
+            "allow_lock_bypass": False,
+            "allow_gate_waiver": False,
+            "enforce_required_phase_gates": True,
+        },
+        "autonomy_session_defaults": {
+            "gate_policy": "strict",
+            "stop_on_phase_completion": True,
+            "auto_retry_fidelity_gate": True,
+            "max_tasks_per_session": 100,
+            "max_consecutive_errors": 3,
+            "max_fidelity_review_cycles_per_phase": 3,
+        },
+    },
+    "supervised": {
+        "autonomy_security": {
+            "role": "maintainer",
+            "allow_lock_bypass": True,
+            "allow_gate_waiver": True,
+            "enforce_required_phase_gates": True,
+        },
+        "autonomy_session_defaults": {
+            "gate_policy": "strict",
+            "stop_on_phase_completion": True,
+            "auto_retry_fidelity_gate": True,
+            "max_tasks_per_session": 100,
+            "max_consecutive_errors": 5,
+            "max_fidelity_review_cycles_per_phase": 3,
+        },
+    },
+    "debug": {
+        "autonomy_security": {
+            "role": "maintainer",
+            "allow_lock_bypass": True,
+            "allow_gate_waiver": True,
+            "enforce_required_phase_gates": False,
+        },
+        "autonomy_session_defaults": {
+            "gate_policy": "manual",
+            "stop_on_phase_completion": False,
+            "auto_retry_fidelity_gate": False,
+            "max_tasks_per_session": 250,
+            "max_consecutive_errors": 20,
+            "max_fidelity_review_cycles_per_phase": 10,
+        },
+    },
+}
 
 
 def _normalize_commit_cadence(value: str) -> str:
@@ -1458,6 +1551,94 @@ def _parse_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"true", "1", "yes", "on"}
 
 
+def _try_parse_bool(value: Any) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    return None
+
+
+def _normalize_feature_flag_name(raw_name: str) -> str:
+    """Normalize feature flag names across TOML and env inputs."""
+    return raw_name.strip().lower().replace("-", "_")
+
+
+def _parse_feature_flags_mapping(
+    mapping: Dict[Any, Any], *, source: str
+) -> Tuple[Dict[str, bool], List[str]]:
+    """Parse a feature-flag mapping and return (flags, warnings)."""
+    flags: Dict[str, bool] = {}
+    warnings: List[str] = []
+
+    for raw_name, raw_value in mapping.items():
+        if not isinstance(raw_name, str) or not raw_name.strip():
+            warnings.append(
+                f"Ignoring feature flag with invalid name from {source}: {raw_name!r}"
+            )
+            continue
+
+        name = _normalize_feature_flag_name(raw_name)
+        parsed = _try_parse_bool(raw_value)
+        if parsed is None:
+            warnings.append(
+                f"Ignoring feature flag '{name}' from {source}: value must be boolean-compatible, got {raw_value!r}"
+            )
+            continue
+
+        flags[name] = parsed
+
+    return flags, warnings
+
+
+def _parse_feature_flags_env(
+    raw_env_value: str,
+) -> Tuple[Dict[str, bool], List[str]]:
+    """Parse FOUNDRY_MCP_FEATURE_FLAGS from env.
+
+    Accepted formats:
+    - "autonomy_sessions" (enables flag)
+    - "autonomy_sessions=true,autonomy_fidelity_gates=false"
+    """
+    flags: Dict[str, bool] = {}
+    warnings: List[str] = []
+
+    for token in raw_env_value.split(","):
+        entry = token.strip()
+        if not entry:
+            continue
+
+        if "=" in entry:
+            raw_name, raw_value = entry.split("=", 1)
+            name = _normalize_feature_flag_name(raw_name)
+            if not name:
+                warnings.append(
+                    f"Ignoring malformed feature flag entry in {_FEATURE_FLAG_ENV_VAR}: {entry!r}"
+                )
+                continue
+            parsed = _try_parse_bool(raw_value)
+            if parsed is None:
+                warnings.append(
+                    f"Ignoring feature flag '{name}' in {_FEATURE_FLAG_ENV_VAR}: expected true/false value, got {raw_value!r}"
+                )
+                continue
+            flags[name] = parsed
+            continue
+
+        name = _normalize_feature_flag_name(entry)
+        if not name:
+            warnings.append(
+                f"Ignoring malformed feature flag entry in {_FEATURE_FLAG_ENV_VAR}: {entry!r}"
+            )
+            continue
+        flags[name] = True
+
+    return flags, warnings
+
+
 @dataclass
 class ServerConfig:
     """Server configuration with support for env vars and TOML overrides."""
@@ -1503,12 +1684,17 @@ class ServerConfig:
 
     # Autonomy security configuration
     autonomy_security: AutonomySecurityConfig = field(default_factory=AutonomySecurityConfig)
+    autonomy_posture: AutonomyPostureConfig = field(default_factory=AutonomyPostureConfig)
+    autonomy_session_defaults: AutonomySessionDefaultsConfig = field(
+        default_factory=AutonomySessionDefaultsConfig
+    )
 
     # Tool registration control
     disabled_tools: List[str] = field(default_factory=list)
 
     # Feature flags for enabling/disabling experimental features
     feature_flags: Dict[str, bool] = field(default_factory=dict)
+    startup_warnings: List[str] = field(default_factory=list, repr=False)
 
     @classmethod
     def from_env(cls, config_file: Optional[str] = None) -> "ServerConfig":
@@ -1558,6 +1744,7 @@ class ServerConfig:
 
         # Override with environment variables
         config._load_env()
+        config._validate_startup_configuration()
 
         return config
 
@@ -1612,6 +1799,22 @@ class ServerConfig:
                 if "disabled_tools" in tools_cfg:
                     self.disabled_tools = tools_cfg["disabled_tools"]
 
+            # Feature flag configuration
+            if "feature_flags" in data:
+                feature_flags_data = data["feature_flags"]
+                if isinstance(feature_flags_data, dict):
+                    parsed_flags, parse_warnings = _parse_feature_flags_mapping(
+                        feature_flags_data,
+                        source=f"{path}: [feature_flags]",
+                    )
+                    self.feature_flags.update(parsed_flags)
+                    for warning in parse_warnings:
+                        self._add_startup_warning(warning)
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring [feature_flags] in {path}: expected table/dict, got {type(feature_flags_data).__name__}"
+                    )
+
             # Git workflow settings
             if "git" in data:
                 git_cfg = data["git"]
@@ -1661,6 +1864,32 @@ class ServerConfig:
             # Research workflows settings
             if "research" in data:
                 self.research = ResearchConfig.from_toml_dict(data["research"])
+
+            # Autonomy posture profile (applies defaults that direct sections can override)
+            if "autonomy_posture" in data:
+                posture_data = data["autonomy_posture"]
+                if isinstance(posture_data, dict):
+                    self._apply_autonomy_posture_profile(
+                        posture_data.get("profile"),
+                        source=f"{path}: [autonomy_posture].profile",
+                    )
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring [autonomy_posture] in {path}: expected table/dict, got {type(posture_data).__name__}"
+                    )
+
+            # Autonomy session-start defaults
+            if "autonomy_session_defaults" in data:
+                defaults_data = data["autonomy_session_defaults"]
+                if isinstance(defaults_data, dict):
+                    self._apply_autonomy_session_defaults(
+                        defaults_data,
+                        source=f"{path}: [autonomy_session_defaults]",
+                    )
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring [autonomy_session_defaults] in {path}: expected table/dict, got {type(defaults_data).__name__}"
+                    )
 
             # Autonomy security settings
             if "autonomy_security" in data:
@@ -1867,6 +2096,135 @@ class ServerConfig:
         if disabled := os.environ.get("FOUNDRY_MCP_DISABLED_TOOLS"):
             self.disabled_tools = [t.strip() for t in disabled.split(",") if t.strip()]
 
+        # Feature flags from env:
+        # 1) bulk list/map via FOUNDRY_MCP_FEATURE_FLAGS
+        # 2) per-flag overrides via FOUNDRY_MCP_FEATURE_FLAG_<NAME>
+        if bulk_flags := os.environ.get(_FEATURE_FLAG_ENV_VAR):
+            parsed_flags, parse_warnings = _parse_feature_flags_env(bulk_flags)
+            self.feature_flags.update(parsed_flags)
+            for warning in parse_warnings:
+                self._add_startup_warning(warning)
+
+        for env_key, env_value in os.environ.items():
+            if not env_key.startswith(_FEATURE_FLAG_ENV_PREFIX):
+                continue
+            raw_name = env_key[len(_FEATURE_FLAG_ENV_PREFIX):]
+            name = _normalize_feature_flag_name(raw_name)
+            if not name:
+                self._add_startup_warning(
+                    f"Ignoring malformed feature-flag override env var: {env_key}"
+                )
+                continue
+            parsed = _try_parse_bool(env_value)
+            if parsed is None:
+                self._add_startup_warning(
+                    f"Ignoring {env_key}: expected true/false value, got {env_value!r}"
+                )
+                continue
+            self.feature_flags[name] = parsed
+
+        # Autonomy posture profile defaults (can be overridden by explicit env vars below)
+        if posture_profile := os.environ.get(_AUTONOMY_POSTURE_ENV_VAR):
+            self._apply_autonomy_posture_profile(
+                posture_profile,
+                source=_AUTONOMY_POSTURE_ENV_VAR,
+            )
+
+        # Autonomy session-start defaults
+        if gate_policy := os.environ.get(_AUTONOMY_DEFAULT_GATE_POLICY_ENV_VAR):
+            normalized_policy = gate_policy.strip().lower()
+            if normalized_policy in _VALID_GATE_POLICIES:
+                self.autonomy_session_defaults.gate_policy = normalized_policy
+            else:
+                self._add_startup_warning(
+                    f"Ignoring {_AUTONOMY_DEFAULT_GATE_POLICY_ENV_VAR}: expected one of "
+                    f"{', '.join(sorted(_VALID_GATE_POLICIES))}, got {gate_policy!r}"
+                )
+
+        if stop_on_phase_completion := os.environ.get(
+            _AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION_ENV_VAR
+        ):
+            parsed_stop_on_phase_completion = _try_parse_bool(stop_on_phase_completion)
+            if parsed_stop_on_phase_completion is None:
+                self._add_startup_warning(
+                    f"Ignoring {_AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION_ENV_VAR}: "
+                    f"expected true/false value, got {stop_on_phase_completion!r}"
+                )
+            else:
+                self.autonomy_session_defaults.stop_on_phase_completion = (
+                    parsed_stop_on_phase_completion
+                )
+
+        if auto_retry_fidelity_gate := os.environ.get(
+            _AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE_ENV_VAR
+        ):
+            parsed_auto_retry_fidelity_gate = _try_parse_bool(auto_retry_fidelity_gate)
+            if parsed_auto_retry_fidelity_gate is None:
+                self._add_startup_warning(
+                    f"Ignoring {_AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE_ENV_VAR}: "
+                    f"expected true/false value, got {auto_retry_fidelity_gate!r}"
+                )
+            else:
+                self.autonomy_session_defaults.auto_retry_fidelity_gate = (
+                    parsed_auto_retry_fidelity_gate
+                )
+
+        if max_tasks_per_session := os.environ.get(
+            _AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR
+        ):
+            try:
+                parsed = int(max_tasks_per_session)
+                if parsed > 0:
+                    self.autonomy_session_defaults.max_tasks_per_session = parsed
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR}: "
+                        "value must be > 0"
+                    )
+            except ValueError:
+                self._add_startup_warning(
+                    f"Ignoring {_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR}: "
+                    f"expected integer > 0, got {max_tasks_per_session!r}"
+                )
+
+        if max_consecutive_errors := os.environ.get(
+            _AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR
+        ):
+            try:
+                parsed = int(max_consecutive_errors)
+                if parsed > 0:
+                    self.autonomy_session_defaults.max_consecutive_errors = parsed
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR}: "
+                        "value must be > 0"
+                    )
+            except ValueError:
+                self._add_startup_warning(
+                    f"Ignoring {_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR}: "
+                    f"expected integer > 0, got {max_consecutive_errors!r}"
+                )
+
+        if max_fidelity_cycles := os.environ.get(
+            _AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR
+        ):
+            try:
+                parsed = int(max_fidelity_cycles)
+                if parsed > 0:
+                    self.autonomy_session_defaults.max_fidelity_review_cycles_per_phase = (
+                        parsed
+                    )
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR}: "
+                        "value must be > 0"
+                    )
+            except ValueError:
+                self._add_startup_warning(
+                    f"Ignoring {_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR}: "
+                    f"expected integer > 0, got {max_fidelity_cycles!r}"
+                )
+
         # Autonomy security settings
         if allow_lock_bypass := os.environ.get(
             "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS"
@@ -1911,6 +2269,246 @@ class ServerConfig:
                     self.autonomy_security.rate_limit_retry_after_seconds = parsed
             except ValueError:
                 pass
+
+    def _add_startup_warning(self, message: str) -> None:
+        if message and message not in self.startup_warnings:
+            self.startup_warnings.append(message)
+
+    def _apply_autonomy_posture_profile(
+        self,
+        profile_value: Any,
+        *,
+        source: str,
+    ) -> None:
+        """Apply a fixed posture profile to autonomy defaults."""
+        if profile_value is None:
+            return
+        if not isinstance(profile_value, str) or not profile_value.strip():
+            self._add_startup_warning(
+                f"Ignoring autonomy posture from {source}: expected non-empty string, got {profile_value!r}"
+            )
+            return
+
+        normalized_profile = profile_value.strip().lower()
+        profile_defaults = _AUTONOMY_POSTURE_DEFAULTS.get(normalized_profile)
+        if profile_defaults is None:
+            self._add_startup_warning(
+                f"Ignoring autonomy posture from {source}: expected one of "
+                f"{', '.join(sorted(_VALID_AUTONOMY_POSTURES))}, got {profile_value!r}"
+            )
+            return
+
+        self.autonomy_posture.profile = normalized_profile
+
+        current_security = self.autonomy_security
+        security_defaults = profile_defaults["autonomy_security"]
+        self.autonomy_security = AutonomySecurityConfig(
+            allow_lock_bypass=bool(security_defaults["allow_lock_bypass"]),
+            allow_gate_waiver=bool(security_defaults["allow_gate_waiver"]),
+            enforce_required_phase_gates=bool(
+                security_defaults["enforce_required_phase_gates"]
+            ),
+            role=str(security_defaults["role"]),
+            rate_limit_max_consecutive_denials=(
+                current_security.rate_limit_max_consecutive_denials
+            ),
+            rate_limit_denial_window_seconds=(
+                current_security.rate_limit_denial_window_seconds
+            ),
+            rate_limit_retry_after_seconds=(
+                current_security.rate_limit_retry_after_seconds
+            ),
+        )
+
+        session_defaults = profile_defaults["autonomy_session_defaults"]
+        self.autonomy_session_defaults = AutonomySessionDefaultsConfig(
+            gate_policy=str(session_defaults["gate_policy"]),
+            stop_on_phase_completion=bool(
+                session_defaults["stop_on_phase_completion"]
+            ),
+            auto_retry_fidelity_gate=bool(
+                session_defaults["auto_retry_fidelity_gate"]
+            ),
+            max_tasks_per_session=int(session_defaults["max_tasks_per_session"]),
+            max_consecutive_errors=int(session_defaults["max_consecutive_errors"]),
+            max_fidelity_review_cycles_per_phase=int(
+                session_defaults["max_fidelity_review_cycles_per_phase"]
+            ),
+        )
+
+    def _apply_autonomy_session_defaults(
+        self,
+        defaults_data: Dict[Any, Any],
+        *,
+        source: str,
+    ) -> None:
+        """Apply autonomy session default overrides from config."""
+        if not isinstance(defaults_data, dict):
+            self._add_startup_warning(
+                f"Ignoring autonomy session defaults from {source}: expected table/dict"
+            )
+            return
+
+        current = self.autonomy_session_defaults
+        gate_policy = current.gate_policy
+        if "gate_policy" in defaults_data:
+            raw_gate_policy = defaults_data["gate_policy"]
+            if isinstance(raw_gate_policy, str):
+                normalized_gate_policy = raw_gate_policy.strip().lower()
+                if normalized_gate_policy in _VALID_GATE_POLICIES:
+                    gate_policy = normalized_gate_policy
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring gate_policy from {source}: expected one of "
+                        f"{', '.join(sorted(_VALID_GATE_POLICIES))}, got {raw_gate_policy!r}"
+                    )
+            else:
+                self._add_startup_warning(
+                    f"Ignoring gate_policy from {source}: expected string, got {type(raw_gate_policy).__name__}"
+                )
+
+        stop_on_phase_completion = current.stop_on_phase_completion
+        if "stop_on_phase_completion" in defaults_data:
+            parsed = _try_parse_bool(defaults_data["stop_on_phase_completion"])
+            if parsed is None:
+                self._add_startup_warning(
+                    f"Ignoring stop_on_phase_completion from {source}: expected true/false value, got {defaults_data['stop_on_phase_completion']!r}"
+                )
+            else:
+                stop_on_phase_completion = parsed
+
+        auto_retry_fidelity_gate = current.auto_retry_fidelity_gate
+        if "auto_retry_fidelity_gate" in defaults_data:
+            parsed = _try_parse_bool(defaults_data["auto_retry_fidelity_gate"])
+            if parsed is None:
+                self._add_startup_warning(
+                    f"Ignoring auto_retry_fidelity_gate from {source}: expected true/false value, got {defaults_data['auto_retry_fidelity_gate']!r}"
+                )
+            else:
+                auto_retry_fidelity_gate = parsed
+
+        max_tasks_per_session = current.max_tasks_per_session
+        if "max_tasks_per_session" in defaults_data:
+            raw_value = defaults_data["max_tasks_per_session"]
+            try:
+                parsed = int(raw_value)
+                if parsed > 0:
+                    max_tasks_per_session = parsed
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring max_tasks_per_session from {source}: value must be > 0"
+                    )
+            except (TypeError, ValueError):
+                self._add_startup_warning(
+                    f"Ignoring max_tasks_per_session from {source}: expected integer > 0, got {raw_value!r}"
+                )
+
+        max_consecutive_errors = current.max_consecutive_errors
+        if "max_consecutive_errors" in defaults_data:
+            raw_value = defaults_data["max_consecutive_errors"]
+            try:
+                parsed = int(raw_value)
+                if parsed > 0:
+                    max_consecutive_errors = parsed
+                else:
+                    self._add_startup_warning(
+                        f"Ignoring max_consecutive_errors from {source}: value must be > 0"
+                    )
+            except (TypeError, ValueError):
+                self._add_startup_warning(
+                    f"Ignoring max_consecutive_errors from {source}: expected integer > 0, got {raw_value!r}"
+                )
+
+        max_fidelity_review_cycles_per_phase = (
+            current.max_fidelity_review_cycles_per_phase
+        )
+        if "max_fidelity_review_cycles_per_phase" in defaults_data:
+            raw_value = defaults_data["max_fidelity_review_cycles_per_phase"]
+            try:
+                parsed = int(raw_value)
+                if parsed > 0:
+                    max_fidelity_review_cycles_per_phase = parsed
+                else:
+                    self._add_startup_warning(
+                        "Ignoring max_fidelity_review_cycles_per_phase from "
+                        f"{source}: value must be > 0"
+                    )
+            except (TypeError, ValueError):
+                self._add_startup_warning(
+                    "Ignoring max_fidelity_review_cycles_per_phase from "
+                    f"{source}: expected integer > 0, got {raw_value!r}"
+                )
+
+        self.autonomy_session_defaults = AutonomySessionDefaultsConfig(
+            gate_policy=gate_policy,
+            stop_on_phase_completion=stop_on_phase_completion,
+            auto_retry_fidelity_gate=auto_retry_fidelity_gate,
+            max_tasks_per_session=max_tasks_per_session,
+            max_consecutive_errors=max_consecutive_errors,
+            max_fidelity_review_cycles_per_phase=(
+                max_fidelity_review_cycles_per_phase
+            ),
+        )
+
+    def _validate_startup_configuration(self) -> None:
+        """Collect non-fatal startup warnings for inconsistent config states."""
+        for flag_name, dependencies in _FEATURE_FLAG_DEPENDENCIES.items():
+            if not self.feature_flags.get(flag_name, False):
+                continue
+
+            missing = [dep for dep in dependencies if not self.feature_flags.get(dep, False)]
+            if missing:
+                self._add_startup_warning(
+                    f"Feature flag '{flag_name}' is enabled but missing dependencies: {', '.join(missing)}"
+                )
+
+        # Warn when autonomy-only security toggles are configured while sessions are off.
+        if not self.feature_flags.get("autonomy_sessions", False):
+            non_default_controls: List[str] = []
+            if self.autonomy_security.allow_lock_bypass:
+                non_default_controls.append("allow_lock_bypass=true")
+            if self.autonomy_security.allow_gate_waiver:
+                non_default_controls.append("allow_gate_waiver=true")
+            if not self.autonomy_security.enforce_required_phase_gates:
+                non_default_controls.append("enforce_required_phase_gates=false")
+            if non_default_controls:
+                self._add_startup_warning(
+                    "Autonomy security controls configured while autonomy_sessions is disabled: "
+                    + ", ".join(non_default_controls)
+                )
+
+        profile = self.autonomy_posture.profile
+        if profile == "unattended":
+            unsafe_conditions: List[str] = []
+            if self.autonomy_security.role != "autonomy_runner":
+                unsafe_conditions.append(
+                    "role must be autonomy_runner for unattended posture"
+                )
+            if self.autonomy_security.allow_lock_bypass:
+                unsafe_conditions.append("allow_lock_bypass must be false")
+            if self.autonomy_security.allow_gate_waiver:
+                unsafe_conditions.append("allow_gate_waiver must be false")
+            if not self.autonomy_security.enforce_required_phase_gates:
+                unsafe_conditions.append(
+                    "enforce_required_phase_gates must be true"
+                )
+            if self.autonomy_session_defaults.gate_policy != "strict":
+                unsafe_conditions.append("gate_policy should be strict")
+            if not self.autonomy_session_defaults.stop_on_phase_completion:
+                unsafe_conditions.append(
+                    "stop_on_phase_completion should be true"
+                )
+            if unsafe_conditions:
+                self._add_startup_warning(
+                    "UNSAFE unattended posture configuration: "
+                    + "; ".join(unsafe_conditions)
+                )
+
+        if profile == "debug" and self.autonomy_security.role == "autonomy_runner":
+            self._add_startup_warning(
+                "Debug posture is intended for supervised/manual operation; "
+                "autonomy_runner role should not be used."
+            )
 
     def validate_api_key(self, key: Optional[str]) -> bool:
         """

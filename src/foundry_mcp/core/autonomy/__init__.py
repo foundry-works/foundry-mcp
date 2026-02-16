@@ -27,6 +27,7 @@ from .models import (
     GateVerdict,
     PhaseGateStatus,
     StepOutcome,
+    LoopSignal,
     # Main state model
     AutonomousSessionState,
     # Sub-models
@@ -49,6 +50,9 @@ from .models import (
     CompletedPhaseSummary,
     PendingTaskSummary,
     StepInstruction,
+    RecommendedAction,
+    derive_loop_signal,
+    derive_recommended_actions,
 )
 from .orchestrator import (
     StepOrchestrator,
@@ -127,6 +131,7 @@ __all__ = [
     "GateVerdict",
     "PhaseGateStatus",
     "StepOutcome",
+    "LoopSignal",
     # Models - Main
     "AutonomousSessionState",
     # Models - Sub-models
@@ -149,6 +154,9 @@ __all__ = [
     "CompletedPhaseSummary",
     "PendingTaskSummary",
     "StepInstruction",
+    "RecommendedAction",
+    "derive_loop_signal",
+    "derive_recommended_actions",
     # Orchestrator
     "StepOrchestrator",
     "OrchestrationResult",

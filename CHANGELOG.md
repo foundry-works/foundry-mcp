@@ -32,6 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`AutonomyStorage` export**: Added `AutonomyStorage` to `core/autonomy/__init__.py` public API exports
 - **`LastStepResult` validation**: Added cross-field model validator ensuring required fields per step type (`task_id` for implement/verify, `phase_id`+`gate_attempt_id` for gate steps)
 
+### Changed
+
+- **Autonomy posture profiles**: Added fixed posture profiles (`unattended`, `supervised`, `debug`) with runtime defaults for role, escape-hatch policy, and session-start defaults.
+- **Capability response enhancements**: `server(action="capabilities")` now includes runtime posture/security/session-default details and a role-preflight convention contract for consumers.
+- **Session-start default expansion**: `task(action="session", command="start")` now uses config-driven session defaults (`gate_policy`, stop/retry behavior, bounded limits) when request fields are omitted.
+
+### Migration
+
+- **Legacy session action names remain supported** but are now on an explicit removal window: **3 months or 2 minor releases (whichever is later)**.
+- Legacy action responses include machine-readable deprecation metadata:
+  - `meta.deprecated.action`
+  - `meta.deprecated.replacement`
+  - `meta.deprecated.removal_target`
+- Server logs now emit `WARN` entries for legacy action invocations to support migration tracking.
+
 ## [0.11.0] - 2026-02-14
 
 ### Removed

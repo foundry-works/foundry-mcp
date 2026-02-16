@@ -13,6 +13,8 @@ All actions are feature-flag guarded by 'autonomy_sessions'.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -30,12 +32,18 @@ from foundry_mcp.core.autonomy.models import (
     SessionStepResponseData,
     StepOutcome,
     StepType,
+    derive_loop_signal,
+    derive_recommended_actions,
 )
 from foundry_mcp.core.autonomy.orchestrator import (
     OrchestrationResult,
     StepOrchestrator,
     ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
+    ERROR_STEP_PROOF_MISMATCH,
+    ERROR_STEP_PROOF_CONFLICT,
+    ERROR_STEP_PROOF_EXPIRED,
     ERROR_SPEC_REBASE_REQUIRED,
     ERROR_HEARTBEAT_STALE,
     ERROR_STEP_STALE,
@@ -70,6 +78,98 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _hash_last_step_result_payload(last_step_result: LastStepResult) -> str:
+    """Create stable payload hash for step-proof replay detection."""
+    payload = last_step_result.model_dump(mode="json", by_alias=True, exclude_none=True)
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _restore_cached_proof_response(
+    cached_response: Dict[str, Any],
+    request_id: str,
+) -> dict:
+    """Restore cached response envelope for idempotent proof replay."""
+    restored = json.loads(json.dumps(cached_response, default=str))
+    meta = restored.get("meta")
+    if isinstance(meta, dict):
+        meta["request_id"] = request_id
+    else:
+        restored["meta"] = {"version": "response-v2", "request_id": request_id}
+    return restored
+
+
+def _persist_step_proof_response(
+    *,
+    storage: Any,
+    session_id: str,
+    step_proof: Optional[str],
+    step_id: Optional[str],
+    response: dict,
+) -> None:
+    """Persist response envelope for one-time proof token replay."""
+    if not step_proof or not step_id:
+        return
+    try:
+        storage.update_proof_record_response(
+            session_id,
+            step_proof,
+            step_id=step_id,
+            response=response,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to persist step-proof replay response for session %s step %s: %s",
+            session_id,
+            step_id,
+            exc,
+        )
+
+
+def _attach_loop_fields(response: dict) -> dict:
+    """Attach loop_signal + recommended_actions to session-step responses."""
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return response
+
+    success = bool(response.get("success"))
+    details = data.get("details")
+    if not isinstance(details, dict):
+        details = {}
+
+    error_code = None
+    if not success:
+        error_code = details.get("error_code") or data.get("error_code")
+    repeated_invalid_gate_evidence = bool(details.get("repeated_invalid_gate_evidence"))
+    if not repeated_invalid_gate_evidence:
+        attempts = details.get("invalid_gate_evidence_attempts")
+        if isinstance(attempts, int) and attempts >= 3:
+            repeated_invalid_gate_evidence = True
+
+    loop_signal = derive_loop_signal(
+        status=data.get("status"),
+        pause_reason=data.get("pause_reason"),
+        error_code=error_code,
+        is_unrecoverable_error=(error_code == ERROR_SESSION_UNRECOVERABLE),
+        repeated_invalid_gate_evidence=repeated_invalid_gate_evidence,
+    )
+    if loop_signal is None:
+        return response
+
+    data["loop_signal"] = loop_signal.value
+    recommended_actions = derive_recommended_actions(
+        loop_signal=loop_signal,
+        pause_reason=data.get("pause_reason"),
+        error_code=error_code,
+    )
+    if recommended_actions:
+        data["recommended_actions"] = [
+            action.model_dump(mode="json", by_alias=True)
+            for action in recommended_actions
+        ]
+    return response
+
+
 def _map_orchestrator_error_to_response(
     error_code: Optional[str],
     error_message: str,
@@ -84,6 +184,10 @@ def _map_orchestrator_error_to_response(
     error_code_map = {
         ERROR_STEP_RESULT_REQUIRED: ErrorCode.VALIDATION_ERROR,
         ERROR_STEP_MISMATCH: ErrorCode.CONFLICT,
+        ERROR_STEP_PROOF_MISSING: ErrorCode.MISSING_REQUIRED,
+        ERROR_STEP_PROOF_MISMATCH: ErrorCode.CONFLICT,
+        ERROR_STEP_PROOF_CONFLICT: ErrorCode.CONFLICT,
+        ERROR_STEP_PROOF_EXPIRED: ErrorCode.CONFLICT,
         ERROR_SPEC_REBASE_REQUIRED: ErrorCode.CONFLICT,
         ERROR_HEARTBEAT_STALE: ErrorCode.UNAVAILABLE,
         ERROR_STEP_STALE: ErrorCode.UNAVAILABLE,
@@ -102,6 +206,10 @@ def _map_orchestrator_error_to_response(
     error_type_map = {
         ERROR_STEP_RESULT_REQUIRED: ErrorType.VALIDATION,
         ERROR_STEP_MISMATCH: ErrorType.CONFLICT,
+        ERROR_STEP_PROOF_MISSING: ErrorType.VALIDATION,
+        ERROR_STEP_PROOF_MISMATCH: ErrorType.CONFLICT,
+        ERROR_STEP_PROOF_CONFLICT: ErrorType.CONFLICT,
+        ERROR_STEP_PROOF_EXPIRED: ErrorType.CONFLICT,
         ERROR_SPEC_REBASE_REQUIRED: ErrorType.CONFLICT,
         ERROR_HEARTBEAT_STALE: ErrorType.UNAVAILABLE,
         ERROR_STEP_STALE: ErrorType.UNAVAILABLE,
@@ -131,6 +239,22 @@ def _map_orchestrator_error_to_response(
         details["remediation"] = "Provide last_step_result with the outcome of the previous step"
     elif error_code == ERROR_STEP_MISMATCH:
         details["remediation"] = "Ensure step_id and step_type match the last issued step"
+    elif error_code == ERROR_STEP_PROOF_MISSING:
+        details["remediation"] = (
+            "Include step_proof from the issued step in last_step_result for one-time proof validation."
+        )
+    elif error_code == ERROR_STEP_PROOF_MISMATCH:
+        details["remediation"] = (
+            "Use the latest issued step and matching step_proof token, or replay with the original proof payload."
+        )
+    elif error_code == ERROR_STEP_PROOF_CONFLICT:
+        details["remediation"] = (
+            "Resubmit exactly the same payload for this step_proof token. Different payloads are rejected."
+        )
+    elif error_code == ERROR_STEP_PROOF_EXPIRED:
+        details["remediation"] = (
+            "The proof replay grace window has expired. Request a fresh step via session-step-next."
+        )
     elif error_code == ERROR_SPEC_REBASE_REQUIRED:
         details["remediation"] = "Use session-rebase to reconcile spec structure changes"
     elif error_code in (ERROR_HEARTBEAT_STALE, ERROR_STEP_STALE):
@@ -179,13 +303,17 @@ def _map_orchestrator_error_to_response(
         else:
             details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
 
-    return asdict(error_response(
-        error_message,
-        error_code=mapped_code,
-        error_type=mapped_type,
-        request_id=request_id,
-        details=details,
-    ))
+    return _attach_loop_fields(
+        asdict(
+            error_response(
+                error_message,
+                error_code=mapped_code,
+                error_type=mapped_type,
+                request_id=request_id,
+                details=details,
+            )
+        )
+    )
 
 
 def _build_next_step_response(
@@ -225,6 +353,11 @@ def _build_next_step_response(
             elif gate_record.status in (PhaseGateStatus.PENDING, PhaseGateStatus.FAILED):
                 missing_required_gates.append(phase_id)
 
+    loop_signal = derive_loop_signal(
+        status=session.status,
+        pause_reason=session.pause_reason,
+    )
+
     # Build response data - pass NextStep model directly
     response_data = SessionStepResponseData(
         session_id=session.id,
@@ -234,12 +367,22 @@ def _build_next_step_response(
         required_phase_gates=required_phase_gates if required_phase_gates else None,
         satisfied_gates=satisfied_gates if satisfied_gates else None,
         missing_required_gates=missing_required_gates if missing_required_gates else None,
+        loop_signal=loop_signal,
+        recommended_actions=derive_recommended_actions(
+            loop_signal=loop_signal,
+            pause_reason=session.pause_reason,
+        )
+        or None,
     )
 
-    return asdict(success_response(
-        data=response_data.model_dump(mode="json", by_alias=True),
-        request_id=request_id,
-    ))
+    return _attach_loop_fields(
+        asdict(
+            success_response(
+                data=response_data.model_dump(mode="json", by_alias=True),
+                request_id=request_id,
+            )
+        )
+    )
 
 
 def _handle_session_step_next(
@@ -293,16 +436,20 @@ def _handle_session_step_next(
 
     # Feature flag check - fail-closed
     if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-step-next", request_id)
+        return _attach_loop_fields(
+            _feature_disabled_response("session-step-next", request_id)
+        )
 
     storage = _get_storage(config, workspace)
 
     session, err = _resolve_session(storage, "session-step-next", request_id, session_id, spec_id)
     if err:
-        return err
+        return _attach_loop_fields(err)
 
     # Parse last_step_result if provided
     parsed_last_step_result: Optional[LastStepResult] = None
+    consumed_step_proof: Optional[str] = None
+    consumed_step_id: Optional[str] = None
     if last_step_result:
         try:
             # Convert outcome string to enum
@@ -312,17 +459,21 @@ def _handle_session_step_next(
             # step_type is required in LastStepResult
             step_type_str = last_step_result.get("step_type")
             if not step_type_str:
-                return asdict(error_response(
-                    "step_type is required in last_step_result",
-                    error_code=ErrorCode.VALIDATION_ERROR,
-                    error_type=ErrorType.VALIDATION,
-                    request_id=request_id,
-                    details={
-                        "action": "session-step-next",
-                        "field": "last_step_result.step_type",
-                        "hint": "Provide step_type matching the last issued step",
-                    },
-                ))
+                return _attach_loop_fields(
+                    asdict(
+                        error_response(
+                            "step_type is required in last_step_result",
+                            error_code=ErrorCode.VALIDATION_ERROR,
+                            error_type=ErrorType.VALIDATION,
+                            request_id=request_id,
+                            details={
+                                "action": "session-step-next",
+                                "field": "last_step_result.step_type",
+                                "hint": "Provide step_type matching the last issued step",
+                            },
+                        )
+                    )
+                )
             step_type = StepType(step_type_str)
 
             parsed_last_step_result = LastStepResult(
@@ -339,18 +490,142 @@ def _handle_session_step_next(
             )
         except (ValueError, TypeError, ValidationError) as e:
             logger.warning("Failed to parse last_step_result: %s", e)
-            return asdict(error_response(
-                f"Invalid last_step_result format: {e}",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                request_id=request_id,
-                details={
-                    "action": "session-step-next",
-                    "field": "last_step_result",
-                    "hint": "Ensure outcome is one of: success, failure, skipped",
-                },
-            ))
+            return _attach_loop_fields(
+                asdict(
+                    error_response(
+                        f"Invalid last_step_result format: {e}",
+                        error_code=ErrorCode.VALIDATION_ERROR,
+                        error_type=ErrorType.VALIDATION,
+                        request_id=request_id,
+                        details={
+                            "action": "session-step-next",
+                            "field": "last_step_result",
+                            "hint": "Ensure outcome is one of: success, failure, skipped",
+                        },
+                    )
+                )
+            )
 
+    if parsed_last_step_result is not None:
+        expected_step_proof = (
+            session.last_step_issued.step_proof
+            if session.last_step_issued is not None
+            else None
+        )
+        provided_step_proof = parsed_last_step_result.step_proof
+        payload_hash = _hash_last_step_result_payload(parsed_last_step_result)
+
+        # If a proof was provided for an older step, return cached response
+        # (or deterministic conflict/expiry) before invoking orchestrator.
+        if provided_step_proof and provided_step_proof != expected_step_proof:
+            replay_record = storage.get_proof_record(
+                session.id,
+                provided_step_proof,
+                include_expired=True,
+            )
+            if replay_record:
+                if replay_record.payload_hash != payload_hash:
+                    return _map_orchestrator_error_to_response(
+                        error_code=ERROR_STEP_PROOF_CONFLICT,
+                        error_message=(
+                            "step_proof was already consumed with a different payload for this session."
+                        ),
+                        request_id=request_id,
+                        session_id=session.id,
+                        state_version=session.state_version,
+                    )
+                if replay_record.grace_expires_at <= datetime.now(timezone.utc):
+                    return _map_orchestrator_error_to_response(
+                        error_code=ERROR_STEP_PROOF_EXPIRED,
+                        error_message=(
+                            "step_proof replay window has expired; request a fresh step."
+                        ),
+                        request_id=request_id,
+                        session_id=session.id,
+                        state_version=session.state_version,
+                    )
+                if isinstance(replay_record.cached_response, dict):
+                    return _attach_loop_fields(
+                        _restore_cached_proof_response(
+                            replay_record.cached_response,
+                            request_id,
+                        )
+                    )
+                return _map_orchestrator_error_to_response(
+                    error_code=ERROR_STEP_PROOF_EXPIRED,
+                    error_message=(
+                        "step_proof was consumed but cached response is unavailable; request a fresh step."
+                    ),
+                    request_id=request_id,
+                    session_id=session.id,
+                    state_version=session.state_version,
+                )
+
+        if expected_step_proof:
+            if not provided_step_proof:
+                return _map_orchestrator_error_to_response(
+                    error_code=ERROR_STEP_PROOF_MISSING,
+                    error_message=(
+                        "step_proof is required for this step. Include the one-time step_proof token "
+                        "from the issued step in last_step_result."
+                    ),
+                    request_id=request_id,
+                    session_id=session.id,
+                    state_version=session.state_version,
+                )
+            if provided_step_proof != expected_step_proof:
+                return _map_orchestrator_error_to_response(
+                    error_code=ERROR_STEP_PROOF_MISMATCH,
+                    error_message="step_proof does not match the currently issued step.",
+                    request_id=request_id,
+                    session_id=session.id,
+                    state_version=session.state_version,
+                )
+
+            consumed, existing_record, proof_error = storage.consume_proof_with_lock(
+                session.id,
+                provided_step_proof,
+                payload_hash,
+                step_id=parsed_last_step_result.step_id,
+            )
+            if not consumed:
+                mapped_code = (
+                    ERROR_STEP_PROOF_EXPIRED
+                    if proof_error == "PROOF_EXPIRED"
+                    else ERROR_STEP_PROOF_CONFLICT
+                )
+                return _map_orchestrator_error_to_response(
+                    error_code=mapped_code,
+                    error_message=(
+                        "step_proof replay window has expired; request a fresh step."
+                        if mapped_code == ERROR_STEP_PROOF_EXPIRED
+                        else "step_proof was already consumed with a different payload."
+                    ),
+                    request_id=request_id,
+                    session_id=session.id,
+                    state_version=session.state_version,
+                )
+
+            if existing_record is not None:
+                if isinstance(existing_record.cached_response, dict):
+                    return _attach_loop_fields(
+                        _restore_cached_proof_response(
+                            existing_record.cached_response,
+                            request_id,
+                        )
+                    )
+                return _map_orchestrator_error_to_response(
+                    error_code=ERROR_STEP_PROOF_EXPIRED,
+                    error_message=(
+                        "step_proof already consumed but cached response is unavailable; request a fresh step."
+                    ),
+                    request_id=request_id,
+                    session_id=session.id,
+                    state_version=session.state_version,
+                )
+
+            consumed_step_proof = provided_step_proof
+            consumed_step_id = parsed_last_step_result.step_id
     # Prepare heartbeat timestamp if requested
     heartbeat_at = None
     if heartbeat:
@@ -370,50 +645,84 @@ def _handle_session_step_next(
         heartbeat_at=heartbeat_at,
     )
 
+    final_response: dict
+
     # Handle replay scenario — return cached SessionStepResponseData in envelope
     if result.replay_response is not None:
         logger.info("Returning cached replay response for session %s", session.id)
-        return asdict(success_response(
-            data=result.replay_response,
-            request_id=request_id,
-        ))
-
-    # Persist session if needed
-    if result.should_persist:
-        try:
-            storage.save(result.session)
-            # Update active session pointer
-            storage.set_active_session(result.session.spec_id, result.session.id)
-        except Exception as e:
-            logger.error("Failed to persist session %s: %s", session.id, e)
-            return asdict(error_response(
-                f"Failed to persist session state: {e}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                request_id=request_id,
-                details={
-                    "session_id": session.id,
-                    "state_version": session.state_version,
-                },
-            ))
-
-    # Return error or success response
-    if not result.success:
-        # Extract gate_block from warnings if present
-        gate_block = None
-        if result.warnings and isinstance(result.warnings, dict):
-            gate_block = result.warnings.get("gate_block")
-
-        return _map_orchestrator_error_to_response(
-            error_code=result.error_code,
-            error_message=result.error_message or "Orchestration failed",
-            request_id=request_id,
-            session_id=session.id,
-            state_version=session.state_version,
-            gate_block=gate_block,
+        final_response = _attach_loop_fields(
+            asdict(
+                success_response(
+                    data=result.replay_response,
+                    request_id=request_id,
+                )
+            )
         )
+    else:
+        # Persist session if needed
+        if result.should_persist:
+            try:
+                storage.save(result.session)
+                # Update active session pointer
+                storage.set_active_session(result.session.spec_id, result.session.id)
+            except Exception as e:
+                logger.error("Failed to persist session %s: %s", session.id, e)
+                final_response = _attach_loop_fields(
+                    asdict(
+                        error_response(
+                            f"Failed to persist session state: {e}",
+                            error_code=ErrorCode.INTERNAL_ERROR,
+                            error_type=ErrorType.INTERNAL,
+                            request_id=request_id,
+                            details={
+                                "session_id": session.id,
+                                "state_version": session.state_version,
+                            },
+                        )
+                    )
+                )
+            else:
+                # Return error or success response
+                if not result.success:
+                    # Extract gate_block from warnings if present
+                    gate_block = None
+                    if result.warnings and isinstance(result.warnings, dict):
+                        gate_block = result.warnings.get("gate_block")
 
-    return _build_next_step_response(result, request_id)
+                    final_response = _map_orchestrator_error_to_response(
+                        error_code=result.error_code,
+                        error_message=result.error_message or "Orchestration failed",
+                        request_id=request_id,
+                        session_id=session.id,
+                        state_version=session.state_version,
+                        gate_block=gate_block,
+                    )
+                else:
+                    final_response = _build_next_step_response(result, request_id)
+        else:
+            if not result.success:
+                gate_block = None
+                if result.warnings and isinstance(result.warnings, dict):
+                    gate_block = result.warnings.get("gate_block")
+                final_response = _map_orchestrator_error_to_response(
+                    error_code=result.error_code,
+                    error_message=result.error_message or "Orchestration failed",
+                    request_id=request_id,
+                    session_id=session.id,
+                    state_version=session.state_version,
+                    gate_block=gate_block,
+                )
+            else:
+                final_response = _build_next_step_response(result, request_id)
+
+    _persist_step_proof_response(
+        storage=storage,
+        session_id=session.id,
+        step_proof=consumed_step_proof,
+        step_id=consumed_step_id,
+        response=final_response,
+    )
+    return final_response
 
 
 def _handle_session_step_report(
@@ -454,38 +763,48 @@ def _handle_session_step_report(
 
     # Feature flag check - fail-closed
     if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-step-report", request_id)
+        return _attach_loop_fields(
+            _feature_disabled_response("session-step-report", request_id)
+        )
 
     if not spec_id and not session_id:
-        return _validation_error(
-            action="session-step-report",
-            field="spec_id/session_id",
-            message="Provide spec_id or session_id",
-            request_id=request_id,
+        return _attach_loop_fields(
+            _validation_error(
+                action="session-step-report",
+                field="spec_id/session_id",
+                message="Provide spec_id or session_id",
+                request_id=request_id,
+            )
         )
 
     if not step_id:
-        return _validation_error(
-            action="session-step-report",
-            field="step_id",
-            message="step_id is required",
-            request_id=request_id,
+        return _attach_loop_fields(
+            _validation_error(
+                action="session-step-report",
+                field="step_id",
+                message="step_id is required",
+                request_id=request_id,
+            )
         )
 
     if not outcome:
-        return _validation_error(
-            action="session-step-report",
-            field="outcome",
-            message="outcome is required",
-            request_id=request_id,
+        return _attach_loop_fields(
+            _validation_error(
+                action="session-step-report",
+                field="outcome",
+                message="outcome is required",
+                request_id=request_id,
+            )
         )
 
     if not step_type:
-        return _validation_error(
-            action="session-step-report",
-            field="step_type",
-            message="step_type is required",
-            request_id=request_id,
+        return _attach_loop_fields(
+            _validation_error(
+                action="session-step-report",
+                field="step_type",
+                message="step_type is required",
+                request_id=request_id,
+            )
         )
 
     # Build last_step_result and delegate to next handler
@@ -539,33 +858,43 @@ def _handle_session_step_replay(
 
     # Feature flag check - fail-closed
     if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-step-replay", request_id)
+        return _attach_loop_fields(
+            _feature_disabled_response("session-step-replay", request_id)
+        )
 
     storage = _get_storage(config, workspace)
 
     session, err = _resolve_session(storage, "session-step-replay", request_id, session_id, spec_id)
     if err:
-        return err
+        return _attach_loop_fields(err)
 
     # Check for cached response
     if not session.last_issued_response:
-        return asdict(error_response(
-            "No cached response available for replay",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            request_id=request_id,
-            details={
-                "action": "session-step-replay",
-                "session_id": session.id,
-                "hint": "Call session-step-next first to get a step to execute",
-            },
-        ))
+        return _attach_loop_fields(
+            asdict(
+                error_response(
+                    "No cached response available for replay",
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    request_id=request_id,
+                    details={
+                        "action": "session-step-replay",
+                        "session_id": session.id,
+                        "hint": "Call session-step-next first to get a step to execute",
+                    },
+                )
+            )
+        )
 
     logger.info("Replaying cached response for session %s", session.id)
-    return asdict(success_response(
-        data=session.last_issued_response,
-        request_id=request_id,
-    ))
+    return _attach_loop_fields(
+        asdict(
+            success_response(
+                data=session.last_issued_response,
+                request_id=request_id,
+            )
+        )
+    )
 
 
 def _handle_session_step_heartbeat(

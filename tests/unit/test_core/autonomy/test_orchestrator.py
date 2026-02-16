@@ -23,6 +23,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from foundry_mcp.core.autonomy.models import (
     AutonomousSessionState,
@@ -33,6 +34,7 @@ from foundry_mcp.core.autonomy.models import (
     LastStepResult,
     PauseReason,
     PendingGateEvidence,
+    PendingVerificationReceipt,
     PhaseGateRecord,
     PhaseGateStatus,
     SessionCounters,
@@ -41,14 +43,20 @@ from foundry_mcp.core.autonomy.models import (
     StepOutcome,
     StepType,
     StopConditions,
+    VerificationReceipt,
 )
 from foundry_mcp.core.autonomy.orchestrator import (
+    ERROR_GATE_AUDIT_FAILURE,
+    ERROR_GATE_INTEGRITY_CHECKSUM,
     ERROR_HEARTBEAT_STALE,
     ERROR_INVALID_GATE_EVIDENCE,
     ERROR_SPEC_REBASE_REQUIRED,
     ERROR_STEP_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
+    ERROR_STEP_PROOF_MISMATCH,
     ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
+    ERROR_VERIFICATION_RECEIPT_INVALID,
     OrchestrationResult,
     StepOrchestrator,
 )
@@ -85,6 +93,7 @@ def _issued(
     task_id: Optional[str] = "task-1",
     phase_id: Optional[str] = "phase-1",
     minutes_ago: int = 0,
+    step_proof: Optional[str] = None,
 ) -> LastStepIssued:
     return LastStepIssued(
         step_id=step_id,
@@ -92,6 +101,7 @@ def _issued(
         task_id=task_id,
         phase_id=phase_id,
         issued_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago),
+        step_proof=step_proof,
     )
 
 
@@ -102,6 +112,8 @@ def _result(
     task_id: Optional[str] = "task-1",
     phase_id: Optional[str] = "phase-1",
     gate_attempt_id: Optional[str] = None,
+    step_proof: Optional[str] = None,
+    verification_receipt: Optional[dict] = None,
 ) -> LastStepResult:
     return LastStepResult(
         step_id=step_id,
@@ -110,7 +122,67 @@ def _result(
         task_id=task_id,
         phase_id=phase_id,
         gate_attempt_id=gate_attempt_id,
+        step_proof=step_proof,
+        verification_receipt=verification_receipt,
     )
+
+
+# =============================================================================
+# Verification Receipt Model Contract
+# =============================================================================
+
+
+class TestVerificationReceiptModelContract:
+    """Receipt construction contract tests (valid and invalid shapes)."""
+
+    def test_verification_receipt_valid_shape(self):
+        receipt = VerificationReceipt(
+            command_hash="a" * 64,
+            exit_code=0,
+            output_digest="b" * 64,
+            issued_at=datetime.now(timezone.utc),
+            step_id="step-valid-1",
+        )
+        assert receipt.command_hash == "a" * 64
+        assert receipt.output_digest == "b" * 64
+        assert receipt.step_id == "step-valid-1"
+
+    @pytest.mark.parametrize(
+        "receipt_data",
+        [
+            {
+                "command_hash": "short",
+                "exit_code": 0,
+                "output_digest": "b" * 64,
+                "issued_at": datetime.now(timezone.utc),
+                "step_id": "step-invalid-1",
+            },
+            {
+                "command_hash": "a" * 64,
+                "exit_code": 0,
+                "output_digest": "short",
+                "issued_at": datetime.now(timezone.utc),
+                "step_id": "step-invalid-2",
+            },
+            {
+                "command_hash": "a" * 64,
+                "exit_code": 0,
+                "output_digest": "b" * 64,
+                "issued_at": datetime.now(timezone.utc),
+                "step_id": "",
+            },
+            {
+                "command_hash": "a" * 64,
+                "exit_code": 0,
+                "output_digest": "b" * 64,
+                "issued_at": datetime.now(),
+                "step_id": "step-invalid-3",
+            },
+        ],
+    )
+    def test_verification_receipt_invalid_shapes(self, receipt_data):
+        with pytest.raises(ValidationError):
+            VerificationReceipt(**receipt_data)
 
 
 # =============================================================================
@@ -158,6 +230,22 @@ class TestReplayDetection:
         result = orch.compute_next_step(session, _result(step_id="step-999"))
         assert result.success is False
         assert result.error_code == ERROR_STEP_MISMATCH
+
+    def test_proof_enforced_feedback_skips_replay_short_circuit(self, tmp_path):
+        """Proof-bearing feedback must be processed instead of replayed."""
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(
+            last_step_issued=_issued(step_id="step-001", step_proof="proof-001"),
+            last_issued_response={"cached": True},
+        )
+
+        result = orch.compute_next_step(
+            session,
+            _result(step_id="step-001", step_proof="proof-001"),
+        )
+
+        assert result.replay_response is None
+        assert "task-1" in result.session.completed_task_ids
 
 
 # =============================================================================
@@ -278,6 +366,58 @@ class TestStepIdentityValidation:
         assert result.error_code != ERROR_STEP_MISMATCH
 
 
+class TestStepProofValidation:
+    """Step-proof enforcement for step result reports."""
+
+    def test_missing_step_proof_returns_error(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(
+            last_step_issued=_issued(
+                step_id="step-proof-1",
+                step_type=StepType.IMPLEMENT_TASK,
+                task_id="task-1",
+                step_proof="proof-123",
+            ),
+        )
+
+        result = orch.compute_next_step(
+            session,
+            _result(
+                step_id="step-proof-1",
+                step_type=StepType.IMPLEMENT_TASK,
+                task_id="task-1",
+                outcome=StepOutcome.SUCCESS,
+                step_proof=None,
+            ),
+        )
+        assert result.success is False
+        assert result.error_code == ERROR_STEP_PROOF_MISSING
+
+    def test_step_proof_mismatch_returns_error(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(
+            last_step_issued=_issued(
+                step_id="step-proof-2",
+                step_type=StepType.IMPLEMENT_TASK,
+                task_id="task-1",
+                step_proof="proof-expected",
+            ),
+        )
+
+        result = orch.compute_next_step(
+            session,
+            _result(
+                step_id="step-proof-2",
+                step_type=StepType.IMPLEMENT_TASK,
+                task_id="task-1",
+                outcome=StepOutcome.SUCCESS,
+                step_proof="proof-wrong",
+            ),
+        )
+        assert result.success is False
+        assert result.error_code == ERROR_STEP_PROOF_MISMATCH
+
+
 # =============================================================================
 # Gate Evidence Validation
 # =============================================================================
@@ -356,6 +496,164 @@ class TestGateEvidenceValidation:
                 phase_id="phase-1",
                 gate_attempt_id=None,  # No attempt ID
             )
+
+
+class TestVerificationReceiptValidation:
+    """Verification receipt completeness and binding checks."""
+
+    def test_verification_receipt_task_mismatch_returns_invalid(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        expected_hash = "a" * 64
+        session = make_session(
+            last_step_issued=_issued(
+                step_id="step-verify-1",
+                step_type=StepType.EXECUTE_VERIFICATION,
+                task_id="verify-1",
+                phase_id="phase-1",
+                step_proof="proof-verify-1",
+            ),
+            pending_verification_receipt=PendingVerificationReceipt(
+                step_id="step-verify-1",
+                task_id="verify-EXPECTED-DIFFERENT",
+                expected_command_hash=expected_hash,
+                issued_at=now,
+            ),
+        )
+
+        receipt = VerificationReceipt(
+            command_hash=expected_hash,
+            exit_code=0,
+            output_digest="b" * 64,
+            issued_at=now,
+            step_id="step-verify-1",
+        )
+        result = orch.compute_next_step(
+            session,
+            _result(
+                step_id="step-verify-1",
+                step_type=StepType.EXECUTE_VERIFICATION,
+                task_id="verify-1",
+                phase_id="phase-1",
+                outcome=StepOutcome.SUCCESS,
+                step_proof="proof-verify-1",
+                verification_receipt=receipt.model_dump(mode="json"),
+            ),
+        )
+        assert result.success is False
+        assert result.error_code == ERROR_VERIFICATION_RECEIPT_INVALID
+
+    def test_verification_receipt_issued_before_pending_window_is_invalid(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        expected_hash = "c" * 64
+        session = make_session(
+            last_step_issued=_issued(
+                step_id="step-verify-2",
+                step_type=StepType.EXECUTE_VERIFICATION,
+                task_id="verify-2",
+                phase_id="phase-1",
+                step_proof="proof-verify-2",
+            ),
+            pending_verification_receipt=PendingVerificationReceipt(
+                step_id="step-verify-2",
+                task_id="verify-2",
+                expected_command_hash=expected_hash,
+                issued_at=now,
+            ),
+        )
+
+        receipt = VerificationReceipt(
+            command_hash=expected_hash,
+            exit_code=0,
+            output_digest="d" * 64,
+            issued_at=now - timedelta(minutes=1),
+            step_id="step-verify-2",
+        )
+        result = orch.compute_next_step(
+            session,
+            _result(
+                step_id="step-verify-2",
+                step_type=StepType.EXECUTE_VERIFICATION,
+                task_id="verify-2",
+                phase_id="phase-1",
+                outcome=StepOutcome.SUCCESS,
+                step_proof="proof-verify-2",
+                verification_receipt=receipt.model_dump(mode="json"),
+            ),
+        )
+        assert result.success is False
+        assert result.error_code == ERROR_VERIFICATION_RECEIPT_INVALID
+
+
+class TestIntegrityFailurePaths:
+    """Integrity checksum and audit failures should map to explicit error codes."""
+
+    def test_tampered_gate_checksum_returns_integrity_error(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        session = make_session(
+            last_step_issued=_issued(
+                step_id="step-gate-1",
+                step_type=StepType.RUN_FIDELITY_GATE,
+                task_id=None,
+                phase_id="phase-1",
+                step_proof="proof-gate-1",
+            ),
+            pending_gate_evidence=PendingGateEvidence(
+                gate_attempt_id="gate-1",
+                step_id="step-gate-1",
+                phase_id="phase-1",
+                verdict=GateVerdict.PASS,
+                issued_at=now,
+                integrity_checksum="tampered-checksum",
+            ),
+        )
+
+        result = orch.compute_next_step(
+            session,
+            _result(
+                step_id="step-gate-1",
+                step_type=StepType.RUN_FIDELITY_GATE,
+                task_id=None,
+                phase_id="phase-1",
+                gate_attempt_id="gate-1",
+                outcome=StepOutcome.SUCCESS,
+                step_proof="proof-gate-1",
+            ),
+        )
+        assert result.success is False
+        assert result.error_code == ERROR_GATE_INTEGRITY_CHECKSUM
+
+    def test_gate_audit_failure_detected_before_terminal_transition(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "metadata": {"requires_gate": True},
+                    "tasks": [],
+                }
+            ]
+        )
+        session = make_session(
+            active_phase_id="phase-1",
+            required_phase_gates={"phase-1": ["fidelity"]},
+            satisfied_gates={"phase-1": ["fidelity"]},
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.FAILED,
+                )
+            },
+        )
+
+        with patch.object(orch, "_should_run_fidelity_gate", return_value=False):
+            result = orch._determine_next_step(session, spec_data, now)
+        assert result.success is False
+        assert result.error_code == ERROR_GATE_AUDIT_FAILURE
 
 
 # =============================================================================
@@ -1167,6 +1465,26 @@ class TestCreateStepHelpers:
         assert result.success is True
         assert result.next_step.type == StepType.ADDRESS_FIDELITY_FEEDBACK
         assert result.next_step.phase_id == "phase-1"
+
+    def test_created_steps_include_step_proof_tokens(self, tmp_path):
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(active_phase_id="phase-1")
+        now = datetime.now(timezone.utc)
+
+        implement = orch._create_implement_task_step(
+            session,
+            {"id": "task-1", "title": "Implement feature"},
+            make_spec_data(),
+            now,
+        )
+        pause = orch._create_pause_result(session, PauseReason.USER, now, "pause")
+
+        assert implement.next_step.step_proof is not None
+        assert len(implement.next_step.step_proof) == 64
+        assert pause.next_step.step_proof is not None
+        assert len(pause.next_step.step_proof) == 64
+        assert session.last_step_issued is not None
+        assert session.last_step_issued.step_proof == pause.next_step.step_proof
 
     def test_emitted_step_instructions_match_registered_router_actions(self, tmp_path):
         from foundry_mcp.tools.unified.review import _REVIEW_ROUTER

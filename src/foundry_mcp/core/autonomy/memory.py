@@ -927,16 +927,6 @@ class AutonomyStorage:
             # Add new record
             records[record.step_proof] = record.model_dump(mode="json")
 
-            # Prune expired records
-            now = datetime.now(timezone.utc)
-            valid_records = {}
-            for proof, rec_data in records.items():
-                expires = rec_data.get("grace_expires_at")
-                if expires:
-                    expire_time = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-                    if expire_time > now:
-                        valid_records[proof] = rec_data
-
             # Atomic write
             fd, temp_path = tempfile.mkstemp(
                 dir=proof_path.parent,
@@ -945,7 +935,7 @@ class AutonomyStorage:
             )
             try:
                 with os.fdopen(fd, "w") as f:
-                    json.dump({"records": valid_records}, f, indent=2, default=str)
+                    json.dump({"records": records}, f, indent=2, default=str)
                     f.flush()
                     os.fsync(f.fileno())
                 os.replace(temp_path, proof_path)
@@ -960,12 +950,15 @@ class AutonomyStorage:
         self,
         session_id: str,
         step_proof: str,
+        *,
+        include_expired: bool = False,
     ) -> Optional["StepProofRecord"]:
         """Get a specific proof record.
 
         Args:
             session_id: Session identifier
             step_proof: Proof token to look up
+            include_expired: Include records outside replay grace window
 
         Returns:
             StepProofRecord if found and not expired, None otherwise
@@ -977,17 +970,64 @@ class AutonomyStorage:
         if not record_data:
             return None
 
-        # Check expiration
-        expires = record_data.get("grace_expires_at")
-        if expires:
-            expire_time = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-            if expire_time <= datetime.now(timezone.utc):
-                return None
-
         try:
-            return StepProofRecord.model_validate(record_data)
+            record = StepProofRecord.model_validate(record_data)
         except (ValueError, KeyError):
             return None
+        if not include_expired and record.grace_expires_at <= datetime.now(timezone.utc):
+            return None
+        return record
+
+    def update_proof_record_response(
+        self,
+        session_id: str,
+        step_proof: str,
+        *,
+        step_id: str,
+        response: Dict[str, Any],
+    ) -> bool:
+        """Attach response payload/hash to a previously-consumed proof record."""
+        from .models import StepProofRecord
+
+        lock_path = self._get_proof_lock_path(session_id)
+        proof_path = self._get_proof_path(session_id)
+        with FileLock(lock_path, timeout=LOCK_ACQUISITION_TIMEOUT):
+            records = self.load_proof_records(session_id)
+            record_data = records.get(step_proof)
+            if not isinstance(record_data, dict):
+                return False
+            try:
+                record = StepProofRecord.model_validate(record_data)
+            except (ValueError, KeyError):
+                return False
+
+            response_json = json.dumps(
+                response, sort_keys=True, separators=(",", ":"), default=str
+            )
+            record.step_id = step_id
+            record.cached_response = response
+            record.response_hash = hashlib.sha256(response_json.encode()).hexdigest()
+
+            records[step_proof] = record.model_dump(mode="json")
+
+            fd, temp_path = tempfile.mkstemp(
+                dir=proof_path.parent,
+                prefix=f".{session_id}_proofs.",
+                suffix=".tmp",
+            )
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump({"records": records}, f, indent=2, default=str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_path, proof_path)
+            except Exception:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
+            return True
 
     def consume_proof_with_lock(
         self,
@@ -995,6 +1035,7 @@ class AutonomyStorage:
         step_proof: str,
         payload_hash: str,
         grace_window_seconds: int = 30,
+        step_id: str = "",
     ) -> Tuple[bool, Optional["StepProofRecord"], str]:
         """Atomically consume a proof token with per-session locking.
 
@@ -1008,42 +1049,66 @@ class AutonomyStorage:
             step_proof: Proof token to consume
             payload_hash: SHA-256 hash of request payload
             grace_window_seconds: Grace window for replay (default 30s)
+            step_id: Step identifier bound to this proof token
 
         Returns:
             Tuple of (success, existing_record_or_none, error_code_or_empty)
             - (True, None, ""): Proof consumed successfully, proceed with execution
             - (True, record, ""): Idempotent replay within grace window, use cached response
             - (False, None, "PROOF_CONFLICT"): Same proof with different payload
-            - (False, None, "PROOF_EXPIRED"): Proof was consumed but grace window expired
+            - (False, record, "PROOF_EXPIRED"): Proof consumed but grace window expired
         """
         from .models import StepProofRecord
 
         lock_path = self._get_proof_lock_path(session_id)
 
         with FileLock(lock_path, timeout=LOCK_ACQUISITION_TIMEOUT):
-            existing = self.get_proof_record(session_id, step_proof)
+            now = datetime.now(timezone.utc)
+            existing = self.get_proof_record(
+                session_id,
+                step_proof,
+                include_expired=True,
+            )
 
             if existing is not None:
                 # Proof was already consumed
-                if existing.payload_hash == payload_hash:
-                    # Same payload - idempotent replay within grace window
-                    return (True, existing, "")
-                else:
+                if existing.payload_hash != payload_hash:
                     # Different payload - conflict
                     return (False, None, "PROOF_CONFLICT")
+                if existing.grace_expires_at > now:
+                    # Same payload - idempotent replay within grace window
+                    return (True, existing, "")
+                return (False, existing, "PROOF_EXPIRED")
 
             # Proof not yet consumed - consume it now
-            now = datetime.now(timezone.utc)
             grace_expires = now + timedelta(seconds=grace_window_seconds)
 
-            # Create record (step_id will be set by caller)
             record = StepProofRecord(
                 step_proof=step_proof,
-                step_id="",  # Will be updated by caller
+                step_id=step_id,
                 payload_hash=payload_hash,
                 consumed_at=now,
                 grace_expires_at=grace_expires,
             )
+            proof_path = self._get_proof_path(session_id)
+            records = self.load_proof_records(session_id)
+            records[step_proof] = record.model_dump(mode="json")
 
-            self.save_proof_record(session_id, record)
+            fd, temp_path = tempfile.mkstemp(
+                dir=proof_path.parent,
+                prefix=f".{session_id}_proofs.",
+                suffix=".tmp",
+            )
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump({"records": records}, f, indent=2, default=str)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_path, proof_path)
+            except Exception:
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+                raise
             return (True, None, "")

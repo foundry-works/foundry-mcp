@@ -48,7 +48,11 @@ class TestRoleAllowlists:
     """Test role allowlist constants."""
 
     def test_autonomy_runner_allowlist(self):
+        assert "spec-find" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "server-capabilities" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-start" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "session-list" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "session-status" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-step-next" in AUTONOMY_RUNNER_ALLOWLIST
         assert "review-fidelity-gate" in AUTONOMY_RUNNER_ALLOWLIST
 
@@ -58,6 +62,7 @@ class TestRoleAllowlists:
     def test_observer_allowlist_readonly(self):
         assert "list" in OBSERVER_ALLOWLIST
         assert "status" in OBSERVER_ALLOWLIST
+        assert "session-events" in OBSERVER_ALLOWLIST
         assert "session-start" not in OBSERVER_ALLOWLIST
 
 
@@ -149,6 +154,18 @@ class TestCheckActionAllowed:
 
     def test_autonomy_runner_can_start_session(self):
         result = check_action_allowed("autonomy_runner", "session", "start")
+        assert result.allowed is True
+
+    def test_autonomy_runner_can_resolve_spec(self):
+        result = check_action_allowed("autonomy_runner", "spec", "find")
+        assert result.allowed is True
+
+    def test_autonomy_runner_can_read_runtime_capabilities(self):
+        result = check_action_allowed("autonomy_runner", "server", "capabilities")
+        assert result.allowed is True
+
+    def test_autonomy_runner_can_perform_session_preflight_list(self):
+        result = check_action_allowed("autonomy_runner", "session", "list")
         assert result.allowed is True
 
     def test_autonomy_runner_cannot_mutate_tasks(self):

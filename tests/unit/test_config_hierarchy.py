@@ -568,3 +568,239 @@ rate_limit_retry_after_seconds = 12
                     assert config.autonomy_security.rate_limit_retry_after_seconds == 9
                 finally:
                     os.chdir(original_cwd)
+
+    def test_feature_flags_loaded_from_toml(self, tmp_path):
+        """[feature_flags] table is parsed from TOML config."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[feature_flags]
+autonomy_sessions = true
+autonomy_fidelity_gates = false
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags["autonomy_sessions"] is True
+                    assert config.feature_flags["autonomy_fidelity_gates"] is False
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flags_env_overrides_toml(self, tmp_path):
+        """FOUNDRY_MCP_FEATURE_FLAGS overrides TOML feature flags."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[feature_flags]
+autonomy_sessions = false
+autonomy_fidelity_gates = false
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_sessions=true,autonomy_fidelity_gates=true"
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags["autonomy_sessions"] is True
+                    assert config.feature_flags["autonomy_fidelity_gates"] is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flag_per_flag_env_overrides_bulk_env(self, tmp_path):
+        """FOUNDRY_MCP_FEATURE_FLAG_<NAME> takes precedence over bulk env."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {
+                    "FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_sessions=true,autonomy_fidelity_gates=true",
+                    "FOUNDRY_MCP_FEATURE_FLAG_AUTONOMY_FIDELITY_GATES": "false",
+                },
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.feature_flags["autonomy_sessions"] is True
+                    assert config.feature_flags["autonomy_fidelity_gates"] is False
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flag_dependency_warning(self, tmp_path):
+        """Startup warnings include dependency issues for inconsistent flags."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_fidelity_gates=true"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert any(
+                        "autonomy_fidelity_gates" in warning
+                        and "autonomy_sessions" in warning
+                        for warning in config.startup_warnings
+                    )
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_profile_expands_defaults(self, tmp_path):
+        """[autonomy_posture] profile applies role/security/session defaults."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_posture]
+profile = "unattended"
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "unattended"
+                    assert config.autonomy_security.role == "autonomy_runner"
+                    assert config.autonomy_security.allow_lock_bypass is False
+                    assert config.autonomy_security.allow_gate_waiver is False
+                    assert config.autonomy_security.enforce_required_phase_gates is True
+                    assert config.autonomy_session_defaults.gate_policy == "strict"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_supervised_profile_expands_defaults(self, tmp_path):
+        """[autonomy_posture] supervised profile keeps guardrails with escape hatches enabled."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_posture]
+profile = "supervised"
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "supervised"
+                    assert config.autonomy_security.role == "maintainer"
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert config.autonomy_security.allow_gate_waiver is True
+                    assert config.autonomy_security.enforce_required_phase_gates is True
+                    assert config.autonomy_session_defaults.gate_policy == "strict"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is True
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_allows_direct_override_with_unsafe_warning(self, tmp_path):
+        """Direct security/session defaults can override profile and trigger safety warnings."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+        project_config = project_dir / "foundry-mcp.toml"
+        project_config.write_text("""
+[autonomy_posture]
+profile = "unattended"
+
+[autonomy_security]
+role = "maintainer"
+allow_lock_bypass = true
+allow_gate_waiver = true
+enforce_required_phase_gates = false
+
+[autonomy_session_defaults]
+gate_policy = "manual"
+stop_on_phase_completion = false
+""")
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(os.environ, {}, clear=True):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "unattended"
+                    assert config.autonomy_security.role == "maintainer"
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert config.autonomy_security.allow_gate_waiver is True
+                    assert config.autonomy_security.enforce_required_phase_gates is False
+                    assert config.autonomy_session_defaults.gate_policy == "manual"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is False
+                    assert any(
+                        "UNSAFE unattended posture configuration" in warning
+                        for warning in config.startup_warnings
+                    )
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_autonomy_posture_env_applies_debug_defaults(self, tmp_path):
+        """FOUNDRY_MCP_AUTONOMY_POSTURE applies debug profile defaults."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_AUTONOMY_POSTURE": "debug"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
+                    config = ServerConfig.from_env()
+                    assert config.autonomy_posture.profile == "debug"
+                    assert config.autonomy_security.role == "maintainer"
+                    assert config.autonomy_security.allow_lock_bypass is True
+                    assert config.autonomy_security.allow_gate_waiver is True
+                    assert config.autonomy_session_defaults.gate_policy == "manual"
+                    assert config.autonomy_session_defaults.stop_on_phase_completion is False
+                finally:
+                    os.chdir(original_cwd)

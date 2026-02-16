@@ -29,6 +29,7 @@ from foundry_mcp.core.autonomy.memory import (
     sanitize_id,
 )
 from foundry_mcp.core.autonomy.models import SessionStatus
+from foundry_mcp.core.autonomy.models import StepProofRecord
 
 from .conftest import make_session
 
@@ -419,6 +420,127 @@ class TestGarbageCollection:
     def test_failed_session_longer_ttl(self, storage):
         """Failed sessions have longer TTL (30 days vs 7 days)."""
         assert GC_TTL_DAYS[SessionStatus.FAILED] > GC_TTL_DAYS[SessionStatus.COMPLETED]
+
+
+# =============================================================================
+# Step Proof Storage
+# =============================================================================
+
+
+class TestStepProofStorage:
+    """Test one-time proof persistence and replay semantics."""
+
+    def test_consume_proof_first_time(self, storage):
+        success, existing, error = storage.consume_proof_with_lock(
+            "sess-proof-1",
+            "proof-token-1",
+            "hash-1",
+            grace_window_seconds=30,
+            step_id="step-1",
+        )
+
+        assert success is True
+        assert existing is None
+        assert error == ""
+
+    def test_consume_same_proof_payload_replays(self, storage):
+        storage.consume_proof_with_lock(
+            "sess-proof-2",
+            "proof-token-2",
+            "hash-2",
+            grace_window_seconds=30,
+            step_id="step-2",
+        )
+
+        success, existing, error = storage.consume_proof_with_lock(
+            "sess-proof-2",
+            "proof-token-2",
+            "hash-2",
+            grace_window_seconds=30,
+            step_id="step-2",
+        )
+
+        assert success is True
+        assert existing is not None
+        assert existing.step_proof == "proof-token-2"
+        assert error == ""
+
+    def test_consume_same_proof_different_payload_conflicts(self, storage):
+        storage.consume_proof_with_lock(
+            "sess-proof-3",
+            "proof-token-3",
+            "hash-3",
+            grace_window_seconds=30,
+            step_id="step-3",
+        )
+
+        success, existing, error = storage.consume_proof_with_lock(
+            "sess-proof-3",
+            "proof-token-3",
+            "hash-3-different",
+            grace_window_seconds=30,
+            step_id="step-3",
+        )
+
+        assert success is False
+        assert existing is None
+        assert error == "PROOF_CONFLICT"
+
+    def test_consume_proof_after_grace_window_expires(self, storage):
+        storage.consume_proof_with_lock(
+            "sess-proof-4",
+            "proof-token-4",
+            "hash-4",
+            grace_window_seconds=1,
+            step_id="step-4",
+        )
+        time.sleep(1.1)
+
+        success, existing, error = storage.consume_proof_with_lock(
+            "sess-proof-4",
+            "proof-token-4",
+            "hash-4",
+            grace_window_seconds=1,
+            step_id="step-4",
+        )
+
+        assert success is False
+        assert existing is not None
+        assert error == "PROOF_EXPIRED"
+
+    def test_update_proof_record_response_persists_cached_response(self, storage):
+        storage.consume_proof_with_lock(
+            "sess-proof-5",
+            "proof-token-5",
+            "hash-5",
+            grace_window_seconds=30,
+            step_id="step-5",
+        )
+
+        response = {
+            "success": True,
+            "data": {"session_id": "sess-proof-5", "status": "running"},
+            "error": None,
+            "meta": {"version": "response-v2"},
+        }
+        updated = storage.update_proof_record_response(
+            "sess-proof-5",
+            "proof-token-5",
+            step_id="step-5",
+            response=response,
+        )
+
+        assert updated is True
+        record = storage.get_proof_record(
+            "sess-proof-5",
+            "proof-token-5",
+            include_expired=True,
+        )
+        assert isinstance(record, StepProofRecord)
+        assert record.cached_response is not None
+        assert record.cached_response["data"]["session_id"] == "sess-proof-5"
+        assert isinstance(record.response_hash, str)
+        assert len(record.response_hash) == 64
 
 
 # =============================================================================

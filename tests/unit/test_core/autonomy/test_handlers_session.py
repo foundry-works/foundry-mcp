@@ -29,11 +29,13 @@ from foundry_mcp.core.autonomy.models import (
     AutonomousSessionState,
     FailureReason,
     GatePolicy,
+    LastStepIssued,
     PauseReason,
     PendingManualGateAck,
     SessionCounters,
     SessionLimits,
     SessionStatus,
+    StepType,
     StopConditions,
 )
 from .conftest import make_session, make_spec_data
@@ -65,6 +67,36 @@ def _setup_workspace(tmp_path: Path, spec_id: str = "test-spec-001") -> Path:
     spec_path.write_text(json.dumps(spec_data, indent=2))
 
     return workspace
+
+
+def _append_session_journal_entry(
+    *,
+    workspace: Path,
+    spec_id: str,
+    session_id: str,
+    action: str,
+    title: str,
+    content: str,
+    entry_type: str = "session",
+) -> None:
+    """Append a session-scoped journal entry directly to a test spec file."""
+    spec_path = workspace / "specs" / "active" / f"{spec_id}.json"
+    spec_data = json.loads(spec_path.read_text())
+    journal = spec_data.setdefault("journal", [])
+    journal.append(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "entry_type": entry_type,
+            "title": title,
+            "content": content,
+            "author": "autonomy",
+            "metadata": {
+                "session_id": session_id,
+                "action": action,
+            },
+        }
+    )
+    spec_path.write_text(json.dumps(spec_data, indent=2))
 
 
 def _call_handler(handler_func, **kwargs) -> dict:
@@ -273,6 +305,49 @@ class TestSessionStart:
         assert data["limits"]["max_tasks_per_session"] == 50
         assert data["limits"]["max_consecutive_errors"] == 10
         assert data["limits"]["heartbeat_stale_minutes"] == 30
+
+    def test_start_uses_configured_session_defaults(self, tmp_path):
+        """Session-start uses config.autonomy_session_defaults when args omitted."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        config.autonomy_session_defaults = type(
+            "SessionDefaults",
+            (),
+            {
+                "gate_policy": "manual",
+                "stop_on_phase_completion": True,
+                "auto_retry_fidelity_gate": False,
+                "max_tasks_per_session": 42,
+                "max_consecutive_errors": 7,
+                "max_fidelity_review_cycles_per_phase": 5,
+            },
+        )()
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+
+        data = _assert_success(resp)
+        assert data["limits"]["max_tasks_per_session"] == 42
+        assert data["limits"]["max_consecutive_errors"] == 7
+        assert data["limits"]["max_fidelity_review_cycles_per_phase"] == 5
+        assert data["stop_conditions"]["stop_on_phase_completion"] is True
+        assert data["stop_conditions"]["auto_retry_fidelity_gate"] is False
+
+        from foundry_mcp.core.autonomy.memory import AutonomyStorage
+
+        storage = AutonomyStorage(workspace_path=workspace)
+        session_id = storage.get_active_session("test-spec-001")
+        assert session_id is not None
+        session = storage.load(session_id)
+        assert session is not None
+        assert session.gate_policy.value == "manual"
 
 
 # =============================================================================
@@ -779,6 +854,95 @@ class TestSessionStatus:
         data = _assert_success(resp)
         assert data["session_id"] == data_start["session_id"]
         assert data["status"] == "running"
+        assert data["session_signal"] is None
+
+    def test_status_includes_phase_complete_session_signal(self, tmp_path):
+        """session-status includes derived session_signal for phase completion pauses."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.status = SessionStatus.PAUSED
+        session.pause_reason = PauseReason.PHASE_COMPLETE
+        storage.save(session)
+
+        resp = _handle_session_status(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+        assert data["session_signal"] == "phase_complete"
+
+    def test_status_includes_operator_progress_fields(self, tmp_path):
+        """session-status includes P2 operator fields for progress and retries."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+        session.active_phase_id = "phase-1"
+        session.last_task_id = "task-1"
+        session.completed_task_ids = ["task-1"]
+        session.counters.consecutive_errors = 2
+        session.counters.fidelity_review_cycles_in_active_phase = 1
+        session.last_step_issued = LastStepIssued(
+            step_id="01TESTSTEP000000000000000000",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+        )
+        storage.save(session)
+
+        spec_path = workspace / "specs" / "active" / "test-spec-001.json"
+        spec_data = json.loads(spec_path.read_text())
+        spec_data["phases"][0]["tasks"][1]["metadata"] = {"retry_count": 3}
+        spec_path.write_text(json.dumps(spec_data, indent=2))
+
+        resp = _handle_session_status(
+            config=config, session_id=session_id, workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+
+        assert data["last_step_id"] == "01TESTSTEP000000000000000000"
+        assert data["last_step_type"] == "implement_task"
+        assert data["current_task_id"] == "task-1"
+
+        active_phase_progress = data["active_phase_progress"]
+        assert active_phase_progress["phase_id"] == "phase-1"
+        assert active_phase_progress["total_tasks"] == 3
+        assert active_phase_progress["completed_tasks"] == 1
+        assert active_phase_progress["remaining_tasks"] == 2
+
+        retry_counters = data["retry_counters"]
+        assert retry_counters["consecutive_errors"] == 2
+        assert retry_counters["fidelity_review_cycles_in_active_phase"] == 1
+        assert retry_counters["phase_retry_counts"]["phase-1"] == 1
+        assert retry_counters["task_retry_counts"]["task-2"] == 3
 
     def test_status_no_session_returns_error(self, tmp_path):
         """Status with no active session returns NO_ACTIVE_SESSION."""
@@ -912,6 +1076,215 @@ class TestSessionList:
         )
         data = _assert_success(resp)
         assert len(data["sessions"]) == 1
+
+
+# =============================================================================
+# Session Events Tests
+# =============================================================================
+
+
+class TestSessionEvents:
+    """Tests for _handle_session_events."""
+
+    def test_events_returns_journal_backed_session_view(self, tmp_path):
+        """session-events returns journal entries filtered to the target session."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        _append_session_journal_entry(
+            workspace=workspace,
+            spec_id="test-spec-001",
+            session_id=session_id,
+            action="start",
+            title="Session start",
+            content="Started autonomous session",
+        )
+        _append_session_journal_entry(
+            workspace=workspace,
+            spec_id="test-spec-001",
+            session_id=session_id,
+            action="pause",
+            title="Session pause",
+            content="Paused autonomous session",
+        )
+        _append_session_journal_entry(
+            workspace=workspace,
+            spec_id="test-spec-001",
+            session_id=session_id,
+            action="resume",
+            title="Session resume",
+            content="Resumed autonomous session",
+        )
+
+        resp = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+
+        assert data["session_id"] == session_id
+        assert data["spec_id"] == "test-spec-001"
+        assert len(data["events"]) >= 3
+        assert all(event["session_id"] == session_id for event in data["events"])
+        assert all("event_id" in event for event in data["events"])
+        assert all("timestamp" in event for event in data["events"])
+
+        actions = {event.get("action") for event in data["events"]}
+        assert "start" in actions
+        assert "pause" in actions
+        assert "resume" in actions
+
+    def test_events_pagination_cursor(self, tmp_path):
+        """session-events paginates with stable cursor semantics."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        for i in range(5):
+            _append_session_journal_entry(
+                workspace=workspace,
+                spec_id="test-spec-001",
+                session_id=session_id,
+                action="status",
+                title=f"Status {i}",
+                content=f"Synthetic event {i}",
+            )
+
+        first_page = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            limit=2,
+            workspace=str(workspace),
+        )
+        first_data = _assert_success(first_page)
+        assert len(first_data["events"]) == 2
+        assert first_page["meta"]["pagination"]["has_more"] is True
+
+        cursor = first_page["meta"]["pagination"]["cursor"]
+        assert isinstance(cursor, str)
+
+        second_page = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            limit=2,
+            cursor=cursor,
+            workspace=str(workspace),
+        )
+        second_data = _assert_success(second_page)
+        assert len(second_data["events"]) >= 1
+
+        first_ids = {event["event_id"] for event in first_data["events"]}
+        second_ids = {event["event_id"] for event in second_data["events"]}
+        assert first_ids.isdisjoint(second_ids)
+
+    def test_events_invalid_cursor_returns_validation_error(self, tmp_path):
+        """session-events rejects malformed cursors."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        resp = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            cursor="not-a-valid-cursor",
+            workspace=str(workspace),
+        )
+
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "INVALID_CURSOR"
+
+    def test_events_filter_to_requested_session(self, tmp_path):
+        """session-events does not leak entries across sessions."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_end,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+
+        # Add a second spec so we can create an additional session.
+        spec_two = make_spec_data(spec_id="test-spec-002")
+        spec_two["title"] = "Spec 2"
+        spec_two["journal"] = []
+        (workspace / "specs" / "active" / "test-spec-002.json").write_text(
+            json.dumps(spec_two, indent=2)
+        )
+
+        config = _make_config(workspace)
+
+        first_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        first_session_id = _assert_success(first_start)["session_id"]
+        _handle_session_end(
+            config=config,
+            session_id=first_session_id,
+            reason_code="operator_override",
+            workspace=str(workspace),
+        )
+
+        second_start = _handle_session_start(
+            config=config, spec_id="test-spec-002", workspace=str(workspace),
+        )
+        second_session_id = _assert_success(second_start)["session_id"]
+
+        _append_session_journal_entry(
+            workspace=workspace,
+            spec_id="test-spec-001",
+            session_id=first_session_id,
+            action="start",
+            title="First session",
+            content="First session event",
+        )
+        _append_session_journal_entry(
+            workspace=workspace,
+            spec_id="test-spec-002",
+            session_id=second_session_id,
+            action="start",
+            title="Second session",
+            content="Second session event",
+        )
+
+        resp = _handle_session_events(
+            config=config,
+            session_id=second_session_id,
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+
+        assert data["session_id"] == second_session_id
+        assert len(data["events"]) >= 1
+        assert all(event["session_id"] == second_session_id for event in data["events"])
 
 
 # =============================================================================

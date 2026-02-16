@@ -11,6 +11,7 @@ from foundry_mcp.core.discovery import (
     ServerCapabilities,
     get_capabilities,
     negotiate_capabilities,
+    set_capabilities,
     deprecated_tool,
     is_deprecated,
     get_deprecation_info,
@@ -365,6 +366,41 @@ class TestGetCapabilities:
         assert "capabilities" in caps
         assert "server_version" in caps
         assert "api_version" in caps
+
+    def test_runtime_feature_flags_override_defaults(self):
+        """Runtime feature flags should override static capability defaults."""
+        set_capabilities(ServerCapabilities())
+        caps = get_capabilities(
+            feature_flags={
+                "autonomy_sessions": True,
+                "autonomy_fidelity_gates": True,
+            }
+        )
+
+        assert caps["capabilities"]["autonomy_sessions"] is True
+        assert caps["capabilities"]["autonomy_fidelity_gates"] is True
+        assert (
+            caps["runtime"]["autonomy"]["supported_by_binary"]["autonomy_sessions"]
+            is True
+        )
+        assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_sessions"] is True
+
+    def test_runtime_dependency_warnings_for_inconsistent_flags(self):
+        """Inconsistent runtime flags should be surfaced as warnings."""
+        set_capabilities(ServerCapabilities())
+        caps = get_capabilities(
+            feature_flags={
+                "autonomy_fidelity_gates": True,
+            }
+        )
+
+        assert caps["capabilities"]["autonomy_sessions"] is False
+        assert caps["capabilities"]["autonomy_fidelity_gates"] is False
+        assert "runtime_warnings" in caps
+        assert any(
+            "autonomy_fidelity_gates" in warning
+            for warning in caps["runtime_warnings"]
+        )
 
 
 class TestNegotiateCapabilities:

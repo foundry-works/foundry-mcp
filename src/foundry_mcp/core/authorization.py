@@ -65,11 +65,17 @@ class Role(str, Enum):
 
 # Actions allowed for autonomy_runner role - session management and step control only
 AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset({
+    # Spec resolution
+    "spec-find",
+    # Runtime capability preflight
+    "server-capabilities",
     # Session lifecycle
     "session-start",
     "session-resume",
     "session-heartbeat",
     "session-rebase",
+    "session-list",
+    "session-status",
     # Session-step actions
     "session-step-next",
     "session-step-report",
@@ -94,6 +100,7 @@ OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset({
     "prepare",
     # Read-only session actions
     "session-status",
+    "session-events",
     "session-list",
     # Read-only spec actions
     "spec-list",

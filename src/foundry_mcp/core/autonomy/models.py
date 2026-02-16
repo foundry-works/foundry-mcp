@@ -102,6 +102,16 @@ class StepOutcome(str, Enum):
     SKIPPED = "skipped"
 
 
+class LoopSignal(str, Enum):
+    """Normalized loop outcomes for supervisor branching."""
+
+    PHASE_COMPLETE = "phase_complete"
+    SPEC_COMPLETE = "spec_complete"
+    PAUSED_NEEDS_ATTENTION = "paused_needs_attention"
+    FAILED = "failed"
+    BLOCKED_RUNTIME = "blocked_runtime"
+
+
 class OverrideReasonCode(str, Enum):
     """Structured reason codes for privileged override actions.
 
@@ -323,6 +333,14 @@ class PendingTaskSummary(BaseModel):
     title: str = Field(..., description="Task title")
 
 
+class RecommendedAction(BaseModel):
+    """Machine-readable action recommendation for escalations."""
+
+    action: str = Field(..., description="Recommended operation identifier")
+    description: str = Field(..., description="Human-readable remediation guidance")
+    command: Optional[str] = Field(None, description="Canonical task command to run")
+
+
 # =============================================================================
 # Step Proof Models (P1.1 - One-time step proof tokens)
 # =============================================================================
@@ -372,6 +390,29 @@ class VerificationReceipt(BaseModel):
     issued_at: datetime = Field(..., description="When this receipt was issued")
     step_id: str = Field(..., description="Step ID this receipt is bound to")
 
+    @field_validator("command_hash", "output_digest")
+    @classmethod
+    def validate_sha256_hex(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if len(normalized) != 64 or any(ch not in "0123456789abcdef" for ch in normalized):
+            raise ValueError("must be a 64-character lowercase hex sha256 digest")
+        return normalized
+
+    @field_validator("step_id")
+    @classmethod
+    def validate_step_id_non_empty(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("step_id must be non-empty")
+        return normalized
+
+    @field_validator("issued_at")
+    @classmethod
+    def validate_issued_at_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("issued_at must include timezone information")
+        return value
+
 
 class PendingVerificationReceipt(BaseModel):
     """Pending verification receipt data stored in session state.
@@ -388,6 +429,14 @@ class PendingVerificationReceipt(BaseModel):
         ..., description="Expected SHA-256 hash of the verification command"
     )
     issued_at: datetime = Field(..., description="When this pending receipt was created")
+
+    @field_validator("expected_command_hash")
+    @classmethod
+    def validate_expected_hash(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if len(normalized) != 64 or any(ch not in "0123456789abcdef" for ch in normalized):
+            raise ValueError("expected_command_hash must be a 64-character lowercase hex sha256 digest")
+        return normalized
 
 
 def issue_verification_receipt(
@@ -494,6 +543,37 @@ class RebaseResultDetail(BaseModel):
     completed_tasks_removed: Optional[int] = Field(None, description="Number of completed tasks removed when force=true")
 
 
+class ActivePhaseProgress(BaseModel):
+    """Progress summary for the currently active phase."""
+
+    phase_id: str = Field(..., description="Active phase ID")
+    phase_title: Optional[str] = Field(None, description="Active phase title")
+    total_tasks: int = Field(default=0, ge=0, description="Total tasks in active phase")
+    completed_tasks: int = Field(default=0, ge=0, description="Completed tasks in active phase")
+    blocked_tasks: int = Field(default=0, ge=0, description="Blocked tasks in active phase")
+    remaining_tasks: int = Field(default=0, ge=0, description="Remaining tasks in active phase")
+    completion_pct: int = Field(default=0, ge=0, le=100, description="Completion percentage (0-100)")
+
+
+class RetryCounters(BaseModel):
+    """Retry and error counters for operator polling."""
+
+    consecutive_errors: int = Field(default=0, ge=0, description="Current consecutive error count")
+    fidelity_review_cycles_in_active_phase: int = Field(
+        default=0,
+        ge=0,
+        description="Fidelity review cycles in the current active phase",
+    )
+    phase_retry_counts: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Phase-scoped retry counters keyed by phase_id",
+    )
+    task_retry_counts: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Task-scoped retry counters keyed by task_id (when available)",
+    )
+
+
 class SessionResponseData(BaseModel):
     """Response data for session lifecycle commands."""
 
@@ -508,6 +588,23 @@ class SessionResponseData(BaseModel):
     active_phase_id: Optional[str] = Field(None, description="Active phase ID")
     last_heartbeat_at: Optional[datetime] = Field(None, description="Last heartbeat timestamp")
     next_action_hint: Optional[str] = Field(None, description="Hint for next action")
+    last_step_id: Optional[str] = Field(None, description="Most recently issued step ID")
+    last_step_type: Optional[StepType] = Field(None, description="Most recently issued step type")
+    current_task_id: Optional[str] = Field(
+        None,
+        description="Current task ID inferred from last issued step or session state",
+    )
+    active_phase_progress: Optional[ActivePhaseProgress] = Field(
+        None,
+        description="Progress summary for the current active phase",
+    )
+    retry_counters: Optional[RetryCounters] = Field(
+        None,
+        description="Retry/error counters for active phase and tasks",
+    )
+    session_signal: Optional[LoopSignal] = Field(
+        None, description="Derived loop summary for quick supervisor polling"
+    )
     resume_context: Optional[ResumeContext] = Field(None, description="Resume context if applicable")
     rebase_result: Optional[RebaseResultDetail] = Field(None, description="Rebase result if applicable")
 
@@ -528,6 +625,13 @@ class SessionStepResponseData(BaseModel):
     )
     missing_required_gates: Optional[List[str]] = Field(
         None, description="IDs of required gates that are pending or failed"
+    )
+    loop_signal: Optional[LoopSignal] = Field(
+        None,
+        description="Normalized loop outcome used by supervisors to decide continue/stop/escalate",
+    )
+    recommended_actions: Optional[List[RecommendedAction]] = Field(
+        None, description="Actionable escalation guidance when loop_signal is non-success"
     )
 
 
@@ -683,6 +787,291 @@ class SessionSummary(BaseModel):
 # =============================================================================
 # Shared Utility Functions
 # =============================================================================
+
+_PAUSED_NEEDS_ATTENTION_REASONS = frozenset(
+    {
+        PauseReason.FIDELITY_CYCLE_LIMIT.value,
+        PauseReason.GATE_FAILED.value,
+        PauseReason.GATE_REVIEW_REQUIRED.value,
+        PauseReason.BLOCKED.value,
+        PauseReason.ERROR_THRESHOLD.value,
+        PauseReason.CONTEXT_LIMIT.value,
+        PauseReason.HEARTBEAT_STALE.value,
+        PauseReason.STEP_STALE.value,
+        PauseReason.TASK_LIMIT.value,
+        "spec_rebase_required",
+    }
+)
+
+_BLOCKED_RUNTIME_ERROR_CODES = frozenset(
+    {
+        "REQUIRED_GATE_UNSATISFIED",
+        "GATE_AUDIT_FAILURE",
+        "GATE_INTEGRITY_CHECKSUM",
+        "FEATURE_DISABLED",
+        "AUTHORIZATION",
+        "STEP_PROOF_MISSING",
+        "STEP_PROOF_MISMATCH",
+        "STEP_PROOF_CONFLICT",
+        "STEP_PROOF_EXPIRED",
+        "VERIFICATION_RECEIPT_MISSING",
+        "VERIFICATION_RECEIPT_INVALID",
+    }
+)
+
+
+def _normalize_signal_value(value: Any) -> str:
+    """Normalize enum/string values for deterministic loop-signal mapping."""
+    if value is None:
+        return ""
+    if isinstance(value, Enum):
+        raw = value.value
+    else:
+        raw = str(value)
+    return raw.strip().lower()
+
+
+def derive_loop_signal(
+    *,
+    status: Optional[Any] = None,
+    pause_reason: Optional[Any] = None,
+    error_code: Optional[str] = None,
+    is_unrecoverable_error: bool = False,
+    repeated_invalid_gate_evidence: bool = False,
+) -> Optional[LoopSignal]:
+    """Map status/pause/error inputs to the canonical loop signal contract."""
+    normalized_status = _normalize_signal_value(status)
+    normalized_pause_reason = _normalize_signal_value(pause_reason)
+    normalized_error_code = _normalize_signal_value(error_code).upper()
+
+    if normalized_pause_reason == PauseReason.PHASE_COMPLETE.value:
+        return LoopSignal.PHASE_COMPLETE
+
+    if (
+        normalized_status == SessionStatus.COMPLETED.value
+        or normalized_pause_reason == "spec_complete"
+    ):
+        return LoopSignal.SPEC_COMPLETE
+
+    if (
+        normalized_error_code in _BLOCKED_RUNTIME_ERROR_CODES
+        or normalized_error_code == "ERROR_REQUIRED_GATE_UNSATISFIED"
+        or normalized_error_code == "ERROR_GATE_AUDIT_FAILURE"
+        or normalized_error_code == "ERROR_GATE_INTEGRITY_CHECKSUM"
+    ):
+        return LoopSignal.BLOCKED_RUNTIME
+
+    if normalized_error_code in {"INVALID_GATE_EVIDENCE", "ERROR_INVALID_GATE_EVIDENCE"}:
+        if repeated_invalid_gate_evidence:
+            return LoopSignal.BLOCKED_RUNTIME
+
+    if (
+        normalized_status == SessionStatus.FAILED.value
+        or is_unrecoverable_error
+        or normalized_error_code in {"SESSION_UNRECOVERABLE", "ERROR_SESSION_UNRECOVERABLE"}
+    ):
+        return LoopSignal.FAILED
+
+    if normalized_pause_reason in _PAUSED_NEEDS_ATTENTION_REASONS:
+        return LoopSignal.PAUSED_NEEDS_ATTENTION
+
+    return None
+
+
+def derive_recommended_actions(
+    *,
+    loop_signal: Optional[LoopSignal],
+    pause_reason: Optional[Any] = None,
+    error_code: Optional[str] = None,
+) -> List[RecommendedAction]:
+    """Build recommended_actions payload for escalation outcomes."""
+    if loop_signal in (None, LoopSignal.PHASE_COMPLETE, LoopSignal.SPEC_COMPLETE):
+        return []
+
+    normalized_pause_reason = _normalize_signal_value(pause_reason)
+    normalized_error_code = _normalize_signal_value(error_code).upper()
+
+    if loop_signal == LoopSignal.PAUSED_NEEDS_ATTENTION:
+        pause_actions: Dict[str, List[RecommendedAction]] = {
+            PauseReason.CONTEXT_LIMIT.value: [
+                RecommendedAction(
+                    action="resume_in_fresh_context",
+                    description="Open a fresh context window, then resume the session.",
+                    command='task(action="session", command="resume")',
+                )
+            ],
+            PauseReason.ERROR_THRESHOLD.value: [
+                RecommendedAction(
+                    action="inspect_recent_failures",
+                    description="Inspect recent failed steps before retrying execution.",
+                    command='task(action="session-step", command="replay")',
+                ),
+                RecommendedAction(
+                    action="reset_session_if_needed",
+                    description="Reset the session only after root-cause triage.",
+                    command='task(action="session", command="reset")',
+                ),
+            ],
+            PauseReason.BLOCKED.value: [
+                RecommendedAction(
+                    action="resolve_task_blockers",
+                    description="Unblock dependency chains before resuming automation.",
+                    command='task(action="list-blocked")',
+                )
+            ],
+            PauseReason.GATE_FAILED.value: [
+                RecommendedAction(
+                    action="review_gate_findings",
+                    description="Review fidelity findings and apply remediation before retry.",
+                    command='review(action="fidelity")',
+                )
+            ],
+            PauseReason.GATE_REVIEW_REQUIRED.value: [
+                RecommendedAction(
+                    action="acknowledge_manual_gate_review",
+                    description="A maintainer must acknowledge manual gate review before resume.",
+                    command='task(action="session", command="resume")',
+                )
+            ],
+            PauseReason.FIDELITY_CYCLE_LIMIT.value: [
+                RecommendedAction(
+                    action="escalate_fidelity_cycle_limit",
+                    description="Manual intervention is required after repeated gate retries.",
+                    command='task(action="session", command="pause")',
+                )
+            ],
+            PauseReason.HEARTBEAT_STALE.value: [
+                RecommendedAction(
+                    action="refresh_heartbeat_or_resume",
+                    description="Refresh heartbeat or resume the session once the caller is healthy.",
+                    command='task(action="session-step", command="heartbeat")',
+                )
+            ],
+            PauseReason.STEP_STALE.value: [
+                RecommendedAction(
+                    action="replay_or_reset_stale_step",
+                    description="Replay the last response first; reset only if replay is invalid.",
+                    command='task(action="session-step", command="replay")',
+                )
+            ],
+            PauseReason.TASK_LIMIT.value: [
+                RecommendedAction(
+                    action="start_followup_session",
+                    description="Start a new session to continue once task limit is reached.",
+                    command='task(action="session", command="start")',
+                )
+            ],
+            "spec_rebase_required": [
+                RecommendedAction(
+                    action="rebase_session_to_spec",
+                    description="Rebase session state to the latest spec structure before resume.",
+                    command='task(action="session", command="rebase")',
+                )
+            ],
+        }
+        return pause_actions.get(
+            normalized_pause_reason,
+            [
+                RecommendedAction(
+                    action="manual_triage",
+                    description="Investigate pause cause and resume only after mitigation.",
+                    command='task(action="session", command="status")',
+                )
+            ],
+        )
+
+    if loop_signal == LoopSignal.BLOCKED_RUNTIME:
+        if normalized_error_code == "FEATURE_DISABLED":
+            return [
+                RecommendedAction(
+                    action="enable_required_feature_flag",
+                    description="Enable required autonomy feature flags before retrying.",
+                )
+            ]
+        if normalized_error_code == "AUTHORIZATION":
+            return [
+                RecommendedAction(
+                    action="use_authorized_role",
+                    description="Switch to a role authorized for session-step actions.",
+                )
+            ]
+        if normalized_error_code in {
+            "REQUIRED_GATE_UNSATISFIED",
+            "ERROR_REQUIRED_GATE_UNSATISFIED",
+        }:
+            return [
+                RecommendedAction(
+                    action="satisfy_or_waive_required_gate",
+                    description="Satisfy required gates or execute a maintainer gate waiver.",
+                    command='task(action="gate-waiver")',
+                )
+            ]
+        if normalized_error_code in {"GATE_AUDIT_FAILURE", "ERROR_GATE_AUDIT_FAILURE"}:
+            return [
+                RecommendedAction(
+                    action="rerun_gate_with_fresh_evidence",
+                    description="Rerun gate checks and verify integrity evidence bindings.",
+                )
+            ]
+        if normalized_error_code in {
+            "GATE_INTEGRITY_CHECKSUM",
+            "ERROR_GATE_INTEGRITY_CHECKSUM",
+            "INVALID_GATE_EVIDENCE",
+            "ERROR_INVALID_GATE_EVIDENCE",
+        }:
+            return [
+                RecommendedAction(
+                    action="request_fresh_gate_evidence",
+                    description="Obtain fresh gate evidence and submit it with exact step binding.",
+                    command='task(action="session-step", command="next")',
+                )
+            ]
+        if normalized_error_code in {
+            "STEP_PROOF_MISSING",
+            "STEP_PROOF_MISMATCH",
+            "STEP_PROOF_CONFLICT",
+            "STEP_PROOF_EXPIRED",
+        }:
+            return [
+                RecommendedAction(
+                    action="request_fresh_step_proof",
+                    description="Request a fresh step and resubmit with the exact server-issued step_proof token.",
+                    command='task(action="session-step", command="next")',
+                )
+            ]
+        if normalized_error_code in {
+            "VERIFICATION_RECEIPT_MISSING",
+            "VERIFICATION_RECEIPT_INVALID",
+        }:
+            return [
+                RecommendedAction(
+                    action="regenerate_verification_receipt",
+                    description="Regenerate verification evidence and submit the server-issued verification_receipt fields.",
+                    command='task(action="session-step", command="next")',
+                )
+            ]
+        return [
+            RecommendedAction(
+                action="resolve_runtime_blocker",
+                description="Resolve runtime policy or integrity blocker before retrying.",
+            )
+        ]
+
+    if loop_signal == LoopSignal.FAILED:
+        return [
+            RecommendedAction(
+                action="collect_failure_context",
+                description="Inspect failure details and recent session events before retry.",
+                command='task(action="session", command="status")',
+            ),
+            RecommendedAction(
+                action="reset_or_restart_session",
+                description="Reset or restart the session only after root-cause analysis.",
+                command='task(action="session", command="reset")',
+            ),
+        ]
+
+    return []
 
 
 def compute_effective_status(session: AutonomousSessionState) -> Optional[SessionStatus]:

@@ -11,6 +11,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
+from foundry_mcp.core.autonomy.models import (
+    derive_loop_signal,
+    derive_recommended_actions,
+)
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.pagination import (
     CursorError,
@@ -50,6 +54,271 @@ def _metric(action: str) -> str:
 
 
 _validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
+
+
+_SESSION_COMMAND_TO_ACTION: Dict[str, str] = {
+    "start": "session-start",
+    "status": "session-status",
+    "pause": "session-pause",
+    "resume": "session-resume",
+    "rebase": "session-rebase",
+    "end": "session-end",
+    "list": "session-list",
+    "reset": "session-reset",
+}
+
+_SESSION_STEP_COMMAND_TO_ACTION: Dict[str, str] = {
+    "next": "session-step-next",
+    "report": "session-step-report",
+    "replay": "session-step-replay",
+    "heartbeat": "session-step-heartbeat",
+}
+
+_LEGACY_ACTION_DEPRECATIONS: Dict[str, Dict[str, str]] = {
+    "session-start": {
+        "action": "session-start",
+        "replacement": 'task(action="session", command="start")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-status": {
+        "action": "session-status",
+        "replacement": 'task(action="session", command="status")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-pause": {
+        "action": "session-pause",
+        "replacement": 'task(action="session", command="pause")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-resume": {
+        "action": "session-resume",
+        "replacement": 'task(action="session", command="resume")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-rebase": {
+        "action": "session-rebase",
+        "replacement": 'task(action="session", command="rebase")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-end": {
+        "action": "session-end",
+        "replacement": 'task(action="session", command="end")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-list": {
+        "action": "session-list",
+        "replacement": 'task(action="session", command="list")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-reset": {
+        "action": "session-reset",
+        "replacement": 'task(action="session", command="reset")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-heartbeat": {
+        "action": "session-heartbeat",
+        "replacement": 'task(action="session-step", command="heartbeat")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-step-next": {
+        "action": "session-step-next",
+        "replacement": 'task(action="session-step", command="next")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-step-report": {
+        "action": "session-step-report",
+        "replacement": 'task(action="session-step", command="report")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-step-replay": {
+        "action": "session-step-replay",
+        "replacement": 'task(action="session-step", command="replay")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+    "session-step-heartbeat": {
+        "action": "session-step-heartbeat",
+        "replacement": 'task(action="session-step", command="heartbeat")',
+        "removal_target": "2026-05-16_or_2_minor_releases",
+    },
+}
+
+
+def _normalize_task_action_shape(
+    *,
+    action: str,
+    payload: Dict[str, Any],
+    request_id: str,
+) -> tuple[str, Dict[str, Any], Optional[Dict[str, str]], Optional[dict]]:
+    """Normalize canonical session action shapes to runtime actions.
+
+    Returns:
+        Tuple of (normalized_action, normalized_payload, deprecation_metadata, error_response)
+    """
+    normalized_action = (action or "").strip().lower()
+    normalized_payload = dict(payload)
+
+    if normalized_action == "session":
+        command = normalized_payload.get("command")
+        if not isinstance(command, str) or not command.strip():
+            return (
+                normalized_action,
+                normalized_payload,
+                None,
+                _validation_error(
+                    action="session",
+                    field="command",
+                    message="command is required (start|status|pause|resume|rebase|end|list|reset)",
+                    request_id=request_id,
+                    code=ErrorCode.MISSING_REQUIRED,
+                ),
+            )
+        normalized_command = command.strip().lower()
+        mapped_action = _SESSION_COMMAND_TO_ACTION.get(normalized_command)
+        if mapped_action is None:
+            return (
+                normalized_action,
+                normalized_payload,
+                None,
+                _validation_error(
+                    action="session",
+                    field="command",
+                    message=(
+                        f"unsupported command '{normalized_command}'. "
+                        "Expected one of: start, status, pause, resume, rebase, end, list, reset"
+                    ),
+                    request_id=request_id,
+                    code=ErrorCode.INVALID_FORMAT,
+                ),
+            )
+        normalized_payload["command"] = normalized_command
+        return mapped_action, normalized_payload, None, None
+
+    if normalized_action == "session-step":
+        command = normalized_payload.get("command")
+        if not isinstance(command, str) or not command.strip():
+            return (
+                normalized_action,
+                normalized_payload,
+                None,
+                _validation_error(
+                    action="session-step",
+                    field="command",
+                    message="command is required (next|report|replay|heartbeat)",
+                    request_id=request_id,
+                    code=ErrorCode.MISSING_REQUIRED,
+                ),
+            )
+        normalized_command = command.strip().lower()
+        mapped_action = _SESSION_STEP_COMMAND_TO_ACTION.get(normalized_command)
+        if mapped_action is None:
+            return (
+                normalized_action,
+                normalized_payload,
+                None,
+                _validation_error(
+                    action="session-step",
+                    field="command",
+                    message=(
+                        f"unsupported command '{normalized_command}'. "
+                        "Expected one of: next, report, replay, heartbeat"
+                    ),
+                    request_id=request_id,
+                    code=ErrorCode.INVALID_FORMAT,
+                ),
+            )
+        normalized_payload["command"] = normalized_command
+        return mapped_action, normalized_payload, None, None
+
+    deprecation = _LEGACY_ACTION_DEPRECATIONS.get(normalized_action)
+    return normalized_action, normalized_payload, deprecation, None
+
+
+def _attach_deprecation_metadata(
+    response: dict,
+    deprecation: Optional[Dict[str, str]],
+) -> dict:
+    """Attach machine-readable deprecation metadata to response envelope."""
+    if not deprecation:
+        return response
+    meta = response.setdefault("meta", {"version": "response-v2"})
+    meta["deprecated"] = dict(deprecation)
+    return response
+
+
+def _emit_legacy_action_warning(
+    action: str,
+    deprecation: Optional[Dict[str, str]],
+) -> None:
+    """Emit WARN-level log for deprecated legacy action invocations."""
+    if not deprecation:
+        return
+    logger.warning(
+        "Deprecated task action invoked: action=%s replacement=%s removal_target=%s",
+        action,
+        deprecation.get("replacement"),
+        deprecation.get("removal_target"),
+    )
+
+
+def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
+    """Attach loop signal metadata for session-step responses.
+
+    This post-dispatch helper ensures authorization/rate-limit/feature-flag
+    errors emitted before handlers still include machine-readable loop outcomes.
+    """
+    normalized_action = (action or "").strip().lower()
+    if normalized_action not in {
+        "session-step-next",
+        "session-step-report",
+        "session-step-replay",
+    }:
+        return response
+
+    data = response.get("data")
+    if not isinstance(data, dict):
+        return response
+
+    details = data.get("details")
+    if not isinstance(details, dict):
+        details = {}
+
+    success = bool(response.get("success"))
+    error_code = None
+    if not success:
+        error_code = details.get("error_code") or data.get("error_code")
+
+    repeated_invalid_gate_evidence = bool(details.get("repeated_invalid_gate_evidence"))
+    if not repeated_invalid_gate_evidence:
+        attempts = details.get("invalid_gate_evidence_attempts")
+        if isinstance(attempts, int) and attempts >= 3:
+            repeated_invalid_gate_evidence = True
+
+    loop_signal = derive_loop_signal(
+        status=data.get("status"),
+        pause_reason=data.get("pause_reason"),
+        error_code=error_code,
+        is_unrecoverable_error=(
+            str(error_code).upper() in {"SESSION_UNRECOVERABLE", "ERROR_SESSION_UNRECOVERABLE"}
+        ),
+        repeated_invalid_gate_evidence=repeated_invalid_gate_evidence,
+    )
+    if loop_signal is None:
+        return response
+
+    data.setdefault("loop_signal", loop_signal.value)
+    if "recommended_actions" not in data:
+        recommended_actions = derive_recommended_actions(
+            loop_signal=loop_signal,
+            pause_reason=data.get("pause_reason"),
+            error_code=error_code,
+        )
+        if recommended_actions:
+            data["recommended_actions"] = [
+                action.model_dump(mode="json", by_alias=True)
+                for action in recommended_actions
+            ]
+
+    return response
 
 
 def _is_feature_enabled(config: ServerConfig, feature_name: str) -> bool:

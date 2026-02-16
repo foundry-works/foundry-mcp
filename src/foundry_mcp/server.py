@@ -32,6 +32,12 @@ from foundry_mcp.tools.unified import register_unified_tools
 logger = logging.getLogger(__name__)
 
 
+def _log_startup_warnings(config: ServerConfig) -> None:
+    """Emit startup validation warnings collected during config loading."""
+    for warning in config.startup_warnings:
+        logger.warning("Startup configuration warning: %s", warning)
+
+
 def _init_observability(config: ServerConfig) -> None:
     """Initialize the observability stack from server configuration."""
 
@@ -233,6 +239,7 @@ def create_server(config: Optional[ServerConfig] = None) -> FastMCP:
         config = get_config()
 
     config.setup_logging()
+    _log_startup_warnings(config)
     initialized_role = initialize_role_from_config(config.autonomy_security.role)
     logger.info("Authorization role initialized: %s", initialized_role)
     _init_authorization_rate_limits(config)
