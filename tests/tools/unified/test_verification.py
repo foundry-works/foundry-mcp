@@ -26,6 +26,7 @@ class TestVerificationDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["run"]
             mock_router.dispatch.side_effect = RuntimeError("Verification failed")
 
             result = _dispatch_verification_action(
@@ -48,6 +49,7 @@ class TestVerificationDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["run"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_verification_action(
@@ -70,6 +72,7 @@ class TestVerificationDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.verification._VERIFICATION_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["run"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_verification_action(

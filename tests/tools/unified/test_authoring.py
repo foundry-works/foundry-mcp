@@ -26,6 +26,7 @@ class TestAuthoringDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["spec-create"]
             mock_router.dispatch.side_effect = RuntimeError("Database connection failed")
 
             result = _dispatch_authoring_action(
@@ -48,6 +49,7 @@ class TestAuthoringDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["spec-create"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_authoring_action(
@@ -70,6 +72,7 @@ class TestAuthoringDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["spec-create"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_authoring_action(

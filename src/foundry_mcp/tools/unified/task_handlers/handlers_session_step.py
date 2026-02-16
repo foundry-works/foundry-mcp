@@ -44,6 +44,10 @@ from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_INVALID_GATE_EVIDENCE,
     ERROR_GATE_BLOCKED,
     ERROR_REQUIRED_GATE_UNSATISFIED,
+    ERROR_VERIFICATION_RECEIPT_MISSING,
+    ERROR_VERIFICATION_RECEIPT_INVALID,
+    ERROR_GATE_INTEGRITY_CHECKSUM,
+    ERROR_GATE_AUDIT_FAILURE,
 )
 from foundry_mcp.core.responses import (
     ErrorCode,
@@ -88,6 +92,10 @@ def _map_orchestrator_error_to_response(
         ERROR_INVALID_GATE_EVIDENCE: ErrorCode.VALIDATION_ERROR,
         ERROR_GATE_BLOCKED: ErrorCode.VALIDATION_ERROR,
         ERROR_REQUIRED_GATE_UNSATISFIED: ErrorCode.FORBIDDEN,
+        ERROR_VERIFICATION_RECEIPT_MISSING: ErrorCode.VALIDATION_ERROR,
+        ERROR_VERIFICATION_RECEIPT_INVALID: ErrorCode.VALIDATION_ERROR,
+        ERROR_GATE_INTEGRITY_CHECKSUM: ErrorCode.VALIDATION_ERROR,
+        ERROR_GATE_AUDIT_FAILURE: ErrorCode.CONFLICT,
     }
 
     # Map to error types
@@ -102,6 +110,10 @@ def _map_orchestrator_error_to_response(
         ERROR_INVALID_GATE_EVIDENCE: ErrorType.VALIDATION,
         ERROR_GATE_BLOCKED: ErrorType.VALIDATION,
         ERROR_REQUIRED_GATE_UNSATISFIED: ErrorType.AUTHORIZATION,
+        ERROR_VERIFICATION_RECEIPT_MISSING: ErrorType.VALIDATION,
+        ERROR_VERIFICATION_RECEIPT_INVALID: ErrorType.VALIDATION,
+        ERROR_GATE_INTEGRITY_CHECKSUM: ErrorType.VALIDATION,
+        ERROR_GATE_AUDIT_FAILURE: ErrorType.CONFLICT,
     }
 
     mapped_code = error_code_map.get(error_code or "", ErrorCode.INTERNAL_ERROR)
@@ -127,6 +139,25 @@ def _map_orchestrator_error_to_response(
         details["remediation"] = "Resolve task blockers to continue execution"
     elif error_code == ERROR_INVALID_GATE_EVIDENCE:
         details["remediation"] = "Provide valid gate evidence via fidelity-gate action"
+    elif error_code == ERROR_VERIFICATION_RECEIPT_MISSING:
+        details["remediation"] = (
+            "Include verification_receipt in last_step_result when execute_verification "
+            "reports outcome='success'."
+        )
+    elif error_code == ERROR_VERIFICATION_RECEIPT_INVALID:
+        details["remediation"] = (
+            "Use the server-issued verification receipt for the current step and "
+            "resubmit with matching step_id and command hash."
+        )
+    elif error_code == ERROR_GATE_INTEGRITY_CHECKSUM:
+        details["remediation"] = (
+            "Re-run the gate step to obtain fresh evidence before reporting success."
+        )
+    elif error_code == ERROR_GATE_AUDIT_FAILURE:
+        details["remediation"] = (
+            "Gate audit failed due to evidence inconsistency. Re-run required gate "
+            "checks or request maintainer intervention."
+        )
     elif error_code == ERROR_GATE_BLOCKED:
         details["blocked_by_gate"] = True
         if missing_required_gates:
@@ -425,11 +456,11 @@ def _handle_session_step_report(
     if not _is_feature_enabled(config, "autonomy_sessions"):
         return _feature_disabled_response("session-step-report", request_id)
 
-    if not spec_id:
+    if not spec_id and not session_id:
         return _validation_error(
             action="session-step-report",
-            field="spec_id",
-            message="spec_id is required",
+            field="spec_id/session_id",
+            message="Provide spec_id or session_id",
             request_id=request_id,
         )
 

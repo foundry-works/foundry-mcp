@@ -26,6 +26,7 @@ class TestSpecDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.spec._SPEC_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["get"]
             mock_router.dispatch.side_effect = RuntimeError("Spec storage failed")
 
             result = _dispatch_spec_action(
@@ -48,6 +49,7 @@ class TestSpecDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.spec._SPEC_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["get"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_spec_action(
@@ -70,6 +72,7 @@ class TestSpecDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.spec._SPEC_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["get"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_spec_action(

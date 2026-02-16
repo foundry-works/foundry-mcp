@@ -25,12 +25,16 @@ from foundry_mcp.core.autonomy.models import (
 )
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_ALL_TASKS_BLOCKED,
+    ERROR_GATE_AUDIT_FAILURE,
+    ERROR_GATE_INTEGRITY_CHECKSUM,
     ERROR_HEARTBEAT_STALE,
     ERROR_SESSION_UNRECOVERABLE,
     ERROR_SPEC_REBASE_REQUIRED,
     ERROR_STEP_MISMATCH,
     ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
+    ERROR_VERIFICATION_RECEIPT_INVALID,
+    ERROR_VERIFICATION_RECEIPT_MISSING,
     OrchestrationResult,
 )
 
@@ -190,6 +194,62 @@ class TestMapOrchestratorError:
             request_id="test-req",
         )
         assert resp["success"] is False
+
+    def test_verification_receipt_missing_mapping(self):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _map_orchestrator_error_to_response,
+        )
+
+        resp = _map_orchestrator_error_to_response(
+            error_code=ERROR_VERIFICATION_RECEIPT_MISSING,
+            error_message="Receipt missing",
+            request_id="test-req",
+        )
+        assert resp["success"] is False
+        assert resp["data"]["error_type"] == "validation"
+        details = resp["data"].get("details", {})
+        assert "verification_receipt" in details.get("remediation", "")
+
+    def test_verification_receipt_invalid_mapping(self):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _map_orchestrator_error_to_response,
+        )
+
+        resp = _map_orchestrator_error_to_response(
+            error_code=ERROR_VERIFICATION_RECEIPT_INVALID,
+            error_message="Receipt invalid",
+            request_id="test-req",
+        )
+        assert resp["success"] is False
+        assert resp["data"]["error_type"] == "validation"
+
+    def test_gate_integrity_checksum_mapping(self):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _map_orchestrator_error_to_response,
+        )
+
+        resp = _map_orchestrator_error_to_response(
+            error_code=ERROR_GATE_INTEGRITY_CHECKSUM,
+            error_message="Gate integrity checksum mismatch",
+            request_id="test-req",
+        )
+        assert resp["success"] is False
+        assert resp["data"]["error_type"] == "validation"
+
+    def test_gate_audit_failure_mapping(self):
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _map_orchestrator_error_to_response,
+        )
+
+        resp = _map_orchestrator_error_to_response(
+            error_code=ERROR_GATE_AUDIT_FAILURE,
+            error_message="Gate audit failed",
+            request_id="test-req",
+        )
+        assert resp["success"] is False
+        assert resp["data"]["error_type"] == "conflict"
+        details = resp["data"].get("details", {})
+        assert "audit" in details.get("remediation", "").lower()
 
     def test_unknown_error_code_maps_to_internal(self):
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
@@ -648,6 +708,32 @@ class TestSessionStepReport:
         assert call_kwargs["last_step_result"]["outcome"] == "success"
         assert call_kwargs["last_step_result"]["note"] == "all good"
         assert call_kwargs["last_step_result"]["files_touched"] == ["src/main.py"]
+
+    def test_report_accepts_session_id_without_spec_id(self, tmp_path):
+        """session-step-report should resolve by session_id when spec_id is omitted."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_report,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step._handle_session_step_next"
+        ) as mock_next:
+            mock_next.return_value = {"success": True, "data": {}, "error": None, "meta": {"version": "response-v2"}}
+            resp = _handle_session_step_report(
+                config=config,
+                session_id=session_id,
+                step_id="step-001",
+                step_type="implement_task",
+                outcome="success",
+                workspace=str(workspace),
+            )
+
+        assert resp["success"] is True
+        call_kwargs = mock_next.call_args.kwargs
+        assert call_kwargs["session_id"] == session_id
+        assert call_kwargs["spec_id"] is None
 
 
 # =============================================================================

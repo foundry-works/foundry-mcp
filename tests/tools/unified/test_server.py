@@ -26,6 +26,7 @@ class TestServerDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.server._SERVER_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError("Server introspection failed")
 
             result = _dispatch_server_action(
@@ -48,6 +49,7 @@ class TestServerDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.server._SERVER_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_server_action(
@@ -70,6 +72,7 @@ class TestServerDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.server._SERVER_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["info"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_server_action(

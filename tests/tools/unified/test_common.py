@@ -295,8 +295,65 @@ class TestDispatchWithStandardErrors:
             mock_metrics_class.assert_called_once_with(prefix="authz")
             mock_collector.counter.assert_called_once_with(
                 "denied",
-                labels={"role": "observer", "tool": "test", "action": "do-thing"},
+                labels={
+                    "role": "observer",
+                    "tool": "test",
+                    "action": "do-thing",
+                    "scope": "role",
+                },
             )
+
+    def test_authorization_denial_key_uses_client_scope_when_available(self):
+        """Rate-limit key should include client ID when context provides one."""
+        router = self._make_router()
+        mock_tracker = MagicMock()
+        mock_tracker.check_rate_limit.return_value = None
+
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_client_id",
+            return_value="client-123",
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+            return_value=mock_tracker,
+        ):
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
+
+        assert result["data"]["error_code"] == "AUTHORIZATION"
+        mock_tracker.check_rate_limit.assert_called_once_with(
+            "test.do-thing|client:client-123"
+        )
+        mock_tracker.record_denial.assert_called_once_with(
+            "test.do-thing|client:client-123"
+        )
+
+    def test_authorization_denial_key_falls_back_to_role_scope(self):
+        """Anonymous requests should rate-limit by role scope."""
+        router = self._make_router()
+        mock_tracker = MagicMock()
+        mock_tracker.check_rate_limit.return_value = None
+
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_client_id",
+            return_value="anonymous",
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+            return_value=mock_tracker,
+        ):
+            result = dispatch_with_standard_errors(router, "test", "do-thing")
+
+        assert result["data"]["error_code"] == "AUTHORIZATION"
+        mock_tracker.check_rate_limit.assert_called_once_with(
+            "test.do-thing|role:observer"
+        )
+        mock_tracker.record_denial.assert_called_once_with(
+            "test.do-thing|role:observer"
+        )
 
     def test_authorization_allowed_for_maintainer(self):
         """Test that maintainer role has access to all actions."""

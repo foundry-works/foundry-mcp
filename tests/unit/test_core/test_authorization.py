@@ -1,5 +1,6 @@
 """Tests for authorization module."""
 
+import threading
 import os
 import subprocess
 import sys
@@ -29,6 +30,8 @@ from foundry_mcp.core.authorization import (
     reset_runner_isolation_config,
     run_isolated_subprocess,
     StdinTimeoutError,
+    validate_runner_path,
+    PathValidationError,
 )
 
 
@@ -61,6 +64,9 @@ class TestRoleAllowlists:
 class TestServerRoleVar:
     """Test server role context variable."""
 
+    def teardown_method(self):
+        set_server_role("observer")
+
     def test_default_role_is_observer(self):
         assert get_server_role() == "observer"
 
@@ -73,6 +79,29 @@ class TestServerRoleVar:
     def test_set_invalid_role_falls_back_to_observer(self):
         set_server_role("invalid_role")
         assert get_server_role() == "observer"
+
+    def test_role_propagates_to_new_thread_via_process_fallback(self):
+        set_server_role("maintainer")
+        observed_role: list[str] = []
+
+        def _read_role() -> None:
+            observed_role.append(get_server_role())
+
+        thread = threading.Thread(target=_read_role)
+        thread.start()
+        thread.join()
+
+        assert observed_role == ["maintainer"]
+
+    def test_context_override_is_local_and_process_role_remains(self):
+        set_server_role("maintainer")
+        token = server_role_var.set("observer")
+        try:
+            assert get_server_role() == "observer"
+        finally:
+            server_role_var.reset(token)
+
+        assert get_server_role() == "maintainer"
 
 
 class TestGetRoleAllowlist:
@@ -347,6 +376,7 @@ class TestRunIsolatedSubprocess:
 
     def teardown_method(self):
         reset_runner_isolation_config()
+        set_server_role("observer")
 
     def test_stdin_timeout_cap_applies_when_timeout_not_provided(self):
         set_runner_isolation_config(RunnerIsolationConfig(stdin_timeout_seconds=0.1))
@@ -373,3 +403,93 @@ class TestRunIsolatedSubprocess:
                 [sys.executable, "-c", "import time; time.sleep(0.5)"],
                 timeout=5.0,
             )
+
+    def test_runner_cwd_outside_workspace_is_rejected(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        outside = tmp_path / "outside"
+        outside.mkdir(parents=True, exist_ok=True)
+
+        set_server_role("autonomy_runner")
+        set_runner_isolation_config(RunnerIsolationConfig(workspace_root=str(workspace)))
+
+        with pytest.raises(PathValidationError) as exc:
+            run_isolated_subprocess(
+                [sys.executable, "-c", "print('ok')"],
+                cwd=str(outside),
+            )
+
+        assert exc.value.reason == "outside_workspace"
+
+
+class TestValidateRunnerPath:
+    """Workspace-root validation should return the normalized validated path."""
+
+    def teardown_method(self):
+        reset_runner_isolation_config()
+        set_server_role("observer")
+
+    def test_relative_existing_path_returns_workspace_resolved_path(self, tmp_path, monkeypatch):
+        workspace = tmp_path / "workspace"
+        workspace_target = workspace / "nested" / "target.txt"
+        workspace_target.parent.mkdir(parents=True, exist_ok=True)
+        workspace_target.write_text("workspace", encoding="utf-8")
+
+        other = tmp_path / "other"
+        other_target = other / "nested" / "target.txt"
+        other_target.parent.mkdir(parents=True, exist_ok=True)
+        other_target.write_text("other", encoding="utf-8")
+
+        set_runner_isolation_config(RunnerIsolationConfig(workspace_root=str(workspace)))
+        monkeypatch.chdir(other)
+
+        result = validate_runner_path("nested/target.txt")
+        assert result == workspace_target.resolve()
+
+    def test_relative_non_existing_path_returns_workspace_resolved_path(self, tmp_path, monkeypatch):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        other = tmp_path / "other"
+        other.mkdir(parents=True, exist_ok=True)
+
+        set_runner_isolation_config(RunnerIsolationConfig(workspace_root=str(workspace)))
+        monkeypatch.chdir(other)
+
+        result = validate_runner_path("future/output.txt")
+        assert result == (workspace / "future" / "output.txt").resolve()
+
+    def test_traversal_probe_is_denied(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        set_runner_isolation_config(RunnerIsolationConfig(workspace_root=str(workspace)))
+
+        with pytest.raises(PathValidationError) as exc:
+            validate_runner_path("../secret.txt")
+
+        assert exc.value.reason == "path_traversal_denied"
+
+    def test_absolute_path_outside_workspace_is_denied(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        outside = tmp_path / "outside"
+        outside.mkdir(parents=True, exist_ok=True)
+        outside_file = outside / "data.txt"
+        outside_file.write_text("outside", encoding="utf-8")
+
+        set_runner_isolation_config(RunnerIsolationConfig(workspace_root=str(workspace)))
+
+        with pytest.raises(PathValidationError) as exc:
+            validate_runner_path(outside_file)
+
+        assert exc.value.reason == "outside_workspace"
+
+    def test_absolute_workspace_path_is_canonicalized(self, tmp_path):
+        workspace = tmp_path / "workspace"
+        target = workspace / "nested" / "file.txt"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("ok", encoding="utf-8")
+
+        set_runner_isolation_config(RunnerIsolationConfig(workspace_root=str(workspace)))
+
+        result = validate_runner_path(target.parent / "." / target.name)
+        assert result == target.resolve()

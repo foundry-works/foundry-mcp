@@ -115,8 +115,10 @@ _ROLE_ALLOWLISTS: Dict[str, FrozenSet[str]] = {
 # Context Variable for Server Role
 # =============================================================================
 
-server_role_var: ContextVar[str] = ContextVar("server_role", default=Role.OBSERVER.value)
+server_role_var: ContextVar[Optional[str]] = ContextVar("server_role", default=None)
 """Process-level server role for authorization decisions."""
+_configured_server_role: str = Role.OBSERVER.value
+_configured_server_role_lock = Lock()
 
 
 def get_server_role() -> str:
@@ -125,7 +127,12 @@ def get_server_role() -> str:
     Returns:
         Current role string (default: "observer")
     """
-    return server_role_var.get()
+    context_role = server_role_var.get()
+    if isinstance(context_role, str) and context_role:
+        return context_role
+
+    with _configured_server_role_lock:
+        return _configured_server_role
 
 
 def set_server_role(role: str) -> None:
@@ -144,6 +151,11 @@ def set_server_role(role: str) -> None:
             ", ".join(r.value for r in Role),
         )
         role = Role.OBSERVER.value
+
+    global _configured_server_role
+
+    with _configured_server_role_lock:
+        _configured_server_role = role
 
     server_role_var.set(role)
     logger.info("Server role set to: %s", role)
@@ -315,16 +327,16 @@ def initialize_role_from_config(config_role: Optional[str] = None) -> str:
     env_role = os.environ.get("FOUNDRY_MCP_ROLE", "").strip().lower()
     if env_role:
         set_server_role(env_role)
-        return env_role
+        return get_server_role()
 
     # Use config role if provided
     if config_role:
         set_server_role(config_role)
-        return config_role
+        return get_server_role()
 
     # Default to observer (fail-closed)
     set_server_role(Role.OBSERVER.value)
-    return Role.OBSERVER.value
+    return get_server_role()
 
 
 # =============================================================================
@@ -697,6 +709,7 @@ def validate_runner_path(
 
     # Check workspace root boundary
     config = get_runner_isolation_config()
+    full_path: Optional[Path] = None
     if require_within_workspace and config.workspace_root:
         workspace_root = Path(config.workspace_root).resolve()
 
@@ -724,6 +737,9 @@ def validate_runner_path(
                 reason="validation_error",
                 detail=str(e),
             ) from e
+        # When workspace boundary enforcement is active, always return the
+        # normalized path that was validated against workspace_root.
+        return full_path
 
     return path_obj.resolve() if path_obj.exists() else path_obj
 

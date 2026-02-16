@@ -15,11 +15,16 @@ class TestHealthDispatchExceptionHandling:
         from foundry_mcp.tools.unified.health import _dispatch_health_action
 
         with patch(
-            "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError("Health check failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["check"]
+                mock_router.dispatch.side_effect = RuntimeError("Health check failed")
 
-            result = _dispatch_health_action(action="check", include_details=True)
+                result = _dispatch_health_action(action="check", include_details=True)
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -33,11 +38,16 @@ class TestHealthDispatchExceptionHandling:
         from foundry_mcp.tools.unified.health import _dispatch_health_action
 
         with patch(
-            "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-        ) as mock_router:
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["check"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_health_action(action="check")
+                result = _dispatch_health_action(action="check")
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -51,10 +61,15 @@ class TestHealthDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-            ) as mock_router:
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch(
+                    "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
+                ) as mock_router:
+                    mock_router.allowed_actions.return_value = ["check"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
 
-                _dispatch_health_action(action="check")
+                    _dispatch_health_action(action="check")
 
         assert "test error" in caplog.text

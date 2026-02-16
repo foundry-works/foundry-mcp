@@ -116,6 +116,22 @@ def _request_id() -> str:
 _validation_error = make_validation_error_fn("lifecycle")
 
 
+def _resolve_workspace_for_write_lock(
+    config: ServerConfig,
+    path: Optional[str],
+) -> tuple[Optional[str], Optional[Path], Optional[dict]]:
+    """Resolve canonical workspace root for write-lock checks.
+
+    Lifecycle `path` may be a workspace, `specs/` directory, or spec file path.
+    Write-lock storage expects the workspace root, so resolve specs first and
+    then normalize to its parent directory.
+    """
+    specs_dir, specs_err = resolve_specs_dir(config, path)
+    if specs_err or specs_dir is None:
+        return None, specs_dir, specs_err
+    return str(specs_dir.parent), specs_dir, None
+
+
 def _classify_error(error_message: str) -> tuple[ErrorCode, ErrorType, str]:
     lowered = error_message.lower()
     if "not found" in lowered:
@@ -270,10 +286,14 @@ def _handle_move(
             request_id=request_id,
         )
 
+    workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
+    if specs_err:
+        return specs_err
+
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
         spec_id=spec_id.strip(),
-        workspace=path,
+        workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
@@ -281,10 +301,6 @@ def _handle_move(
     )
     if lock_error:
         return lock_error
-
-    specs_dir, specs_err = resolve_specs_dir(config, path)
-    if specs_err:
-        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -350,10 +366,14 @@ def _handle_activate(
             request_id=request_id,
         )
 
+    workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
+    if specs_err:
+        return specs_err
+
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
         spec_id=spec_id.strip(),
-        workspace=path,
+        workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
@@ -361,10 +381,6 @@ def _handle_activate(
     )
     if lock_error:
         return lock_error
-
-    specs_dir, specs_err = resolve_specs_dir(config, path)
-    if specs_err:
-        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -437,10 +453,14 @@ def _handle_complete(
             request_id=request_id,
         )
 
+    workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
+    if specs_err:
+        return specs_err
+
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
         spec_id=spec_id.strip(),
-        workspace=path,
+        workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
@@ -448,10 +468,6 @@ def _handle_complete(
     )
     if lock_error:
         return lock_error
-
-    specs_dir, specs_err = resolve_specs_dir(config, path)
-    if specs_err:
-        return specs_err
 
     audit_log(
         "tool_invocation",
@@ -517,10 +533,14 @@ def _handle_archive(
             request_id=request_id,
         )
 
+    workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
+    if specs_err:
+        return specs_err
+
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
         spec_id=spec_id.strip(),
-        workspace=path,
+        workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
         request_id=request_id,
@@ -528,10 +548,6 @@ def _handle_archive(
     )
     if lock_error:
         return lock_error
-
-    specs_dir, specs_err = resolve_specs_dir(config, path)
-    if specs_err:
-        return specs_err
 
     audit_log(
         "tool_invocation",

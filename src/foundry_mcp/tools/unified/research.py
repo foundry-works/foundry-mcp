@@ -1537,6 +1537,7 @@ def _dispatch_research_action(action: str, **kwargs: Any) -> dict:
         "research",
         action,
         include_details_in_router_error=True,
+        config=_get_config(),
         **kwargs,
     )
 

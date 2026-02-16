@@ -26,6 +26,7 @@ class TestReviewDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["run"]
             mock_router.dispatch.side_effect = RuntimeError("Review analysis failed")
 
             result = _dispatch_review_action(
@@ -48,6 +49,7 @@ class TestReviewDispatchExceptionHandling:
         with patch(
             "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["run"]
             mock_router.dispatch.side_effect = RuntimeError()
 
             result = _dispatch_review_action(
@@ -70,6 +72,7 @@ class TestReviewDispatchExceptionHandling:
             with patch(
                 "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
             ) as mock_router:
+                mock_router.allowed_actions.return_value = ["run"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
                 _dispatch_review_action(

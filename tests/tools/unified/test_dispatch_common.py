@@ -163,7 +163,11 @@ class TestInternalErrorEnvelope:
         tool_name, call_style, valid_action,
     ):
         patch_target = f"foundry_mcp.tools.unified.{module_name}.{router_const}"
-        with patch(patch_target) as mock_router:
+        with patch(patch_target) as mock_router, patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            mock_router.allowed_actions.return_value = [valid_action]
             mock_router.dispatch.side_effect = RuntimeError("boom")
             result = _call_dispatch(
                 module_name, dispatch_fn_name, call_style,
@@ -227,6 +231,7 @@ class TestEnvelopeSnapshots:
         with patch(
             "foundry_mcp.tools.unified.server._SERVER_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["tools"]
             mock_router.dispatch.side_effect = ValueError("db connection lost")
             result = _call_dispatch(
                 "server", "_dispatch_server_action", "kw",
@@ -262,6 +267,7 @@ class TestEnvelopeSnapshots:
         with patch(
             "foundry_mcp.tools.unified.task._TASK_ROUTER"
         ) as mock_router:
+            mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
             result = _call_dispatch(
                 "task", "_dispatch_task_action", "kw",
