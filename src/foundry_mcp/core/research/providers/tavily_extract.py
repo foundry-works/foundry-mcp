@@ -33,7 +33,7 @@ from urllib.parse import urlparse
 import httpx
 
 from foundry_mcp.core.research.models import ResearchSource, SourceType
-from foundry_mcp.core.research.providers.base import (
+from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
     SearchProviderError,
@@ -95,20 +95,8 @@ VALID_EXTRACT_DEPTHS = frozenset(["basic", "advanced"])
 VALID_FORMATS = frozenset(["markdown", "text"])
 
 
-class UrlValidationError(ValueError):
-    """Raised when URL validation fails (SSRF protection).
-
-    Attributes:
-        url: The URL that failed validation.
-        reason: Human-readable explanation of the failure.
-        error_code: Machine-readable error code (INVALID_URL or BLOCKED_HOST).
-    """
-
-    def __init__(self, url: str, reason: str, error_code: str = "INVALID_URL"):
-        self.url = url
-        self.reason = reason
-        self.error_code = error_code
-        super().__init__(f"URL validation failed for {url!r}: {reason}")
+# Error class (canonical definition in foundry_mcp.core.errors.research)
+from foundry_mcp.core.errors.research import UrlValidationError  # noqa: E402
 
 
 def _is_private_ip(ip_str: str) -> bool:

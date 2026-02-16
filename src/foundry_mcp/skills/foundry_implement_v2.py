@@ -54,23 +54,8 @@ _EXTENDED_REPORT_FIELDS = {
 _TERMINAL_SESSION_STATUSES = {"completed", "failed", "ended"}
 
 
-class FoundryImplementV2Error(RuntimeError):
-    """Structured error for v2 skill preflight/loop orchestration."""
-
-    def __init__(
-        self,
-        code: str,
-        message: str,
-        *,
-        remediation: Optional[str] = None,
-        details: Optional[dict[str, Any]] = None,
-        response: Optional[dict[str, Any]] = None,
-    ) -> None:
-        super().__init__(message)
-        self.code = code
-        self.remediation = remediation
-        self.details = details or {}
-        self.response = response
+# Error class (canonical definition in foundry_mcp.core.errors.execution)
+from foundry_mcp.core.errors.execution import FoundryImplementV2Error  # noqa: E402
 
 
 @dataclass(frozen=True)

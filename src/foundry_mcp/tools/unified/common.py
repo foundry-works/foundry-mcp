@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from foundry_mcp.core.authorization import (
-    PathValidationError,
     check_action_allowed,
     get_rate_limit_tracker,
     get_server_role,
 )
+from foundry_mcp.core.errors.authorization import PathValidationError
 from foundry_mcp.core.context import (
     generate_correlation_id,
     get_client_id,
@@ -32,7 +32,8 @@ from foundry_mcp.core.responses import (
     error_response,
 )
 from foundry_mcp.core.spec import find_specs_directory
-from foundry_mcp.tools.unified.router import ActionRouter, ActionRouterError
+from foundry_mcp.core.errors.execution import ActionRouterError
+from foundry_mcp.tools.unified.router import ActionRouter
 
 logger = logging.getLogger(__name__)
 

@@ -298,30 +298,12 @@ class SummarizationLevel(str, Enum):
         return None
 
 
-class SummarizationError(Exception):
-    """Base exception for summarization errors."""
-
-    pass
-
-
-class ProviderExhaustedError(SummarizationError):
-    """Raised when all providers in the chain have failed."""
-
-    def __init__(self, errors: list[tuple[str, Exception]]):
-        self.errors = errors
-        provider_msgs = [f"{p}: {e}" for p, e in errors]
-        super().__init__(
-            f"All summarization providers failed: {', '.join(provider_msgs)}"
-        )
-
-
-class SummarizationValidationError(SummarizationError):
-    """Raised when summarization output fails validation."""
-
-    def __init__(self, message: str, level: SummarizationLevel, missing_fields: list[str]):
-        self.level = level
-        self.missing_fields = missing_fields
-        super().__init__(f"{message}: missing {missing_fields} for {level.value} level")
+# Error classes (canonical definitions in foundry_mcp.core.errors.research)
+from foundry_mcp.core.errors.research import (  # noqa: E402
+    ProviderExhaustedError,
+    SummarizationError,
+    SummarizationValidationError,
+)
 
 
 @dataclass

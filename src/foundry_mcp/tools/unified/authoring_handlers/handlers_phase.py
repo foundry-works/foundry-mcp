@@ -37,7 +37,7 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
-from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
+from foundry_mcp.tools.unified.param_schema import AtLeastOne, Bool, Num, Str, validate_payload
 
 _PHASE_ADD_SCHEMA = {
     "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
@@ -49,6 +49,46 @@ _PHASE_ADD_SCHEMA = {
     "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
     "position": Num(integer_only=True, min_val=0),
     "link_previous": Bool(default=True),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
+
+_PHASE_UPDATE_METADATA_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                   remediation="Pass the spec identifier to authoring"),
+    "phase_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                    remediation="Pass the phase identifier (e.g., 'phase-1')"),
+    "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
+    "description": Str(),
+    "purpose": Str(),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
+
+_PHASE_ADD_BULK_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                   remediation="Pass the spec identifier to authoring"),
+    "position": Num(integer_only=True, min_val=0),
+    "link_previous": Bool(default=True),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
+
+_PHASE_MOVE_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                   remediation='Use spec(action="list") to find available spec IDs'),
+    "phase_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                    remediation="Specify a phase ID like phase-1 or phase-2"),
+    # position validated imperatively — needs MISSING_REQUIRED vs INVALID_FORMAT
+    "link_previous": Bool(default=True, error_code=ErrorCode.INVALID_FORMAT),
+    "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
+    "path": Str(error_code=ErrorCode.INVALID_FORMAT),
+}
+
+_PHASE_REMOVE_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "phase_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "force": Bool(default=False),
     "dry_run": Bool(default=False),
     "path": Str(),
 }
@@ -179,108 +219,26 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
     request_id = _request_id()
     action = "phase-update-metadata"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            remediation="Pass the spec identifier to authoring",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _PHASE_UPDATE_METADATA_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id,
+                           cross_field_rules=[
+                               AtLeastOne(
+                                   fields=("estimated_hours", "description", "purpose"),
+                                   error_code=ErrorCode.VALIDATION_ERROR,
+                                   remediation="Include estimated_hours, description, or purpose",
+                               ),
+                           ])
+    if err:
+        return err
 
-    phase_id = payload.get("phase_id")
-    if not isinstance(phase_id, str) or not phase_id.strip():
-        return _validation_error(
-            field="phase_id",
-            action=action,
-            message="Provide a non-empty phase_id parameter",
-            remediation="Pass the phase identifier (e.g., 'phase-1')",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    phase_id = phase_id.strip()
-
-    # Extract optional metadata fields
+    spec_id = payload["spec_id"]
+    phase_id = payload["phase_id"]
     estimated_hours = payload.get("estimated_hours")
     description = payload.get("description")
     purpose = payload.get("purpose")
-
-    # Validate at least one field is provided
-    has_update = any(v is not None for v in [estimated_hours, description, purpose])
-    if not has_update:
-        return _validation_error(
-            field="metadata",
-            action=action,
-            message="At least one metadata field must be provided",
-            remediation="Include estimated_hours, description, or purpose",
-            request_id=request_id,
-            code=ErrorCode.VALIDATION_FAILED,
-        )
-
-    # Validate estimated_hours if provided
-    if estimated_hours is not None:
-        if isinstance(estimated_hours, bool) or not isinstance(
-            estimated_hours, (int, float)
-        ):
-            return _validation_error(
-                field="estimated_hours",
-                action=action,
-                message="Provide a numeric value",
-                remediation="Set estimated_hours to a number >= 0",
-                request_id=request_id,
-            )
-        if estimated_hours < 0:
-            return _validation_error(
-                field="estimated_hours",
-                action=action,
-                message="Value must be non-negative",
-                remediation="Set hours to zero or greater",
-                request_id=request_id,
-            )
-        estimated_hours = float(estimated_hours)
-
-    # Validate description if provided
-    if description is not None and not isinstance(description, str):
-        return _validation_error(
-            field="description",
-            action=action,
-            message="Description must be a string",
-            remediation="Provide a text description",
-            request_id=request_id,
-        )
-
-    # Validate purpose if provided
-    if purpose is not None and not isinstance(purpose, str):
-        return _validation_error(
-            field="purpose",
-            action=action,
-            message="Purpose must be a string",
-            remediation="Provide a text purpose",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            remediation="Set dry_run to true or false",
-            request_id=request_id,
-        )
-
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            remediation="Provide a valid workspace path",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
@@ -381,18 +339,17 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-add-bulk"
 
-    # Validate spec_id
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            remediation="Pass the spec identifier to authoring",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _PHASE_ADD_BULK_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    position = payload.get("position")
+    link_previous = payload["link_previous"]
+    dry_run = payload["dry_run"]
+    path = payload.get("path")
 
     # Require macro format: {phase: {...}, tasks: [...]}
     phase_obj = payload.get("phase")
@@ -576,50 +533,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
     metadata_defaults = None
     if top_level_defaults or phase_level_defaults:
         metadata_defaults = {**(top_level_defaults or {}), **(phase_level_defaults or {})}
-
-    position = payload.get("position")
-    if position is not None:
-        if isinstance(position, bool) or not isinstance(position, int):
-            return _validation_error(
-                field="position",
-                action=action,
-                message="Position must be an integer",
-                request_id=request_id,
-            )
-        if position < 0:
-            return _validation_error(
-                field="position",
-                action=action,
-                message="Position must be >= 0",
-                request_id=request_id,
-            )
-
-    link_previous = payload.get("link_previous", True)
-    if not isinstance(link_previous, bool):
-        return _validation_error(
-            field="link_previous",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
@@ -1040,30 +953,19 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-move"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-            remediation='Use spec(action="list") to find available spec IDs',
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _PHASE_MOVE_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    phase_id = payload.get("phase_id")
-    if not isinstance(phase_id, str) or not phase_id.strip():
-        return _validation_error(
-            field="phase_id",
-            action=action,
-            message="Provide the phase identifier (e.g., phase-1)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-            remediation="Specify a phase ID like phase-1 or phase-2",
-        )
-    phase_id = phase_id.strip()
+    spec_id = payload["spec_id"]
+    phase_id = payload["phase_id"]
+    link_previous = payload["link_previous"]
+    dry_run = payload["dry_run"]
+    path = payload.get("path")
 
+    # Position requires MISSING_REQUIRED vs INVALID_FORMAT distinction
     position = payload.get("position")
     if position is None:
         return _validation_error(
@@ -1091,39 +993,6 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
             remediation="Use 1 for first position, 2 for second, etc.",
-        )
-
-    link_previous = payload.get("link_previous", True)
-    if not isinstance(link_previous, bool):
-        return _validation_error(
-            field="link_previous",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation="Use true or false for link_previous",
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-            remediation="Use true or false for dry_run",
-        )
-
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-            remediation="Provide a valid filesystem path string",
-            code=ErrorCode.INVALID_FORMAT,
         )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
@@ -1241,54 +1110,17 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-remove"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _PHASE_REMOVE_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    phase_id = payload.get("phase_id")
-    if not isinstance(phase_id, str) or not phase_id.strip():
-        return _validation_error(
-            field="phase_id",
-            action=action,
-            message="Provide the phase identifier (e.g., phase-1)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    phase_id = phase_id.strip()
-
-    force = payload.get("force", False)
-    if not isinstance(force, bool):
-        return _validation_error(
-            field="force",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
+    spec_id = payload["spec_id"]
+    phase_id = payload["phase_id"]
+    force = payload["force"]
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:

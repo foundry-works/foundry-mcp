@@ -763,7 +763,8 @@ def _validate_workspace(
     Returns:
         (validated_path, None) on success, or (None, error_response) on failure.
     """
-    from foundry_mcp.core.authorization import PathValidationError, validate_runner_path
+    from foundry_mcp.core.authorization import validate_runner_path
+    from foundry_mcp.core.errors.authorization import PathValidationError
 
     try:
         validated = validate_runner_path(workspace, require_within_workspace=False)

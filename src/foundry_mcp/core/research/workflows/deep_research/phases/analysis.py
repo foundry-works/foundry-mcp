@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.providers import ContextWindowError
+from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.document_digest import (
     DigestConfig,

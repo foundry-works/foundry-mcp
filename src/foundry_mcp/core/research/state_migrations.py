@@ -43,10 +43,8 @@ CURRENT_SCHEMA_VERSION = 1
 SCHEMA_VERSION_KEY = "_schema_version"
 
 
-class MigrationError(Exception):
-    """Raised when a state migration fails."""
-
-    pass
+# Error class (canonical definition in foundry_mcp.core.errors.storage)
+from foundry_mcp.core.errors.storage import MigrationError  # noqa: E402
 
 
 class MigrationWarning:

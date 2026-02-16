@@ -153,9 +153,8 @@ class PaginationCursor:
             return None
 
 
-class LockAcquisitionError(Exception):
-    """Raised when file lock cannot be acquired within timeout."""
-    pass
+# Error class (canonical definition in foundry_mcp.core.errors.storage)
+from foundry_mcp.core.errors.storage import LockAcquisitionError  # noqa: E402
 
 
 class IntakeStore:

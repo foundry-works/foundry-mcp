@@ -672,47 +672,8 @@ class DegradationResult:
         }
 
 
-class ProtectedContentOverflowError(Exception):
-    """Raised when protected content exceeds budget even after headline compression.
-
-    This error indicates that the protected content is too large to fit within
-    the available token budget, even after applying the most aggressive
-    compression (headline level, ~10% of original).
-
-    Attributes:
-        protected_tokens: Total tokens required by protected content at headline level
-        budget: Available token budget
-        item_ids: List of protected item IDs that couldn't fit
-        remediation: Suggested remediation steps
-    """
-
-    def __init__(
-        self,
-        protected_tokens: int,
-        budget: int,
-        item_ids: list[str],
-        remediation: Optional[str] = None,
-    ):
-        self.protected_tokens = protected_tokens
-        self.budget = budget
-        self.item_ids = item_ids
-        self.remediation = remediation or (
-            f"Protected content requires {protected_tokens} tokens at headline level, "
-            f"but only {budget} tokens available. "
-            "Options: (1) Increase context budget, (2) Reduce number of protected items, "
-            "(3) Mark fewer items as protected, (4) Use a model with larger context window."
-        )
-        super().__init__(self.remediation)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return {
-            "error_type": "protected_content_overflow",
-            "protected_tokens": self.protected_tokens,
-            "budget": self.budget,
-            "item_ids": self.item_ids,
-            "remediation": self.remediation,
-        }
+# Error class (canonical definition in foundry_mcp.core.errors.research)
+from foundry_mcp.core.errors.research import ProtectedContentOverflowError  # noqa: E402
 
 
 class DegradationPipeline:

@@ -26,7 +26,8 @@ T = TypeVar("T")
 from foundry_mcp.core.context import get_correlation_id
 from foundry_mcp.core.observability import audit_log
 from foundry_mcp.core.rate_limit import RateLimitConfig, TokenBucketLimiter
-from foundry_mcp.core.resilience import CircuitBreaker, CircuitBreakerError, CircuitState
+from foundry_mcp.core.errors.resilience import CircuitBreakerError
+from foundry_mcp.core.resilience import CircuitBreaker, CircuitState
 
 
 class ErrorType(str, Enum):
@@ -458,48 +459,11 @@ async def async_retry_with_backoff(
     raise RuntimeError("async_retry_with_backoff: unexpected state")
 
 
-class TimeBudgetExceededError(Exception):
-    """Time budget for operation has been exhausted.
-
-    Attributes:
-        budget_seconds: The original time budget.
-        elapsed_seconds: Time elapsed before budget exceeded.
-        operation: Name of the operation.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        budget_seconds: Optional[float] = None,
-        elapsed_seconds: Optional[float] = None,
-        operation: Optional[str] = None,
-    ):
-        super().__init__(message)
-        self.budget_seconds = budget_seconds
-        self.elapsed_seconds = elapsed_seconds
-        self.operation = operation
-
-
-class RateLimitWaitError(Exception):
-    """Rate limiter wait time would exceed max_wait_seconds.
-
-    Attributes:
-        wait_needed: Seconds needed to wait for token.
-        max_wait: Maximum allowed wait time.
-        provider: Provider name.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        wait_needed: Optional[float] = None,
-        max_wait: Optional[float] = None,
-        provider: Optional[str] = None,
-    ):
-        super().__init__(message)
-        self.wait_needed = wait_needed
-        self.max_wait = max_wait
-        self.provider = provider
+# Error classes (canonical definitions in foundry_mcp.core.errors.resilience)
+from foundry_mcp.core.errors.resilience import (  # noqa: E402
+    RateLimitWaitError,
+    TimeBudgetExceededError,
+)
 
 
 async def execute_with_resilience(

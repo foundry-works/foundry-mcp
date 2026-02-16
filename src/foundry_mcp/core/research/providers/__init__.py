@@ -10,11 +10,13 @@ Supported providers:
 - SemanticScholarProvider: Academic paper search via Semantic Scholar API
 """
 
-from foundry_mcp.core.research.providers.base import (
+from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
-    SearchProvider,
     SearchProviderError,
+)
+from foundry_mcp.core.research.providers.base import (
+    SearchProvider,
     SearchResult,
 )
 from foundry_mcp.core.research.providers.google import GoogleSearchProvider

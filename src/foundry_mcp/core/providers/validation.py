@@ -48,12 +48,7 @@ MAX_METADATA_SIZE = 64 * 1024  # 64KB
 # ---------------------------------------------------------------------------
 
 
-class ValidationError(ProviderExecutionError):
-    """Raised when input validation fails."""
-
-    def __init__(self, message: str, field: Optional[str] = None, **kwargs: object) -> None:
-        self.field = field
-        super().__init__(message, **kwargs)
+from foundry_mcp.core.errors.provider import ValidationError  # noqa: E402, F811
 
 
 def strip_ansi(text: str) -> str:

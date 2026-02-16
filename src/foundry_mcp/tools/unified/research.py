@@ -1094,7 +1094,7 @@ def _handle_extract(
         UrlValidationError,
         validate_extract_url_async,
     )
-    from foundry_mcp.core.research.providers.base import (
+    from foundry_mcp.core.errors.search import (
         RateLimitError,
         AuthenticationError,
         SearchProviderError,

@@ -37,12 +37,8 @@ DEFAULT_QUEUE_LIMIT = 100
 DEFAULT_SHUTDOWN_TIMEOUT = 30.0
 
 
-class ExecutorExhaustedError(Exception):
-    """Raised when both dedicated and fallback executors are unavailable."""
-
-    def __init__(self, message: str = "Executor pool exhausted"):
-        super().__init__(message)
-        self.message = message
+# Error class (canonical definition in foundry_mcp.core.errors.execution)
+from foundry_mcp.core.errors.execution import ExecutorExhaustedError  # noqa: E402
 
 
 class ProviderExecutor:

@@ -7,12 +7,8 @@ from dataclasses import dataclass
 from typing import Callable, Dict, cast
 
 
-class ActionRouterError(ValueError):
-    """Raised when an unsupported action is requested."""
-
-    def __init__(self, message: str, *, allowed_actions: Sequence[str]) -> None:
-        super().__init__(message)
-        self.allowed_actions = tuple(allowed_actions)
+# Error class (canonical definition in foundry_mcp.core.errors.execution)
+from foundry_mcp.core.errors.execution import ActionRouterError  # noqa: E402
 
 
 @dataclass(frozen=True)

@@ -34,6 +34,13 @@ Example usage:
             result = provider.generate(request)
 """
 
+from foundry_mcp.core.errors.provider import (
+    ContextWindowError,
+    ProviderError,
+    ProviderExecutionError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from foundry_mcp.core.providers.base import (
     # Enums
     ProviderCapability,
@@ -51,12 +58,6 @@ from foundry_mcp.core.providers.base import (
     StreamChunkCallback,
     BeforeExecuteHook,
     AfterResultHook,
-    # Errors
-    ProviderError,
-    ProviderUnavailableError,
-    ProviderExecutionError,
-    ProviderTimeoutError,
-    ContextWindowError,
     # ABC
     ProviderContext,
 )

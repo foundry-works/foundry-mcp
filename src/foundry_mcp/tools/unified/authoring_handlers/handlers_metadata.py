@@ -30,62 +30,49 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
+
+_ASSUMPTION_ADD_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "text": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "assumption_type": Str(),
+    "author": Str(),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
+
+_ASSUMPTION_LIST_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "assumption_type": Str(),
+    "path": Str(),
+}
+
+_REVISION_ADD_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "version": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "changes": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "author": Str(),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
 
 
 def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "assumption-add"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _ASSUMPTION_ADD_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    text = payload.get("text")
-    if not isinstance(text, str) or not text.strip():
-        return _validation_error(
-            field="text",
-            action=action,
-            message="Provide the assumption text",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    text = text.strip()
-
-    assumption_type = payload.get("assumption_type")  # Optional, any string accepted
-
+    spec_id = payload["spec_id"]
+    text = payload["text"]
+    assumption_type = payload.get("assumption_type")
     author = payload.get("author")
-    if author is not None and not isinstance(author, str):
-        return _validation_error(
-            field="author",
-            action=action,
-            message="Author must be a string",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
@@ -200,27 +187,15 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "assumption-list"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _ASSUMPTION_LIST_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    assumption_type = payload.get("assumption_type")  # Optional filter, any string accepted
-
+    spec_id = payload["spec_id"]
+    assumption_type = payload.get("assumption_type")
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
@@ -301,65 +276,18 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "revision-add"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _REVISION_ADD_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    version = payload.get("version")
-    if not isinstance(version, str) or not version.strip():
-        return _validation_error(
-            field="version",
-            action=action,
-            message="Provide the revision version (e.g., 1.1)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    version = version.strip()
-
-    changes = payload.get("changes")
-    if not isinstance(changes, str) or not changes.strip():
-        return _validation_error(
-            field="changes",
-            action=action,
-            message="Provide a summary of changes",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    changes = changes.strip()
-
+    spec_id = payload["spec_id"]
+    version = payload["version"]
+    changes = payload["changes"]
     author = payload.get("author")
-    if author is not None and not isinstance(author, str):
-        return _validation_error(
-            field="author",
-            action=action,
-            message="Author must be a string",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:

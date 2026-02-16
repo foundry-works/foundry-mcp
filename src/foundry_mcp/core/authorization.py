@@ -738,14 +738,8 @@ def reset_runner_isolation_config() -> None:
         _runner_isolation_config = None
 
 
-class PathValidationError(Exception):
-    """Raised when a path fails validation for runner isolation."""
-
-    def __init__(self, path: str, reason: str, detail: Optional[str] = None):
-        self.path = path
-        self.reason = reason
-        self.detail = detail
-        super().__init__(f"Path validation failed: {reason} (path={path})")
+# Error classes (canonical definitions in foundry_mcp.core.errors.authorization)
+from foundry_mcp.core.errors.authorization import PathValidationError  # noqa: E402
 
 
 def validate_runner_path(
@@ -877,15 +871,7 @@ def is_runner_role() -> bool:
     return get_server_role() == Role.AUTONOMY_RUNNER.value
 
 
-class StdinTimeoutError(Exception):
-    """Raised when a subprocess exceeds the stdin timeout cap."""
-
-    def __init__(self, timeout_seconds: float, command: Sequence[str]):
-        self.timeout_seconds = timeout_seconds
-        self.command = command
-        super().__init__(
-            f"Subprocess killed after {timeout_seconds:g}s stdin timeout: {' '.join(command[:3])}..."
-        )
+from foundry_mcp.core.errors.authorization import StdinTimeoutError  # noqa: E402, F811
 
 
 def run_isolated_subprocess(

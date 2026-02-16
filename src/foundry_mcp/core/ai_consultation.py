@@ -49,12 +49,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+from foundry_mcp.core.errors.provider import ProviderUnavailableError
 from foundry_mcp.core.providers import (
     ProviderHooks,
     ProviderRequest,
     ProviderResult,
     ProviderStatus,
-    ProviderUnavailableError,
     available_providers,
     check_provider_available,
     resolve_provider,

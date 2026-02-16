@@ -439,7 +439,7 @@ def create_resilience_executor(
             execute_with_resilience,
             get_resilience_manager,
         )
-        from foundry_mcp.core.resilience import CircuitBreakerError
+        from foundry_mcp.core.errors.resilience import CircuitBreakerError
 
         time_budget = timeout * (config.max_retries + 1)
         try:
@@ -505,7 +505,7 @@ async def check_provider_health(
     Returns:
         ``True`` if the provider is healthy, ``False`` otherwise.
     """
-    from foundry_mcp.core.research.providers.base import AuthenticationError
+    from foundry_mcp.core.errors.search import AuthenticationError
 
     if not api_key:
         logger.error(

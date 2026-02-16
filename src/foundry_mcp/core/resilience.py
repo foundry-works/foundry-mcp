@@ -70,27 +70,10 @@ T = TypeVar("T")
 
 
 # ---------------------------------------------------------------------------
-# Timeout Error
+# Timeout Error (canonical definition in foundry_mcp.core.errors.resilience)
 # ---------------------------------------------------------------------------
 
-
-class TimeoutException(Exception):
-    """Operation timed out.
-
-    Attributes:
-        timeout_seconds: The timeout duration that was exceeded.
-        operation: Name of the operation that timed out.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        timeout_seconds: Optional[float] = None,
-        operation: Optional[str] = None,
-    ):
-        super().__init__(message)
-        self.timeout_seconds = timeout_seconds
-        self.operation = operation
+from foundry_mcp.core.errors.resilience import TimeoutException  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -267,26 +250,7 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"
 
 
-class CircuitBreakerError(Exception):
-    """Circuit breaker is open and rejecting requests.
-
-    Attributes:
-        breaker_name: Name of the circuit breaker.
-        state: Current state of the breaker.
-        retry_after: Seconds until recovery timeout.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        breaker_name: Optional[str] = None,
-        state: Optional[CircuitState] = None,
-        retry_after: Optional[float] = None,
-    ):
-        super().__init__(message)
-        self.breaker_name = breaker_name
-        self.state = state
-        self.retry_after = retry_after
+from foundry_mcp.core.errors.resilience import CircuitBreakerError  # noqa: E402
 
 
 @dataclass

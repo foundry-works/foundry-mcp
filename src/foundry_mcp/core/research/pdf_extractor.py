@@ -181,24 +181,13 @@ MAX_PDF_REDIRECTS = 5
 # =============================================================================
 
 
-class PDFSecurityError(Exception):
-    """Base exception for PDF security violations."""
-    pass
-
-
-class SSRFError(PDFSecurityError):
-    """Raised when SSRF protection blocks a request."""
-    pass
-
-
-class InvalidPDFError(PDFSecurityError):
-    """Raised when PDF validation fails (magic bytes, content-type)."""
-    pass
-
-
-class PDFSizeError(PDFSecurityError):
-    """Raised when PDF exceeds size limits."""
-    pass
+# Error classes (canonical definitions in foundry_mcp.core.errors.research)
+from foundry_mcp.core.errors.research import (  # noqa: E402
+    InvalidPDFError,
+    PDFSecurityError,
+    PDFSizeError,
+    SSRFError,
+)
 
 
 # =============================================================================

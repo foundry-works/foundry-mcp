@@ -78,23 +78,8 @@ CURSOR_VERSION: int = 1
 # ---------------------------------------------------------------------------
 
 
-class CursorError(Exception):
-    """Error during cursor encoding or decoding.
-
-    Attributes:
-        cursor: The invalid cursor string (if decoding).
-        reason: Description of what went wrong.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        cursor: Optional[str] = None,
-        reason: Optional[str] = None,
-    ):
-        super().__init__(message)
-        self.cursor = cursor
-        self.reason = reason
+# Error class (canonical definition in foundry_mcp.core.errors.storage)
+from foundry_mcp.core.errors.storage import CursorError  # noqa: E402
 
 
 def encode_cursor(data: Dict[str, Any]) -> str:

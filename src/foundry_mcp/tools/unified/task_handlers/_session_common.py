@@ -127,7 +127,8 @@ def _load_spec_for_session(
     workspace: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Load spec data for a session, returning None on lookup failure."""
-    from foundry_mcp.core.authorization import PathValidationError, validate_runner_path
+    from foundry_mcp.core.authorization import validate_runner_path
+    from foundry_mcp.core.errors.authorization import PathValidationError
 
     if workspace:
         try:

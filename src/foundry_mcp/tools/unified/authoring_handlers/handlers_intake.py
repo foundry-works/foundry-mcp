@@ -8,7 +8,8 @@ from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.intake import IntakeStore, LockAcquisitionError, INTAKE_ID_PATTERN
+from foundry_mcp.core.errors.storage import LockAcquisitionError
+from foundry_mcp.core.intake import IntakeStore, INTAKE_ID_PATTERN
 from foundry_mcp.core.observability import audit_log
 from foundry_mcp.core.responses import (
     ErrorCode,
@@ -26,6 +27,7 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
 
 # Validation constants for intake
 _INTAKE_TITLE_MAX_LEN = 140
@@ -55,32 +57,45 @@ _INTAKE_LIST_MAX_LIMIT = 200
 # Intake dismiss constants
 _INTAKE_DISMISS_REASON_MAX_LEN = 200
 
+_INTAKE_ADD_SCHEMA = {
+    "title": Str(required=True, max_length=_INTAKE_TITLE_MAX_LEN,
+                 error_code=ErrorCode.MISSING_REQUIRED),
+    # description, source, requester, idempotency_key: imperative (strip-or-None + dual error codes)
+    # priority: imperative (alias normalization)
+    # tags: imperative (per-element regex validation)
+    "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
+    "path": Str(error_code=ErrorCode.INVALID_FORMAT),
+}
+
+_INTAKE_LIST_SCHEMA = {
+    # limit: imperative (default from constant + bool-passthrough behavior)
+    "cursor": Str(error_code=ErrorCode.INVALID_FORMAT),
+    "path": Str(error_code=ErrorCode.INVALID_FORMAT),
+}
+
+_INTAKE_DISMISS_SCHEMA = {
+    # intake_id: imperative (regex pattern + MISSING_REQUIRED vs INVALID_FORMAT)
+    "reason": Str(max_length=_INTAKE_DISMISS_REASON_MAX_LEN,
+                  error_code=ErrorCode.INVALID_FORMAT),
+    "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
+    "path": Str(error_code=ErrorCode.INVALID_FORMAT),
+}
+
 
 def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     """Add a new intake item to the notes queue."""
     request_id = _request_id()
     action = "intake-add"
 
-    # Validate title (required, 1-140 chars)
-    title = payload.get("title")
-    if not isinstance(title, str) or not title.strip():
-        return _validation_error(
-            field="title",
-            action=action,
-            message="Provide a non-empty title (1-140 characters)",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    title = title.strip()
-    if len(title) > _INTAKE_TITLE_MAX_LEN:
-        return _validation_error(
-            field="title",
-            action=action,
-            message=f"Title exceeds maximum length of {_INTAKE_TITLE_MAX_LEN} characters",
-            request_id=request_id,
-            code=ErrorCode.VALIDATION_ERROR,
-            remediation=f"Shorten title to {_INTAKE_TITLE_MAX_LEN} characters or less",
-        )
+    err = validate_payload(payload, _INTAKE_ADD_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    title = payload["title"]
+    dry_run = payload["dry_run"]
+    path = payload.get("path")
 
     # Validate description (optional, max 2000 chars)
     description = payload.get("description")
@@ -250,28 +265,6 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.VALIDATION_ERROR,
             )
 
-    # Validate dry_run
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    # Validate path
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
     # Resolve specs directory
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
@@ -360,7 +353,20 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "intake-list"
 
-    # Validate limit (optional, default 50, range 1-200)
+    err = validate_payload(payload, _INTAKE_LIST_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    path = payload.get("path")
+    # Strip-or-None for cursor (schema strips but doesn't convert empty to None)
+    cursor = payload.get("cursor")
+    if isinstance(cursor, str):
+        cursor = cursor.strip() or None
+
+    # Validate limit (optional, default 50, range 1-200) — imperative due to
+    # pre-applied default from constant + dual error codes
     limit = payload.get("limit", _INTAKE_LIST_DEFAULT_LIMIT)
     if limit is not None:
         if not isinstance(limit, int):
@@ -380,30 +386,6 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.VALIDATION_ERROR,
                 remediation=f"Use a value between 1 and {_INTAKE_LIST_MAX_LIMIT} (default: {_INTAKE_LIST_DEFAULT_LIMIT})",
             )
-
-    # Validate cursor (optional string)
-    cursor = payload.get("cursor")
-    if cursor is not None:
-        if not isinstance(cursor, str):
-            return _validation_error(
-                field="cursor",
-                action=action,
-                message="cursor must be a string",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-        cursor = cursor.strip() or None
-
-    # Validate path (optional workspace override)
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     # Resolve specs directory
     specs_dir, specs_err = _resolve_specs_dir(config, path)
@@ -495,7 +477,21 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "intake-dismiss"
 
-    # Validate intake_id (required, must match pattern)
+    err = validate_payload(payload, _INTAKE_DISMISS_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    dry_run = payload["dry_run"]
+    path = payload.get("path")
+
+    # Strip-or-None for reason (schema strips but doesn't convert empty to None)
+    reason = payload.get("reason")
+    if isinstance(reason, str):
+        reason = reason.strip() or None
+
+    # intake_id validated imperatively — regex pattern + MISSING_REQUIRED vs INVALID_FORMAT
     intake_id = payload.get("intake_id")
     if not isinstance(intake_id, str) or not intake_id.strip():
         return _validation_error(
@@ -514,50 +510,6 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
             remediation="Use format: intake-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        )
-
-    # Validate reason (optional, max 200 chars)
-    reason = payload.get("reason")
-    if reason is not None:
-        if not isinstance(reason, str):
-            return _validation_error(
-                field="reason",
-                action=action,
-                message="reason must be a string",
-                request_id=request_id,
-                code=ErrorCode.INVALID_FORMAT,
-            )
-        reason = reason.strip() or None
-        if reason and len(reason) > _INTAKE_DISMISS_REASON_MAX_LEN:
-            return _validation_error(
-                field="reason",
-                action=action,
-                message=f"reason exceeds maximum length of {_INTAKE_DISMISS_REASON_MAX_LEN} characters",
-                request_id=request_id,
-                code=ErrorCode.VALIDATION_ERROR,
-                remediation=f"Shorten reason to {_INTAKE_DISMISS_REASON_MAX_LEN} characters or less",
-            )
-
-    # Validate dry_run
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    # Validate path
-    path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
         )
 
     # Resolve specs directory

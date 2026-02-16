@@ -10,15 +10,17 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config import ServerConfig
-from foundry_mcp.core.llm_provider import RateLimitError
+from foundry_mcp.core.errors.llm import RateLimitError
+from foundry_mcp.core.errors.provider import (
+    ProviderExecutionError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import (
-    ProviderExecutionError,
     ProviderHooks,
     ProviderRequest,
-    ProviderTimeoutError,
-    ProviderUnavailableError,
     check_provider_available,
     describe_providers,
     get_provider_metadata,

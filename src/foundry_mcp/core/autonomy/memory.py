@@ -53,25 +53,11 @@ GC_TTL_DAYS: Dict[SessionStatus, int] = {
 MAX_PROOF_RECORDS = 500
 PROOF_TTL_SECONDS = 3600  # 1 hour
 
-class SessionCorrupted(Exception):
-    """Raised when a session file exists but cannot be parsed or validated."""
-
-    def __init__(self, session_id: str, reason: str) -> None:
-        self.session_id = session_id
-        self.reason = reason
-        super().__init__(f"Session {session_id} is corrupted: {reason}")
-
-
-class VersionConflictError(Exception):
-    """Raised when optimistic version check fails during save."""
-
-    def __init__(self, session_id: str, expected: int, actual: int) -> None:
-        self.session_id = session_id
-        self.expected_version = expected
-        self.actual_version = actual
-        super().__init__(
-            f"Version conflict for session {session_id}: expected {expected}, on-disk {actual}"
-        )
+# Error classes (canonical definitions in foundry_mcp.core.errors.storage)
+from foundry_mcp.core.errors.storage import (  # noqa: E402
+    SessionCorrupted,
+    VersionConflictError,
+)
 
 
 class ActiveSessionLookupResult(Enum):
