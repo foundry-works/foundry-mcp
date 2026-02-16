@@ -24,6 +24,7 @@ from foundry_mcp.core.task import (
     update_task_requirements,
 )
 
+from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _check_autonomy_write_lock,
     _load_spec_data,
@@ -34,90 +35,50 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _validation_error,
 )
 
+_ADD_SCHEMA = {
+    "spec_id": Str(required=True),
+    "parent": Str(required=True),
+    "title": Str(required=True),
+    "description": Str(),
+    "task_type": Str(required=True),
+    "estimated_hours": Num(),
+    "position": Num(integer_only=True, min_val=0),
+    "file_path": Str(),
+    "dry_run": Bool(default=False),
+    "workspace": Str(),
+}
+
 
 def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "add"
-    spec_id = payload.get("spec_id")
-    parent = payload.get("parent")
     bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
     bypass_reason = payload.get("bypass_reason")
 
-    title = payload.get("title")
+    # Default task_type before validation so required check passes
+    if payload.get("task_type") is None:
+        payload["task_type"] = "task"
+
+    err = validate_payload(payload, _ADD_SCHEMA,
+                           tool_name="task", action=action,
+                           request_id=request_id)
+    if err:
+        return err
+
+    spec_id = payload["spec_id"]
+    parent = payload["parent"]
+    title = payload["title"]
     description = payload.get("description")
-    task_type = payload.get("task_type", "task")
+    task_type = payload["task_type"]
     estimated_hours = payload.get("estimated_hours")
     position = payload.get("position")
     file_path = payload.get("file_path")
 
-    # Research-specific parameters
+    # Research-specific parameters (conditional validation kept imperative)
     research_type = payload.get("research_type")
     blocking_mode = payload.get("blocking_mode")
     query = payload.get("query")
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec identifier",
-            request_id=request_id,
-        )
-    if not isinstance(parent, str) or not parent.strip():
-        return _validation_error(
-            field="parent",
-            action=action,
-            message="Provide a non-empty parent node identifier",
-            request_id=request_id,
-        )
-    if not isinstance(title, str) or not title.strip():
-        return _validation_error(
-            field="title",
-            action=action,
-            message="Provide a non-empty task title",
-            request_id=request_id,
-        )
-    if description is not None and not isinstance(description, str):
-        return _validation_error(
-            field="description",
-            action=action,
-            message="description must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    if not isinstance(task_type, str):
-        return _validation_error(
-            field="task_type",
-            action=action,
-            message="task_type must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    if estimated_hours is not None and not isinstance(estimated_hours, (int, float)):
-        return _validation_error(
-            field="estimated_hours",
-            action=action,
-            message="estimated_hours must be a number",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    if position is not None and (not isinstance(position, int) or position < 0):
-        return _validation_error(
-            field="position",
-            action=action,
-            message="position must be a non-negative integer",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    if file_path is not None and not isinstance(file_path, str):
-        return _validation_error(
-            field="file_path",
-            action=action,
-            message="file_path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    # Validate research-specific parameters when task_type is "research"
     if task_type == "research":
         from foundry_mcp.core.validation import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
 
@@ -160,16 +121,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.INVALID_FORMAT,
             )
 
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    dry_run_bool = bool(dry_run)
+    dry_run_bool = bool(payload["dry_run"])
 
     workspace = payload.get("workspace")
 

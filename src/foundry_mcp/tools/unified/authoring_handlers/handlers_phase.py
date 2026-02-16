@@ -37,117 +37,42 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
+
+_PHASE_ADD_SCHEMA = {
+    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                   remediation="Pass the spec identifier to authoring"),
+    "title": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
+                 remediation="Include a descriptive title for the new phase"),
+    "description": Str(),
+    "purpose": Str(),
+    "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
+    "position": Num(integer_only=True, min_val=0),
+    "link_previous": Bool(default=True),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
 
 
 def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-add"
 
-    spec_id = payload.get("spec_id")
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            field="spec_id",
-            action=action,
-            message="Provide a non-empty spec_id parameter",
-            remediation="Pass the spec identifier to authoring",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    spec_id = spec_id.strip()
+    err = validate_payload(payload, _PHASE_ADD_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    title = payload.get("title")
-    if not isinstance(title, str) or not title.strip():
-        return _validation_error(
-            field="title",
-            action=action,
-            message="Provide a non-empty phase title",
-            remediation="Include a descriptive title for the new phase",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-    title = title.strip()
-
+    spec_id = payload["spec_id"]
+    title = payload["title"]
     description = payload.get("description")
-    if description is not None and not isinstance(description, str):
-        return _validation_error(
-            field="description",
-            action=action,
-            message="Description must be a string",
-            request_id=request_id,
-        )
     purpose = payload.get("purpose")
-    if purpose is not None and not isinstance(purpose, str):
-        return _validation_error(
-            field="purpose",
-            action=action,
-            message="Purpose must be a string",
-            request_id=request_id,
-        )
-
     estimated_hours = payload.get("estimated_hours")
-    if estimated_hours is not None:
-        if isinstance(estimated_hours, bool) or not isinstance(
-            estimated_hours, (int, float)
-        ):
-            return _validation_error(
-                field="estimated_hours",
-                action=action,
-                message="Provide a numeric value",
-                request_id=request_id,
-            )
-        if estimated_hours < 0:
-            return _validation_error(
-                field="estimated_hours",
-                action=action,
-                message="Value must be non-negative",
-                remediation="Set hours to zero or greater",
-                request_id=request_id,
-            )
-        estimated_hours = float(estimated_hours)
-
     position = payload.get("position")
-    if position is not None:
-        if isinstance(position, bool) or not isinstance(position, int):
-            return _validation_error(
-                field="position",
-                action=action,
-                message="Position must be an integer",
-                request_id=request_id,
-            )
-        if position < 0:
-            return _validation_error(
-                field="position",
-                action=action,
-                message="Position must be >= 0",
-                request_id=request_id,
-            )
-
-    link_previous = payload.get("link_previous", True)
-    if not isinstance(link_previous, bool):
-        return _validation_error(
-            field="link_previous",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="Expected a boolean value",
-            request_id=request_id,
-        )
-
+    link_previous = payload["link_previous"]
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:

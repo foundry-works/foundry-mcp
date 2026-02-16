@@ -35,92 +35,43 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
 
 # Valid scopes for find-replace
 _FIND_REPLACE_SCOPES = {"all", "titles", "descriptions"}
+
+_SPEC_CREATE_SCHEMA = {
+    "name": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+    "template": Str(choices=frozenset(TEMPLATES),
+                    remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply"),
+    "category": Str(choices=frozenset(CATEGORIES),
+                    remediation=f"Use one of: {', '.join(CATEGORIES)}"),
+    "mission": Str(),
+    "dry_run": Bool(default=False),
+    "path": Str(),
+}
 
 
 def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "spec-create"
 
-    name = payload.get("name")
-    if not isinstance(name, str) or not name.strip():
-        return _validation_error(
-            field="name",
-            action=action,
-            message="Provide a non-empty specification name",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    # Apply defaults for template and category before validation
+    payload["template"] = (payload.get("template") or "empty")
+    payload["category"] = (payload.get("category") or "implementation")
 
-    template = payload.get("template") or "empty"
-    if not isinstance(template, str):
-        return _validation_error(
-            field="template",
-            action=action,
-            message="template must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    template = template.strip() or "empty"
-    if template not in TEMPLATES:
-        return _validation_error(
-            field="template",
-            action=action,
-            message=f"Only 'empty' template is supported. Use phase templates to add structure.",
-            request_id=request_id,
-            remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply",
-        )
+    err = validate_payload(payload, _SPEC_CREATE_SCHEMA,
+                           tool_name="authoring", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    category = payload.get("category") or "implementation"
-    if not isinstance(category, str):
-        return _validation_error(
-            field="category",
-            action=action,
-            message="category must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-    category = category.strip() or "implementation"
-    if category not in CATEGORIES:
-        return _validation_error(
-            field="category",
-            action=action,
-            message=f"Category must be one of: {', '.join(CATEGORIES)}",
-            request_id=request_id,
-            remediation=f"Use one of: {', '.join(CATEGORIES)}",
-        )
-
+    name = payload["name"]
+    template = payload["template"]
+    category = payload["category"]
     mission = payload.get("mission")
-    if mission is not None and not isinstance(mission, str):
-        return _validation_error(
-            field="mission",
-            action=action,
-            message="mission must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    dry_run = payload.get("dry_run", False)
-    if dry_run is not None and not isinstance(dry_run, bool):
-        return _validation_error(
-            field="dry_run",
-            action=action,
-            message="dry_run must be a boolean",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
+    dry_run = payload["dry_run"]
     path = payload.get("path")
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            field="path",
-            action=action,
-            message="path must be a string",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
 
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
