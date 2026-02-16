@@ -70,6 +70,7 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _request_id,
     _resolve_session,
     _session_not_found_response,
+    _validate_context_usage_pct,
     _validation_error,
     _is_feature_enabled,
     _feature_disabled_response,
@@ -117,7 +118,7 @@ def _persist_step_proof_response(
             step_id=step_id,
             response=response,
         )
-    except Exception as exc:
+    except (OSError, ValueError, TimeoutError) as exc:
         logger.warning(
             "Failed to persist step-proof replay response for session %s step %s: %s",
             session_id,
@@ -440,7 +441,14 @@ def _handle_session_step_next(
             _feature_disabled_response("session-step-next", request_id)
         )
 
-    storage = _get_storage(config, workspace)
+    # Validate context_usage_pct
+    pct_err = _validate_context_usage_pct(context_usage_pct, "session-step-next", request_id)
+    if pct_err:
+        return _attach_loop_fields(pct_err)
+
+    storage = _get_storage(config, workspace, request_id=request_id)
+    if isinstance(storage, dict):
+        return storage
 
     session, err = _resolve_session(storage, "session-step-next", request_id, session_id, spec_id)
     if err:
@@ -665,7 +673,7 @@ def _handle_session_step_next(
                 storage.save(result.session)
                 # Update active session pointer
                 storage.set_active_session(result.session.spec_id, result.session.id)
-            except Exception as e:
+            except (OSError, ValueError, TimeoutError) as e:
                 logger.error("Failed to persist session %s: %s", session.id, e)
                 final_response = _attach_loop_fields(
                     asdict(
@@ -862,7 +870,9 @@ def _handle_session_step_replay(
             _feature_disabled_response("session-step-replay", request_id)
         )
 
-    storage = _get_storage(config, workspace)
+    storage = _get_storage(config, workspace, request_id=request_id)
+    if isinstance(storage, dict):
+        return storage
 
     session, err = _resolve_session(storage, "session-step-replay", request_id, session_id, spec_id)
     if err:

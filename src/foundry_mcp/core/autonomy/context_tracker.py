@@ -30,13 +30,13 @@ logger = logging.getLogger(__name__)
 # Sidecar file path relative to workspace
 SIDECAR_REL_PATH = Path("specs") / ".autonomy" / "context" / "context.json"
 
-# Maximum age for a sidecar file to be considered fresh
+# Default maximum age for a sidecar file to be considered fresh
 SIDECAR_MAX_AGE = timedelta(minutes=2)
 
 # Env var that indicates sandbox mode (hook writes sidecar)
 SANDBOX_ENV_VAR = "FOUNDRY_SANDBOX"
 
-# Context usage below this threshold is treated as a possible /clear reset
+# Default context usage below this threshold is treated as a possible /clear reset
 RESET_THRESHOLD_PCT = 10
 
 
@@ -82,9 +82,14 @@ class ContextTracker:
         if now is None:
             now = datetime.now(timezone.utc)
 
+        # Compute sidecar max age from session limits if available
+        sidecar_max_age = timedelta(
+            seconds=getattr(session.limits, "sidecar_max_age_seconds", int(SIDECAR_MAX_AGE.total_seconds()))
+        )
+
         # Tier 1: Sidecar (sandbox mode)
         if is_sandbox_mode():
-            sidecar_pct = self._read_sidecar(now)
+            sidecar_pct = self._read_sidecar(now, sidecar_max_age)
             if sidecar_pct is not None:
                 self._update_report_tracking(session, sidecar_pct, now)
                 return sidecar_pct, "sidecar"
@@ -109,15 +114,23 @@ class ContextTracker:
     # Tier 1: Sidecar file reading
     # -----------------------------------------------------------------
 
-    def _read_sidecar(self, now: datetime) -> Optional[int]:
+    def _read_sidecar(self, now: datetime, max_age: Optional[timedelta] = None) -> Optional[int]:
         """Read context usage from sidecar file.
 
         The sidecar is written atomically by the Claude Code hook.
-        We validate freshness (< 2 min) and clamp to 0-100.
+        We validate freshness and clamp to 0-100.
+
+        Args:
+            now: Current timestamp for freshness check.
+            max_age: Maximum age for sidecar to be considered fresh.
+                     Defaults to SIDECAR_MAX_AGE module constant.
 
         Returns:
             Context percentage if fresh sidecar exists, None otherwise.
         """
+        if max_age is None:
+            max_age = SIDECAR_MAX_AGE
+
         try:
             if not self._sidecar_path.exists():
                 logger.debug("Sidecar file not found: %s", self._sidecar_path)
@@ -137,11 +150,11 @@ class ContextTracker:
             if ts_str:
                 try:
                     ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                    if now - ts > SIDECAR_MAX_AGE:
+                    if now - ts > max_age:
                         logger.debug(
                             "Sidecar file stale: %s (age > %s)",
                             ts_str,
-                            SIDECAR_MAX_AGE,
+                            max_age,
                         )
                         return None
                 except (ValueError, TypeError):
@@ -153,7 +166,7 @@ class ContextTracker:
                     mtime = datetime.fromtimestamp(
                         self._sidecar_path.stat().st_mtime, tz=timezone.utc
                     )
-                    if now - mtime > SIDECAR_MAX_AGE:
+                    if now - mtime > max_age:
                         logger.debug("Sidecar file stale by mtime")
                         return None
                 except OSError:
@@ -189,8 +202,9 @@ class ContextTracker:
         last_pct = session.context.last_context_report_pct
 
         # Monotonicity check: reject decreases unless it looks like a /clear reset
+        reset_threshold = getattr(session.limits, "context_reset_threshold_pct", RESET_THRESHOLD_PCT)
         if last_pct is not None and pct < last_pct:
-            if pct < RESET_THRESHOLD_PCT:
+            if pct < reset_threshold:
                 # Accept: likely a /clear or new session context
                 logger.info(
                     "Context usage dropped from %d%% to %d%% (treating as reset)",

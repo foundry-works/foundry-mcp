@@ -49,6 +49,15 @@ GC_TTL_DAYS: Dict[SessionStatus, int] = {
     SessionStatus.FAILED: 30,
 }
 
+class SessionCorrupted(Exception):
+    """Raised when a session file exists but cannot be parsed or validated."""
+
+    def __init__(self, session_id: str, reason: str) -> None:
+        self.session_id = session_id
+        self.reason = reason
+        super().__init__(f"Session {session_id} is corrupted: {reason}")
+
+
 class ActiveSessionLookupResult(Enum):
     """Result of active session lookup."""
 
@@ -303,18 +312,22 @@ class AutonomyStorage:
         self,
         session_id: str,
         apply_migrations: bool = True,
+        raise_on_corrupted: bool = False,
     ) -> Optional[AutonomousSessionState]:
         """Load a session with locking and optional migration.
 
         Args:
             session_id: Session identifier
             apply_migrations: Whether to apply schema migrations
+            raise_on_corrupted: If True, raise SessionCorrupted instead of
+                returning None when the file exists but is unparseable.
 
         Returns:
             Session state or None if not found/expired
 
         Raises:
             Timeout: If lock acquisition times out
+            SessionCorrupted: If raise_on_corrupted=True and file is corrupted
         """
         session_path = self._get_session_path(session_id)
         lock_path = self._get_lock_path(session_id)
@@ -349,8 +362,24 @@ class AutonomyStorage:
 
                 return AutonomousSessionState.model_validate(data)
 
-            except (json.JSONDecodeError, ValueError) as exc:
-                logger.warning("Failed to load session %s: %s", session_id, exc)
+            except json.JSONDecodeError as exc:
+                logger.warning(
+                    "Corrupted session file (invalid JSON) for %s: %s",
+                    session_id,
+                    exc,
+                )
+                if raise_on_corrupted:
+                    raise SessionCorrupted(session_id, f"Invalid JSON: {exc}") from exc
+                return None
+
+            except ValueError as exc:
+                logger.warning(
+                    "Corrupted session file (schema validation failed) for %s: %s",
+                    session_id,
+                    exc,
+                )
+                if raise_on_corrupted:
+                    raise SessionCorrupted(session_id, f"Schema validation failed: {exc}") from exc
                 return None
 
     def delete(self, session_id: str) -> bool:

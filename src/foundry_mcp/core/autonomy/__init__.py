@@ -99,6 +99,7 @@ from .context_tracker import (
 )
 from .memory import (
     AutonomyStorage,
+    SessionCorrupted,
 )
 from .spec_hash import (
     SpecFileMetadata,

@@ -379,6 +379,59 @@ Both modes produce the same JSON schema shape - all keys are present in both mod
 audit_verbosity = "minimal"
 ```
 
+## Secret Management
+
+The autonomy subsystem uses a server secret for HMAC-based integrity protection
+of gate evidence. The secret ensures that gate verdicts cannot be tampered with
+between the review step and the evidence-submission step.
+
+### How the secret works
+
+- **Auto-generated** on first use: a 32-byte random key is created automatically
+- **Stored** at `$FOUNDRY_DATA_DIR/.server_secret` (default: `~/.foundry-mcp/.server_secret`) with mode `0600` (owner read/write only)
+- **Cached** in memory after first load for performance
+- **Override** via `FOUNDRY_MCP_GATE_SECRET` environment variable (for deterministic testing)
+
+### Secret rotation / recovery procedure
+
+If the server secret is compromised or needs rotation:
+
+1. **Stop the server** — ensure no autonomous sessions are actively running
+2. **Delete the secret file**:
+   ```bash
+   rm ~/.foundry-mcp/.server_secret
+   # or if using custom data dir:
+   rm $FOUNDRY_DATA_DIR/.server_secret
+   ```
+3. **Restart the server** — a new secret is auto-generated on first use
+
+### Impact of rotation
+
+- All **in-flight gate evidence** becomes invalid because HMAC checksums were
+  computed with the old secret. The orchestrator will reject stale evidence and
+  re-request gate steps.
+- Active sessions with **pending manual gate acknowledgments** will need the
+  gate step re-issued.
+- Sessions should be **rebased** (`session-rebase`) after rotation to
+  re-establish a clean state, or ended and restarted.
+- Completed sessions and historical audit data are **not affected** — they are
+  already persisted and do not require the secret for reads.
+
+### Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `FOUNDRY_DATA_DIR` | Override the data directory (default: `~/.foundry-mcp`) |
+| `FOUNDRY_MCP_GATE_SECRET` | Provide a deterministic secret (for testing only — do not use in production) |
+
+### Security notes
+
+- Never commit the secret file to version control
+- The secret file permissions are set to `0600` (owner-only) automatically
+- In production, use filesystem-level access controls to protect `$FOUNDRY_DATA_DIR`
+- Gate evidence is short-lived by design, limiting the window of exposure if
+  a secret is compromised
+
 ## Specs directory resolution
 
 If you do not set `FOUNDRY_MCP_SPECS_DIR`, the CLI and server will attempt to

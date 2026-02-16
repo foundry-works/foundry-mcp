@@ -2451,16 +2451,19 @@ class ServerConfig:
         )
 
     def _validate_startup_configuration(self) -> None:
-        """Collect non-fatal startup warnings for inconsistent config states."""
+        """Validate startup configuration. Raises on critical misconfigurations."""
+        # Hard error: feature flag dependencies must be satisfied
         for flag_name, dependencies in _FEATURE_FLAG_DEPENDENCIES.items():
             if not self.feature_flags.get(flag_name, False):
                 continue
 
             missing = [dep for dep in dependencies if not self.feature_flags.get(dep, False)]
             if missing:
-                self._add_startup_warning(
-                    f"Feature flag '{flag_name}' is enabled but missing dependencies: {', '.join(missing)}"
+                msg = (
+                    f"Feature flag '{flag_name}' requires [{', '.join(missing)}] "
+                    f"to be enabled. Either enable the dependencies or disable '{flag_name}'."
                 )
+                raise ValueError(msg)
 
         # Warn when autonomy-only security toggles are configured while sessions are off.
         if not self.feature_flags.get("autonomy_sessions", False):

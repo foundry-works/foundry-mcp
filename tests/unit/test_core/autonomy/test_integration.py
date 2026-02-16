@@ -263,6 +263,15 @@ class TestPhaseBoundary:
 class TestSpecDrift:
     """Test spec change detection and rebase recovery."""
 
+    @pytest.fixture(autouse=True)
+    def _set_maintainer_role(self):
+        """Rebase requires maintainer role."""
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
     def test_spec_change_fails_session(self, tmp_path):
         """Editing spec mid-session causes SPEC_REBASE_REQUIRED on next step."""
         workspace = _make_workspace(tmp_path)
@@ -547,6 +556,15 @@ class TestResumeContext:
 
 
 class TestStateVersionIncrements:
+
+    @pytest.fixture(autouse=True)
+    def _set_maintainer_role(self):
+        """Rebase requires maintainer role."""
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
     """Verify state_version is incremented on all state mutations."""
 
     def test_heartbeat_increments_state_version(self, tmp_path):

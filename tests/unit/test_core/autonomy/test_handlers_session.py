@@ -2,7 +2,7 @@
 
 Covers:
 - session-start: basic creation, force-end existing, idempotency key, spec not found,
-  missing spec_id, gate_policy validation, journal rollback
+  missing spec_id, gate_policy validation, best-effort journal writes
 - session-pause: running -> paused, invalid state transitions, invalid reason fallback
 - session-resume: paused -> running, failed + force -> running,
   spec_structure_changed guard, manual gate ack, gate_ack mismatch
@@ -348,6 +348,134 @@ class TestSessionStart:
         session = storage.load(session_id)
         assert session is not None
         assert session.gate_policy.value == "manual"
+
+    def test_start_succeeds_when_journal_write_fails(self, tmp_path):
+        """Session start succeeds even if journal write fails (best-effort policy)."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session._write_session_journal",
+            return_value=False,
+        ):
+            resp = _handle_session_start(
+                config=config,
+                spec_id="test-spec-001",
+                workspace=str(workspace),
+            )
+        _assert_success(resp)
+
+    def test_start_rejects_path_traversal(self, tmp_path):
+        """Workspace with path traversal is rejected."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace) + "/../../../etc",
+        )
+        assert resp["success"] is False
+
+    def test_start_rejects_dotdot_workspace(self, tmp_path):
+        """Workspace containing .. anywhere is rejected."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        config = _make_config(tmp_path)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace="../../../etc",
+        )
+        assert resp["success"] is False
+
+    def test_start_rejects_lenient_gate_policy_under_unattended_posture(self, tmp_path):
+        """Unattended posture rejects non-strict gate_policy at runtime."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        config.autonomy_posture.profile = "unattended"
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+            gate_policy="lenient",
+        )
+        assert resp["success"] is False
+        details = resp.get("data", {}).get("details", {})
+        assert details.get("posture_profile") == "unattended"
+        assert any("gate_policy" in v for v in details.get("violations", []))
+
+    def test_start_rejects_write_lock_bypass_under_unattended_posture(self, tmp_path):
+        """Unattended posture rejects enforce_autonomy_write_lock=false."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        config.autonomy_posture.profile = "unattended"
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+            enforce_autonomy_write_lock=False,
+        )
+        assert resp["success"] is False
+        details = resp.get("data", {}).get("details", {})
+        assert any("write_lock" in v for v in details.get("violations", []))
+
+    def test_start_allows_strict_policy_under_unattended_posture(self, tmp_path):
+        """Unattended posture allows session-start with strict gate_policy."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        config.autonomy_posture.profile = "unattended"
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+            gate_policy="strict",
+        )
+        assert resp["success"] is True
+
+    def test_start_allows_lenient_policy_without_posture(self, tmp_path):
+        """Without a posture profile, lenient gate_policy is allowed."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+        config.autonomy_posture.profile = None
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+            gate_policy="lenient",
+        )
+        assert resp["success"] is True
 
 
 # =============================================================================
@@ -1295,6 +1423,15 @@ class TestSessionEvents:
 class TestSessionRebase:
     """Tests for _handle_session_rebase."""
 
+    @pytest.fixture(autouse=True)
+    def _set_maintainer_role(self):
+        """Rebase requires maintainer role; set it by default for existing tests."""
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
     def test_rebase_no_change(self, tmp_path):
         """Rebase with no structural change transitions to running."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
@@ -1577,6 +1714,50 @@ class TestSessionRebase:
         data = _assert_success(resp)
         assert data["status"] == "running"
 
+    def test_rebase_denied_for_autonomy_runner(self, tmp_path):
+        """Non-maintainer roles are denied session-rebase."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="autonomy_runner",
+        ):
+            resp = _handle_session_rebase(
+                config=config,
+                spec_id="test-spec-001",
+                workspace=str(workspace),
+            )
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "FORBIDDEN"
+        assert resp["data"]["details"]["action"] == "session-rebase"
+        assert resp["data"]["details"]["required_role"] == "maintainer"
+
+    def test_rebase_denied_for_observer(self, tmp_path):
+        """Observer role is denied session-rebase."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="observer",
+        ):
+            resp = _handle_session_rebase(
+                config=config,
+                spec_id="test-spec-001",
+                workspace=str(workspace),
+            )
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "FORBIDDEN"
+
 
 # =============================================================================
 # Session Heartbeat Tests
@@ -1684,6 +1865,15 @@ class TestSessionHeartbeat:
 
 class TestSessionReset:
     """Tests for _handle_session_reset."""
+
+    @pytest.fixture(autouse=True)
+    def _set_maintainer_role(self):
+        """Reset requires maintainer role; set it by default for existing tests."""
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
 
     def test_reset_failed_session(self, tmp_path):
         """Resetting a failed session deletes it (ADR escape hatch)."""
@@ -1835,6 +2025,87 @@ class TestSessionReset:
         assert resp["success"] is False
         assert resp["data"]["details"]["field"] == "reason_code"
 
+    def test_reset_denied_for_autonomy_runner(self, tmp_path):
+        """Non-maintainer roles are denied session-reset."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_reset,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="autonomy_runner",
+        ):
+            resp = _handle_session_reset(
+                config=config,
+                session_id="any-session-id",
+                reason_code="operator_override",
+                workspace=str(workspace),
+            )
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "FORBIDDEN"
+        assert resp["data"]["details"]["action"] == "session-reset"
+        assert resp["data"]["details"]["required_role"] == "maintainer"
+
+    def test_reset_denied_for_observer(self, tmp_path):
+        """Observer role is denied session-reset."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_reset,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="observer",
+        ):
+            resp = _handle_session_reset(
+                config=config,
+                session_id="any-session-id",
+                reason_code="operator_override",
+                workspace=str(workspace),
+            )
+        assert resp["success"] is False
+        assert resp["data"]["error_code"] == "FORBIDDEN"
+
+    def test_reset_allowed_for_maintainer(self, tmp_path):
+        """Maintainer role is allowed to reset failed sessions."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_reset,
+        )
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp_start = _handle_session_start(
+            config=config, spec_id="test-spec-001", workspace=str(workspace),
+        )
+        session_id = _assert_success(resp_start)["session_id"]
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        session.status = SessionStatus.FAILED
+        session.failure_reason = FailureReason.STATE_CORRUPT
+        storage.save(session)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session.get_server_role",
+            return_value="maintainer",
+        ):
+            resp = _handle_session_reset(
+                config=config,
+                session_id=session_id,
+                reason_code="corrupt_state",
+                workspace=str(workspace),
+            )
+        data = _assert_success(resp)
+        assert data["result"] == "deleted"
+
 
 # =============================================================================
 # Session Resolution Tests (via _resolve_session)
@@ -1947,3 +2218,372 @@ class TestSessionEventsBenchmark:
         assert elapsed_ms < 200, (
             f"session-events query took {elapsed_ms:.1f}ms, exceeds 200ms design target"
         )
+
+
+# =============================================================================
+# Workspace Path Traversal Tests (T2)
+# =============================================================================
+
+
+class TestWorkspacePathTraversal:
+    """Tests for workspace path traversal rejection in _load_spec_for_session."""
+
+    def test_load_spec_rejects_path_traversal(self):
+        """_load_spec_for_session returns None for workspace with path traversal."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _load_spec_for_session,
+        )
+
+        session = make_session(spec_id="test-spec-001")
+        result = _load_spec_for_session(session, workspace="../../../etc")
+        assert result is None
+
+    def test_load_spec_rejects_dotdot_in_path(self):
+        """_load_spec_for_session returns None for embedded .. in workspace."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _load_spec_for_session,
+        )
+
+        session = make_session(spec_id="test-spec-001")
+        result = _load_spec_for_session(session, workspace="/tmp/safe/../../../etc")
+        assert result is None
+
+
+# =============================================================================
+# WS4 Operator Observability Field Tests (T18)
+# =============================================================================
+
+
+class TestOperatorObservabilityFields:
+    """Verify that session-status responses include WS4 operator observability fields.
+
+    Tests that last_step_id, current_task_id, active_phase_progress,
+    and retry_counters are populated correctly.
+    """
+
+    def test_status_includes_last_step_id_and_type(self, tmp_path):
+        """last_step_id and last_step_type reflect the most recent step issued."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        # Start session
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+        session_id = data["session_id"]
+
+        # Manually set last_step_issued on the session to simulate step issuance
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.core.autonomy.models import LastStepIssued, StepType
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        session.last_step_issued = LastStepIssued(
+            step_id="step-abc-123",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+        )
+        storage.save(session)
+
+        # Query status
+        status_resp = _handle_session_status(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        status_data = _assert_success(status_resp)
+
+        assert status_data["last_step_id"] == "step-abc-123"
+        assert status_data["last_step_type"] == "implement_task"
+
+    def test_status_includes_current_task_id_from_last_step(self, tmp_path):
+        """current_task_id is derived from the last issued step's task_id."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+        session_id = data["session_id"]
+
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.core.autonomy.models import LastStepIssued, StepType
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        session.last_step_issued = LastStepIssued(
+            step_id="step-xyz-456",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-2",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+        )
+        storage.save(session)
+
+        status_resp = _handle_session_status(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        status_data = _assert_success(status_resp)
+
+        assert status_data["current_task_id"] == "task-2"
+
+    def test_status_includes_active_phase_progress(self, tmp_path):
+        """active_phase_progress reports correct completed/total/remaining counts."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+        session_id = data["session_id"]
+
+        # Set active_phase_id and mark some tasks completed
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        session.active_phase_id = "phase-1"
+        session.completed_task_ids = ["task-1"]  # 1 of 3 tasks in phase-1 completed
+        storage.save(session)
+
+        status_resp = _handle_session_status(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        status_data = _assert_success(status_resp)
+
+        progress = status_data.get("active_phase_progress")
+        assert progress is not None
+        assert progress["phase_id"] == "phase-1"
+        assert progress["total_tasks"] == 3  # task-1, task-2, verify-1 from make_spec_data
+        assert progress["completed_tasks"] == 1
+        assert progress["remaining_tasks"] == 2
+        assert 0 <= progress["completion_pct"] <= 100
+
+    def test_status_includes_retry_counters(self, tmp_path):
+        """retry_counters reports fidelity review cycles and consecutive errors."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+        session_id = data["session_id"]
+
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        session.active_phase_id = "phase-1"
+        session.counters.consecutive_errors = 2
+        session.counters.fidelity_review_cycles_in_active_phase = 1
+        storage.save(session)
+
+        status_resp = _handle_session_status(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        status_data = _assert_success(status_resp)
+
+        counters = status_data.get("retry_counters")
+        assert counters is not None
+        assert counters["consecutive_errors"] == 2
+        assert counters["fidelity_review_cycles_in_active_phase"] == 1
+        assert "phase-1" in counters.get("phase_retry_counts", {})
+
+    def test_status_no_step_fields_are_null_initially(self, tmp_path):
+        """Before any step is issued, last_step_id and current_task_id are null."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_status,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        data = _assert_success(resp)
+        session_id = data["session_id"]
+
+        status_resp = _handle_session_status(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        status_data = _assert_success(status_resp)
+
+        assert status_data.get("last_step_id") is None
+        assert status_data.get("last_step_type") is None
+        assert status_data.get("current_task_id") is None
+
+
+class TestSessionEventsCursorPagination:
+    """Test cursor-based pagination for session-events."""
+
+    def test_events_cursor_pagination(self, tmp_path):
+        """Cursor pagination returns non-overlapping pages of events."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        # Start session to create events
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        start_data = _assert_success(resp)
+        session_id = start_data["session_id"]
+
+        # Add more journal entries to create pagination
+        spec_path = workspace / "specs" / "active" / "test-spec-001.json"
+        spec_data = json.loads(spec_path.read_text())
+        journal = spec_data.setdefault("journal", [])
+        for i in range(10):
+            journal.append({
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "entry_type": "session",
+                "title": f"Event {i}",
+                "content": f"Content {i}",
+                "author": "autonomy",
+                "metadata": {
+                    "session_id": session_id,
+                    "action": "test",
+                },
+            })
+        spec_path.write_text(json.dumps(spec_data, indent=2))
+
+        # First page with small limit
+        page1 = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+            limit=3,
+        )
+        page1_data = _assert_success(page1)
+        page1_events = page1_data["events"]
+
+        # If there are enough events for pagination
+        if page1["meta"].get("pagination", {}).get("has_more"):
+            cursor = page1["meta"]["pagination"]["cursor"]
+            assert cursor is not None
+
+            # Second page
+            page2 = _handle_session_events(
+                config=config,
+                session_id=session_id,
+                workspace=str(workspace),
+                cursor=cursor,
+                limit=3,
+            )
+            page2_data = _assert_success(page2)
+            page2_events = page2_data["events"]
+
+            # Pages should not overlap (check by title uniqueness)
+            page1_titles = {e.get("title") for e in page1_events}
+            page2_titles = {e.get("title") for e in page2_events}
+            assert page1_titles & page2_titles == set(), (
+                f"Overlapping events between pages: {page1_titles & page2_titles}"
+            )
+
+    def test_events_invalid_cursor_returns_error(self, tmp_path):
+        """Invalid cursor returns a validation error."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        start_data = _assert_success(resp)
+        session_id = start_data["session_id"]
+
+        error_resp = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+            cursor="bad-cursor-value",
+        )
+        assert error_resp["success"] is False
+
+    def test_events_response_includes_telemetry(self, tmp_path):
+        """session-events includes telemetry metadata."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_start,
+            _handle_session_events,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        resp = _handle_session_start(
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
+        )
+        start_data = _assert_success(resp)
+        session_id = start_data["session_id"]
+
+        events_resp = _handle_session_events(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        events_data = _assert_success(events_resp)
+        telemetry = events_resp["meta"].get("telemetry", {})
+
+        assert "duration_ms" in telemetry
+        assert "journal_entries_scanned" in telemetry
+        assert "session_events_returned" in telemetry

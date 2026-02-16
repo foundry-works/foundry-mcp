@@ -1019,6 +1019,61 @@ class TestSessionStepNext:
         assert call_args.kwargs["heartbeat_at"] is not None
 
 
+    def test_next_rejects_invalid_context_usage_pct(self, tmp_path):
+        """Step-next rejects context_usage_pct outside 0-100 bounds."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace = _setup_workspace(tmp_path)
+        config = _make_config(workspace)
+
+        for bad_value in [-1, 101, 200]:
+            resp = _handle_session_step_next(
+                config=config,
+                spec_id="test-spec-001",
+                workspace=str(workspace),
+                context_usage_pct=bad_value,
+            )
+            assert resp["success"] is False
+            assert "context_usage_pct" in resp.get("data", {}).get("details", {}).get("field", "")
+
+    def test_next_accepts_valid_context_usage_pct(self, tmp_path):
+        """Step-next accepts context_usage_pct within 0-100 bounds."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_next,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+
+        mock_next_step = NextStep(
+            step_id="step-001",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            task_title="Implement task 1",
+        )
+        mock_result = OrchestrationResult(
+            success=True,
+            session=make_session(session_id=session_id),
+            next_step=mock_next_step,
+            should_persist=True,
+        )
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
+        ) as MockOrch:
+            MockOrch.return_value.compute_next_step.return_value = mock_result
+            resp = _handle_session_step_next(
+                config=config,
+                spec_id="test-spec-001",
+                workspace=str(workspace),
+                context_usage_pct=50,
+            )
+
+        assert resp["success"] is True
+
+
 # =============================================================================
 # Session Step Report Tests
 # =============================================================================

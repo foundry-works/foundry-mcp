@@ -199,6 +199,12 @@ class SessionLimits(BaseModel):
     context_staleness_penalty_pct: int = Field(
         default=5, ge=1, le=20, description="Penalty percentage added when context reports are stale"
     )
+    context_reset_threshold_pct: int = Field(
+        default=10, ge=0, le=50, description="Context usage below this threshold is treated as a possible /clear reset"
+    )
+    sidecar_max_age_seconds: int = Field(
+        default=120, ge=10, le=600, description="Maximum age in seconds for a sidecar file to be considered fresh"
+    )
 
 
 class StopConditions(BaseModel):

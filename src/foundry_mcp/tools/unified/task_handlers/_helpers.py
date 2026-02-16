@@ -15,6 +15,7 @@ from foundry_mcp.core.autonomy.models import (
     derive_loop_signal,
     derive_recommended_actions,
 )
+from foundry_mcp.core.autonomy.orchestrator import ERROR_SESSION_UNRECOVERABLE
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.pagination import (
     CursorError,
@@ -54,6 +55,73 @@ def _metric(action: str) -> str:
 
 
 _validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
+
+
+def _validate_context_usage_pct(
+    value: Optional[int], action: str, request_id: str
+) -> Optional[dict]:
+    """Validate context_usage_pct bounds (0-100 integer).
+
+    Returns an error response dict if invalid, None if valid or absent.
+    """
+    if value is not None:
+        if not isinstance(value, int) or not (0 <= value <= 100):
+            return _validation_error(
+                action=action,
+                field="context_usage_pct",
+                message="context_usage_pct must be an integer between 0 and 100",
+                request_id=request_id,
+            )
+    return None
+
+
+# Regex patterns for ID validation
+# Session IDs: ULID format (26 chars, Crockford base32) or safe alphanumeric with hyphens
+_SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
+# Spec IDs: alphanumeric with hyphens, underscores, dots (for file-safe naming)
+_SPEC_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def _validate_session_id(
+    value: Optional[str], action: str, request_id: str
+) -> Optional[dict]:
+    """Validate session_id format.
+
+    Returns an error response dict if invalid, None if valid or absent.
+    """
+    if value is not None:
+        if not isinstance(value, str) or not _SESSION_ID_PATTERN.match(value):
+            return _validation_error(
+                action=action,
+                field="session_id",
+                message=(
+                    "session_id must be 1-128 characters, starting with alphanumeric, "
+                    "containing only alphanumeric, hyphens, and underscores"
+                ),
+                request_id=request_id,
+            )
+    return None
+
+
+def _validate_spec_id(
+    value: Optional[str], action: str, request_id: str
+) -> Optional[dict]:
+    """Validate spec_id format.
+
+    Returns an error response dict if invalid, None if valid or absent.
+    """
+    if value is not None:
+        if not isinstance(value, str) or not _SPEC_ID_PATTERN.match(value):
+            return _validation_error(
+                action=action,
+                field="spec_id",
+                message=(
+                    "spec_id must be 1-128 characters, starting with alphanumeric, "
+                    "containing only alphanumeric, hyphens, underscores, and dots"
+                ),
+                request_id=request_id,
+            )
+    return None
 
 
 _SESSION_COMMAND_TO_ACTION: Dict[str, str] = {
@@ -297,9 +365,7 @@ def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
         status=data.get("status"),
         pause_reason=data.get("pause_reason"),
         error_code=error_code,
-        is_unrecoverable_error=(
-            str(error_code).upper() in {"SESSION_UNRECOVERABLE", "ERROR_SESSION_UNRECOVERABLE"}
-        ),
+        is_unrecoverable_error=(error_code == ERROR_SESSION_UNRECOVERABLE),
         repeated_invalid_gate_evidence=repeated_invalid_gate_evidence,
     )
     if loop_signal is None:
@@ -580,9 +646,62 @@ def _check_autonomy_write_lock(
     return None
 
 
-def _get_storage(config: ServerConfig, workspace: Optional[str] = None) -> AutonomyStorage:
-    """Get AutonomyStorage instance for session operations."""
-    ws_path = Path(workspace) if workspace else Path.cwd()
+def _workspace_path_error(workspace: str, reason: str, request_id: str) -> dict:
+    """Return a validation error for an invalid workspace path."""
+    return asdict(error_response(
+        f"Invalid workspace path: {reason}",
+        error_code=ErrorCode.VALIDATION_ERROR,
+        error_type=ErrorType.VALIDATION,
+        request_id=request_id,
+        details={
+            "field": "workspace",
+            "reason": reason,
+            "path": workspace,
+            "hint": "Provide an absolute path without '..' components",
+        },
+    ))
+
+
+def _validate_workspace(
+    workspace: str, request_id: str,
+) -> Tuple[Optional[Path], Optional[dict]]:
+    """Validate and canonicalize a workspace path, rejecting traversal attempts.
+
+    Returns:
+        (validated_path, None) on success, or (None, error_response) on failure.
+    """
+    from foundry_mcp.core.authorization import PathValidationError, validate_runner_path
+
+    try:
+        validated = validate_runner_path(workspace, require_within_workspace=False)
+        return validated, None
+    except PathValidationError as exc:
+        logger.warning("Workspace path validation failed: %s (path=%s)", exc.reason, exc.path)
+        return None, _workspace_path_error(workspace, exc.reason, request_id)
+
+
+def _get_storage(
+    config: ServerConfig,
+    workspace: Optional[str] = None,
+    *,
+    request_id: Optional[str] = None,
+) -> "AutonomyStorage | dict":
+    """Get AutonomyStorage instance for session operations.
+
+    When request_id is provided and workspace validation fails, returns an
+    error response dict instead of raising.  When request_id is None (legacy
+    callers), raises PathValidationError on invalid workspace.
+    """
+    if workspace:
+        if request_id:
+            ws_path, err = _validate_workspace(workspace, request_id)
+            if err:
+                return err
+        else:
+            from foundry_mcp.core.authorization import validate_runner_path
+            ws_path = validate_runner_path(workspace, require_within_workspace=False)
+    else:
+        ws_path = Path.cwd()
     return AutonomyStorage(workspace_path=ws_path)
 
 

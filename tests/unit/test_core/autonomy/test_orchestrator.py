@@ -1658,3 +1658,148 @@ class TestHandleGateEvidence:
             now,
         )
         assert session.counters.fidelity_review_cycles_in_active_phase == 2
+
+
+# =============================================================================
+# Audit Integration Tests
+# =============================================================================
+
+
+class TestAuditIntegration:
+    """Tests verifying audit events are emitted at orchestrator decision points."""
+
+    def _make_session_for_orch(self, tmp_path):
+        """Create a session with spec_structure_hash matching the spec on disk."""
+        spec_data = make_spec_data()
+        spec_hash = compute_spec_structure_hash(spec_data)
+        return make_session(spec_structure_hash=spec_hash)
+
+    def test_step_issued_emits_audit_event(self, tmp_path):
+        """Orchestrator emits STEP_ISSUED audit event when issuing a task step."""
+        from foundry_mcp.core.autonomy.audit import AuditEventType, AuditLedger
+
+        orch = _make_orchestrator(tmp_path)
+        session = self._make_session_for_orch(tmp_path)
+
+        result = orch.compute_next_step(session)
+        assert result.success
+        assert result.next_step is not None
+
+        ledger = AuditLedger(
+            spec_id=session.spec_id,
+            workspace_path=orch.workspace_path,
+        )
+        entries = ledger.get_entries(event_type=AuditEventType.STEP_ISSUED)
+        assert len(entries) >= 1
+        assert entries[0].session_id == session.id
+        assert entries[0].action == "issue_step"
+
+    def test_step_consumed_emits_audit_event(self, tmp_path):
+        """Orchestrator emits STEP_CONSUMED audit event when recording step outcome."""
+        from foundry_mcp.core.autonomy.audit import AuditEventType, AuditLedger
+
+        orch = _make_orchestrator(tmp_path)
+        session = self._make_session_for_orch(tmp_path)
+
+        result1 = orch.compute_next_step(session)
+        assert result1.success
+
+        step_result = _result(
+            step_id=result1.next_step.step_id,
+            step_type=result1.next_step.type,
+            outcome=StepOutcome.SUCCESS,
+            task_id=result1.next_step.task_id,
+            phase_id=result1.next_step.phase_id,
+            step_proof=result1.next_step.step_proof,
+        )
+        orch.compute_next_step(session, last_step_result=step_result)
+
+        ledger = AuditLedger(
+            spec_id=session.spec_id,
+            workspace_path=orch.workspace_path,
+        )
+        entries = ledger.get_entries(event_type=AuditEventType.STEP_CONSUMED)
+        assert len(entries) >= 1
+        consumed = entries[0]
+        assert consumed.session_id == session.id
+        assert consumed.action == "consume_step"
+        assert consumed.metadata["outcome"] == "success"
+
+    def test_pause_emits_audit_event(self, tmp_path):
+        """Orchestrator emits PAUSE audit event on context limit pause."""
+        from foundry_mcp.core.autonomy.audit import AuditEventType, AuditLedger
+
+        orch = _make_orchestrator(tmp_path)
+        session = self._make_session_for_orch(tmp_path)
+        session.context.context_usage_pct = 95
+        session.limits.context_threshold_pct = 90
+
+        result = orch.compute_next_step(session)
+        assert result.success
+        assert result.next_step.type == StepType.PAUSE
+
+        ledger = AuditLedger(
+            spec_id=session.spec_id,
+            workspace_path=orch.workspace_path,
+        )
+        entries = ledger.get_entries(event_type=AuditEventType.PAUSE)
+        assert len(entries) >= 1
+        assert entries[0].metadata["reason"] == "context_limit"
+
+    def test_audit_failure_does_not_block_step(self, tmp_path):
+        """Audit write failure is best-effort and does not block orchestration."""
+        orch = _make_orchestrator(tmp_path)
+        session = self._make_session_for_orch(tmp_path)
+
+        with patch(
+            "foundry_mcp.core.autonomy.audit.AuditLedger.append",
+            side_effect=OSError("disk full"),
+        ):
+            result = orch.compute_next_step(session)
+            assert result.success  # Should succeed despite audit failure
+
+
+# =============================================================================
+# Spec Cache Invalidation (T16)
+# =============================================================================
+
+
+class TestSpecCacheInvalidation:
+    """Test invalidate_spec_cache() method."""
+
+    def test_invalidate_clears_cache_for_matching_spec(self, tmp_path):
+        """invalidate_spec_cache(spec_id) clears cache when spec_id matches."""
+        orch = _make_orchestrator(tmp_path)
+        # Manually populate the cache
+        orch._spec_cache = ("test-spec-001", 1234.0, 5678, {"spec_id": "test-spec-001"})
+
+        orch.invalidate_spec_cache("test-spec-001")
+        assert orch._spec_cache is None
+
+    def test_invalidate_preserves_cache_for_different_spec(self, tmp_path):
+        """invalidate_spec_cache(spec_id) preserves cache when spec_id differs."""
+        orch = _make_orchestrator(tmp_path)
+        cached = ("other-spec", 1234.0, 5678, {"spec_id": "other-spec"})
+        orch._spec_cache = cached
+
+        orch.invalidate_spec_cache("test-spec-001")
+        assert orch._spec_cache == cached
+
+    def test_invalidate_unconditional_clears_any_cache(self, tmp_path):
+        """invalidate_spec_cache(None) clears any cached spec."""
+        orch = _make_orchestrator(tmp_path)
+        orch._spec_cache = ("any-spec", 1234.0, 5678, {"spec_id": "any-spec"})
+
+        orch.invalidate_spec_cache()
+        assert orch._spec_cache is None
+
+    def test_invalidate_on_empty_cache_is_noop(self, tmp_path):
+        """invalidate_spec_cache() on empty cache does not raise."""
+        orch = _make_orchestrator(tmp_path)
+        assert orch._spec_cache is None
+
+        orch.invalidate_spec_cache("test-spec-001")
+        assert orch._spec_cache is None
+
+        orch.invalidate_spec_cache()
+        assert orch._spec_cache is None

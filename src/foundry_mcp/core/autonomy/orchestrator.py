@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -60,6 +61,7 @@ from foundry_mcp.core.autonomy.server_secret import (
     compute_integrity_checksum,
     verify_integrity_checksum,
 )
+from foundry_mcp.core.autonomy.audit import AuditEventType, AuditLedger
 from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.core.task._helpers import check_all_blocked
 
@@ -169,6 +171,56 @@ class StepOrchestrator:
         # Cache: (spec_id, mtime, file_size) -> spec_data
         self._spec_cache: Optional[Tuple[str, float, int, Dict[str, Any]]] = None
         self._context_tracker = ContextTracker(self.workspace_path)
+        # Audit ledger cache keyed by spec_id
+        self._audit_ledgers: Dict[str, AuditLedger] = {}
+
+    def invalidate_spec_cache(self, spec_id: Optional[str] = None) -> None:
+        """Invalidate the spec data cache.
+
+        Call after rebase or any operation that modifies spec on disk.
+
+        Args:
+            spec_id: If provided, only invalidate if cached spec matches.
+                     If None, unconditionally clear the cache.
+        """
+        if spec_id is None:
+            self._spec_cache = None
+        elif self._spec_cache is not None and self._spec_cache[0] == spec_id:
+            self._spec_cache = None
+
+    def _get_ledger(self, spec_id: str) -> AuditLedger:
+        """Get or create an audit ledger for the given spec."""
+        if spec_id not in self._audit_ledgers:
+            self._audit_ledgers[spec_id] = AuditLedger(
+                spec_id=spec_id,
+                workspace_path=self.workspace_path,
+            )
+        return self._audit_ledgers[spec_id]
+
+    def _emit_audit_event(
+        self,
+        session: AutonomousSessionState,
+        event_type: AuditEventType,
+        action: str,
+        step_id: Optional[str] = None,
+        phase_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Emit an audit event (best-effort, never fails the calling operation)."""
+        try:
+            ledger = self._get_ledger(session.spec_id)
+            ledger.append(
+                event_type=event_type,
+                action=action,
+                session_id=session.id,
+                step_id=step_id,
+                phase_id=phase_id,
+                task_id=task_id,
+                metadata=metadata,
+            )
+        except (OSError, ValueError, TimeoutError) as e:
+            logger.debug("Audit event emission failed (non-critical): %s", e)
 
     def compute_next_step(
         self,
@@ -753,6 +805,20 @@ class StepOrchestrator:
         # Write journal entry (best-effort)
         self._write_step_journal(session, result)
 
+        # Audit: step consumed
+        self._emit_audit_event(
+            session,
+            AuditEventType.STEP_CONSUMED,
+            action="consume_step",
+            step_id=result.step_id,
+            phase_id=result.phase_id,
+            task_id=result.task_id,
+            metadata={
+                "outcome": result.outcome.value if result.outcome else "unknown",
+                "step_type": result.step_type.value if result.step_type else "unknown",
+            },
+        )
+
         session.updated_at = now
 
     def _record_gate_outcome(
@@ -793,6 +859,25 @@ class StepOrchestrator:
 
         gate_record.evaluated_at = now
         gate_record.gate_attempt_id = result.gate_attempt_id
+
+        # Audit: gate verdict
+        audit_type = (
+            AuditEventType.GATE_PASSED
+            if gate_record.status == PhaseGateStatus.PASSED
+            else AuditEventType.GATE_FAILED
+        )
+        self._emit_audit_event(
+            session,
+            audit_type,
+            action="record_gate_outcome",
+            step_id=result.step_id,
+            phase_id=result.phase_id,
+            metadata={
+                "verdict": gate_record.verdict.value if gate_record.verdict else None,
+                "gate_attempt_id": result.gate_attempt_id,
+                "status": gate_record.status.value,
+            },
+        )
 
     def _write_step_journal(
         self,
@@ -848,7 +933,7 @@ class StepOrchestrator:
             else:
                 logger.debug("Spec not found for step journal: %s", session.spec_id)
 
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
             logger.debug("Failed to write step journal: %s", e)
 
     def _validate_spec_integrity(
@@ -934,8 +1019,14 @@ class StepOrchestrator:
                 )
             return spec_data, None
 
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError) as e:
             logger.error("Spec integrity validation failed: %s", e)
+            self._emit_audit_event(
+                session,
+                AuditEventType.STEP_CONSUMED,
+                action="spec_integrity_failure",
+                metadata={"error": str(e)},
+            )
             return None, f"Spec integrity validation failed: {e}"
 
     def _find_spec_path(self, spec_id: str) -> Optional[Path]:
@@ -1754,6 +1845,14 @@ class StepOrchestrator:
             step_proof=step_proof,
         )
 
+        self._emit_audit_event(
+            session,
+            AuditEventType.PAUSE,
+            action="session_pause",
+            step_id=step_id,
+            metadata={"reason": reason.value},
+        )
+
         return OrchestrationResult(
             success=True,
             session=session,
@@ -1820,6 +1919,16 @@ class StepOrchestrator:
         session.status = SessionStatus.RUNNING
         session.updated_at = now
         session.state_version += 1
+
+        self._emit_audit_event(
+            session,
+            AuditEventType.STEP_ISSUED,
+            action="issue_step",
+            step_id=step_id,
+            phase_id=phase_id,
+            task_id=task_id,
+            metadata={"step_type": "implement_task"},
+        )
 
         return OrchestrationResult(
             success=True,
@@ -1901,6 +2010,16 @@ class StepOrchestrator:
         session.updated_at = now
         session.state_version += 1
 
+        self._emit_audit_event(
+            session,
+            AuditEventType.STEP_ISSUED,
+            action="issue_step",
+            step_id=step_id,
+            phase_id=phase_id,
+            task_id=task_id,
+            metadata={"step_type": "execute_verification"},
+        )
+
         return OrchestrationResult(
             success=True,
             session=session,
@@ -1971,6 +2090,15 @@ class StepOrchestrator:
         session.updated_at = now
         session.state_version += 1
 
+        self._emit_audit_event(
+            session,
+            AuditEventType.STEP_ISSUED,
+            action="issue_step",
+            step_id=step_id,
+            phase_id=phase_id,
+            metadata={"step_type": "run_fidelity_gate", "gate_attempt_id": gate_attempt_id},
+        )
+
         return OrchestrationResult(
             success=True,
             session=session,
@@ -2030,6 +2158,15 @@ class StepOrchestrator:
         session.updated_at = now
         session.state_version += 1
 
+        self._emit_audit_event(
+            session,
+            AuditEventType.STEP_ISSUED,
+            action="issue_step",
+            step_id=step_id,
+            phase_id=evidence.phase_id,
+            metadata={"step_type": "address_fidelity_feedback", "gate_attempt_id": evidence.gate_attempt_id},
+        )
+
         return OrchestrationResult(
             success=True,
             session=session,
@@ -2070,6 +2207,14 @@ class StepOrchestrator:
             phase_id=None,
             issued_at=now,
             step_proof=step_proof,
+        )
+
+        self._emit_audit_event(
+            session,
+            AuditEventType.SPEC_COMPLETE,
+            action="complete_spec",
+            step_id=step_id,
+            metadata={"tasks_completed": session.counters.tasks_completed},
         )
 
         return OrchestrationResult(

@@ -651,8 +651,8 @@ autonomy_fidelity_gates = false
                 finally:
                     os.chdir(original_cwd)
 
-    def test_feature_flag_dependency_warning(self, tmp_path):
-        """Startup warnings include dependency issues for inconsistent flags."""
+    def test_feature_flag_dependency_error(self, tmp_path):
+        """Startup raises ValueError when flag dependencies are violated."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
 
@@ -668,12 +668,31 @@ autonomy_fidelity_gates = false
                 original_cwd = os.getcwd()
                 os.chdir(project_dir)
                 try:
+                    with pytest.raises(ValueError, match="autonomy_fidelity_gates"):
+                        ServerConfig.from_env()
+                finally:
+                    os.chdir(original_cwd)
+
+    def test_feature_flag_dependency_satisfied(self, tmp_path):
+        """No error when flag dependencies are satisfied."""
+        home_dir = tmp_path / "home"
+        home_dir.mkdir()
+
+        project_dir = tmp_path / "project"
+        project_dir.mkdir()
+
+        with patch.object(Path, "home", return_value=home_dir):
+            with patch.dict(
+                os.environ,
+                {"FOUNDRY_MCP_FEATURE_FLAGS": "autonomy_sessions=true,autonomy_fidelity_gates=true"},
+                clear=True,
+            ):
+                original_cwd = os.getcwd()
+                os.chdir(project_dir)
+                try:
                     config = ServerConfig.from_env()
-                    assert any(
-                        "autonomy_fidelity_gates" in warning
-                        and "autonomy_sessions" in warning
-                        for warning in config.startup_warnings
-                    )
+                    assert config.feature_flags.get("autonomy_fidelity_gates") is True
+                    assert config.feature_flags.get("autonomy_sessions") is True
                 finally:
                     os.chdir(original_cwd)
 

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from foundry_mcp.core.authorization import (
+    PathValidationError,
     check_action_allowed,
     get_rate_limit_tracker,
     get_server_role,
@@ -330,6 +331,28 @@ def dispatch_with_standard_errors(
                 remediation=f"Use one of: {allowed}",
                 request_id=rid,
                 details=details,
+            )
+        )
+    except PathValidationError as exc:
+        rid = request_id or build_request_id(tool_name)
+        logger.warning(
+            "%s action '%s' rejected: path validation failed: %s",
+            tool_name.capitalize(),
+            action,
+            exc.reason,
+        )
+        return asdict(
+            error_response(
+                f"Invalid workspace path: {exc.reason}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                remediation="Provide an absolute path without '..' components.",
+                request_id=rid,
+                details={
+                    "action": action,
+                    "reason": exc.reason,
+                    "path": exc.path,
+                },
             )
         )
     except Exception as exc:
