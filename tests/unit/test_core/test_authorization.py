@@ -329,6 +329,42 @@ class TestRateLimitTracker:
         assert stats["is_limited"] is True
         assert stats["retry_after"] > 0
 
+    def test_tracker_caps_tracked_action_cardinality(self):
+        """High-cardinality denial keys should be bounded in memory."""
+        config = RateLimitConfig(
+            max_consecutive_denials=9999,
+            max_tracked_actions=32,
+            global_cleanup_interval_seconds=0,
+        )
+        tracker = RateLimitTracker(config)
+
+        for index in range(200):
+            tracker.record_denial(f"action-{index}")
+
+        tracked_actions = (
+            set(tracker._denials)
+            | set(tracker._rate_limited_until)
+            | set(tracker._last_seen)
+        )
+        assert len(tracked_actions) <= 32
+
+    def test_global_cleanup_sweeps_expired_rate_limits(self):
+        """Expired rate-limit entries should be removed by global maintenance."""
+        config = RateLimitConfig(
+            max_consecutive_denials=1,
+            retry_after_seconds=0.01,
+            global_cleanup_interval_seconds=0,
+        )
+        tracker = RateLimitTracker(config)
+
+        tracker.record_denial("stale-action")
+        assert "stale-action" in tracker._rate_limited_until
+
+        time.sleep(0.02)
+        tracker.check_rate_limit("different-action")
+
+        assert "stale-action" not in tracker._rate_limited_until
+
 
 class TestGetRateLimitTracker:
     """Test global rate limit tracker functions."""

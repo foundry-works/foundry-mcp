@@ -352,11 +352,17 @@ class RateLimitConfig:
         max_consecutive_denials: Maximum denials before rate limiting
         denial_window_seconds: Sliding window for counting denials
         retry_after_seconds: Cooldown period after rate limit triggered
+        max_tracked_actions: Maximum number of action keys retained in memory
+        stale_entry_ttl_seconds: TTL for inactive tracking state
+        global_cleanup_interval_seconds: Minimum interval between global sweeps
     """
 
     max_consecutive_denials: int = 10
     denial_window_seconds: int = 60
     retry_after_seconds: int = 5
+    max_tracked_actions: int = 1024
+    stale_entry_ttl_seconds: int = 300
+    global_cleanup_interval_seconds: int = 5
 
 
 @dataclass
@@ -401,6 +407,8 @@ class RateLimitTracker:
         self._config = config or RateLimitConfig()
         self._denials: Dict[str, List[_DenialRecord]] = {}
         self._rate_limited_until: Dict[str, float] = {}
+        self._last_seen: Dict[str, float] = {}
+        self._last_global_cleanup: float = 0.0
         self._lock = Lock()
 
     def check_rate_limit(self, action: str) -> Optional[float]:
@@ -415,14 +423,17 @@ class RateLimitTracker:
         now = time.monotonic()
 
         with self._lock:
+            self._touch_action(action, now)
             # Check if currently rate-limited
             limited_until = self._rate_limited_until.get(action, 0)
             if now < limited_until:
                 remaining = limited_until - now
+                self._run_global_maintenance(now)
                 return remaining
 
             # Clean up expired entries
             self._cleanup_expired(action, now)
+            self._run_global_maintenance(now)
 
             return None
 
@@ -435,6 +446,7 @@ class RateLimitTracker:
         now = time.monotonic()
 
         with self._lock:
+            self._touch_action(action, now)
             # Clean up old entries first
             self._cleanup_expired(action, now)
 
@@ -457,6 +469,8 @@ class RateLimitTracker:
                 # Clear the denial list after triggering rate limit
                 self._denials[action] = []
 
+            self._run_global_maintenance(now)
+
     def reset(self, action: str) -> None:
         """Reset the denial counter for an action.
 
@@ -466,8 +480,7 @@ class RateLimitTracker:
             action: The action to reset
         """
         with self._lock:
-            self._denials.pop(action, None)
-            self._rate_limited_until.pop(action, None)
+            self._evict_action(action)
 
     def _cleanup_expired(self, action: str, now: float) -> None:
         """Remove expired denial records outside the window.
@@ -477,17 +490,61 @@ class RateLimitTracker:
             now: Current timestamp
         """
         if action not in self._denials:
-            return
-
-        window_start = now - self._config.denial_window_seconds
-        self._denials[action] = [
-            d for d in self._denials[action] if d.timestamp >= window_start
-        ]
+            pass
+        else:
+            window_start = now - self._config.denial_window_seconds
+            self._denials[action] = [
+                d for d in self._denials[action] if d.timestamp >= window_start
+            ]
+            if not self._denials[action]:
+                del self._denials[action]
 
         # Also clean up expired rate limits
         if action in self._rate_limited_until:
             if now >= self._rate_limited_until[action]:
                 del self._rate_limited_until[action]
+
+    def _touch_action(self, action: str, now: float) -> None:
+        """Record recent activity for bounded-LRU cleanup decisions."""
+        self._last_seen[action] = now
+
+    def _evict_action(self, action: str) -> None:
+        """Remove all tracking state for an action key."""
+        self._denials.pop(action, None)
+        self._rate_limited_until.pop(action, None)
+        self._last_seen.pop(action, None)
+
+    def _run_global_maintenance(self, now: float) -> None:
+        """Sweep stale state and enforce cardinality bounds globally."""
+        interval = max(0, self._config.global_cleanup_interval_seconds)
+        if interval > 0 and now - self._last_global_cleanup < interval:
+            return
+        self._last_global_cleanup = now
+
+        for action in list(self._denials):
+            self._cleanup_expired(action, now)
+        for action in list(self._rate_limited_until):
+            self._cleanup_expired(action, now)
+
+        stale_ttl = max(0, self._config.stale_entry_ttl_seconds)
+        for action, seen_at in list(self._last_seen.items()):
+            if action in self._denials or action in self._rate_limited_until:
+                continue
+            if now - seen_at >= stale_ttl:
+                self._last_seen.pop(action, None)
+
+        max_actions = max(1, self._config.max_tracked_actions)
+        tracked_keys = set(self._last_seen) | set(self._denials) | set(self._rate_limited_until)
+        if len(tracked_keys) <= max_actions:
+            return
+
+        oldest_first = sorted(
+            tracked_keys,
+            key=lambda key: self._last_seen.get(key, 0.0),
+        )
+        overflow = len(tracked_keys) - max_actions
+        for action in oldest_first[:overflow]:
+            self._evict_action(action)
 
     def get_stats(self, action: str) -> Dict[str, int]:
         """Get current stats for an action (for debugging/monitoring).
@@ -501,7 +558,9 @@ class RateLimitTracker:
         now = time.monotonic()
 
         with self._lock:
+            self._touch_action(action, now)
             self._cleanup_expired(action, now)
+            self._run_global_maintenance(now)
 
             denial_count = len(self._denials.get(action, []))
             limited_until = self._rate_limited_until.get(action, 0)

@@ -24,16 +24,20 @@ class TestReviewDispatchExceptionHandling:
         from foundry_mcp.tools.unified.review import _dispatch_review_action
 
         with patch(
-            "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
-        ) as mock_router:
-            mock_router.allowed_actions.return_value = ["run"]
-            mock_router.dispatch.side_effect = RuntimeError("Review analysis failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["run"]
+                mock_router.dispatch.side_effect = RuntimeError("Review analysis failed")
 
-            result = _dispatch_review_action(
-                action="run",
-                payload={"spec_id": "test-spec"},
-                config=mock_config,
-            )
+                result = _dispatch_review_action(
+                    action="run",
+                    payload={"spec_id": "test-spec"},
+                    config=mock_config,
+                )
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -47,16 +51,20 @@ class TestReviewDispatchExceptionHandling:
         from foundry_mcp.tools.unified.review import _dispatch_review_action
 
         with patch(
-            "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
-        ) as mock_router:
-            mock_router.allowed_actions.return_value = ["run"]
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["run"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_review_action(
-                action="run",
-                payload={"spec_id": "test-spec"},
-                config=mock_config,
-            )
+                result = _dispatch_review_action(
+                    action="run",
+                    payload={"spec_id": "test-spec"},
+                    config=mock_config,
+                )
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -70,15 +78,19 @@ class TestReviewDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
-            ) as mock_router:
-                mock_router.allowed_actions.return_value = ["run"]
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch(
+                    "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
+                ) as mock_router:
+                    mock_router.allowed_actions.return_value = ["run"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
 
-                _dispatch_review_action(
-                    action="run",
-                    payload={"spec_id": "test-spec"},
-                    config=mock_config,
-                )
+                    _dispatch_review_action(
+                        action="run",
+                        payload={"spec_id": "test-spec"},
+                        config=mock_config,
+                    )
 
         assert "test error" in caplog.text

@@ -1188,6 +1188,14 @@ class TestProviderSpecIntegration:
 class TestDeepResearchActionHandlers:
     """Tests for deep research action handlers in the research router."""
 
+    @pytest.fixture(autouse=True)
+    def _maintainer_role(self):
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            yield
+
     @pytest.fixture
     def mock_tool_config(self, tmp_path: Path):
         """Mock server config for testing."""

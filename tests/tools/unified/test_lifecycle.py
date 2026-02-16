@@ -28,16 +28,20 @@ class TestLifecycleDispatchExceptionHandling:
         from foundry_mcp.tools.unified.lifecycle import _dispatch_lifecycle_action
 
         with patch(
-            "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
-        ) as mock_router:
-            mock_router.allowed_actions.return_value = ["archive"]
-            mock_router.dispatch.side_effect = RuntimeError("Lifecycle transition failed")
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["archive"]
+                mock_router.dispatch.side_effect = RuntimeError("Lifecycle transition failed")
 
-            result = _dispatch_lifecycle_action(
-                action="archive",
-                payload={"spec_id": "test-spec"},
-                config=mock_config,
-            )
+                result = _dispatch_lifecycle_action(
+                    action="archive",
+                    payload={"spec_id": "test-spec"},
+                    config=mock_config,
+                )
 
         # Should return error response, not raise exception
         assert result["success"] is False
@@ -51,16 +55,20 @@ class TestLifecycleDispatchExceptionHandling:
         from foundry_mcp.tools.unified.lifecycle import _dispatch_lifecycle_action
 
         with patch(
-            "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
-        ) as mock_router:
-            mock_router.allowed_actions.return_value = ["archive"]
-            mock_router.dispatch.side_effect = RuntimeError()
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["archive"]
+                mock_router.dispatch.side_effect = RuntimeError()
 
-            result = _dispatch_lifecycle_action(
-                action="archive",
-                payload={"spec_id": "test-spec"},
-                config=mock_config,
-            )
+                result = _dispatch_lifecycle_action(
+                    action="archive",
+                    payload={"spec_id": "test-spec"},
+                    config=mock_config,
+                )
 
         # Should use class name when message is empty
         assert result["success"] is False
@@ -74,16 +82,20 @@ class TestLifecycleDispatchExceptionHandling:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
-            ) as mock_router:
-                mock_router.allowed_actions.return_value = ["archive"]
-                mock_router.dispatch.side_effect = ValueError("test error")
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ):
+                with patch(
+                    "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
+                ) as mock_router:
+                    mock_router.allowed_actions.return_value = ["archive"]
+                    mock_router.dispatch.side_effect = ValueError("test error")
 
-                _dispatch_lifecycle_action(
-                    action="archive",
-                    payload={"spec_id": "test-spec"},
-                    config=mock_config,
-                )
+                    _dispatch_lifecycle_action(
+                        action="archive",
+                        payload={"spec_id": "test-spec"},
+                        config=mock_config,
+                    )
 
         assert "test error" in caplog.text
 

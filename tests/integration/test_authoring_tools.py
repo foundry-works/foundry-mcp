@@ -9,6 +9,8 @@ Tests:
 """
 
 import json
+from unittest.mock import patch
+
 import pytest
 from foundry_mcp.server import create_server
 from foundry_mcp.config import ServerConfig
@@ -135,6 +137,16 @@ def test_config(test_specs_dir):
         specs_dir=test_specs_dir,
         log_level="WARNING",
     )
+
+
+@pytest.fixture(autouse=True)
+def maintainer_role():
+    """Run integration authoring tool assertions with maintainer access."""
+    with patch(
+        "foundry_mcp.tools.unified.common.get_server_role",
+        return_value="maintainer",
+    ):
+        yield
 
 
 @pytest.fixture
@@ -302,9 +314,13 @@ class TestResponseEnvelopeCompliance:
         """Test validation errors return proper envelope with error details."""
         tools = mcp_server._tool_manager._tools
         # Missing required parameter
-        result = _call_tool(
-            tools, "task-add", spec_id="", parent="phase-1", title="Test"
-        )
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            result = _call_tool(
+                tools, "task-add", spec_id="", parent="phase-1", title="Test"
+            )
         self._validate_response_envelope(result)
         assert result["success"] is False
         assert "spec_id" in result["error"].lower()
@@ -317,13 +333,17 @@ class TestResponseEnvelopeCompliance:
         tools = mcp_server._tool_manager._tools
 
         # Missing version
-        result = _call_tool(
-            tools,
-            "revision-add",
-            spec_id="authoring-test-spec-001",
-            version="",
-            changes="Test changes",
-        )
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            result = _call_tool(
+                tools,
+                "revision-add",
+                spec_id="authoring-test-spec-001",
+                version="",
+                changes="Test changes",
+            )
 
         assert result["success"] is False
         assert "version" in result["error"].lower()

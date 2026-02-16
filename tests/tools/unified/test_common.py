@@ -267,6 +267,26 @@ class TestDispatchWithStandardErrors:
         assert result["data"]["error_code"] == "AUTHORIZATION"
         assert result["data"]["details"]["role"] == "observer"
 
+    def test_authorization_enforced_when_config_role_is_observer(self):
+        """Observer config must not bypass authorization checks."""
+        router = self._make_router()
+        config = MagicMock()
+        config.autonomy_security.role = "observer"
+
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = dispatch_with_standard_errors(
+                router,
+                "test",
+                "do-thing",
+                config=config,
+            )
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "AUTHORIZATION"
+
     def test_authorization_denied_includes_required_role(self):
         """Test that authorization denial includes required role."""
         router = self._make_router()
@@ -346,6 +366,37 @@ class TestDispatchWithStandardErrors:
             return_value=mock_tracker,
         ):
             result = dispatch_with_standard_errors(router, "test", "do-thing")
+
+        assert result["data"]["error_code"] == "AUTHORIZATION"
+        mock_tracker.check_rate_limit.assert_called_once_with(
+            "test.do-thing|role:observer"
+        )
+        mock_tracker.record_denial.assert_called_once_with(
+            "test.do-thing|role:observer"
+        )
+
+    def test_untrusted_principal_hints_do_not_influence_scope(self):
+        """Rate-limit scope must ignore caller-supplied principal hints."""
+        router = self._make_router()
+        mock_tracker = MagicMock()
+        mock_tracker.check_rate_limit.return_value = None
+
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_client_id",
+            return_value=None,
+        ), patch(
+            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+            return_value=mock_tracker,
+        ):
+            result = dispatch_with_standard_errors(
+                router,
+                "test",
+                "do-thing",
+                actor_id="attacker-supplied",
+            )
 
         assert result["data"]["error_code"] == "AUTHORIZATION"
         mock_tracker.check_rate_limit.assert_called_once_with(

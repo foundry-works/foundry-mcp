@@ -40,23 +40,6 @@ logger = logging.getLogger(__name__)
 # Authorization policy
 # ---------------------------------------------------------------------------
 
-def _should_enforce_authorization(config: Any) -> bool:
-    """Return whether auth/rate-limit checks should run for this dispatch.
-
-    Compatibility policy:
-    - If no config is provided, enforce authorization (legacy unit-test path).
-    - If a config is provided, enforce only when role is explicitly non-observer.
-      Observer remains compatibility mode for broad tool validation workflows.
-    """
-    if config is None:
-        return True
-
-    role = getattr(getattr(config, "autonomy_security", None), "role", None)
-    if not isinstance(role, str):
-        return False
-    return role.strip().lower() != "observer"
-
-
 def _normalize_principal(value: Any) -> Optional[str]:
     """Return a sanitized principal value or ``None`` when unavailable."""
     if not isinstance(value, str):
@@ -69,17 +52,11 @@ def _normalize_principal(value: Any) -> Optional[str]:
     return normalized
 
 
-def _resolve_rate_limit_scope(kwargs: Dict[str, Any]) -> tuple[str, str]:
+def _resolve_rate_limit_scope() -> tuple[str, str]:
     """Resolve per-request rate-limit scope.
 
-    Prefers explicit principal hints, then request-context client ID.
-    Falls back to role-based scoping when no principal is available.
+    Uses only trusted request-context identity and falls back to role scope.
     """
-    for key in ("principal_id", "client_id", "actor_id", "tenant_id"):
-        principal = _normalize_principal(kwargs.get(key))
-        if principal:
-            return f"client:{principal}", "client"
-
     context_client = _normalize_principal(get_client_id())
     if context_client:
         return f"client:{context_client}", "client"
@@ -92,10 +69,9 @@ def _build_rate_limit_key(
     tool_name: str,
     action: str,
     role: str,
-    kwargs: Dict[str, Any],
 ) -> tuple[str, str]:
     """Build a scoped authorization-denial rate-limit key."""
-    scope_value, scope_kind = _resolve_rate_limit_scope(kwargs)
+    scope_value, scope_kind = _resolve_rate_limit_scope()
     action_key = f"{tool_name}.{action}"
     if scope_kind == "client":
         return f"{action_key}|{scope_value}", scope_kind
@@ -193,9 +169,9 @@ def dispatch_with_standard_errors(
 ) -> dict:
     """Dispatch *action* through *router*, converting exceptions to envelopes.
 
-    Performs action validation, then optional rate-limit/authorization checks,
+    Performs action validation, then rate-limit/authorization checks,
     then dispatches to the handler.
-    Error precedence when auth is enforced:
+    Error precedence:
     action validation -> RATE_LIMITED -> AUTHORIZATION -> argument validation.
 
     Catches :class:`ActionRouterError` (unsupported action) and generic
@@ -229,116 +205,113 @@ def dispatch_with_standard_errors(
             )
         )
 
-    enforce_auth = _should_enforce_authorization(kwargs.get("config"))
-    if enforce_auth:
-        current_role = get_server_role()
-        rate_limit_key, rate_limit_scope = _build_rate_limit_key(
-            tool_name=tool_name,
-            action=action,
-            role=current_role,
-            kwargs=kwargs,
+    current_role = get_server_role()
+    rate_limit_key, rate_limit_scope = _build_rate_limit_key(
+        tool_name=tool_name,
+        action=action,
+        role=current_role,
+    )
+    action_key = f"{tool_name}.{action}"
+
+    # Rate limit check (before authorization check)
+    rate_limit_tracker = get_rate_limit_tracker()
+    retry_after = rate_limit_tracker.check_rate_limit(rate_limit_key)
+
+    if retry_after is not None:
+        rid = request_id or build_request_id(tool_name)
+        logger.warning(
+            "Rate limited: %s.%s (%s scope) - retry after %.1f seconds",
+            tool_name,
+            action,
+            rate_limit_scope,
+            retry_after,
         )
-        action_key = f"{tool_name}.{action}"
 
-        # Rate limit check (before authorization check)
-        rate_limit_tracker = get_rate_limit_tracker()
-        retry_after = rate_limit_tracker.check_rate_limit(rate_limit_key)
+        # Emit authz.rate_limited metric
+        metrics = MetricsCollector(prefix="authz")
+        metrics.counter(
+            "rate_limited",
+            labels={
+                "tool": tool_name,
+                "action": action,
+                "scope": rate_limit_scope,
+            },
+        )
 
-        if retry_after is not None:
-            rid = request_id or build_request_id(tool_name)
-            logger.warning(
-                "Rate limited: %s.%s (%s scope) - retry after %.1f seconds",
-                tool_name,
-                action,
-                rate_limit_scope,
-                retry_after,
-            )
-
-            # Emit authz.rate_limited metric
-            metrics = MetricsCollector(prefix="authz")
-            metrics.counter(
-                "rate_limited",
-                labels={
-                    "tool": tool_name,
-                    "action": action,
+        return asdict(
+            error_response(
+                f"Rate limited: too many authorization denials for '{tool_name}.{action}'",
+                error_code=ErrorCode.RATE_LIMITED,
+                error_type=ErrorType.RATE_LIMIT,
+                remediation=f"Wait {int(retry_after)} seconds before retrying.",
+                request_id=rid,
+                details={
+                    "action": action_key,
                     "scope": rate_limit_scope,
+                    "retry_after": int(retry_after),
                 },
             )
+        )
 
-            return asdict(
-                error_response(
-                    f"Rate limited: too many authorization denials for '{tool_name}.{action}'",
-                    error_code=ErrorCode.RATE_LIMITED,
-                    error_type=ErrorType.RATE_LIMIT,
-                    remediation=f"Wait {int(retry_after)} seconds before retrying.",
-                    request_id=rid,
-                    details={
-                        "action": action_key,
-                        "scope": rate_limit_scope,
-                        "retry_after": int(retry_after),
-                    },
-                )
+    # Authorization check (after rate limit, before dispatch)
+    authz_result = check_action_allowed(current_role, tool_name, action)
+
+    if not authz_result.allowed:
+        rid = request_id or build_request_id(tool_name)
+        logger.warning(
+            "Authorization denied for %s.%s: role=%s, required=%s",
+            tool_name,
+            action,
+            current_role,
+            authz_result.required_role,
+        )
+
+        # Record denial for rate limiting
+        rate_limit_tracker.record_denial(rate_limit_key)
+
+        # Emit authz.denied metric
+        metrics = MetricsCollector(prefix="authz")
+        metrics.counter(
+            "denied",
+            labels={
+                "role": current_role,
+                "tool": tool_name,
+                "action": action,
+                "scope": rate_limit_scope,
+            },
+        )
+
+        # Build recovery action guidance
+        if authz_result.required_role:
+            recovery = (
+                f"This action requires '{authz_result.required_role}' role. "
+                f"Current role is '{current_role}'. "
+                f"Set FOUNDRY_MCP_ROLE environment variable or configure role in settings."
+            )
+        else:
+            recovery = (
+                f"Role '{current_role}' is not authorized for this action. "
+                f"Contact administrator for access."
             )
 
-        # Authorization check (after rate limit, before dispatch)
-        authz_result = check_action_allowed(current_role, tool_name, action)
-
-        if not authz_result.allowed:
-            rid = request_id or build_request_id(tool_name)
-            logger.warning(
-                "Authorization denied for %s.%s: role=%s, required=%s",
-                tool_name,
-                action,
-                current_role,
-                authz_result.required_role,
-            )
-
-            # Record denial for rate limiting
-            rate_limit_tracker.record_denial(rate_limit_key)
-
-            # Emit authz.denied metric
-            metrics = MetricsCollector(prefix="authz")
-            metrics.counter(
-                "denied",
-                labels={
+        return asdict(
+            error_response(
+                f"Authorization denied: role '{current_role}' cannot perform '{tool_name}.{action}'",
+                error_code=ErrorCode.AUTHORIZATION,
+                error_type=ErrorType.AUTHORIZATION,
+                remediation=recovery,
+                request_id=rid,
+                details={
                     "role": current_role,
-                    "tool": tool_name,
-                    "action": action,
-                    "scope": rate_limit_scope,
+                    "action": f"{tool_name}.{action}",
+                    "required_role": authz_result.required_role,
+                    "recovery_action": recovery,
                 },
             )
+        )
 
-            # Build recovery action guidance
-            if authz_result.required_role:
-                recovery = (
-                    f"This action requires '{authz_result.required_role}' role. "
-                    f"Current role is '{current_role}'. "
-                    f"Set FOUNDRY_MCP_ROLE environment variable or configure role in settings."
-                )
-            else:
-                recovery = (
-                    f"Role '{current_role}' is not authorized for this action. "
-                    f"Contact administrator for access."
-                )
-
-            return asdict(
-                error_response(
-                    f"Authorization denied: role '{current_role}' cannot perform '{tool_name}.{action}'",
-                    error_code=ErrorCode.AUTHORIZATION,
-                    error_type=ErrorType.AUTHORIZATION,
-                    remediation=recovery,
-                    request_id=rid,
-                    details={
-                        "role": current_role,
-                        "action": f"{tool_name}.{action}",
-                        "required_role": authz_result.required_role,
-                        "recovery_action": recovery,
-                    },
-                )
-            )
-
-        # Authorized - reset rate limit counter and proceed with dispatch
-        rate_limit_tracker.reset(rate_limit_key)
+    # Authorized - reset rate limit counter and proceed with dispatch
+    rate_limit_tracker.reset(rate_limit_key)
 
     try:
         return router.dispatch(action=action, **kwargs)

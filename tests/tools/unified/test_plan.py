@@ -4,7 +4,7 @@ Tests that _dispatch_plan_action catches exceptions and returns error responses
 instead of crashing the MCP server.
 """
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 class TestPlanDispatchExceptionHandling:
@@ -82,3 +82,48 @@ class TestPlanDispatchExceptionHandling:
                     )
 
         assert "test error" in caplog.text
+
+    def test_dispatch_forwards_config_to_router(self):
+        """_dispatch_plan_action should pass config through dispatch kwargs."""
+        from foundry_mcp.tools.unified.plan import _dispatch_plan_action
+
+        config = MagicMock()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="maintainer",
+        ):
+            with patch(
+                "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
+            ) as mock_router:
+                mock_router.allowed_actions.return_value = ["create"]
+                mock_router.dispatch.return_value = {"success": True}
+
+                _dispatch_plan_action(
+                    action="create",
+                    payload={"name": "test-plan"},
+                    config=config,
+                )
+
+        mock_router.dispatch.assert_called_once_with(
+            action="create",
+            config=config,
+            name="test-plan",
+        )
+
+    def test_dispatch_with_config_still_enforces_authorization(self):
+        """Observer role should be denied even when config is provided."""
+        from foundry_mcp.tools.unified.plan import _dispatch_plan_action
+
+        config = MagicMock()
+        with patch(
+            "foundry_mcp.tools.unified.common.get_server_role",
+            return_value="observer",
+        ):
+            result = _dispatch_plan_action(
+                action="create",
+                payload={"name": "test-plan"},
+                config=config,
+            )
+
+        assert result["success"] is False
+        assert result["data"]["error_code"] == "AUTHORIZATION"
