@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.llm_config import ProviderSpec
 from foundry_mcp.core.errors.provider import ContextWindowError, ProviderTimeoutError
 from foundry_mcp.core.providers import (

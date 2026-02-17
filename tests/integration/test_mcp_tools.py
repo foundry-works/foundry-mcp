@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.authorization import get_server_role, set_server_role
 from foundry_mcp.server import create_server
 from tests.conftest import extract_response_dict

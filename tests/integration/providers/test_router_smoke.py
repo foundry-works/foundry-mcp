@@ -208,7 +208,7 @@ class TestResearchRouterSmoke:
         """Configure research with gemini provider."""
         from unittest.mock import patch
 
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         research_cfg = ResearchConfig(
             enabled=True,
@@ -285,7 +285,7 @@ class TestResearchRouterConsensusSmoke:
         """Configure research with multiple providers."""
         from unittest.mock import patch
 
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         research_cfg = ResearchConfig(
             enabled=True,

@@ -7,7 +7,7 @@ evidence accumulation, and confidence progression.
 import logging
 from typing import Any, Optional
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models import (
     ConfidenceLevel,

@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 
 
 class TestServerDispatchExceptionHandling:

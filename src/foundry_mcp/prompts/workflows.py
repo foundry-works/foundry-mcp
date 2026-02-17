@@ -10,7 +10,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.spec import (
     load_spec,
     list_specs,

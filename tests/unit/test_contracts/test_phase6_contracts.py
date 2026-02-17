@@ -292,7 +292,7 @@ def sample_spec():
 @pytest.fixture
 def mock_server_config():
     """Mock ServerConfig for handler testing."""
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     return ServerConfig(workspace=".")
 
@@ -332,7 +332,7 @@ def call_spec_handler(
 ) -> Dict[str, Any]:
     """Call the spec router handler and return response dict."""
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)
@@ -348,7 +348,7 @@ def call_authoring_handler(
 ) -> Dict[str, Any]:
     """Call the authoring router handler and return response dict."""
     from foundry_mcp.tools.unified.authoring_handlers import _AUTHORING_ROUTER
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 

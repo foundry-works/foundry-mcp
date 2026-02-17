@@ -10,7 +10,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.llm_config import ProviderSpec
 from foundry_mcp.core.providers import ProviderHooks, ProviderRequest, ProviderStatus
 from foundry_mcp.core.providers.registry import available_providers, resolve_provider

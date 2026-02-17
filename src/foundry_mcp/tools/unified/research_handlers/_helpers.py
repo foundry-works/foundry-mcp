@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.responses import ErrorCode
 from foundry_mcp.tools.unified.common import (

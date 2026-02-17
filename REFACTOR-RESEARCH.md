@@ -201,9 +201,9 @@ Created 5 new `conftest.py` files to centralize duplicate fixtures across the te
 
 ## 8. Deep Research Phase Execution Framework — DONE
 
-### Status: Waves 1-4 complete (2026-02-17)
+### Status: Waves 1-5 complete (2026-02-17)
 
-Extracted shared LLM call lifecycle boilerplate from 4 phase mixins (planning, analysis, synthesis, refinement) into `phases/_lifecycle.py`. Gathering excluded (uses search providers, not LLM calls).
+Extracted shared LLM call lifecycle boilerplate from 4 phase mixins (planning, analysis, synthesis, refinement) into `phases/_lifecycle.py`. Then extracted shared orchestrator dispatch boilerplate from `core.py` into `_run_phase()`. Gathering excluded from lifecycle helpers (uses search providers, not LLM calls).
 
 **Wave 1** — Created `phases/_lifecycle.py` (~100 lines) with `LLMCallResult` dataclass, `execute_llm_call()` async helper, and `finalize_phase()` helper. 18 unit tests in `test_phase_lifecycle.py`.
 
@@ -213,20 +213,24 @@ Extracted shared LLM call lifecycle boilerplate from 4 phase mixins (planning, a
 
 **Wave 4** — Migrated `analysis.py` to use lifecycle helpers. ~80 lines of boilerplate removed.
 
-**Deferred** — Wave 5 (orchestrator dispatch dedup in `core.py`) deferred to separate session due to phase-specific branching complexity.
+**Wave 5** — Extracted `_run_phase()` helper in `core.py` (~30 lines) encapsulating the 9-step phase dispatch lifecycle (cancel → timer → hooks → audit → execute → error → hooks → audit → transition). Migrated all 5 phase blocks in `_execute_workflow_async`:
+- PLANNING, ANALYSIS — clean migration (standard lifecycle)
+- GATHERING — `iteration_in_progress` pre-hook, extract followup post-hook
+- SYNTHESIS — `skip_transition=True`, custom orchestrator logic inline
+- REFINEMENT — `skip_error_check=True, skip_transition=True`, iteration tracking + recursion inline
 
 ### Impact
 
 | Metric | Before | After |
 |--------|--------|-------|
-| Boilerplate lines across 4 phases | ~350 | ~0 |
-| New helper code | 0 | ~100 |
-| Net line reduction | — | ~250 |
-| Copy-paste bug surface | 4 copies | 1 source of truth |
-| Files modified | 0 | 5 (4 phases + 1 new) |
-| New test file | 0 | 1 (18 tests) |
+| Phase mixin boilerplate (Waves 1-4) | ~350 lines | ~0 |
+| Orchestrator dispatch boilerplate (Wave 5) | ~250 lines (5 copies) | ~30 lines (helper) + ~55 lines (calls) |
+| `core.py` line count | 1,629 | 1,595 |
+| Copy-paste bug surface | 4 phase copies + 5 dispatch copies | 2 sources of truth |
+| New helpers | 0 | 2 (`_lifecycle.py`, `_run_phase()`) |
+| New tests | 0 | 18 (`test_phase_lifecycle.py`) + 4 (`_run_phase` unit tests) |
 
-5,201 tests passing, 0 regressions.
+130 tests passing (95 primary + 35 secondary), 0 regressions.
 
 ---
 
@@ -238,6 +242,38 @@ Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` wit
 - `_COUNTS_CODES` frozenset — 4 codes routing to `_build_counts_fix(diag, spec_data)`
 
 `_build_fix_action` body reduced from 30+ lines to 10 lines (3 dict lookups + 1 set membership test).
+
+---
+
+## 10. Config Module Decomposition — DONE
+
+### Status: All 4 waves complete (2026-02-17)
+
+Decomposed `config.py` (2,771 lines, 24 dataclasses — the largest god object in the codebase) into a `config/` package with 7 focused sub-modules.
+
+**Wave 1** — Extracted `ResearchConfig` (974 lines) → `config/research.py`. Extracted parsing helpers → `config/parsing.py` (163 lines). Created `config/__init__.py` with re-exports. Remaining symbols in `config/_legacy.py`.
+
+**Wave 2** — Extracted domain configs → `config/domains.py` (348 lines: `GitSettings`, `ObservabilityConfig`, `HealthConfig`, `ErrorCollectionConfig`, `MetricsPersistenceConfig`, `RunnerConfig`, `TestConfig`). Extracted autonomy configs → `config/autonomy.py` (142 lines: `AutonomySecurityConfig`, `AutonomySessionDefaultsConfig`, `AutonomyPostureConfig`, posture constants).
+
+**Wave 3** — Split `ServerConfig` into `config/server.py` (~190 lines, class definition + globals) and `config/loader.py` (~560 lines, `_ServerConfigLoader` mixin with `from_env`, `_load_toml`, `_load_env`). Extracted decorators → `config/decorators.py` (~120 lines). Deleted `_legacy.py`.
+
+**Wave 4** — Migrated ~60 caller import sites across `src/` and `tests/` to canonical sub-module paths (`config.server`, `config.research`, `config.domains`). Re-exports in `__init__.py` retained for external consumers.
+
+### Final Structure
+
+```
+config/
+    __init__.py       # Re-exports all public symbols (70 lines)
+    server.py         # ServerConfig + get_config/set_config (~190 lines)
+    loader.py         # _ServerConfigLoader mixin (~560 lines)
+    research.py       # ResearchConfig (974 lines)
+    autonomy.py       # Autonomy configs + posture constants (142 lines)
+    domains.py        # 7 domain config dataclasses (348 lines)
+    parsing.py        # Parse/normalize helpers (163 lines)
+    decorators.py     # log_call, timed, require_auth (~120 lines)
+```
+
+4,812+ tests passing, 0 regressions across all 4 waves.
 
 ---
 
@@ -266,5 +302,6 @@ Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` wit
 | 5 | Tool signature cleanup | **Done** | — | `locals()` passthrough, ~350 lines |
 | 6 | Test fixture consolidation | **Done** (Waves 1-4) | — | 5 conftest files, ~820 lines deduplicated |
 | 7 | Observability consolidation | **Done** (Waves 1-4) | — | 6 files → 2 packages, deprecation shims |
-| 8 | Deep research framework | **Done** (Waves 1-4) | — | ~250 lines removed, 1 source of truth |
+| 8 | Deep research framework | **Done** (Waves 1-5) | — | ~320 lines removed, 2 sources of truth |
 | 9 | Validation fix dispatch dict | **Done** | — | Quick win |
+| 10 | Config module decomposition | **Done** (Waves 1-4) | — | Largest god object eliminated |

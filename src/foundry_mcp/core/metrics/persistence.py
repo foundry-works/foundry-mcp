@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from foundry_mcp.config import MetricsPersistenceConfig
+from foundry_mcp.config.domains import MetricsPersistenceConfig
 from foundry_mcp.core.metrics.store import (
     MetricDataPoint,
     FileMetricsStore,

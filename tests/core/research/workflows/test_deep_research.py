@@ -1034,7 +1034,7 @@ class TestResearchConfigHelpers:
 
     def test_real_config_get_phase_timeout(self):
         """Should return phase-specific timeouts from real config."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             deep_research_timeout=120.0,
@@ -1053,7 +1053,7 @@ class TestResearchConfigHelpers:
 
     def test_real_config_get_phase_provider(self):
         """Should return phase-specific providers from real config."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             default_provider="gemini",
@@ -1068,7 +1068,7 @@ class TestResearchConfigHelpers:
 
     def test_from_toml_dict_parses_phase_config(self):
         """Should parse phase config from TOML dict."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         toml_data = {
             "enabled": True,
@@ -1093,7 +1093,7 @@ class TestProviderSpecIntegration:
 
     def test_resolve_phase_provider_simple_name(self):
         """Should handle simple provider names."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             default_provider="gemini",
@@ -1111,7 +1111,7 @@ class TestProviderSpecIntegration:
 
     def test_resolve_phase_provider_cli_spec_with_model(self):
         """Should parse [cli]provider:model format."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             default_provider="[cli]gemini:pro",
@@ -1129,7 +1129,7 @@ class TestProviderSpecIntegration:
 
     def test_resolve_phase_provider_cli_spec_with_backend(self):
         """Should parse [cli]transport:backend/model format."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             default_provider="[cli]opencode:openai/gpt-5.2",
@@ -1141,7 +1141,7 @@ class TestProviderSpecIntegration:
 
     def test_resolve_phase_provider_api_spec(self):
         """Should parse [api]provider/model format."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             default_provider="[api]openai/gpt-4.1",
@@ -1153,7 +1153,7 @@ class TestProviderSpecIntegration:
 
     def test_get_phase_provider_extracts_provider_id_only(self):
         """get_phase_provider should return just the provider ID."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
 
         config = ResearchConfig(
             default_provider="[cli]gemini:pro",
@@ -1443,7 +1443,7 @@ class TestStatusPersistenceThrottle:
     @pytest.fixture
     def workflow_with_throttle(self, mock_memory, tmp_path: Path):
         """Create a workflow with throttle configuration."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         config = ResearchConfig(status_persistence_throttle_seconds=5)
@@ -1453,7 +1453,7 @@ class TestStatusPersistenceThrottle:
     @pytest.fixture
     def workflow_zero_throttle(self, mock_memory, tmp_path: Path):
         """Create a workflow with zero throttle (always persist)."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         config = ResearchConfig(status_persistence_throttle_seconds=0)
@@ -1511,7 +1511,7 @@ class TestStatusPersistenceThrottle:
         self, mock_memory, sample_deep_research_state
     ):
         """Throttle should respect persisted tracking data across instances."""
-        from foundry_mcp.config import ResearchConfig
+        from foundry_mcp.config.research import ResearchConfig
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         config = ResearchConfig(status_persistence_throttle_seconds=5)
@@ -2415,3 +2415,187 @@ class TestDeepResearchProviderFailoverEdgeCases:
         # Should mention configuration, not circuit breakers
         assert "no search providers available" in result.error.lower()
         assert "configure api keys" in result.error.lower()
+
+
+# =============================================================================
+# _run_phase() Helper Tests
+# =============================================================================
+
+
+class TestRunPhaseHelper:
+    """Tests for the _run_phase() lifecycle helper."""
+
+    @pytest.fixture
+    def workflow(self, mock_config, mock_memory):
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
+        return DeepResearchWorkflow(mock_config, mock_memory)
+
+    @pytest.fixture
+    def state(self):
+        return DeepResearchState(
+            id="test-run-phase",
+            original_query="Test query",
+            research_brief="Test",
+            phase=DeepResearchPhase.PLANNING,
+            iteration=1,
+        )
+
+    @pytest.mark.asyncio
+    async def test_success_path(self, workflow, state):
+        """_run_phase returns None on success and emits all lifecycle events."""
+        executor = AsyncMock(
+            return_value=WorkflowResult(success=True, content="ok")
+        )()
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+
+        result = await workflow._run_phase(
+            state, DeepResearchPhase.PLANNING, executor
+        )
+
+        assert result is None
+        workflow.hooks.emit_phase_start.assert_called_once_with(state)
+        workflow.hooks.emit_phase_complete.assert_called_once_with(state)
+        workflow._safe_orchestrator_transition.assert_called_once_with(
+            state, DeepResearchPhase.PLANNING
+        )
+
+    @pytest.mark.asyncio
+    async def test_failure_path(self, workflow, state):
+        """_run_phase returns WorkflowResult on failure and marks state failed."""
+        fail_result = WorkflowResult(
+            success=False, content="", error="planning failed"
+        )
+        executor = AsyncMock(return_value=fail_result)()
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+        workflow._flush_state = MagicMock()
+
+        result = await workflow._run_phase(
+            state, DeepResearchPhase.PLANNING, executor
+        )
+
+        assert result is fail_result
+        assert state.metadata.get("failed") is True
+        assert state.completed_at is not None
+        workflow._flush_state.assert_called_once_with(state)
+        # Should NOT emit phase_complete or do transition on failure
+        workflow.hooks.emit_phase_complete.assert_not_called()
+        workflow._safe_orchestrator_transition.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skip_error_check(self, workflow, state):
+        """skip_error_check=True ignores result.success and continues lifecycle."""
+        fail_result = WorkflowResult(
+            success=False, content="", error="ignored"
+        )
+        executor = AsyncMock(return_value=fail_result)()
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+
+        result = await workflow._run_phase(
+            state,
+            DeepResearchPhase.REFINEMENT,
+            executor,
+            skip_error_check=True,
+        )
+
+        assert result is None
+        # Should still emit both start and complete hooks
+        workflow.hooks.emit_phase_start.assert_called_once()
+        workflow.hooks.emit_phase_complete.assert_called_once()
+        # Transition should happen since skip_transition defaults to False
+        workflow._safe_orchestrator_transition.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_skip_transition(self, workflow, state):
+        """skip_transition=True skips orchestrator transition."""
+        executor = AsyncMock(
+            return_value=WorkflowResult(success=True, content="ok")
+        )()
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+
+        result = await workflow._run_phase(
+            state,
+            DeepResearchPhase.SYNTHESIS,
+            executor,
+            skip_transition=True,
+        )
+
+        assert result is None
+        workflow.hooks.emit_phase_start.assert_called_once()
+        workflow.hooks.emit_phase_complete.assert_called_once()
+        workflow._safe_orchestrator_transition.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cancellation_propagates(self, workflow, state):
+        """_run_phase propagates CancelledError from _check_cancellation."""
+        workflow._check_cancellation = MagicMock(
+            side_effect=asyncio.CancelledError("cancelled")
+        )
+        executor = AsyncMock(
+            return_value=WorkflowResult(success=True, content="ok")
+        )()
+
+        with pytest.raises(asyncio.CancelledError):
+            await workflow._run_phase(
+                state, DeepResearchPhase.PLANNING, executor
+            )
+
+    @pytest.mark.asyncio
+    async def test_audit_events_written(self, workflow, state, mock_memory):
+        """_run_phase writes phase_start and phase_complete audit events."""
+        executor = AsyncMock(
+            return_value=WorkflowResult(success=True, content="ok")
+        )()
+        workflow.hooks = MagicMock()
+        workflow._safe_orchestrator_transition = MagicMock()
+
+        await workflow._run_phase(
+            state, DeepResearchPhase.ANALYSIS, executor
+        )
+
+        # Verify audit events were written
+        audit_path = (
+            mock_memory.base_path
+            / "deep_research"
+            / f"{state.id}.audit.jsonl"
+        )
+        assert audit_path.exists()
+        lines = audit_path.read_text(encoding="utf-8").splitlines()
+        events = [json.loads(line) for line in lines]
+        event_types = [e["event_type"] for e in events]
+        assert "phase_start" in event_types
+        assert "phase_complete" in event_types
+
+    @pytest.mark.asyncio
+    async def test_failure_writes_phase_error_audit(
+        self, workflow, state, mock_memory
+    ):
+        """_run_phase writes phase_error audit event on failure."""
+        fail_result = WorkflowResult(
+            success=False, content="", error="boom"
+        )
+        executor = AsyncMock(return_value=fail_result)()
+        workflow.hooks = MagicMock()
+        workflow._flush_state = MagicMock()
+
+        await workflow._run_phase(
+            state, DeepResearchPhase.PLANNING, executor
+        )
+
+        audit_path = (
+            mock_memory.base_path
+            / "deep_research"
+            / f"{state.id}.audit.jsonl"
+        )
+        assert audit_path.exists()
+        lines = audit_path.read_text(encoding="utf-8").splitlines()
+        events = [json.loads(line) for line in lines]
+        event_types = [e["event_type"] for e in events]
+        assert "phase_start" in event_types
+        assert "phase_error" in event_types
+        # phase_complete should NOT be present on failure
+        assert "phase_complete" not in event_types

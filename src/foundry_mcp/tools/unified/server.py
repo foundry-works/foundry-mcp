@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.discovery import get_capabilities, get_tool_registry
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import (

@@ -11,7 +11,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models import (
     derive_loop_signal,

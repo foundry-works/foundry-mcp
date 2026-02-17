@@ -10,7 +10,7 @@ from typing import Any, Callable
 import pytest
 from ulid import ULID
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.authorization import set_server_role
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models import GateVerdict, PendingGateEvidence

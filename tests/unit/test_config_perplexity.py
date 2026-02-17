@@ -9,7 +9,7 @@ Tests cover:
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 
 
 class TestPerplexityConfigParsing:

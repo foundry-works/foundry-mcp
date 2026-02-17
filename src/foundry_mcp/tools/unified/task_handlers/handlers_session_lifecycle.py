@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from ulid import ULID
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.memory import (
     VersionConflictError,
 )

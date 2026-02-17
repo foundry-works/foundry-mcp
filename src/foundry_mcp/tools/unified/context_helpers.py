@@ -14,7 +14,7 @@ import logging
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,

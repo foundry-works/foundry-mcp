@@ -43,7 +43,7 @@ _AVAILABILITY_CACHE: Dict[str, Tuple[bool, float]] = {}
 def _get_cache_ttl() -> float:
     """Get cache TTL from config or default to 3600s."""
     try:
-        from foundry_mcp.config import get_config
+        from foundry_mcp.config.server import get_config
         return float(get_config().providers.get("availability_cache_ttl", 3600))
     except Exception:
         return 3600.0

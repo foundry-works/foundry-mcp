@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.background_task import BackgroundTask
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.observability import get_metrics
@@ -1138,6 +1138,70 @@ class DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhas
             )
             raise asyncio.CancelledError("Cancellation requested")
 
+    async def _run_phase(
+        self,
+        state: DeepResearchState,
+        phase: DeepResearchPhase,
+        executor: Any,
+        *,
+        skip_error_check: bool = False,
+        skip_transition: bool = False,
+    ) -> WorkflowResult | None:
+        """Execute common phase lifecycle: cancel → timer → hooks → audit → execute → error → hooks → audit → transition.
+
+        Encapsulates the boilerplate shared across all 5 phase dispatch blocks
+        in ``_execute_workflow_async``.
+
+        Args:
+            state: Current research state.
+            phase: The phase being executed (used for audit events and orchestrator transition).
+            executor: An *unawaited* coroutine returned by ``_execute_<phase>_async(...)``.
+            skip_error_check: If True, do not check ``result.success`` for failure
+                (used by REFINEMENT which always succeeds).
+            skip_transition: If True, skip the standard orchestrator transition
+                (used by SYNTHESIS/REFINEMENT which have custom post-processing).
+
+        Returns:
+            ``WorkflowResult`` on phase failure (caller should ``return`` it),
+            ``None`` on success (caller continues to next phase).
+        """
+        self._check_cancellation(state)
+        phase_started = time.perf_counter()
+        self.hooks.emit_phase_start(state)
+        self._write_audit_event(
+            state,
+            "phase_start",
+            data={"phase": state.phase.value},
+        )
+
+        result = await executor
+
+        if not skip_error_check and not result.success:
+            self._write_audit_event(
+                state,
+                "phase_error",
+                data={"phase": state.phase.value, "error": result.error},
+                level="error",
+            )
+            state.mark_failed(result.error or f"Phase {state.phase.value} failed")
+            self._flush_state(state)
+            return result
+
+        self.hooks.emit_phase_complete(state)
+        self._write_audit_event(
+            state,
+            "phase_complete",
+            data={
+                "phase": state.phase.value,
+                "duration_ms": (time.perf_counter() - phase_started) * 1000,
+            },
+        )
+
+        if not skip_transition:
+            self._safe_orchestrator_transition(state, phase)
+
+        return None
+
     async def _execute_workflow_async(
         self,
         state: DeepResearchState,
@@ -1154,83 +1218,33 @@ class DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhas
         try:
             # Phase execution based on current state
             if state.phase == DeepResearchPhase.PLANNING:
-                # Check for cancellation at the start of the phase
-                self._check_cancellation(state)
-                phase_started = time.perf_counter()
-                self.hooks.emit_phase_start(state)
-                self._write_audit_event(
+                err = await self._run_phase(
                     state,
-                    "phase_start",
-                    data={"phase": state.phase.value},
+                    DeepResearchPhase.PLANNING,
+                    self._execute_planning_async(
+                        state=state,
+                        provider_id=state.planning_provider,
+                        timeout=self.config.get_phase_timeout("planning"),
+                    ),
                 )
-                result = await self._execute_planning_async(
-                    state=state,
-                    provider_id=state.planning_provider,
-                    timeout=self.config.get_phase_timeout("planning"),
-                )
-                if not result.success:
-                    self._write_audit_event(
-                        state,
-                        "phase_error",
-                        data={"phase": state.phase.value, "error": result.error},
-                        level="error",
-                    )
-                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self._flush_state(state)
-                    return result
-                self.hooks.emit_phase_complete(state)
-                self._write_audit_event(
-                    state,
-                    "phase_complete",
-                    data={
-                        "phase": state.phase.value,
-                        "duration_ms": (time.perf_counter() - phase_started) * 1000,
-                    },
-                )
-                # Think pause: supervisor evaluates planning quality
-                self._safe_orchestrator_transition(state, DeepResearchPhase.PLANNING)
+                if err:
+                    return err
 
             if state.phase == DeepResearchPhase.GATHERING:
-                # Check for cancellation at the start of the phase
-                self._check_cancellation(state)
                 # Mark the current iteration as in progress (for cancellation handling)
-                # This applies to iteration 1 (first pass) and new iterations started after refinement
                 state.metadata["iteration_in_progress"] = True
-
-                phase_started = time.perf_counter()
-                self.hooks.emit_phase_start(state)
-                self._write_audit_event(
+                err = await self._run_phase(
                     state,
-                    "phase_start",
-                    data={"phase": state.phase.value},
+                    DeepResearchPhase.GATHERING,
+                    self._execute_gathering_async(
+                        state=state,
+                        provider_id=provider_id,
+                        timeout=timeout_per_operation,
+                        max_concurrent=max_concurrent,
+                    ),
                 )
-                result = await self._execute_gathering_async(
-                    state=state,
-                    provider_id=provider_id,
-                    timeout=timeout_per_operation,
-                    max_concurrent=max_concurrent,
-                )
-                if not result.success:
-                    self._write_audit_event(
-                        state,
-                        "phase_error",
-                        data={"phase": state.phase.value, "error": result.error},
-                        level="error",
-                    )
-                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self._flush_state(state)
-                    return result
-                self.hooks.emit_phase_complete(state)
-                self._write_audit_event(
-                    state,
-                    "phase_complete",
-                    data={
-                        "phase": state.phase.value,
-                        "duration_ms": (time.perf_counter() - phase_started) * 1000,
-                    },
-                )
-                # Think pause: supervisor evaluates gathering quality
-                self._safe_orchestrator_transition(state, DeepResearchPhase.GATHERING)
+                if err:
+                    return err
 
                 # Optional: Execute extract follow-up to expand URL content
                 if self.config.tavily_extract_in_deep_research:
@@ -1249,77 +1263,33 @@ class DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhas
                         )
 
             if state.phase == DeepResearchPhase.ANALYSIS:
-                # Check for cancellation at the start of the phase
-                self._check_cancellation(state)
-                phase_started = time.perf_counter()
-                self.hooks.emit_phase_start(state)
-                self._write_audit_event(
+                err = await self._run_phase(
                     state,
-                    "phase_start",
-                    data={"phase": state.phase.value},
+                    DeepResearchPhase.ANALYSIS,
+                    self._execute_analysis_async(
+                        state=state,
+                        provider_id=state.analysis_provider,
+                        timeout=self.config.get_phase_timeout("analysis"),
+                    ),
                 )
-                result = await self._execute_analysis_async(
-                    state=state,
-                    provider_id=state.analysis_provider,
-                    timeout=self.config.get_phase_timeout("analysis"),
-                )
-                if not result.success:
-                    self._write_audit_event(
-                        state,
-                        "phase_error",
-                        data={"phase": state.phase.value, "error": result.error},
-                        level="error",
-                    )
-                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self._flush_state(state)
-                    return result
-                self.hooks.emit_phase_complete(state)
-                self._write_audit_event(
-                    state,
-                    "phase_complete",
-                    data={
-                        "phase": state.phase.value,
-                        "duration_ms": (time.perf_counter() - phase_started) * 1000,
-                    },
-                )
-                # Think pause: supervisor evaluates analysis quality
-                self._safe_orchestrator_transition(state, DeepResearchPhase.ANALYSIS)
+                if err:
+                    return err
 
             if state.phase == DeepResearchPhase.SYNTHESIS:
-                # Check for cancellation at the start of the phase
-                self._check_cancellation(state)
-                phase_started = time.perf_counter()
-                self.hooks.emit_phase_start(state)
-                self._write_audit_event(
+                err = await self._run_phase(
                     state,
-                    "phase_start",
-                    data={"phase": state.phase.value},
+                    DeepResearchPhase.SYNTHESIS,
+                    self._execute_synthesis_async(
+                        state=state,
+                        provider_id=state.synthesis_provider,
+                        timeout=self.config.get_phase_timeout("synthesis"),
+                    ),
+                    skip_transition=True,
                 )
-                result = await self._execute_synthesis_async(
-                    state=state,
-                    provider_id=state.synthesis_provider,
-                    timeout=self.config.get_phase_timeout("synthesis"),
-                )
-                if not result.success:
-                    self._write_audit_event(
-                        state,
-                        "phase_error",
-                        data={"phase": state.phase.value, "error": result.error},
-                        level="error",
-                    )
-                    state.mark_failed(result.error or f"Phase {state.phase.value} failed")
-                    self._flush_state(state)
-                    return result
-                self.hooks.emit_phase_complete(state)
-                self._write_audit_event(
-                    state,
-                    "phase_complete",
-                    data={
-                        "phase": state.phase.value,
-                        "duration_ms": (time.perf_counter() - phase_started) * 1000,
-                    },
-                )
-                # Think pause: supervisor evaluates synthesis and decides iteration
+                if err:
+                    return err
+
+                # Phase-specific: custom orchestrator + iteration decision
                 try:
                     self.orchestrator.evaluate_phase_completion(state, DeepResearchPhase.SYNTHESIS)
                     self.orchestrator.decide_iteration(state)
@@ -1352,36 +1322,22 @@ class DeepResearchWorkflow(PlanningPhaseMixin, GatheringPhaseMixin, AnalysisPhas
                     # Mark iteration as successfully completed (no more refinement)
                     state.metadata["iteration_in_progress"] = False
                     state.metadata["last_completed_iteration"] = state.iteration
-                    state.mark_completed(report=result.content)
+                    state.mark_completed(report=state.report)
 
             # Handle refinement phase
             if state.phase == DeepResearchPhase.REFINEMENT:
-                # Check for cancellation at the start of the phase
-                self._check_cancellation(state)
                 # Mark the current iteration as in progress (for cancellation handling)
                 state.metadata["iteration_in_progress"] = True
-
-                phase_started = time.perf_counter()
-                self.hooks.emit_phase_start(state)
-                self._write_audit_event(
+                await self._run_phase(
                     state,
-                    "phase_start",
-                    data={"phase": state.phase.value},
-                )
-                # Generate follow-up queries from gaps
-                await self._execute_refinement_async(
-                    state=state,
-                    provider_id=state.refinement_provider,
-                    timeout=self.config.get_phase_timeout("refinement"),
-                )
-                self.hooks.emit_phase_complete(state)
-                self._write_audit_event(
-                    state,
-                    "phase_complete",
-                    data={
-                        "phase": state.phase.value,
-                        "duration_ms": (time.perf_counter() - phase_started) * 1000,
-                    },
+                    DeepResearchPhase.REFINEMENT,
+                    self._execute_refinement_async(
+                        state=state,
+                        provider_id=state.refinement_provider,
+                        timeout=self.config.get_phase_timeout("refinement"),
+                    ),
+                    skip_error_check=True,
+                    skip_transition=True,
                 )
 
                 # Mark iteration as successfully completed

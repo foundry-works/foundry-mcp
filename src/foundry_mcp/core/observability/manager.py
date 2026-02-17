@@ -9,7 +9,7 @@ import threading
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from foundry_mcp.config import ObservabilityConfig
+    from foundry_mcp.config.domains import ObservabilityConfig
 
 logger = logging.getLogger(__name__)
 

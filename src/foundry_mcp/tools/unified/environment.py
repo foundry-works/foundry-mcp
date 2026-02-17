@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, cast
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig, _PACKAGE_VERSION
+from foundry_mcp.config.server import ServerConfig, _PACKAGE_VERSION
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
 from foundry_mcp.core.responses import (

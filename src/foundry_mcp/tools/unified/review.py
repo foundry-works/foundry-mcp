@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.ai_consultation import (
     ConsultationOrchestrator,
     ConsultationRequest,

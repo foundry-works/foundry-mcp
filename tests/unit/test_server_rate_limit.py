@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.server import create_server
 
 

@@ -211,7 +211,7 @@ def call_spec_handler(
 ) -> Dict[str, Any]:
     """Call the spec router handler and return response dict."""
     from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     config = ServerConfig(specs_dir=specs_dir)
     return _SPEC_ROUTER.dispatch(action=action, config=config, payload=payload)

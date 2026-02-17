@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from foundry_mcp.server import create_server
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from tests.conftest import extract_response_dict
 
 

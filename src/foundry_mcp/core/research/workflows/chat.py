@@ -7,7 +7,7 @@ supporting thread creation, continuation, and message history management.
 import logging
 from typing import Any, Optional
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models import (
     ConversationMessage,

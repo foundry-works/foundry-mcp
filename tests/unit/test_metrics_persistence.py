@@ -20,7 +20,7 @@ from foundry_mcp.core.metrics.persistence import (
     get_metrics_collector,
     reset_metrics_collector,
 )
-from foundry_mcp.config import MetricsPersistenceConfig
+from foundry_mcp.config.domains import MetricsPersistenceConfig
 
 
 # =============================================================================

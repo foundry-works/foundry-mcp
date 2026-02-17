@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core.research.models import (
     DeepResearchState,

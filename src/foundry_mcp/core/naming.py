@@ -126,7 +126,7 @@ def _collect_tool_error(
     """
     try:
         # Lazy import to avoid circular dependencies
-        from foundry_mcp.config import get_config
+        from foundry_mcp.config.server import get_config
 
         config = get_config()
         if not config.error_collection.enabled:

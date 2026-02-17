@@ -7,7 +7,7 @@ shared foundry_mcp.config module and core spec utilities.
 from pathlib import Path
 from typing import Optional
 
-from foundry_mcp.config import ServerConfig, get_config as get_server_config
+from foundry_mcp.config.server import ServerConfig, get_config as get_server_config
 from foundry_mcp.core.spec import find_specs_directory
 
 

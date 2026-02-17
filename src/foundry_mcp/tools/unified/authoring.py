@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.authoring_handlers import (  # noqa: F401
     _AUTHORING_ROUTER,

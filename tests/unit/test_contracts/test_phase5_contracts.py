@@ -294,7 +294,7 @@ def spec_with_findable_text(sample_spec):
 @pytest.fixture
 def mock_server_config():
     """Mock ServerConfig for handler testing."""
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     return ServerConfig(workspace=".")
 
@@ -315,7 +315,7 @@ def call_task_handler(
     This simulates how the MCP tool would invoke the handlers.
     """
     from foundry_mcp.tools.unified.task_handlers import _TASK_ROUTER
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)
@@ -335,7 +335,7 @@ def call_authoring_handler(
     This simulates how the MCP tool would invoke the handlers.
     """
     from foundry_mcp.tools.unified.authoring_handlers import _AUTHORING_ROUTER
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)

@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig
+from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import ActionDefinition, ActionRouter

@@ -6,7 +6,7 @@ and fallback logic.
 
 import asyncio
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 

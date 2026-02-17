@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.config import ResearchConfig
+from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.providers import ProviderResult, ProviderStatus
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models import (

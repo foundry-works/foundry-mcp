@@ -18,7 +18,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config import ServerConfig, get_config
+from foundry_mcp.config.server import ServerConfig, get_config
 from foundry_mcp.core.authorization import (
     RateLimitConfig,
     get_rate_limit_tracker,

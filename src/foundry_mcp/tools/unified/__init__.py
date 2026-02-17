@@ -21,7 +21,7 @@ from .research import register_unified_research_tool
 
 if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from mcp.server.fastmcp import FastMCP
-    from foundry_mcp.config import ServerConfig
+    from foundry_mcp.config.server import ServerConfig
 
 
 def register_unified_tools(mcp: "FastMCP", config: "ServerConfig") -> None:

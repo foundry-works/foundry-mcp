@@ -180,7 +180,7 @@ class TestConfigLoading:
 
     def test_observability_config_defaults(self):
         """ObservabilityConfig should have sensible defaults."""
-        from foundry_mcp.config import ObservabilityConfig
+        from foundry_mcp.config.domains import ObservabilityConfig
 
         config = ObservabilityConfig()
         assert config.enabled is False
@@ -195,7 +195,7 @@ class TestConfigLoading:
 
     def test_observability_config_from_dict(self):
         """ObservabilityConfig should load from TOML dict."""
-        from foundry_mcp.config import ObservabilityConfig
+        from foundry_mcp.config.domains import ObservabilityConfig
 
         data = {
             "enabled": True,
@@ -214,7 +214,7 @@ class TestConfigLoading:
 
     def test_server_config_has_observability(self):
         """ServerConfig should include observability settings."""
-        from foundry_mcp.config import ServerConfig
+        from foundry_mcp.config.server import ServerConfig
 
         config = ServerConfig()
         assert hasattr(config, "observability")
