@@ -19,7 +19,7 @@ from foundry_mcp.core.ai_consultation import (
     ConsultationWorkflow,
     ConsensusResult,
 )
-from foundry_mcp.core.llm_config import load_consultation_config
+from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import available_providers
@@ -30,7 +30,7 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.llm_config import load_consultation_config
+from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.tools.unified.router import (

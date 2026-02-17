@@ -18,7 +18,7 @@ from foundry_mcp.core.ai_consultation import (
     ConsultationWorkflow,
     ResultCache,
 )
-from foundry_mcp.core.llm_config import ConsultationConfig, WorkflowConsultationConfig
+from foundry_mcp.core.llm_config.consultation import ConsultationConfig, WorkflowConsultationConfig
 from foundry_mcp.core.providers import ProviderResult, ProviderStatus, TokenUsage
 
 

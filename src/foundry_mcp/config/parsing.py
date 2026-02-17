@@ -53,7 +53,7 @@ def _parse_provider_spec(spec: str) -> Tuple[str, Optional[str]]:
 
     # Try to parse with ProviderSpec
     try:
-        from foundry_mcp.core.llm_config import ProviderSpec
+        from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 
         parsed = ProviderSpec.parse(spec)
         # Build model string with backend routing if present

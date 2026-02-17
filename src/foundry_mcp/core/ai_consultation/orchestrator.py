@@ -28,7 +28,7 @@ from foundry_mcp.core.providers import (
     check_provider_available,
     resolve_provider,
 )
-from foundry_mcp.core.llm_config import ProviderSpec
+from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 
 from foundry_mcp.core.ai_consultation.types import (
     ConsensusResult,
@@ -123,7 +123,7 @@ class ConsultationOrchestrator:
             config: ConsultationConfig instance (uses global config if None)
         """
         # Lazy import to avoid circular dependency
-        from foundry_mcp.core.llm_config import (
+        from foundry_mcp.core.llm_config.consultation import (
             ConsultationConfig,
             get_consultation_config,
         )

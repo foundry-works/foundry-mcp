@@ -1388,7 +1388,7 @@ class TestConsultationOrchestrator:
     @pytest.fixture
     def mock_config(self, tmp_path):
         """Create a mock ConsultationConfig."""
-        from foundry_mcp.core.llm_config import ConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
         return ConsultationConfig(
             priority=["gemini", "claude"],
@@ -1830,7 +1830,7 @@ class TestConsultationOrchestratorMultiModel:
     @pytest.fixture
     def mock_multi_model_config(self, tmp_path):
         """Create a mock ConsultationConfig for multi-model mode."""
-        from foundry_mcp.core.llm_config import ConsultationConfig, WorkflowConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig, WorkflowConsultationConfig
 
         return ConsultationConfig(
             priority=["gemini", "claude", "openai"],

@@ -2,10 +2,8 @@
 
 import pytest
 
-from foundry_mcp.core.llm_config import (
-    ProviderSpec,
-    ConsultationConfig,
-)
+from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
+from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
 
 # =============================================================================

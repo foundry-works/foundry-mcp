@@ -27,7 +27,7 @@ from foundry_mcp.core.ai_consultation import (
 from foundry_mcp.core.prompts.fidelity_review import (
     FIDELITY_SYNTHESIZED_RESPONSE_SCHEMA,
 )
-from foundry_mcp.core.llm_config import get_consultation_config, load_consultation_config
+from foundry_mcp.core.llm_config.consultation import get_consultation_config, load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import get_provider_statuses

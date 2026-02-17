@@ -43,14 +43,18 @@ from foundry_mcp.core.llm_provider import (
 )
 
 # LLM Config imports
-from foundry_mcp.core.llm_config import (
+from foundry_mcp.core.llm_config.provider_spec import (
     LLMProviderType,
+    DEFAULT_MODELS,
+    API_KEY_ENV_VARS,
+)
+from foundry_mcp.core.llm_config.llm import (
     LLMConfig,
     get_llm_config,
     set_llm_config,
     reset_llm_config,
-    DEFAULT_MODELS,
-    API_KEY_ENV_VARS,
+)
+from foundry_mcp.core.llm_config.workflow import (
     WorkflowMode,
     WorkflowConfig,
     get_workflow_config,

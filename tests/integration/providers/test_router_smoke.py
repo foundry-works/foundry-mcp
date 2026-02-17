@@ -59,7 +59,7 @@ class TestConsultationOrchestratorSmoke:
             ConsultationResult,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import ConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
         config = ConsultationConfig(
             priority=["[cli]gemini:gemini-2.5-flash"],
@@ -100,7 +100,7 @@ class TestConsultationOrchestratorSmoke:
             ConsultationResult,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import ConsultationConfig
+        from foundry_mcp.core.llm_config.consultation import ConsultationConfig
 
         config = ConsultationConfig(
             priority=["[cli]gemini:gemini-2.5-flash"],
@@ -148,7 +148,7 @@ class TestConsultationOrchestratorMultiModelSmoke:
             ConsultationRequest,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import (
+        from foundry_mcp.core.llm_config.consultation import (
             ConsultationConfig,
             WorkflowConsultationConfig,
         )

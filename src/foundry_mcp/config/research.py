@@ -878,12 +878,12 @@ class ResearchConfig:
 
     def get_default_provider_spec(self) -> "ProviderSpec":
         """Parse default_provider into a ProviderSpec."""
-        from foundry_mcp.core.llm_config import ProviderSpec
+        from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
         return ProviderSpec.parse_flexible(self.default_provider)
 
     def get_consensus_provider_specs(self) -> List["ProviderSpec"]:
         """Parse consensus_providers into ProviderSpec list."""
-        from foundry_mcp.core.llm_config import ProviderSpec
+        from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
         return [ProviderSpec.parse_flexible(p) for p in self.consensus_providers]
 
     def get_model_context_override(

@@ -193,7 +193,7 @@ def _run_ai_review(
             ConsultationRequest,
             ConsultationWorkflow,
         )
-        from foundry_mcp.core.llm_config import load_consultation_config
+        from foundry_mcp.core.llm_config.consultation import load_consultation_config
     except ImportError:
         return asdict(
             error_response(

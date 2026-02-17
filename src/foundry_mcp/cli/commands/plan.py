@@ -20,7 +20,7 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
 )
 from foundry_mcp.core.spec import find_specs_directory
-from foundry_mcp.core.llm_config import get_consultation_config
+from foundry_mcp.core.llm_config.consultation import get_consultation_config
 
 logger = get_cli_logger()
 

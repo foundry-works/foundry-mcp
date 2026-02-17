@@ -344,6 +344,36 @@ core/autonomy/models/
 
 ---
 
+## 13. LLM Config Module Decomposition — DONE
+
+### Status: All 4 waves complete (2026-02-17)
+
+Decomposed `core/llm_config.py` (1,419 lines, 7 classes, 18 callers — the highest caller count remaining) into a `core/llm_config/` package with 5 focused sub-modules. Triplication of load/get/set/reset pattern across 3 config domains made extraction mechanical.
+
+**Wave 1** — Created package scaffold with `_paths.py` (bundled default config + search paths), `provider_spec.py` (`ProviderSpec`, `LLMProviderType`, `DEFAULT_MODELS`, `API_KEY_ENV_VARS`), `llm.py` (`LLMConfig` + load/get/set/reset), and `__init__.py` with re-exports. Deleted original `core/llm_config.py`. 5,208 tests passing.
+
+**Wave 2** — Extracted `workflow.py` (`WorkflowMode`, `WorkflowConfig` + load/get/set/reset) and `consultation.py` (`WorkflowConsultationConfig`, `ConsultationConfig` + load/get/set/reset). Cross-references resolved: `consultation.py` imports from `.provider_spec` and `._paths`. 5,208 tests passing.
+
+**Wave 3** — Migrated 15 production + 7 test import sites to canonical sub-module paths (e.g., `llm_config.provider_spec`, `llm_config.consultation`, `llm_config.llm`). Updated monkeypatch targets in test files. 5,207 tests passing.
+
+**Wave 4** — Verified zero remaining old-path imports (excluding `__init__.py` re-exports and documentation examples). Verified all 21 public symbols re-exported in `__init__.py`. Full test suite: 5,208 passed, 48 skipped, 0 failures.
+
+### Final Structure
+
+```
+core/llm_config/
+    __init__.py       # Re-exports all public symbols (~85 lines)
+    _paths.py         # _get_bundled_default_config(), _default_config_search_paths() (~55 lines)
+    provider_spec.py  # ProviderSpec, LLMProviderType, DEFAULT_MODELS, API_KEY_ENV_VARS (~185 lines)
+    llm.py            # LLMConfig + load/get/set/reset (~290 lines)
+    workflow.py       # WorkflowMode, WorkflowConfig + load/get/set/reset (~270 lines)
+    consultation.py   # WorkflowConsultationConfig, ConsultationConfig + load/get/set/reset (~400 lines)
+```
+
+5,208 tests passing, 0 regressions across all 4 waves.
+
+---
+
 ## What's Working Well
 
 - **Response envelope consistency**: 100% of production code uses `asdict(success_response(...))` / `asdict(error_response(...))` — zero hand-rolled responses
@@ -374,3 +404,4 @@ core/autonomy/models/
 | 10 | Config module decomposition | **Done** (Waves 1-4) | — | Largest god object eliminated |
 | 11 | Research models decomposition | **Done** (Waves 1-4) | — | 33 classes split into 8 sub-modules |
 | 12 | Autonomy models decomposition | **Done** (Waves 1-4) | — | 36 classes split into 8 sub-modules |
+| 13 | LLM config module decomposition | **Done** (Waves 1-4) | — | 7 classes split into 5 sub-modules, 18 callers |

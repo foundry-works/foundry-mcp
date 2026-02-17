@@ -85,7 +85,7 @@ def get_llm_status() -> Dict[str, Any]:
         Dict with available flag, providers list, and config source info
     """
     try:
-        from foundry_mcp.core.llm_config import get_consultation_config
+        from foundry_mcp.core.llm_config.consultation import get_consultation_config
         from foundry_mcp.core.providers import available_providers
 
         config = get_consultation_config()
@@ -103,7 +103,7 @@ def get_llm_status() -> Dict[str, Any]:
 
     # Fallback to legacy LLM config if consultation layer unavailable
     try:
-        from foundry_mcp.core.llm_config import get_llm_config
+        from foundry_mcp.core.llm_config.llm import get_llm_config
 
         config = get_llm_config()
         return {

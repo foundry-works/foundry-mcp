@@ -43,7 +43,7 @@ from foundry_mcp.tools.unified.review_helpers import (
     _run_ai_review,
     _run_quick_review,
 )
-from foundry_mcp.core.llm_config import get_consultation_config
+from foundry_mcp.core.llm_config.consultation import get_consultation_config
 
 logger = get_cli_logger()
 
