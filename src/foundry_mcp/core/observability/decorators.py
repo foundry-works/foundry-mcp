@@ -35,7 +35,7 @@ def _record_to_metrics_persistence(
     Fails silently if metrics persistence is not configured.
     """
     try:
-        from foundry_mcp.core.metrics_persistence import get_metrics_collector
+        from foundry_mcp.core.metrics.persistence import get_metrics_collector
 
         collector = get_metrics_collector()
         if collector is not None and collector._config.enabled:

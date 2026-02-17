@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from foundry_mcp.core.metrics_store import (
+from foundry_mcp.core.metrics.store import (
     MetricDataPoint,
     FileMetricsStore,
     get_metrics_store,
     reset_metrics_store,
 )
-from foundry_mcp.core.metrics_persistence import (
+from foundry_mcp.core.metrics.persistence import (
     MetricBucket,
     MetricsPersistenceCollector,
     get_metrics_collector,

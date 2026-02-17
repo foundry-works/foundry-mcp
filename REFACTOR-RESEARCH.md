@@ -141,30 +141,30 @@ core/errors/
 
 ---
 
-## 6. Observability/Metrics Sprawl (Medium)
+## 6. Observability/Metrics Consolidation — DONE
 
-### Problem
+### Status: All 4 waves complete (2026-02-17)
 
-Metrics and observability logic is spread across **7 files totaling 5,000+ lines** with unclear boundaries.
+Consolidated 6 standalone `core/` files into two well-bounded packages (`core/metrics/` and `core/observability/`). Zero test failures (5,183 tests verified).
 
-### File Inventory
+**Wave 1** — Created `core/metrics/` package. Moved `metrics_store.py` → `metrics/store.py`, `metrics_persistence.py` → `metrics/persistence.py`, `metrics_registry.py` → `metrics/registry.py`. Created `__init__.py` with re-exports.
 
-| File | Lines | Responsibility |
-|------|-------|---------------|
-| `core/observability.py` | 1,218 | Orchestration + decorators |
-| `core/metrics_store.py` | 641 | Abstract base + implementations |
-| `core/metrics_persistence.py` | 584 | File I/O for metrics |
-| `core/prometheus.py` | 564 | Prometheus exporter |
-| `core/otel.py` | 452 | OpenTelemetry integration |
-| `core/metrics_registry.py` | 327 | In-memory registry |
-| `core/otel_stubs.py` | 264 | Fallback stubs when OTel unavailable |
+**Wave 2** — Moved `prometheus.py` → `observability/prometheus.py`, `otel.py` → `observability/otel.py`, `otel_stubs.py` → `observability/stubs.py`. Updated internal cross-references.
 
-### Recommendation
+**Wave 3** — Migrated ~11 production import sites and ~6 test import sites to canonical paths. Full test suite green.
 
-Consolidate into two packages:
+**Wave 4** — Verified zero remaining old-path imports. Added deprecation warnings to all 6 shim files at old locations. Shims preserved for third-party consumers.
+
+### Previous Problem
+
+Metrics and observability logic was spread across **7 files totaling 5,000+ lines** with unclear boundaries.
+
+### Final Structure
+
 ```
-core/metrics/        # Registry, data models, persistence
-core/observability/  # Logging, tracing, auditing, decorators, exporters
+core/metrics/          # store.py, persistence.py, registry.py, __init__.py
+core/observability/    # manager.py, metrics.py, audit.py, decorators.py, redaction.py,
+                       # prometheus.py, otel.py, stubs.py, __init__.py
 ```
 
 ---
@@ -264,6 +264,6 @@ Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` wit
 | 4 | Research sub-handlers | **Done** (Waves 1-4) | — | Consistency win, follows existing pattern |
 | 5 | Tool signature cleanup | **Done** | — | `locals()` passthrough, ~350 lines |
 | 6 | Test fixture consolidation | **Done** (Waves 1-4) | — | 5 conftest files, ~820 lines deduplicated |
-| 7 | Observability consolidation | Pending | 3-4 days | Lower urgency, improves clarity |
+| 7 | Observability consolidation | **Done** (Waves 1-4) | — | 6 files → 2 packages, deprecation shims |
 | 8 | Deep research framework | Pending | 3-4 days | Contained to one subsystem |
 | 9 | Validation fix dispatch dict | **Done** | — | Quick win |

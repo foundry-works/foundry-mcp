@@ -14,14 +14,14 @@ class TestNoOpStubs:
 
     def test_noop_tracer_can_be_imported(self):
         """NoOp tracer should always be importable."""
-        from foundry_mcp.core.otel_stubs import get_noop_tracer
+        from foundry_mcp.core.observability.stubs import get_noop_tracer
 
         tracer = get_noop_tracer("test")
         assert tracer is not None
 
     def test_noop_tracer_context_manager(self):
         """NoOp tracer spans should work as context managers."""
-        from foundry_mcp.core.otel_stubs import get_noop_tracer
+        from foundry_mcp.core.observability.stubs import get_noop_tracer
 
         tracer = get_noop_tracer("test")
         with tracer.start_as_current_span("test-span") as span:
@@ -30,14 +30,14 @@ class TestNoOpStubs:
 
     def test_noop_meter_can_be_imported(self):
         """NoOp meter should always be importable."""
-        from foundry_mcp.core.otel_stubs import get_noop_meter
+        from foundry_mcp.core.observability.stubs import get_noop_meter
 
         meter = get_noop_meter("test")
         assert meter is not None
 
     def test_noop_meter_instruments(self):
         """NoOp meter instruments should be callable."""
-        from foundry_mcp.core.otel_stubs import get_noop_meter
+        from foundry_mcp.core.observability.stubs import get_noop_meter
 
         meter = get_noop_meter("test")
         counter = meter.create_counter("test_counter")

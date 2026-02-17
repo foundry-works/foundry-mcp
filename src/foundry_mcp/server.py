@@ -89,8 +89,8 @@ def _init_metrics_persistence(config: ServerConfig) -> None:
         return
 
     try:
-        from foundry_mcp.core.metrics_persistence import initialize_metrics_persistence
-        from foundry_mcp.core.metrics_store import get_metrics_store
+        from foundry_mcp.core.metrics.persistence import initialize_metrics_persistence
+        from foundry_mcp.core.metrics.store import get_metrics_store
 
         collector = initialize_metrics_persistence(metrics_config)
         if collector is None:

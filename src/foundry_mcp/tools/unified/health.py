@@ -17,7 +17,7 @@ from foundry_mcp.core.health import (
     check_readiness,
 )
 from foundry_mcp.core.naming import canonical_tool
-from foundry_mcp.core.prometheus import get_prometheus_exporter
+from foundry_mcp.core.observability.prometheus import get_prometheus_exporter
 from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,

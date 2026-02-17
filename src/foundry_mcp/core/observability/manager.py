@@ -47,7 +47,7 @@ def get_observability_status() -> Dict[str, Any]:
     otel_enabled = False
     if _OPENTELEMETRY_AVAILABLE:
         try:
-            from foundry_mcp.core.otel import is_enabled
+            from foundry_mcp.core.observability.otel import is_enabled
 
             otel_enabled = is_enabled()
         except ImportError:
@@ -122,7 +122,7 @@ class ObservabilityManager:
             # Initialize OpenTelemetry if enabled
             if config.enabled and config.otel_enabled and _OPENTELEMETRY_AVAILABLE:
                 try:
-                    from foundry_mcp.core.otel import OTelConfig, initialize as init_otel
+                    from foundry_mcp.core.observability.otel import OTelConfig, initialize as init_otel
 
                     otel_config = OTelConfig(
                         enabled=True,
@@ -138,7 +138,7 @@ class ObservabilityManager:
             # Initialize Prometheus if enabled
             if config.enabled and config.prometheus_enabled and _PROMETHEUS_AVAILABLE:
                 try:
-                    from foundry_mcp.core.prometheus import (
+                    from foundry_mcp.core.observability.prometheus import (
                         PrometheusConfig,
                         get_prometheus_exporter,
                         reset_exporter,
@@ -178,11 +178,11 @@ class ObservabilityManager:
             Tracer instance
         """
         if self._otel_initialized:
-            from foundry_mcp.core.otel import get_tracer
+            from foundry_mcp.core.observability.otel import get_tracer
 
             return get_tracer(name)
 
-        from foundry_mcp.core.otel_stubs import get_noop_tracer
+        from foundry_mcp.core.observability.stubs import get_noop_tracer
 
         return get_noop_tracer(name)
 
@@ -193,7 +193,7 @@ class ObservabilityManager:
             PrometheusExporter instance (real or with no-op methods)
         """
         if self._prometheus_initialized:
-            from foundry_mcp.core.prometheus import get_prometheus_exporter
+            from foundry_mcp.core.observability.prometheus import get_prometheus_exporter
 
             return get_prometheus_exporter()
 
@@ -220,7 +220,7 @@ class ObservabilityManager:
         """Shutdown observability providers and flush pending data."""
         if self._otel_initialized:
             try:
-                from foundry_mcp.core.otel import shutdown
+                from foundry_mcp.core.observability.otel import shutdown
 
                 shutdown()
             except Exception:
