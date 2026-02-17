@@ -1,7 +1,6 @@
 """Tests for core spec operations."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -25,22 +24,6 @@ from foundry_mcp.core.spec import (
     recalculate_estimated_hours,
     save_spec,
 )
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Resolve to handle macOS /var -> /private/var symlink
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-
-        # Create status directories
-        (specs_dir / "pending").mkdir(parents=True)
-        (specs_dir / "active").mkdir(parents=True)
-        (specs_dir / "completed").mkdir(parents=True)
-        (specs_dir / "archived").mkdir(parents=True)
-
-        yield specs_dir
 
 
 @pytest.fixture

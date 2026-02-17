@@ -4,16 +4,9 @@ Tests that _dispatch_authoring_action catches exceptions and returns error respo
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
 
 
 class TestAuthoringDispatchExceptionHandling:

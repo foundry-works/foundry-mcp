@@ -6,18 +6,11 @@ instead of crashing the MCP server.
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from foundry_mcp.config import ServerConfig
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock ServerConfig."""
-    config = MagicMock()
-    return config
 
 
 class TestServerDispatchExceptionHandling:

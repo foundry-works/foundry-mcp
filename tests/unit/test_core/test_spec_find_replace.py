@@ -1,22 +1,11 @@
 """Tests for find_replace_in_spec function."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from foundry_mcp.core.spec import find_replace_in_spec, load_spec
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-        for folder in ["pending", "active", "completed", "archived"]:
-            (specs_dir / folder).mkdir(parents=True)
-        yield specs_dir
 
 
 @pytest.fixture

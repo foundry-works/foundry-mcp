@@ -31,28 +31,6 @@ _UNIFIED_TOOL_NAMES = {
 }
 
 
-@pytest.fixture
-def test_config(tmp_path: Path) -> ServerConfig:
-    specs_dir = tmp_path / "specs"
-    specs_dir.mkdir()
-    (specs_dir / "active").mkdir()
-    (specs_dir / "pending").mkdir()
-    (specs_dir / "completed").mkdir()
-    (specs_dir / "archived").mkdir()
-
-    return ServerConfig(
-        server_name="foundry-mcp-test",
-        server_version="0.1.0",
-        specs_dir=specs_dir,
-        log_level="WARNING",
-    )
-
-
-@pytest.fixture
-def mcp_server(test_config: ServerConfig):
-    return create_server(test_config)
-
-
 def test_server_creates_successfully(test_config: ServerConfig):
     server = create_server(test_config)
     assert server is not None

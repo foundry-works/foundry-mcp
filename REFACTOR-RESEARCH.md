@@ -169,47 +169,25 @@ core/observability/  # Logging, tracing, auditing, decorators, exporters
 
 ---
 
-## 7. Test Fixture Duplication (Medium)
+## 7. Test Fixture Consolidation — DONE
 
-### Problem
+### Status: All 4 waves complete (2026-02-17)
 
-Common test fixtures are independently redefined across many test files.
+Created 5 new `conftest.py` files to centralize duplicate fixtures across the test suite. Zero test failures, zero test count changes (5,083 tests verified).
 
-### Duplicate Fixture Counts
+**Wave 1** — Created `tests/tools/unified/conftest.py` with shared `mock_config` fixture. Removed from 11 files; `test_dispatch_common.py` overrides to set `specs_dir=None`; `test_research.py` kept local (yield-based with module patching).
 
-| Fixture | Occurrences | Lines Wasted |
-|---------|-------------|-------------|
-| `mock_config` | 20 files | ~300 |
-| `temp_specs_dir` | 16 files | ~100 |
-| `test_config` | 10 files | ~80 |
-| `mock_memory` | 10 files | ~100 |
-| `test_specs_dir` | 9 files | ~70 |
-| `sample_spec` | 8 files | ~120 |
-| `mcp_server` | 5 files | ~50 |
+**Wave 2** — Created `tests/integration/conftest.py` with `test_specs_dir`, `test_config`, `mcp_server`. Fully removed from `test_provider_tools.py` and `test_json_minification.py`. Partial removal from 4 files that keep local `test_specs_dir` overrides (richer spec data, templates, role overrides).
 
-### Missing Conftest Files
+**Wave 3** — Created `tests/unit/test_core/conftest.py` and `tests/unit/test_contracts/conftest.py` with `temp_specs_dir`. Removed from 6 test_core files and 4 test_contracts files. `test_spec_history.py` and `test_phase6_contracts.py` kept local (need `.backups` dir).
 
-```
-tests/conftest.py                    # Exists (305 lines, only 3 fixtures)
-tests/core/research/conftest.py      # MISSING — should centralize mock_config, mock_memory
-tests/unit/test_core/conftest.py     # MISSING — should centralize test_config, temp_specs_dir
-tests/tools/unified/conftest.py      # MISSING — should centralize shared tool fixtures
-```
+**Wave 4** — Created `tests/core/research/workflows/conftest.py` with `mock_config` and `mock_memory`. 4 workflow test files now extend the base fixtures with workflow-specific attributes. `test_deep_research.py` kept local (15+ attrs + helper methods).
 
-### Monolithic Test Files
+### Remaining (out of scope, separate efforts)
 
-| File | Lines | Issue |
-|------|-------|-------|
-| `tests/core/research/workflows/test_deep_research.py` | 2,403 | Mix of fixture setup + 40+ test scenarios |
-| `tests/core/research/test_document_digest.py` | 2,356 | 9 test classes, should be 3 files |
-| `tests/unit/test_core/test_spec.py` | 2,209 | Large fixture overhead |
-| `tests/unit/test_batch_operations.py` | 1,643 | 18 test classes in 1 file |
-
-### Test Coverage Gaps
-
-- **Entire CLI layer untested** (22+ source files in `cli/` with zero tests)
-- Missing tests for: `core/cache.py`, `core/health.py`, `core/observability.py`, `core/prometheus.py`, `core/otel.py`, `core/error_collection.py`, `core/concurrency.py`
-- Estimated gap: ~30-40% of source modules lack dedicated unit tests
+- Splitting monolithic test files (test_deep_research.py, test_document_digest.py, etc.)
+- CLI layer test coverage gaps
+- `sample_spec` consolidation (too many intentional variations)
 
 ---
 
@@ -284,8 +262,8 @@ Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` wit
 | 2 | Unify error hierarchies | **Done** | — | Prerequisite for cleaner error handling |
 | 3 | Split god objects | **Done** (Waves 1-4) | — | Improves testability and maintainability |
 | 4 | Research sub-handlers | **Done** (Waves 1-4) | — | Consistency win, follows existing pattern |
-| 5 | Tool signature cleanup | **Partial** (research done, task/authoring remaining) | 0.5 day | `locals()` passthrough, ~350 lines |
-| 6 | Test fixture consolidation | Pending | 2-3 days | Reduces test maintenance friction |
+| 5 | Tool signature cleanup | **Done** | — | `locals()` passthrough, ~350 lines |
+| 6 | Test fixture consolidation | **Done** (Waves 1-4) | — | 5 conftest files, ~820 lines deduplicated |
 | 7 | Observability consolidation | Pending | 3-4 days | Lower urgency, improves clarity |
 | 8 | Deep research framework | Pending | 3-4 days | Contained to one subsystem |
-| 9 | Validation fix dispatch dict | Pending | 0.5 day | Quick win |
+| 9 | Validation fix dispatch dict | **Done** | — | Quick win |

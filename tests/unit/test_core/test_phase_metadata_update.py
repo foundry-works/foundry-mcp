@@ -1,7 +1,6 @@
 """Tests for update_phase_metadata function."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -10,21 +9,6 @@ from foundry_mcp.core.spec import (
     load_spec,
     update_phase_metadata,
 )
-
-
-@pytest.fixture
-def temp_specs_dir():
-    """Create a temporary specs directory structure."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        specs_dir = (Path(tmpdir) / "specs").resolve()
-
-        # Create status directories
-        (specs_dir / "pending").mkdir(parents=True)
-        (specs_dir / "active").mkdir(parents=True)
-        (specs_dir / "completed").mkdir(parents=True)
-        (specs_dir / "archived").mkdir(parents=True)
-
-        yield specs_dir
 
 
 def _create_spec_with_phase(

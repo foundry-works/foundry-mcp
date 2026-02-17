@@ -12,20 +12,17 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock ResearchConfig."""
-    config = MagicMock()
-    config.default_provider = "test-provider"
-    config.ideate_perspectives = ["user", "business", "technical"]
-    return config
+def mock_config(mock_config):
+    """Extend base mock_config with ideate-specific attributes."""
+    mock_config.ideate_perspectives = ["user", "business", "technical"]
+    return mock_config
 
 
 @pytest.fixture
-def mock_memory():
-    """Create a mock ResearchMemory."""
-    memory = MagicMock()
-    memory.load_ideation = MagicMock(return_value=None)
-    return memory
+def mock_memory(mock_memory):
+    """Extend base mock_memory with ideation-specific methods."""
+    mock_memory.load_ideation = MagicMock(return_value=None)
+    return mock_memory
 
 
 class TestIdeateWorkflowExceptionHandling:

@@ -12,20 +12,11 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock ResearchConfig."""
-    config = MagicMock()
-    config.default_provider = "test-provider"
-    config.consensus_providers = ["openai", "anthropic"]
-    config.consensus_strategy = "synthesize"
-    return config
-
-
-@pytest.fixture
-def mock_memory():
-    """Create a mock ResearchMemory."""
-    memory = MagicMock()
-    return memory
+def mock_config(mock_config):
+    """Extend base mock_config with consensus-specific attributes."""
+    mock_config.consensus_providers = ["openai", "anthropic"]
+    mock_config.consensus_strategy = "synthesize"
+    return mock_config
 
 
 class TestConsensusWorkflowExceptionHandling:

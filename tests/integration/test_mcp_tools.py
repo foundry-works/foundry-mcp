@@ -113,21 +113,10 @@ def test_specs_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def test_config(test_specs_dir: Path) -> ServerConfig:
-    config = ServerConfig(
-        server_name="foundry-mcp-test",
-        server_version="0.1.0",
-        specs_dir=test_specs_dir,
-        log_level="WARNING",
-    )
-    # Integration tests exercise both read and mutation paths.
-    config.autonomy_security.role = "maintainer"
-    return config
-
-
-@pytest.fixture
-def mcp_server(test_config: ServerConfig):
-    return create_server(test_config)
+def test_config(test_config):
+    """Extend shared test_config with maintainer role for mutation tests."""
+    test_config.autonomy_security.role = "maintainer"
+    return test_config
 
 
 def test_tools_registered(mcp_server):

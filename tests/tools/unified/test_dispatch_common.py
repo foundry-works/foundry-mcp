@@ -54,10 +54,10 @@ _BASELINE_IDS = [entry[0] for entry in DISPATCH_BASELINES]
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def mock_config():
-    config = MagicMock()
-    config.specs_dir = None
-    return config
+def mock_config(mock_config):
+    """Extend base mock_config with specs_dir=None for dispatch tests."""
+    mock_config.specs_dir = None
+    return mock_config
 
 
 def _import(module_name: str, attr: str):

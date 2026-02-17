@@ -7,36 +7,6 @@ Verifies that canonical_tool decorator produces TextContent with minified JSON.
 import pytest
 from mcp.types import TextContent
 
-from foundry_mcp.config import ServerConfig
-from foundry_mcp.server import create_server
-
-
-@pytest.fixture
-def test_specs_dir(tmp_path):
-    """Create minimal test specs directory."""
-    specs_dir = tmp_path / "specs"
-    specs_dir.mkdir()
-    for d in ["active", "pending", "completed", "archived"]:
-        (specs_dir / d).mkdir()
-    return specs_dir
-
-
-@pytest.fixture
-def test_config(test_specs_dir):
-    """Create test server configuration."""
-    return ServerConfig(
-        server_name="foundry-mcp-minify-test",
-        server_version="0.1.0",
-        specs_dir=test_specs_dir,
-        log_level="WARNING",
-    )
-
-
-@pytest.fixture
-def mcp_server(test_config):
-    """Create test MCP server instance."""
-    return create_server(test_config)
-
 
 class TestJsonMinification:
     """Verify tool responses are minified TextContent."""

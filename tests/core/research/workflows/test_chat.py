@@ -12,19 +12,10 @@ from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock ResearchConfig."""
-    config = MagicMock()
-    config.default_provider = "test-provider"
-    config.max_messages_per_thread = 50
-    return config
-
-
-@pytest.fixture
-def mock_memory():
-    """Create a mock ResearchMemory."""
-    memory = MagicMock()
-    return memory
+def mock_config(mock_config):
+    """Extend base mock_config with chat-specific attributes."""
+    mock_config.max_messages_per_thread = 50
+    return mock_config
 
 
 class TestChatWorkflowExceptionHandling:

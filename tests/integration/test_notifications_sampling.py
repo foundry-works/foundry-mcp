@@ -13,7 +13,6 @@ import pytest
 import time
 from unittest.mock import Mock, patch
 from foundry_mcp.server import create_server
-from foundry_mcp.config import ServerConfig
 from foundry_mcp.core.capabilities import (
     Notification,
     NotificationManager,
@@ -83,17 +82,6 @@ def test_specs_dir(tmp_path):
         json.dump(sample_spec, f)
 
     return specs_dir
-
-
-@pytest.fixture
-def test_config(test_specs_dir):
-    """Create a test server configuration."""
-    return ServerConfig(
-        server_name="foundry-mcp-test",
-        server_version="0.1.0",
-        specs_dir=test_specs_dir,
-        log_level="WARNING",
-    )
 
 
 @pytest.fixture
