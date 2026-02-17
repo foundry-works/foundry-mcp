@@ -191,41 +191,34 @@ Created 5 new `conftest.py` files to centralize duplicate fixtures across the te
 
 ---
 
-## 8. Deep Research Phase Execution Framework (Medium)
+## 8. Deep Research Phase Execution Framework — DONE
 
-### Problem
+### Status: Waves 1-4 complete (2026-02-17)
 
-`DeepResearchWorkflow` uses 6+ mixin classes (5,366+ lines total) where each phase repeats identical patterns for error handling, audit logging, and state mutation.
+Extracted shared LLM call lifecycle boilerplate from 4 phase mixins (planning, analysis, synthesis, refinement) into `phases/_lifecycle.py`. Gathering excluded (uses search providers, not LLM calls).
 
-### Files
+**Wave 1** — Created `phases/_lifecycle.py` (~100 lines) with `LLMCallResult` dataclass, `execute_llm_call()` async helper, and `finalize_phase()` helper. 18 unit tests in `test_phase_lifecycle.py`.
 
-| File | Lines | Mixin |
-|------|-------|-------|
-| `core/research/workflows/deep_research/core.py` | 1,639 | Main orchestrator |
-| `phases/analysis.py` | 1,203 | AnalysisPhaseMixin |
-| `phases/gathering.py` | 824 | GatheringPhaseMixin |
-| `phases/refinement.py` | 660 | RefinementPhaseMixin |
-| `phases/synthesis.py` | 619 | SynthesisPhaseMixin |
-| `phases/planning.py` | 421 | PlanningPhaseMixin |
+**Wave 2** — Migrated `planning.py` and `refinement.py` to use lifecycle helpers. ~160 lines of boilerplate removed.
 
-### Repeated Pattern in Each Phase
+**Wave 3** — Migrated `synthesis.py` to use lifecycle helpers. ~80 lines of boilerplate removed.
 
-```python
-async def _execute_<phase>_async(...):
-    try:
-        result = await self._execute_provider_async(...)
-        state.<phase> = result
-        self._write_audit_event(...)
-    except ContextWindowError:
-        # Error handling
-    except Exception as e:
-        # More error handling
-    return WorkflowResult(...)
-```
+**Wave 4** — Migrated `analysis.py` to use lifecycle helpers. ~80 lines of boilerplate removed.
 
-### Recommendation
+**Deferred** — Wave 5 (orchestrator dispatch dedup in `core.py`) deferred to separate session due to phase-specific branching complexity.
 
-Extract generic `_execute_phase_async(phase_name, executor, timeout)` method. Each phase only defines its unique logic; the lifecycle (error handling, audit, state mutation) is handled by the framework.
+### Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Boilerplate lines across 4 phases | ~350 | ~0 |
+| New helper code | 0 | ~100 |
+| Net line reduction | — | ~250 |
+| Copy-paste bug surface | 4 copies | 1 source of truth |
+| Files modified | 0 | 5 (4 phases + 1 new) |
+| New test file | 0 | 1 (18 tests) |
+
+5,201 tests passing, 0 regressions.
 
 ---
 
@@ -265,5 +258,5 @@ Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` wit
 | 5 | Tool signature cleanup | **Done** | — | `locals()` passthrough, ~350 lines |
 | 6 | Test fixture consolidation | **Done** (Waves 1-4) | — | 5 conftest files, ~820 lines deduplicated |
 | 7 | Observability consolidation | **Done** (Waves 1-4) | — | 6 files → 2 packages, deprecation shims |
-| 8 | Deep research framework | Pending | 3-4 days | Contained to one subsystem |
+| 8 | Deep research framework | **Done** (Waves 1-4) | — | ~250 lines removed, 1 source of truth |
 | 9 | Validation fix dispatch dict | **Done** | — | Quick win |

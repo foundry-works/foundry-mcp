@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.document_digest import (
     DigestConfig,
@@ -49,6 +48,10 @@ from foundry_mcp.core.research.workflows.deep_research._constants import (
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,
     fidelity_level_from_score,
+)
+from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import (
+    execute_llm_call,
+    finalize_phase,
 )
 
 if TYPE_CHECKING:
@@ -184,124 +187,25 @@ class AnalysisPhaseMixin:
         # Check for cancellation before making provider call
         self._check_cancellation(state)
 
-        # Execute LLM call with context window error handling and timeout protection
-        effective_provider = provider_id or state.analysis_provider
-        llm_call_start_time = time.perf_counter()
-        # Update heartbeat and persist interim state for progress visibility
-        state.last_heartbeat_at = datetime.now(timezone.utc)
-        self.memory.save_deep_research(state)
-        self._write_audit_event(
-            state,
-            "llm.call.started",
-            data={
-                "provider": effective_provider,
-                "task_id": state.id,
-                "phase": "analysis",
+        # Execute LLM call with lifecycle instrumentation
+        call_result = await execute_llm_call(
+            workflow=self,
+            state=state,
+            phase_name="analysis",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            provider_id=provider_id or state.analysis_provider,
+            model=state.analysis_model,
+            temperature=0.3,  # Lower temperature for analytical tasks
+            timeout=timeout,
+            error_metadata={
+                "source_count": len(state.sources),
+                "guidance": "Try reducing max_sources_per_query or processing sources in batches",
             },
         )
-        try:
-            result = await self._execute_provider_async(
-                prompt=user_prompt,
-                provider_id=effective_provider,
-                model=state.analysis_model,
-                system_prompt=system_prompt,
-                timeout=timeout,
-                temperature=0.3,  # Lower temperature for analytical tasks
-                phase="analysis",
-                fallback_providers=self.config.get_phase_fallback_providers("analysis"),
-                max_retries=self.config.deep_research_max_retries,
-                retry_delay=self.config.deep_research_retry_delay,
-            )
-        except ContextWindowError as e:
-            llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
-            self._write_audit_event(
-                state,
-                "llm.call.completed",
-                data={
-                    "provider": effective_provider,
-                    "task_id": state.id,
-                    "duration_ms": llm_call_duration_ms,
-                    "status": "error",
-                    "error_type": "context_window_exceeded",
-                },
-            )
-            get_metrics().histogram(
-                "foundry_mcp_research_llm_call_duration_seconds",
-                llm_call_duration_ms / 1000.0,
-                labels={"provider": effective_provider or "unknown", "status": "error"},
-            )
-            logger.error(
-                "Analysis phase context window exceeded: prompt_tokens=%s, "
-                "max_tokens=%s, truncation_needed=%s, provider=%s, source_count=%d",
-                e.prompt_tokens,
-                e.max_tokens,
-                e.truncation_needed,
-                e.provider,
-                len(state.sources),
-            )
-            return WorkflowResult(
-                success=False,
-                content="",
-                error=str(e),
-                metadata={
-                    "research_id": state.id,
-                    "phase": "analysis",
-                    "error_type": "context_window_exceeded",
-                    "prompt_tokens": e.prompt_tokens,
-                    "max_tokens": e.max_tokens,
-                    "truncation_needed": e.truncation_needed,
-                    "source_count": len(state.sources),
-                    "guidance": "Try reducing max_sources_per_query or processing sources in batches",
-                },
-            )
-
-        # Emit llm.call.completed audit event
-        llm_call_duration_ms = (time.perf_counter() - llm_call_start_time) * 1000
-        llm_call_status = "success" if result.success else "error"
-        llm_call_provider: str = result.provider_id or effective_provider or "unknown"
-        self._write_audit_event(
-            state,
-            "llm.call.completed",
-            data={
-                "provider": llm_call_provider,
-                "task_id": state.id,
-                "duration_ms": llm_call_duration_ms,
-                "status": llm_call_status,
-            },
-        )
-        get_metrics().histogram(
-            "foundry_mcp_research_llm_call_duration_seconds",
-            llm_call_duration_ms / 1000.0,
-            labels={"provider": llm_call_provider, "status": llm_call_status},
-        )
-
-        if not result.success:
-            # Check if this was a timeout
-            if result.metadata and result.metadata.get("timeout"):
-                logger.error(
-                    "Analysis phase timed out after exhausting all providers: %s",
-                    result.metadata.get("providers_tried", []),
-                )
-            else:
-                logger.error("Analysis phase LLM call failed: %s", result.error)
-            return result
-
-        # Track token usage
-        if result.tokens_used:
-            state.total_tokens_used += result.tokens_used
-
-        # Track phase metrics for audit
-        state.phase_metrics.append(
-            PhaseMetrics(
-                phase="analysis",
-                duration_ms=result.duration_ms or 0.0,
-                input_tokens=result.input_tokens or 0,
-                output_tokens=result.output_tokens or 0,
-                cached_tokens=result.cached_tokens or 0,
-                provider_id=result.provider_id,
-                model_used=result.model_used,
-            )
-        )
+        if isinstance(call_result, WorkflowResult):
+            return call_result  # Error path
+        result = call_result.result
 
         # Parse the response
         parsed = self._parse_analysis_response(result.content, state)
@@ -389,25 +293,7 @@ class AnalysisPhaseMixin:
             len(parsed["gaps"]),
         )
 
-        # Emit phase.completed audit event
-        phase_duration_ms = (time.perf_counter() - phase_start_time) * 1000
-        self._write_audit_event(
-            state,
-            "phase.completed",
-            data={
-                "phase_name": "analysis",
-                "iteration": state.iteration,
-                "task_id": state.id,
-                "duration_ms": phase_duration_ms,
-            },
-        )
-
-        # Emit phase duration metric
-        get_metrics().histogram(
-            "foundry_mcp_research_phase_duration_seconds",
-            phase_duration_ms / 1000.0,
-            labels={"phase_name": "analysis", "status": "success"},
-        )
+        finalize_phase(self, state, "analysis", phase_start_time)
 
         return WorkflowResult(
             success=True,
