@@ -33,9 +33,9 @@ from foundry_mcp.tools.unified.common import (
     build_request_id,
     dispatch_with_standard_errors,
     make_metric_name,
-    make_validation_error_fn,
     resolve_specs_dir,
 )
+from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -113,7 +113,25 @@ def _request_id() -> str:
     return build_request_id("lifecycle")
 
 
-_validation_error = make_validation_error_fn("lifecycle")
+# ---------------------------------------------------------------------------
+# Declarative parameter schemas
+# ---------------------------------------------------------------------------
+
+_SPEC_PATH_SCHEMA = {
+    "spec_id": Str(required=True, remediation='Call spec(action="list") to locate the correct spec_id'),
+    "path": Str(),
+}
+
+_MOVE_SCHEMA = {
+    **_SPEC_PATH_SCHEMA,
+    "to_folder": Str(required=True, choices=frozenset(VALID_FOLDERS),
+                     remediation="Use one of: pending, active, completed, archived"),
+}
+
+_COMPLETE_SCHEMA = {
+    **_SPEC_PATH_SCHEMA,
+    "force": Bool(default=False),
+}
 
 
 def _resolve_workspace_for_write_lock(
@@ -234,57 +252,21 @@ def _state_response(
     )
 
 
-def _handle_move(
-    *,
-    config: ServerConfig,
-    spec_id: Optional[str] = None,
-    to_folder: Optional[str] = None,
-    path: Optional[str] = None,
-    force: Optional[bool] = None,  # Unused, accepted for router compatibility
-    bypass_autonomy_lock: Optional[bool] = False,
-    bypass_reason: Optional[str] = None,
-) -> dict:
+def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     action = "move"
     request_id = _request_id()
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec identifier",
-            remediation='Call spec(action="list") to locate the correct spec_id',
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    err = validate_payload(payload, _MOVE_SCHEMA,
+                           tool_name="lifecycle", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    if not isinstance(to_folder, str) or not to_folder.strip():
-        return _validation_error(
-            action=action,
-            field="to_folder",
-            message="Provide the destination folder",
-            remediation="Use one of: pending, active, completed, archived",
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
-
-    normalized_folder = to_folder.strip().lower()
-    if normalized_folder not in VALID_FOLDERS:
-        return _validation_error(
-            action=action,
-            field="to_folder",
-            message=f"Unsupported folder '{to_folder}'.",
-            remediation="Use one of: pending, active, completed, archived",
-            request_id=request_id,
-            code=ErrorCode.INVALID_FORMAT,
-        )
-
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
+    spec_id = payload["spec_id"]
+    normalized_folder = payload["to_folder"].lower()
+    path = payload.get("path")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
@@ -292,7 +274,7 @@ def _handle_move(
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -306,13 +288,13 @@ def _handle_move(
         "tool_invocation",
         tool="lifecycle",
         action=action,
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         to_folder=normalized_folder,
     )
 
     start = time.perf_counter()
     try:
-        result = move_spec(spec_id.strip(), normalized_folder, specs_dir)
+        result = move_spec(spec_id, normalized_folder, specs_dir)
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error moving spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
@@ -335,36 +317,20 @@ def _handle_move(
     )
 
 
-def _handle_activate(
-    *,
-    config: ServerConfig,
-    spec_id: Optional[str] = None,
-    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
-    path: Optional[str] = None,
-    force: Optional[bool] = None,  # Unused, accepted for router compatibility
-    bypass_autonomy_lock: Optional[bool] = False,
-    bypass_reason: Optional[str] = None,
-) -> dict:
+def _handle_activate(*, config: ServerConfig, **payload: Any) -> dict:
     action = "activate"
     request_id = _request_id()
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec identifier",
-            remediation='Call spec(action="list") to locate the correct spec_id',
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    err = validate_payload(payload, _SPEC_PATH_SCHEMA,
+                           tool_name="lifecycle", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
+    spec_id = payload["spec_id"]
+    path = payload.get("path")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
@@ -372,7 +338,7 @@ def _handle_activate(
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -386,12 +352,12 @@ def _handle_activate(
         "tool_invocation",
         tool="lifecycle",
         action=action,
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
     )
 
     start = time.perf_counter()
     try:
-        result = activate_spec(spec_id.strip(), specs_dir)
+        result = activate_spec(spec_id, specs_dir)
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error activating spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
@@ -414,44 +380,21 @@ def _handle_activate(
     )
 
 
-def _handle_complete(
-    *,
-    config: ServerConfig,
-    spec_id: Optional[str] = None,
-    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
-    force: Optional[bool] = False,
-    path: Optional[str] = None,
-    bypass_autonomy_lock: Optional[bool] = False,
-    bypass_reason: Optional[str] = None,
-) -> dict:
+def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
     action = "complete"
     request_id = _request_id()
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec identifier",
-            remediation='Call spec(action="list") to locate the correct spec_id',
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    err = validate_payload(payload, _COMPLETE_SCHEMA,
+                           tool_name="lifecycle", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    if force is not None and not isinstance(force, bool):
-        return _validation_error(
-            action=action,
-            field="force",
-            message="Force flag must be boolean",
-            request_id=request_id,
-        )
-
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
+    spec_id = payload["spec_id"]
+    force = payload.get("force", False)
+    path = payload.get("path")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
@@ -459,7 +402,7 @@ def _handle_complete(
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -473,13 +416,13 @@ def _handle_complete(
         "tool_invocation",
         tool="lifecycle",
         action=action,
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         force=bool(force),
     )
 
     start = time.perf_counter()
     try:
-        result = complete_spec(spec_id.strip(), specs_dir, force=bool(force))
+        result = complete_spec(spec_id, specs_dir, force=bool(force))
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error completing spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
@@ -502,36 +445,20 @@ def _handle_complete(
     )
 
 
-def _handle_archive(
-    *,
-    config: ServerConfig,
-    spec_id: Optional[str] = None,
-    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
-    path: Optional[str] = None,
-    force: Optional[bool] = None,  # Unused, accepted for router compatibility
-    bypass_autonomy_lock: Optional[bool] = False,
-    bypass_reason: Optional[str] = None,
-) -> dict:
+def _handle_archive(*, config: ServerConfig, **payload: Any) -> dict:
     action = "archive"
     request_id = _request_id()
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec identifier",
-            remediation='Call spec(action="list") to locate the correct spec_id',
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    err = validate_payload(payload, _SPEC_PATH_SCHEMA,
+                           tool_name="lifecycle", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
+    spec_id = payload["spec_id"]
+    path = payload.get("path")
+    bypass_autonomy_lock = payload.get("bypass_autonomy_lock", False)
+    bypass_reason = payload.get("bypass_reason")
 
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
@@ -539,7 +466,7 @@ def _handle_archive(
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
         workspace=workspace_root,
         bypass_autonomy_lock=bool(bypass_autonomy_lock),
         bypass_reason=bypass_reason,
@@ -553,12 +480,12 @@ def _handle_archive(
         "tool_invocation",
         tool="lifecycle",
         action=action,
-        spec_id=spec_id.strip(),
+        spec_id=spec_id,
     )
 
     start = time.perf_counter()
     try:
-        result = archive_spec(spec_id.strip(), specs_dir)
+        result = archive_spec(spec_id, specs_dir)
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error archiving spec")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
@@ -581,34 +508,18 @@ def _handle_archive(
     )
 
 
-def _handle_state(
-    *,
-    config: ServerConfig,
-    spec_id: Optional[str] = None,
-    to_folder: Optional[str] = None,  # Unused, accepted for router compatibility
-    path: Optional[str] = None,
-    force: Optional[bool] = None,  # Unused, accepted for router compatibility
-) -> dict:
+def _handle_state(*, config: ServerConfig, **payload: Any) -> dict:
     action = "state"
     request_id = _request_id()
 
-    if not isinstance(spec_id, str) or not spec_id.strip():
-        return _validation_error(
-            action=action,
-            field="spec_id",
-            message="Provide a non-empty spec identifier",
-            remediation='Call spec(action="list") to locate the correct spec_id',
-            request_id=request_id,
-            code=ErrorCode.MISSING_REQUIRED,
-        )
+    err = validate_payload(payload, _SPEC_PATH_SCHEMA,
+                           tool_name="lifecycle", action=action,
+                           request_id=request_id)
+    if err:
+        return err
 
-    if path is not None and not isinstance(path, str):
-        return _validation_error(
-            action=action,
-            field="path",
-            message="Workspace path must be a string",
-            request_id=request_id,
-        )
+    spec_id = payload["spec_id"]
+    path = payload.get("path")
 
     specs_dir, specs_err = resolve_specs_dir(config, path)
     if specs_err:
@@ -616,7 +527,7 @@ def _handle_state(
 
     start = time.perf_counter()
     try:
-        state = get_lifecycle_state(spec_id.strip(), specs_dir)
+        state = get_lifecycle_state(spec_id, specs_dir)
     except Exception as exc:  # pragma: no cover - defensive guard
         logger.exception("Unexpected error fetching lifecycle state")
         _metrics.counter(_metric_name(action), labels={"status": "exception"})
@@ -636,7 +547,7 @@ def _handle_state(
         _metrics.counter(_metric_name(action), labels={"status": "not_found"})
         return asdict(
             error_response(
-                f"Spec '{spec_id.strip()}' not found",
+                f"Spec '{spec_id}' not found",
                 error_code=ErrorCode.SPEC_NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
                 remediation='Verify the spec exists via spec(action="list")',

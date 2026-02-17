@@ -42,62 +42,6 @@ def get_fix_actions(
     return actions
 
 
-def _build_fix_action(
-    diag: Diagnostic, spec_data: Dict[str, Any], hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
-    """Build a fix action for a diagnostic."""
-    code = diag.code
-
-    if code == "INVALID_DATE_FORMAT":
-        return _build_date_fix(diag, spec_data)
-
-    if code == "PARENT_CHILD_MISMATCH":
-        return _build_hierarchy_align_fix(diag, hierarchy)
-
-    if code == "ORPHANED_NODES":
-        return _build_orphan_fix(diag, hierarchy)
-
-    if code == "INVALID_ROOT_PARENT":
-        return _build_root_parent_fix(diag, hierarchy)
-
-    if code == "MISSING_NODE_FIELD":
-        return _build_missing_fields_fix(diag, hierarchy)
-
-    if code == "INVALID_NODE_TYPE":
-        return _build_type_normalize_fix(diag, hierarchy)
-
-    if code == "INVALID_STATUS":
-        return _build_status_normalize_fix(diag, hierarchy)
-
-    if code == "EMPTY_TITLE":
-        return _build_title_generate_fix(diag, hierarchy)
-
-    if code in [
-        "TOTAL_TASKS_MISMATCH",
-        "COMPLETED_TASKS_MISMATCH",
-        "COMPLETED_EXCEEDS_TOTAL",
-        "INVALID_LEAF_COUNT",
-    ]:
-        return _build_counts_fix(diag, spec_data)
-
-    if code == "BIDIRECTIONAL_INCONSISTENCY":
-        return _build_bidirectional_fix(diag, hierarchy)
-
-    if code == "INVALID_DEPENDENCIES_TYPE":
-        return _build_deps_structure_fix(diag, hierarchy)
-
-    if code == "MISSING_VERIFICATION_TYPE":
-        return _build_verification_type_fix(diag, hierarchy)
-
-    if code == "INVALID_VERIFICATION_TYPE":
-        return _build_invalid_verification_type_fix(diag, hierarchy)
-
-    # INVALID_TASK_CATEGORY auto-fix disabled - manual correction required
-    # if code == "INVALID_TASK_CATEGORY":
-    #     return _build_task_category_fix(diag, hierarchy)
-
-    return None
-
 
 def _build_date_fix(diag: Diagnostic, spec_data: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for date normalization."""
@@ -534,3 +478,56 @@ def _build_task_category_fix(
         preview=f"Set task_category to 'implementation' for {node_id}",
         apply=apply,
     )
+
+
+# ---------------------------------------------------------------------------
+# Dispatch tables — keyed by diagnostic code, split by argument shape.
+# ---------------------------------------------------------------------------
+
+# Handlers that take (diag, spec_data):
+_SPEC_DATA_HANDLERS: Dict[str, Any] = {
+    "INVALID_DATE_FORMAT": _build_date_fix,
+}
+
+# Handlers that take (diag, hierarchy):
+_HIERARCHY_HANDLERS: Dict[str, Any] = {
+    "PARENT_CHILD_MISMATCH": _build_hierarchy_align_fix,
+    "ORPHANED_NODES": _build_orphan_fix,
+    "INVALID_ROOT_PARENT": _build_root_parent_fix,
+    "MISSING_NODE_FIELD": _build_missing_fields_fix,
+    "INVALID_NODE_TYPE": _build_type_normalize_fix,
+    "INVALID_STATUS": _build_status_normalize_fix,
+    "EMPTY_TITLE": _build_title_generate_fix,
+    "BIDIRECTIONAL_INCONSISTENCY": _build_bidirectional_fix,
+    "INVALID_DEPENDENCIES_TYPE": _build_deps_structure_fix,
+    "MISSING_VERIFICATION_TYPE": _build_verification_type_fix,
+    "INVALID_VERIFICATION_TYPE": _build_invalid_verification_type_fix,
+}
+
+# Codes that all route to _build_counts_fix(diag, spec_data):
+_COUNTS_CODES = frozenset({
+    "TOTAL_TASKS_MISMATCH",
+    "COMPLETED_TASKS_MISMATCH",
+    "COMPLETED_EXCEEDS_TOTAL",
+    "INVALID_LEAF_COUNT",
+})
+
+
+def _build_fix_action(
+    diag: Diagnostic, spec_data: Dict[str, Any], hierarchy: Dict[str, Any]
+) -> Optional[FixAction]:
+    """Build a fix action for a diagnostic."""
+    code = diag.code
+
+    handler = _SPEC_DATA_HANDLERS.get(code)
+    if handler:
+        return handler(diag, spec_data)
+
+    handler = _HIERARCHY_HANDLERS.get(code)
+    if handler:
+        return handler(diag, hierarchy)
+
+    if code in _COUNTS_CODES:
+        return _build_counts_fix(diag, spec_data)
+
+    return None

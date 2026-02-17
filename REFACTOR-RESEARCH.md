@@ -7,7 +7,7 @@
 
 ## 1. Declarative Parameter Validation Framework — IN PROGRESS
 
-### Status: Waves 1-3 complete (44/46 handlers migrated)
+### Status: Waves 1-4 complete (54 handlers migrated)
 
 **Framework built** (`tools/unified/param_schema.py`, ~270 lines):
 - 6 schema types: `Str`, `Num`, `Bool`, `List_`, `Dict_`, `AtLeastOne`
@@ -37,8 +37,15 @@
 
 **Known framework limitation**: Schema supports single `error_code` per field. Fields needing `MISSING_REQUIRED` for absence but `INVALID_FORMAT` for type errors must stay imperative (e.g., `phase_move.position`). Fields with strip-or-None semantics (`description.strip() or None`) also stay imperative since schema strips but doesn't convert empty to None.
 
-**Remaining work** (Wave 4):
-- 21 handlers in other tool modules (`spec.py`, `lifecycle.py`, `verification.py`, `provider.py`); plus 20 deferred (`research.py`, `plan.py`, `review.py`)
+**Wave 4 migrated** (10 handlers, ~40 `_validation_error` calls eliminated):
+- `lifecycle.py` — 5 handlers (move, activate, complete, archive, state); shared `_SPEC_PATH_SCHEMA` base with per-handler extensions
+- `verification.py` — 2 handlers (add, execute); `result` field uses `choices` for PASSED/FAILED/PARTIAL
+- `provider.py` — 3 handlers (list, status, execute); `_handle_execute` was largest (11 imperative calls → 1 schema)
+
+**Remaining work** (Wave 5 — deferred):
+- 20+ handlers in `research_handlers/` (uses simplified validation pattern, separate test suites)
+- `spec.py` handlers already use `error_response()` directly — no migration needed
+- `plan.py` and `review.py` — 0 `_validation_error` calls, no migration needed
 
 ### Original Scale
 
@@ -121,24 +128,16 @@ core/errors/
 
 ---
 
-## 5. Tool Registration Signature Bloat (Medium-High)
-
-### Status: Research tool done, task/authoring remaining
+## 5. Tool Registration Signature Bloat — DONE
 
 **Finding**: `**kwargs` passthrough is **not viable** — FastMCP generates MCP tool parameter schemas by inspecting function signatures. Removing explicit params produces a broken schema. The viable approach is `locals()` passthrough in the function body, which eliminates the manual dict-packing while preserving the schema.
 
 **Research tool** — Done (Wave 4 above). Body reduced from 40 lines to `return _dispatch_research_action(**locals())`.
 
-### Remaining Files
-
-| File | Parameters | Boilerplate Lines |
-|------|-----------|-------------------|
-| `task_handlers/__init__.py` | 55+ | ~200 (manual `payload = {...}`) |
-| `authoring_handlers/__init__.py` | 40+ | ~150 (manual `payload = {...}`) |
-
-### Recommendation
-
-Apply same `locals()` passthrough pattern used for research. For task/authoring, the dispatch functions take `payload` dicts, so the pattern would be: `payload = {k: v for k, v in locals().items() if k != "action"}` followed by `_dispatch_*_action(action=action, payload=payload, config=config)`.
+**Task/Authoring tools** — Done. Applied `locals()` filter pattern:
+- `task_handlers/__init__.py` — replaced ~83-line manual payload dict with 1-line `locals()` filter
+- `authoring_handlers/__init__.py` — replaced ~40-line manual payload dict with 1-line `locals()` filter
+- Pattern: `payload = {k: v for k, v in locals().items() if k not in ("action", "config")}`
 
 ---
 
@@ -252,33 +251,14 @@ Extract generic `_execute_phase_async(phase_name, executor, timeout)` method. Ea
 
 ---
 
-## 9. Dispatch Dictionary for Validation Fixes (Low — Quick Win)
+## 9. Dispatch Dictionary for Validation Fixes — DONE
 
-### Problem
+Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` with two dispatch dicts split by argument shape:
+- `_SPEC_DATA_HANDLERS` — handlers taking `(diag, spec_data)` (1 entry)
+- `_HIERARCHY_HANDLERS` — handlers taking `(diag, hierarchy)` (11 entries)
+- `_COUNTS_CODES` frozenset — 4 codes routing to `_build_counts_fix(diag, spec_data)`
 
-`core/validation.py:1164-1218` uses 12 sequential `if code ==` statements:
-
-```python
-if code == "INVALID_DATE_FORMAT":
-    return _build_date_fix(diag, spec_data)
-if code == "PARENT_CHILD_MISMATCH":
-    return _build_hierarchy_align_fix(diag, hierarchy)
-# ... 10 more
-```
-
-### Fix
-
-```python
-FIX_HANDLERS = {
-    "INVALID_DATE_FORMAT": _build_date_fix,
-    "PARENT_CHILD_MISMATCH": _build_hierarchy_align_fix,
-    ...
-}
-handler = FIX_HANDLERS.get(code)
-return handler(diag, spec_data) if handler else None
-```
-
-3-line change, cleaner and extensible.
+`_build_fix_action` body reduced from 30+ lines to 10 lines (3 dict lookups + 1 set membership test).
 
 ---
 

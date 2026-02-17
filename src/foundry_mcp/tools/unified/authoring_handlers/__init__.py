@@ -125,47 +125,7 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
     ) -> dict:
         """Execute authoring workflows via the action router."""
 
-        payload = {
-            "spec_id": spec_id,
-            "name": name,
-            "template": template,
-            "category": category,
-            "mission": mission,
-            "template_action": template_action,
-            "template_name": template_name,
-            "key": key,
-            "value": value,
-            "title": title,
-            "description": description,
-            "purpose": purpose,
-            "estimated_hours": estimated_hours,
-            "position": position,
-            "link_previous": link_previous,
-            "phase_id": phase_id,
-            "force": force,
-            "text": text,
-            "assumption_type": assumption_type,
-            "author": author,
-            "version": version,
-            "changes": changes,
-            "tasks": tasks,
-            "phase": phase,
-            "metadata_defaults": metadata_defaults,
-            "dry_run": dry_run,
-            "path": path,
-            # spec-find-replace parameters
-            "find": find,
-            "replace": replace,
-            "scope": scope,
-            "use_regex": use_regex,
-            "case_sensitive": case_sensitive,
-            # intake parameters
-            "priority": priority,
-            "tags": tags,
-            "source": source,
-            "requester": requester,
-            "idempotency_key": idempotency_key,
-        }
+        payload = {k: v for k, v in locals().items() if k not in ("action", "config")}
         return _dispatch_authoring_action(action=action, payload=payload, config=config)
 
     logger.debug("Registered unified authoring tool")
