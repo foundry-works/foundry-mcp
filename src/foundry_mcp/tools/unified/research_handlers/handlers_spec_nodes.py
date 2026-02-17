@@ -18,8 +18,35 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.validation.constants import VALID_RESEARCH_RESULTS
+from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 
 from ._helpers import _get_config, _get_memory, _validation_error
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_NODE_EXECUTE_SCHEMA = {
+    "spec_id": Str(required=True),
+    "research_node_id": Str(required=True),
+}
+
+_NODE_RECORD_SCHEMA = {
+    "spec_id": Str(required=True),
+    "research_node_id": Str(required=True),
+    "result": Str(required=True, choices=frozenset(VALID_RESEARCH_RESULTS)),
+}
+
+_NODE_STATUS_SCHEMA = {
+    "spec_id": Str(required=True),
+    "research_node_id": Str(required=True),
+}
+
+_NODE_FINDINGS_SCHEMA = {
+    "spec_id": Str(required=True),
+    "research_node_id": Str(required=True),
+}
 
 
 def _load_research_node(
@@ -69,10 +96,10 @@ def _handle_node_execute(
     from datetime import datetime, timezone
     from foundry_mcp.core.spec import save_spec, find_specs_directory
 
-    if not spec_id:
-        return _validation_error(field="spec_id", action="node-execute", message="Required")
-    if not research_node_id:
-        return _validation_error(field="research_node_id", action="node-execute", message="Required")
+    payload = {"spec_id": spec_id, "research_node_id": research_node_id}
+    err = validate_payload(payload, _NODE_EXECUTE_SCHEMA, tool_name="research", action="node-execute")
+    if err:
+        return err
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -88,6 +115,7 @@ def _handle_node_execute(
     research_type = metadata.get("research_type", "consensus")
     query = prompt or metadata.get("query", "")
 
+    # Imperative: query depends on runtime metadata fallback
     if not query:
         return _validation_error(field="query", action="node-execute", message="No query found in node or prompt parameter")
 
@@ -174,16 +202,11 @@ def _handle_node_record(
     """Record research findings to spec node."""
     from datetime import datetime, timezone
     from foundry_mcp.core.spec import save_spec, find_specs_directory
-    from foundry_mcp.core.validation.constants import VALID_RESEARCH_RESULTS
 
-    if not spec_id:
-        return _validation_error(field="spec_id", action="node-record", message="Required")
-    if not research_node_id:
-        return _validation_error(field="research_node_id", action="node-record", message="Required")
-    if not result:
-        return _validation_error(field="result", action="node-record", message="Required (completed, inconclusive, blocked, cancelled)")
-    if result not in VALID_RESEARCH_RESULTS:
-        return _validation_error(field="result", action="node-record", message=f"Must be one of: {', '.join(sorted(VALID_RESEARCH_RESULTS))}")
+    payload = {"spec_id": spec_id, "research_node_id": research_node_id, "result": result}
+    err = validate_payload(payload, _NODE_RECORD_SCHEMA, tool_name="research", action="node-record")
+    if err:
+        return err
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -261,10 +284,10 @@ def _handle_node_status(
     **kwargs: Any,
 ) -> dict:
     """Get research node status and linked session info."""
-    if not spec_id:
-        return _validation_error(field="spec_id", action="node-status", message="Required")
-    if not research_node_id:
-        return _validation_error(field="research_node_id", action="node-status", message="Required")
+    payload = {"spec_id": spec_id, "research_node_id": research_node_id}
+    err = validate_payload(payload, _NODE_STATUS_SCHEMA, tool_name="research", action="node-status")
+    if err:
+        return err
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -304,10 +327,10 @@ def _handle_node_findings(
     **kwargs: Any,
 ) -> dict:
     """Retrieve recorded findings from spec node."""
-    if not spec_id:
-        return _validation_error(field="spec_id", action="node-findings", message="Required")
-    if not research_node_id:
-        return _validation_error(field="research_node_id", action="node-findings", message="Required")
+    payload = {"spec_id": spec_id, "research_node_id": research_node_id}
+    err = validate_payload(payload, _NODE_FINDINGS_SCHEMA, tool_name="research", action="node-findings")
+    if err:
+        return err
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:

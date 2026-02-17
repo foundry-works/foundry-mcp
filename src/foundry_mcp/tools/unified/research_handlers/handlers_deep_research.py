@@ -12,8 +12,25 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 
 from ._helpers import _get_config, _get_memory, _validation_error
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_DR_STATUS_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+_DR_REPORT_SCHEMA = {
+    "research_id": Str(required=True),
+}
+
+_DR_DELETE_SCHEMA = {
+    "research_id": Str(required=True),
+}
 
 
 def _handle_deep_research(
@@ -137,8 +154,10 @@ def _handle_deep_research_status(
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research-status action."""
-    if not research_id:
-        return _validation_error(field="research_id", action="deep-research-status", message="Required")
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_STATUS_SCHEMA, tool_name="research", action="deep-research-status")
+    if err:
+        return err
 
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
@@ -181,8 +200,10 @@ def _handle_deep_research_report(
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research-report action."""
-    if not research_id:
-        return _validation_error(field="research_id", action="deep-research-report", message="Required")
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_REPORT_SCHEMA, tool_name="research", action="deep-research-report")
+    if err:
+        return err
 
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
@@ -257,8 +278,10 @@ def _handle_deep_research_delete(
     **kwargs: Any,
 ) -> dict:
     """Handle deep-research-delete action."""
-    if not research_id:
-        return _validation_error(field="research_id", action="deep-research-delete", message="Required")
+    payload = {"research_id": research_id}
+    err = validate_payload(payload, _DR_DELETE_SCHEMA, tool_name="research", action="deep-research-delete")
+    if err:
+        return err
 
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())

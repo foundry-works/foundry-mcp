@@ -5,9 +5,9 @@
 
 ---
 
-## 1. Declarative Parameter Validation Framework — IN PROGRESS
+## 1. Declarative Parameter Validation Framework — DONE
 
-### Status: Waves 1-4 complete (54 handlers migrated)
+### Status: Waves 1-5 complete (69 handlers migrated)
 
 **Framework built** (`tools/unified/param_schema.py`, ~270 lines):
 - 6 schema types: `Str`, `Num`, `Bool`, `List_`, `Dict_`, `AtLeastOne`
@@ -42,25 +42,33 @@
 - `verification.py` — 2 handlers (add, execute); `result` field uses `choices` for PASSED/FAILED/PARTIAL
 - `provider.py` — 3 handlers (list, status, execute); `_handle_execute` was largest (11 imperative calls → 1 schema)
 
-**Remaining work** (Wave 5 — deferred):
-- 20+ handlers in `research_handlers/` (uses simplified validation pattern, separate test suites)
-- `spec.py` handlers already use `error_response()` directly — no migration needed
-- `plan.py` and `review.py` — 0 `_validation_error` calls, no migration needed
+**Wave 5 migrated** (15 research handlers, ~21 `_validation_error`/`error_response` validation calls eliminated):
+- `handlers_threads.py` — 3 handlers (thread-list w/ enum choices, thread-get, thread-delete)
+- `handlers_workflows.py` — 4 handlers (chat, consensus w/ enum choices, thinkdeep w/ AtLeastOne, ideate w/ AtLeastOne)
+- `handlers_deep_research.py` — 3 handlers (status, report, delete); `_handle_deep_research` kept imperative (2 action-conditional checks)
+- `handlers_spec_nodes.py` — 4 handlers (execute, record w/ choices, status, findings); `_handle_node_execute` kept imperative (2 runtime-dependent checks: query metadata fallback, research_type validation)
+- `handlers_extract.py` — 1 handler (extract w/ List_); API key config check and exception routing kept imperative
 
-### Original Scale
+**Imperative remainders** (4 calls across 2 handlers — irreducibly runtime-dependent):
+- `_handle_deep_research`: 2 calls (query required when action=="start", research_id required when action=="continue")
+- `_handle_node_execute`: 2 calls (query from param or metadata fallback, unsupported research_type)
 
-| Metric | Count |
-|--------|-------|
-| Handler functions | 46 |
-| `_validation_error()` calls | 346 |
-| Distinct parameter names | 85 |
-| Files with validation boilerplate | 14+ |
+### Final Tally
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Handlers with imperative validation | 69 | 4 (runtime-dependent remainders) |
+| `_validation_error()` calls | ~370 | 4 |
+| Distinct parameter names | 85+ | — |
+| Files with validation boilerplate | 19 | 2 (deep_research, spec_nodes) |
+| Test suite | 5,201 passing | 5,201 passing (0 regressions) |
 
 ### Impact
 
 - ~15-20% codebase reduction in handler files
 - Eliminates entire class of copy-paste validation bugs
 - Makes adding new handlers trivial (schema only, no validation code)
+- All 5 waves completed across authoring, task, lifecycle, provider, verification, and research handler families
 
 ---
 
@@ -251,7 +259,7 @@ Replaced 12 sequential `if code ==` statements in `core/validation/fixes.py` wit
 
 | Priority | Item | Status | Effort | Impact |
 |----------|------|--------|--------|--------|
-| 1 | Declarative parameter validation framework | **In progress** (44/46 handlers, Waves 1-3 done) | 2-3 days remaining (Wave 4) | Highest ROI, ~15-20% handler reduction |
+| 1 | Declarative parameter validation framework | **Done** (69 handlers, Waves 1-5) | — | Highest ROI, ~15-20% handler reduction |
 | 2 | Unify error hierarchies | **Done** | — | Prerequisite for cleaner error handling |
 | 3 | Split god objects | **Done** (Waves 1-4) | — | Improves testability and maintainability |
 | 4 | Research sub-handlers | **Done** (Waves 1-4) | — | Consistency win, follows existing pattern |

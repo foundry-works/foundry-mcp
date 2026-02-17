@@ -13,8 +13,25 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 
-from ._helpers import _get_config, _get_memory, _validation_error
+from ._helpers import _get_config, _get_memory
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_THREAD_LIST_SCHEMA = {
+    "status": Str(choices=frozenset(s.value for s in ThreadStatus)),
+}
+
+_THREAD_GET_SCHEMA = {
+    "thread_id": Str(required=True),
+}
+
+_THREAD_DELETE_SCHEMA = {
+    "thread_id": Str(required=True),
+}
 
 
 def _handle_thread_list(
@@ -24,17 +41,12 @@ def _handle_thread_list(
     **kwargs: Any,
 ) -> dict:
     """Handle thread-list action."""
-    thread_status = None
-    if status:
-        try:
-            thread_status = ThreadStatus(status)
-        except ValueError:
-            valid = [s.value for s in ThreadStatus]
-            return _validation_error(
-                field="status",
-                action="thread-list",
-                message=f"Invalid value. Valid: {valid}",
-            )
+    payload = {"status": status}
+    err = validate_payload(payload, _THREAD_LIST_SCHEMA, tool_name="research", action="thread-list")
+    if err:
+        return err
+
+    thread_status = ThreadStatus(status) if status else None
 
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())
@@ -56,8 +68,10 @@ def _handle_thread_get(
     **kwargs: Any,
 ) -> dict:
     """Handle thread-get action."""
-    if not thread_id:
-        return _validation_error(field="thread_id", action="thread-get", message="Required")
+    payload = {"thread_id": thread_id}
+    err = validate_payload(payload, _THREAD_GET_SCHEMA, tool_name="research", action="thread-get")
+    if err:
+        return err
 
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())
@@ -82,8 +96,10 @@ def _handle_thread_delete(
     **kwargs: Any,
 ) -> dict:
     """Handle thread-delete action."""
-    if not thread_id:
-        return _validation_error(field="thread_id", action="thread-delete", message="Required")
+    payload = {"thread_id": thread_id}
+    err = validate_payload(payload, _THREAD_DELETE_SCHEMA, tool_name="research", action="thread-delete")
+    if err:
+        return err
 
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())

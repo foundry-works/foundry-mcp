@@ -18,8 +18,28 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.param_schema import AtLeastOne, Str, validate_payload
 
-from ._helpers import _get_config, _get_memory, _validation_error
+from ._helpers import _get_config, _get_memory
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_CHAT_SCHEMA = {
+    "prompt": Str(required=True),
+}
+
+_CONSENSUS_SCHEMA = {
+    "prompt": Str(required=True),
+    "strategy": Str(choices=frozenset(s.value for s in ConsensusStrategy)),
+}
+
+_THINKDEEP_SCHEMA: dict = {}
+_THINKDEEP_CROSS_FIELD = [AtLeastOne(fields=("topic", "investigation_id"))]
+
+_IDEATE_SCHEMA: dict = {}
+_IDEATE_CROSS_FIELD = [AtLeastOne(fields=("topic", "ideation_id"))]
 
 
 def _handle_chat(
@@ -35,8 +55,10 @@ def _handle_chat(
     **kwargs: Any,
 ) -> dict:
     """Handle chat action."""
-    if not prompt:
-        return _validation_error(field="prompt", action="chat", message="Required non-empty string")
+    payload = {"prompt": prompt}
+    err = validate_payload(payload, _CHAT_SCHEMA, tool_name="research", action="chat")
+    if err:
+        return err
 
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())
@@ -90,22 +112,13 @@ def _handle_consensus(
     **kwargs: Any,
 ) -> dict:
     """Handle consensus action."""
-    if not prompt:
-        return _validation_error(field="prompt", action="consensus", message="Required non-empty string")
+    payload = {"prompt": prompt, "strategy": strategy}
+    err = validate_payload(payload, _CONSENSUS_SCHEMA, tool_name="research", action="consensus")
+    if err:
+        return err
 
-    # Parse strategy
-    consensus_strategy = ConsensusStrategy.SYNTHESIZE
-    if strategy:
-        try:
-            consensus_strategy = ConsensusStrategy(strategy)
-        except ValueError:
-            valid = [s.value for s in ConsensusStrategy]
-            return _validation_error(
-                field="strategy",
-                action="consensus",
-                message=f"Invalid value. Valid: {valid}",
-                remediation=f"Use one of: {', '.join(valid)}",
-            )
+    # Convert strategy string to enum (schema already validated choices)
+    consensus_strategy = ConsensusStrategy(strategy) if strategy else ConsensusStrategy.SYNTHESIZE
 
     config = _get_config()
     workflow = ConsensusWorkflow(config.research, _get_memory())
@@ -157,12 +170,14 @@ def _handle_thinkdeep(
     **kwargs: Any,
 ) -> dict:
     """Handle thinkdeep action."""
-    if not topic and not investigation_id:
-        return _validation_error(
-            field="topic/investigation_id",
-            action="thinkdeep",
-            message="Either 'topic' (new) or 'investigation_id' (continue) required",
-        )
+    payload = {"topic": topic, "investigation_id": investigation_id}
+    err = validate_payload(
+        payload, _THINKDEEP_SCHEMA,
+        tool_name="research", action="thinkdeep",
+        cross_field_rules=_THINKDEEP_CROSS_FIELD,
+    )
+    if err:
+        return err
 
     config = _get_config()
     workflow = ThinkDeepWorkflow(config.research, _get_memory())
@@ -215,12 +230,14 @@ def _handle_ideate(
     **kwargs: Any,
 ) -> dict:
     """Handle ideate action."""
-    if not topic and not ideation_id:
-        return _validation_error(
-            field="topic/ideation_id",
-            action="ideate",
-            message="Either 'topic' (new) or 'ideation_id' (continue) required",
-        )
+    payload = {"topic": topic, "ideation_id": ideation_id}
+    err = validate_payload(
+        payload, _IDEATE_SCHEMA,
+        tool_name="research", action="ideate",
+        cross_field_rules=_IDEATE_CROSS_FIELD,
+    )
+    if err:
+        return err
 
     config = _get_config()
     workflow = IdeateWorkflow(config.research, _get_memory())

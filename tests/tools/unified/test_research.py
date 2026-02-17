@@ -647,7 +647,7 @@ class TestResponseEnvelope:
         assert result["success"] is False
         assert "data" in result
         assert "error_code" in result["data"]
-        assert result["data"]["error_code"] == "VALIDATION_ERROR"
+        assert result["data"]["error_code"] == "MISSING_REQUIRED"
 
     def test_error_response_has_error_type(
         self, mock_config, mock_memory

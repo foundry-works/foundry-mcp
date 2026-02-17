@@ -12,8 +12,17 @@ from foundry_mcp.core.responses import (
     error_response,
     success_response,
 )
+from foundry_mcp.tools.unified.param_schema import List_, validate_payload
 
-from ._helpers import _get_config, _validation_error
+from ._helpers import _get_config
+
+# ---------------------------------------------------------------------------
+# Declarative validation schemas
+# ---------------------------------------------------------------------------
+
+_EXTRACT_SCHEMA = {
+    "urls": List_(required=True),
+}
 
 logger = logging.getLogger(__name__)
 
@@ -69,25 +78,10 @@ def _handle_extract(
         SearchProviderError,
     )
 
-    # Validate required parameter
-    if not urls:
-        return asdict(
-            error_response(
-                "urls parameter is required",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-                remediation="Provide a list of URLs to extract content from",
-            )
-        )
-
-    if not isinstance(urls, list) or not all(isinstance(u, str) for u in urls):
-        return asdict(
-            error_response(
-                "urls must be a list of strings",
-                error_code=ErrorCode.VALIDATION_ERROR,
-                error_type=ErrorType.VALIDATION,
-            )
-        )
+    payload = {"urls": urls}
+    err = validate_payload(payload, _EXTRACT_SCHEMA, tool_name="research", action="extract")
+    if err:
+        return err
 
     # Get API key from config or environment
     config = _get_config()
