@@ -45,22 +45,28 @@ class MockWorkflowResult:
 @pytest.fixture
 def mock_config(tmp_path: Path):
     """Mock server config for testing."""
-    with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
-        mock_cfg = MagicMock()
-        mock_cfg.research.enabled = True
-        mock_cfg.get_research_dir.return_value = tmp_path
-        mock_cfg.research.ttl_hours = 24
-        mock_get_config.return_value = mock_cfg
-        yield mock_cfg
+    import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
+
+    mock_cfg = MagicMock()
+    mock_cfg.research.enabled = True
+    mock_cfg.get_research_dir.return_value = tmp_path
+    mock_cfg.research.ttl_hours = 24
+    old_config = _helpers._config
+    _helpers._config = mock_cfg
+    yield mock_cfg
+    _helpers._config = old_config
 
 
 @pytest.fixture
 def mock_memory():
     """Mock research memory instance."""
-    with patch("foundry_mcp.tools.unified.research._get_memory") as mock_get_memory:
-        memory = MagicMock()
-        mock_get_memory.return_value = memory
-        yield memory
+    import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
+
+    memory = MagicMock()
+    old_memory = _helpers._memory
+    _helpers._memory = memory
+    yield memory
+    _helpers._memory = old_memory
 
 
 # =============================================================================
@@ -84,7 +90,7 @@ class TestResearchDispatch:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -105,7 +111,7 @@ class TestResearchDispatch:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.ConsensusWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -130,7 +136,7 @@ class TestResearchDispatch:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.ThinkDeepWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -157,7 +163,7 @@ class TestResearchDispatch:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.IdeateWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -211,7 +217,7 @@ class TestChatHandler:
         from foundry_mcp.tools.unified.research import _handle_chat
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -237,7 +243,7 @@ class TestChatHandler:
         from foundry_mcp.tools.unified.research import _handle_chat
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -289,7 +295,7 @@ class TestConsensusHandler:
         from foundry_mcp.tools.unified.research import _handle_consensus
 
         with patch(
-            "foundry_mcp.tools.unified.research.ConsensusWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -336,7 +342,7 @@ class TestThinkDeepHandler:
         from foundry_mcp.tools.unified.research import _handle_thinkdeep
 
         with patch(
-            "foundry_mcp.tools.unified.research.ThinkDeepWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -366,7 +372,7 @@ class TestThinkDeepHandler:
         from foundry_mcp.tools.unified.research import _handle_thinkdeep
 
         with patch(
-            "foundry_mcp.tools.unified.research.ThinkDeepWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -414,7 +420,7 @@ class TestIdeateHandler:
         from foundry_mcp.tools.unified.research import _handle_ideate
 
         with patch(
-            "foundry_mcp.tools.unified.research.IdeateWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -452,7 +458,7 @@ class TestThreadListHandler:
         from foundry_mcp.tools.unified.research import _handle_thread_list
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.list_threads.return_value = [
@@ -474,7 +480,7 @@ class TestThreadListHandler:
         from foundry_mcp.tools.unified.research import _handle_thread_list
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.list_threads.return_value = [
@@ -518,7 +524,7 @@ class TestThreadGetHandler:
         from foundry_mcp.tools.unified.research import _handle_thread_get
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.get_thread.return_value = {
@@ -538,7 +544,7 @@ class TestThreadGetHandler:
         from foundry_mcp.tools.unified.research import _handle_thread_get
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.get_thread.return_value = None
@@ -569,7 +575,7 @@ class TestThreadDeleteHandler:
         from foundry_mcp.tools.unified.research import _handle_thread_delete
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.delete_thread.return_value = True
@@ -586,7 +592,7 @@ class TestThreadDeleteHandler:
         from foundry_mcp.tools.unified.research import _handle_thread_delete
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.delete_thread.return_value = False
@@ -744,7 +750,7 @@ class TestErrorConditions:
         from foundry_mcp.tools.unified.research import _handle_chat
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -783,7 +789,7 @@ class TestErrorConditions:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.ChatWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
         ) as MockWorkflow:
             # Simulate an exception (e.g., provider API failure)
             MockWorkflow.return_value.execute.side_effect = RuntimeError(
@@ -807,7 +813,7 @@ class TestErrorConditions:
 
         with caplog.at_level(logging.ERROR):
             with patch(
-                "foundry_mcp.tools.unified.research.ChatWorkflow"
+                "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
             ) as MockWorkflow:
                 MockWorkflow.return_value.execute.side_effect = ValueError(
                     "test error"
@@ -924,7 +930,7 @@ class TestDeepResearchTimeoutConfig:
         mock_config.research.deep_research_timeout = 300.0
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -957,7 +963,7 @@ class TestDeepResearchTimeoutConfig:
         mock_config.research.deep_research_timeout = 300.0
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -983,8 +989,9 @@ class TestDeepResearchTimeoutConfig:
     def test_hardcoded_fallback_when_config_missing(self, mock_memory):
         """Hardcoded fallback (600s) used when config field missing."""
         from foundry_mcp.tools.unified.research import _handle_deep_research
+        import foundry_mcp.tools.unified.research_handlers._helpers as _helpers
 
-        with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
+        with patch.object(_helpers, "_get_config") as mock_get_config:
             mock_cfg = MagicMock()
             mock_cfg.research.enabled = True
             # Simulate missing deep_research_timeout by having it return default
@@ -992,7 +999,7 @@ class TestDeepResearchTimeoutConfig:
             mock_get_config.return_value = mock_cfg
 
             with patch(
-                "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+                "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
             ) as MockWorkflow:
                 mock_workflow = MagicMock()
                 mock_workflow.execute.return_value = WorkflowResult(

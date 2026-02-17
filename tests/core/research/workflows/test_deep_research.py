@@ -1199,21 +1199,27 @@ class TestDeepResearchActionHandlers:
     @pytest.fixture
     def mock_tool_config(self, tmp_path: Path):
         """Mock server config for testing."""
-        with patch("foundry_mcp.tools.unified.research._get_config") as mock_get_config:
-            mock_cfg = MagicMock()
-            mock_cfg.research.enabled = True
-            mock_cfg.get_research_dir.return_value = tmp_path
-            mock_cfg.research.ttl_hours = 24
-            mock_get_config.return_value = mock_cfg
-            yield mock_cfg
+        from foundry_mcp.tools.unified.research_handlers import _helpers
+
+        mock_cfg = MagicMock()
+        mock_cfg.research.enabled = True
+        mock_cfg.get_research_dir.return_value = tmp_path
+        mock_cfg.research.ttl_hours = 24
+        old_config = _helpers._config
+        _helpers._config = mock_cfg
+        yield mock_cfg
+        _helpers._config = old_config
 
     @pytest.fixture
     def mock_tool_memory(self):
         """Mock research memory for tool tests."""
-        with patch("foundry_mcp.tools.unified.research._get_memory") as mock_get_memory:
-            memory = MagicMock()
-            mock_get_memory.return_value = memory
-            yield memory
+        from foundry_mcp.tools.unified.research_handlers import _helpers
+
+        memory = MagicMock()
+        old_memory = _helpers._memory
+        _helpers._memory = memory
+        yield memory
+        _helpers._memory = old_memory
 
     def test_dispatch_to_deep_research(
         self, mock_tool_config, mock_tool_memory
@@ -1222,7 +1228,7 @@ class TestDeepResearchActionHandlers:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -1260,7 +1266,7 @@ class TestDeepResearchActionHandlers:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -1288,7 +1294,7 @@ class TestDeepResearchActionHandlers:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.list_sessions.return_value = [
@@ -1311,7 +1317,7 @@ class TestDeepResearchActionHandlers:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.delete_session.return_value = True
@@ -1361,7 +1367,7 @@ class TestDeepResearchActionHandlers:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
@@ -1395,7 +1401,7 @@ class TestDeepResearchActionHandlers:
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
-            "foundry_mcp.tools.unified.research.DeepResearchWorkflow"
+            "foundry_mcp.tools.unified.research_handlers.handlers_deep_research.DeepResearchWorkflow"
         ) as MockWorkflow:
             mock_workflow = MagicMock()
             # Return exactly limit items to trigger next_cursor

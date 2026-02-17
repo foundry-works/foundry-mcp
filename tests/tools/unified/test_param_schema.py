@@ -105,7 +105,7 @@ class TestStr:
     def test_choices_invalid(self):
         schema = {"cat": Str(choices=frozenset({"a", "b", "c"}))}
         result = _validate({"cat": "d"}, schema)
-        _assert_error(result, field="cat", code="VALIDATION_ERROR")
+        _assert_error(result, field="cat", code="INVALID_FORMAT")
 
     def test_choices_after_strip(self):
         schema = {"cat": Str(choices=frozenset({"a", "b"}))}
@@ -115,13 +115,13 @@ class TestStr:
         schema = {"name": Str(min_length=3)}
         assert _validate({"name": "abc"}, schema) is None
         result = _validate({"name": "ab"}, schema)
-        _assert_error(result, field="name", code="VALIDATION_ERROR")
+        _assert_error(result, field="name", code="INVALID_FORMAT")
 
     def test_max_length(self):
         schema = {"name": Str(max_length=5)}
         assert _validate({"name": "hello"}, schema) is None
         result = _validate({"name": "toolong"}, schema)
-        _assert_error(result, field="name", code="VALIDATION_ERROR")
+        _assert_error(result, field="name", code="INVALID_FORMAT")
 
     def test_custom_error_code(self):
         schema = {"x": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED)}

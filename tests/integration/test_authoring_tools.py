@@ -436,7 +436,7 @@ class TestSpecCreation:
         )
 
         assert result["success"] is False
-        assert "VALIDATION_ERROR" in str(result["data"].get("error_code", ""))
+        assert "INVALID_FORMAT" in str(result["data"].get("error_code", ""))
 
     def test_spec_create_validates_category(self, mcp_server):
         """Test spec-create validates category parameter."""
@@ -839,7 +839,7 @@ class TestAuthoringWorkflows:
             template="not_a_real_template",
         )
         assert invalid_result["success"] is False
-        assert invalid_result["data"].get("error_code") == "VALIDATION_ERROR"
+        assert invalid_result["data"].get("error_code") == "INVALID_FORMAT"
 
         # Step 2: Try valid parameters (may fail due to CLI, but should pass validation)
         valid_result = _call_tool(

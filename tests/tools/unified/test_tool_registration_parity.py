@@ -67,7 +67,11 @@ def _live_routers():
     }
 
 
-MANIFEST_EXCLUDED_ROUTERS: set[str] = set()
+MANIFEST_EXCLUDED_ROUTERS: set[str] = {
+    # research_handlers is the module name used in dispatch baselines;
+    # the corresponding tool name "research" is covered by LIVE_ROUTERS.
+    "research_handlers",
+}
 
 LIVE_ROUTERS = _live_routers()
 TOOL_NAMES = sorted(LIVE_ROUTERS.keys())

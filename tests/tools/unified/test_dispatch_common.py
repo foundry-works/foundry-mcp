@@ -37,7 +37,7 @@ DISPATCH_BASELINES = [
     ("lifecycle",     "_dispatch_lifecycle_action",     "_LIFECYCLE_ROUTER",     "lifecycle",     "kw",       "move"),
     ("plan",          "_dispatch_plan_action",          "_PLAN_ROUTER",          "plan",          "pos",      "create"),
     ("provider",      "_dispatch_provider_action",      "_PROVIDER_ROUTER",      "provider",      "kw",       "list"),
-    ("research",      "_dispatch_research_action",      "_RESEARCH_ROUTER",      "research",      "research", "chat"),
+    ("research_handlers", "_dispatch_research_action",   "_RESEARCH_ROUTER",      "research",      "research", "chat"),
     ("review",        "_dispatch_review_action",        "_REVIEW_ROUTER",        "review",        "kw",       "spec"),
     ("server",        "_dispatch_server_action",        "_SERVER_ROUTER",        "server",        "kw",       "tools"),
     ("spec",          "_dispatch_spec_action",          "_SPEC_ROUTER",          "spec",          "kw",       "list"),

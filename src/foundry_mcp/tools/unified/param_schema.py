@@ -11,9 +11,8 @@ change is fully backward-compatible.
 Example::
 
     _SCHEMA = {
-        "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                       remediation="Pass the spec identifier"),
-        "title":   Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
+        "spec_id": Str(required=True, remediation="Pass the spec identifier"),
+        "title":   Str(required=True),
         "hours":   Num(min_val=0),
         "dry_run": Bool(default=False),
     }
@@ -49,7 +48,7 @@ class Str:
     min_length: Optional[int] = None
     max_length: Optional[int] = None
     choices: Optional[FrozenSet[str]] = None
-    error_code: ErrorCode = ErrorCode.VALIDATION_ERROR
+    error_code: ErrorCode = ErrorCode.INVALID_FORMAT
     remediation: Optional[str] = None
 
 
@@ -61,7 +60,7 @@ class Num:
     integer_only: bool = False
     min_val: Optional[Union[int, float]] = None
     max_val: Optional[Union[int, float]] = None
-    error_code: ErrorCode = ErrorCode.VALIDATION_ERROR
+    error_code: ErrorCode = ErrorCode.INVALID_FORMAT
     remediation: Optional[str] = None
 
 
@@ -71,7 +70,7 @@ class Bool:
 
     required: bool = False
     default: Optional[bool] = None
-    error_code: ErrorCode = ErrorCode.VALIDATION_ERROR
+    error_code: ErrorCode = ErrorCode.INVALID_FORMAT
     remediation: Optional[str] = None
 
 
@@ -82,7 +81,7 @@ class List_:
     required: bool = False
     min_items: Optional[int] = None
     max_items: Optional[int] = None
-    error_code: ErrorCode = ErrorCode.VALIDATION_ERROR
+    error_code: ErrorCode = ErrorCode.INVALID_FORMAT
     remediation: Optional[str] = None
 
 
@@ -91,7 +90,7 @@ class Dict_:
     """Dict parameter."""
 
     required: bool = False
-    error_code: ErrorCode = ErrorCode.VALIDATION_ERROR
+    error_code: ErrorCode = ErrorCode.INVALID_FORMAT
     remediation: Optional[str] = None
 
 
@@ -171,8 +170,7 @@ def validate_payload(
             return _error(
                 field_name,
                 f"Provide a non-empty {field_name} parameter",
-                code=spec.error_code if spec.error_code != ErrorCode.VALIDATION_ERROR
-                else ErrorCode.MISSING_REQUIRED,
+                code=ErrorCode.MISSING_REQUIRED,
                 remediation=spec.remediation,
             )
 
@@ -267,8 +265,7 @@ def _check_format(
             return _error(
                 field,
                 f"Provide a non-empty {field} parameter",
-                code=spec.error_code if spec.error_code != ErrorCode.VALIDATION_ERROR
-                else ErrorCode.MISSING_REQUIRED,
+                code=ErrorCode.MISSING_REQUIRED,
                 remediation=spec.remediation,
             )
         if spec.min_length is not None and len(text) < spec.min_length:
