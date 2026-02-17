@@ -2,19 +2,23 @@
 
 import pytest
 
-from foundry_mcp.core.discovery import (
-    SCHEMA_VERSION,
-    ParameterType,
-    ParameterMetadata,
-    ToolMetadata,
-    ToolRegistry,
+from foundry_mcp.core.discovery.capabilities import (
     ServerCapabilities,
     get_capabilities,
     negotiate_capabilities,
     set_capabilities,
+)
+from foundry_mcp.core.discovery.deprecation import (
     deprecated_tool,
-    is_deprecated,
     get_deprecation_info,
+    is_deprecated,
+)
+from foundry_mcp.core.discovery.registry import ToolRegistry
+from foundry_mcp.core.discovery.types import (
+    SCHEMA_VERSION,
+    ParameterMetadata,
+    ParameterType,
+    ToolMetadata,
 )
 
 

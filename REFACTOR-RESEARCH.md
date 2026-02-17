@@ -374,6 +374,46 @@ core/llm_config/
 
 ---
 
+## 14. Discovery Module Decomposition — DONE
+
+### Status: All 4 waves complete (2026-02-17)
+
+Decomposed `core/discovery.py` (1,811 lines, 6 classes, 25 functions — 55% pure declarative metadata dicts) into a `core/discovery/` package with 10 focused sub-modules. Metadata fully separated from infrastructure code.
+
+**Wave 1** — Created package scaffold with `types.py` (ParameterType, ParameterMetadata, ToolMetadata, SCHEMA_VERSION), `registry.py` (ToolRegistry + get_tool_registry), `capabilities.py` (ServerCapabilities + get/negotiate/set). Deleted original `discovery.py`. Created `__init__.py` with re-exports + inline remainder. 5,208 tests passing.
+
+**Wave 2** — Extracted `deprecation.py` (deprecated_tool, is_deprecated, get_deprecation_info), `flags.py` (FeatureFlagDescriptor, AUTONOMY_FEATURE_FLAGS, autonomy helpers), and `metadata/` sub-package with `environment.py`, `llm.py`, `provider.py`. Reduced `__init__.py` to pure re-exports (75 lines). 5,208 tests passing.
+
+**Wave 3** — Migrated all caller import sites to canonical sub-module paths:
+- `tools/unified/server.py` — split into `discovery.capabilities` + `discovery.registry`
+- `tools/unified/context_helpers.py` — moved to `discovery.capabilities`
+- `tests/unit/test_core/test_discovery.py` — split into 4 canonical import groups
+- `tests/unit/test_environment.py` — 8 inline imports → `discovery.metadata`
+- `tests/integration/test_environment_tools.py` — 17 inline imports → `discovery.metadata`, `discovery.flags`, `discovery.registry`
+
+**Wave 4** — Verified zero remaining old-path imports outside `__init__.py` re-exports. All 76 public symbols re-exported in `__init__.py`. Full test suite: 5,208 passed, 48 skipped, 0 failures.
+
+### Final Structure
+
+```
+core/discovery/
+    __init__.py       # Re-exports all public symbols (75 lines)
+    types.py          # ParameterType, ParameterMetadata, ToolMetadata, SCHEMA_VERSION (~170 lines)
+    registry.py       # ToolRegistry + get_tool_registry (~175 lines)
+    capabilities.py   # ServerCapabilities + get/negotiate/set (~260 lines)
+    deprecation.py    # deprecated_tool, is_deprecated, get_deprecation_info (111 lines)
+    flags.py          # FeatureFlagDescriptor, AUTONOMY_FEATURE_FLAGS, autonomy helpers (123 lines)
+    metadata/
+        __init__.py       # Re-exports from environment, llm, provider (33 lines)
+        environment.py    # ENVIRONMENT_TOOL_METADATA + ENVIRONMENT_FEATURE_FLAGS + helpers (272 lines)
+        llm.py            # LLM_TOOL_METADATA + LLM_FEATURE_FLAGS + helpers (382 lines)
+        provider.py       # PROVIDER_TOOL_METADATA + PROVIDER_FEATURE_FLAGS + helpers (331 lines)
+```
+
+5,208 tests passing, 0 regressions across all 4 waves.
+
+---
+
 ## What's Working Well
 
 - **Response envelope consistency**: 100% of production code uses `asdict(success_response(...))` / `asdict(error_response(...))` — zero hand-rolled responses
@@ -405,3 +445,4 @@ core/llm_config/
 | 11 | Research models decomposition | **Done** (Waves 1-4) | — | 33 classes split into 8 sub-modules |
 | 12 | Autonomy models decomposition | **Done** (Waves 1-4) | — | 36 classes split into 8 sub-modules |
 | 13 | LLM config module decomposition | **Done** (Waves 1-4) | — | 7 classes split into 5 sub-modules, 18 callers |
+| 14 | Discovery module decomposition | **Done** (Waves 1-4) | — | 6 classes split into 10 sub-modules, 55% metadata separated |

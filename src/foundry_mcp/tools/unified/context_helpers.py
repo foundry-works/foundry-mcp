@@ -87,7 +87,7 @@ def build_server_context_response(
 
     if include_capabilities:
         try:
-            from foundry_mcp.core.discovery import get_capabilities
+            from foundry_mcp.core.discovery.capabilities import get_capabilities
 
             payload["capabilities"] = get_capabilities(
                 feature_flags=config.feature_flags

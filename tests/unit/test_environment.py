@@ -974,7 +974,7 @@ class TestDiscoveryMetadata:
 
     def test_environment_tool_metadata_exists(self):
         """Test that environment tool metadata is defined."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         expected_tools = [
             "sdd-verify-toolchain",
@@ -988,14 +988,14 @@ class TestDiscoveryMetadata:
 
     def test_environment_feature_flags_exist(self):
         """Test that environment feature flags are defined."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         assert "environment_tools" in ENVIRONMENT_FEATURE_FLAGS
         assert "env_auto_fix" in ENVIRONMENT_FEATURE_FLAGS
 
     def test_environment_tools_flag_is_beta(self):
         """Test environment_tools flag is in beta state."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         flag = ENVIRONMENT_FEATURE_FLAGS["environment_tools"]
         assert flag.state == "beta"
@@ -1004,7 +1004,7 @@ class TestDiscoveryMetadata:
 
     def test_env_auto_fix_flag_is_experimental(self):
         """Test env_auto_fix flag is in experimental state."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_FEATURE_FLAGS
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_FEATURE_FLAGS
 
         flag = ENVIRONMENT_FEATURE_FLAGS["env_auto_fix"]
         assert flag.state == "experimental"
@@ -1014,7 +1014,7 @@ class TestDiscoveryMetadata:
 
     def test_get_environment_capabilities(self):
         """Test get_environment_capabilities returns correct structure."""
-        from foundry_mcp.core.discovery import get_environment_capabilities
+        from foundry_mcp.core.discovery.metadata import get_environment_capabilities
 
         capabilities = get_environment_capabilities()
 
@@ -1025,7 +1025,7 @@ class TestDiscoveryMetadata:
 
     def test_is_environment_tool(self):
         """Test is_environment_tool helper function."""
-        from foundry_mcp.core.discovery import is_environment_tool
+        from foundry_mcp.core.discovery.metadata import is_environment_tool
 
         assert is_environment_tool("sdd-verify-toolchain") is True
         assert is_environment_tool("sdd-init-workspace") is True
@@ -1033,7 +1033,7 @@ class TestDiscoveryMetadata:
 
     def test_get_environment_tool_metadata(self):
         """Test get_environment_tool_metadata helper function."""
-        from foundry_mcp.core.discovery import get_environment_tool_metadata
+        from foundry_mcp.core.discovery.metadata import get_environment_tool_metadata
 
         metadata = get_environment_tool_metadata("sdd-verify-toolchain")
         assert metadata is not None
@@ -1044,7 +1044,7 @@ class TestDiscoveryMetadata:
 
     def test_tool_metadata_has_required_fields(self):
         """Test that tool metadata has all required fields."""
-        from foundry_mcp.core.discovery import ENVIRONMENT_TOOL_METADATA
+        from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         for tool_name, metadata in ENVIRONMENT_TOOL_METADATA.items():
             assert metadata.name == tool_name
