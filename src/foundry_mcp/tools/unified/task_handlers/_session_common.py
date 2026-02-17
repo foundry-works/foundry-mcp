@@ -15,20 +15,19 @@ from typing import Any, Dict, List, Optional
 from foundry_mcp.core.autonomy.memory import (
     VersionConflictError,
 )
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
-    SessionStatus,
-    SessionResponseData,
-    ResumeContext,
-    CompletedTaskSummary,
-    CompletedPhaseSummary,
-    PendingTaskSummary,
-    PhaseGateStatus,
-    RebaseResultDetail,
+from foundry_mcp.core.autonomy.models.enums import PhaseGateStatus, SessionStatus
+from foundry_mcp.core.autonomy.models.responses import (
     ActivePhaseProgress,
+    CompletedPhaseSummary,
+    CompletedTaskSummary,
+    PendingTaskSummary,
+    RebaseResultDetail,
+    ResumeContext,
     RetryCounters,
-    derive_loop_signal,
+    SessionResponseData,
 )
+from foundry_mcp.core.autonomy.models.signals import derive_loop_signal
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.responses import (
     ErrorCode,
     ErrorType,
@@ -118,7 +117,7 @@ def _compute_effective_status(session: AutonomousSessionState) -> Optional[Sessi
 
     Delegates to the shared implementation in models.py to avoid duplication.
     """
-    from foundry_mcp.core.autonomy.models import compute_effective_status
+    from foundry_mcp.core.autonomy.models.signals import compute_effective_status
     return compute_effective_status(session)
 
 

@@ -35,19 +35,18 @@ from ulid import ULID
 
 from foundry_mcp.core.autonomy.context_tracker import ContextTracker
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
     FailureReason,
     GateVerdict,
-    LastStepIssued,
-    LastStepResult,
     PauseReason,
     PhaseGateStatus,
     SessionStatus,
-    SessionStepResponseData,
     StepOutcome,
     StepType,
 )
+from foundry_mcp.core.autonomy.models.responses import SessionStepResponseData
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued, LastStepResult
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,

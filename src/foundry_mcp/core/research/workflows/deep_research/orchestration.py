@@ -12,12 +12,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
-    SourceQuality,
 )
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.sources import SourceQuality
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.core.research.memory import ResearchMemory
-    from foundry_mcp.core.research.models import DeepResearchState
+    from foundry_mcp.core.research.models.deep_research import DeepResearchState
 
 # Track active research sessions for crash recovery
 # Protected by _active_sessions_lock to prevent race conditions during iteration

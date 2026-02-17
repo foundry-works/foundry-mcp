@@ -10,9 +10,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research._helpers import (
     extract_json,

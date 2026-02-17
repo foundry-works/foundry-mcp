@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Optional
 
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
 from foundry_mcp.core import task_registry
-from foundry_mcp.core.research.models import DeepResearchState
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     _active_research_sessions,

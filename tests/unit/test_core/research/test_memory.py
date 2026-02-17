@@ -16,15 +16,17 @@ import pytest
 from pydantic import BaseModel
 
 from foundry_mcp.core.research.memory import FileStorageBackend, ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.consensus import (
     ConsensusConfig,
     ConsensusState,
+)
+from foundry_mcp.core.research.models.conversations import ConversationThread
+from foundry_mcp.core.research.models.enums import (
     ConsensusStrategy,
-    ConversationThread,
-    IdeationState,
-    ThinkDeepState,
     ThreadStatus,
 )
+from foundry_mcp.core.research.models.ideation import IdeationState
+from foundry_mcp.core.research.models.thinkdeep import ThinkDeepState
 
 
 # =============================================================================

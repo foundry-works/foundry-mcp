@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
-from foundry_mcp.core.autonomy.models import (
+from foundry_mcp.core.autonomy.models.signals import (
     derive_loop_signal,
     derive_recommended_actions,
 )

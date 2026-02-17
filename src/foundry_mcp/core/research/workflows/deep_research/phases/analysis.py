@@ -26,14 +26,10 @@ from foundry_mcp.core.research.document_digest import (
     deserialize_payload,
     serialize_payload,
 )
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
-    DeepResearchState,
-    FidelityLevel,
-    PhaseMetrics,
-    ResearchSource,
-    SourceQuality,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.fidelity import FidelityLevel, PhaseMetrics
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor
 from foundry_mcp.core.research.summarization import ContentSummarizer
 from foundry_mcp.core.research.workflows.base import WorkflowResult

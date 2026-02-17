@@ -25,21 +25,22 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Tuple
 from ulid import ULID
 
 from foundry_mcp.core.autonomy.audit import AuditEventType
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
     GatePolicy,
     GateVerdict,
-    LastStepIssued,
-    NextStep,
     PauseReason,
-    PendingGateEvidence,
-    PendingVerificationReceipt,
-    PhaseGateRecord,
     PhaseGateStatus,
     SessionStatus,
-    StepInstruction,
     StepType,
 )
+from foundry_mcp.core.autonomy.models.gates import (
+    PendingGateEvidence,
+    PhaseGateRecord,
+)
+from foundry_mcp.core.autonomy.models.responses import NextStep
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued, StepInstruction
+from foundry_mcp.core.autonomy.models.verification import PendingVerificationReceipt
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )

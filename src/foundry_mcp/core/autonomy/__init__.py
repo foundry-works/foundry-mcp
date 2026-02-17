@@ -15,10 +15,8 @@ Key modules:
 - write_lock: Write-lock enforcement helpers
 """
 
-from .models import (
-    # Constants
+from .models.enums import (
     TERMINAL_STATUSES,
-    # Enums
     SessionStatus,
     PauseReason,
     FailureReason,
@@ -28,31 +26,39 @@ from .models import (
     PhaseGateStatus,
     StepOutcome,
     LoopSignal,
-    # Main state model
-    AutonomousSessionState,
-    # Sub-models
-    LastStepIssued,
+)
+from .models.gates import (
     PendingGateEvidence,
     PendingManualGateAck,
-    SessionCounters,
-    SessionLimits,
-    StopConditions,
-    SessionContext,
     PhaseGateRecord,
-    LastStepResult,
+)
+from .models.responses import (
+    CompletedPhaseSummary,
+    CompletedTaskSummary,
     NextStep,
-    ResumeContext,
+    PendingTaskSummary,
     RebaseResultDetail,
+    RecommendedAction,
+    ResumeContext,
     SessionResponseData,
     SessionStepResponseData,
     SessionSummary,
-    CompletedTaskSummary,
-    CompletedPhaseSummary,
-    PendingTaskSummary,
-    StepInstruction,
-    RecommendedAction,
+)
+from .models.session_config import (
+    SessionContext,
+    SessionCounters,
+    SessionLimits,
+    StopConditions,
+)
+from .models.signals import (
     derive_loop_signal,
     derive_recommended_actions,
+)
+from .models.state import AutonomousSessionState
+from .models.steps import (
+    LastStepIssued,
+    LastStepResult,
+    StepInstruction,
 )
 from .orchestrator import (
     StepOrchestrator,

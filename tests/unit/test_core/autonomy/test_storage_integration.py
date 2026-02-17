@@ -18,7 +18,7 @@ from foundry_mcp.core.autonomy.memory import (
     GC_TTL_DAYS,
     SessionCorrupted,
 )
-from foundry_mcp.core.autonomy.models import SessionStatus
+from foundry_mcp.core.autonomy.models.enums import SessionStatus
 
 from .conftest import make_session
 

@@ -12,10 +12,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.core.research.models import (
-    ConversationThread,
-    ThreadStatus,
-)
+from foundry_mcp.core.research.models.conversations import ConversationThread
+from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 

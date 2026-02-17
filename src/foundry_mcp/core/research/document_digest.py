@@ -48,7 +48,8 @@ from enum import Enum
 from typing import Any, Optional
 
 from foundry_mcp.core.observability import audit_log, get_metrics
-from foundry_mcp.core.research.models import DigestPayload, EvidenceSnippet, SourceQuality
+from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnippet
+from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.pdf_extractor import PDFExtractor
 from foundry_mcp.core.research.summarization import (
     ContentSummarizer,

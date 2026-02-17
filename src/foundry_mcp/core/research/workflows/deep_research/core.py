@@ -41,9 +41,11 @@ from foundry_mcp.core.background_task import BackgroundTask
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
+)
+from foundry_mcp.core.research.models.sources import (
     DOMAIN_TIERS,
     ResearchMode,
     ResearchSource,

@@ -9,11 +9,11 @@ from typing import Any, Optional
 
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.conversations import (
     ConversationMessage,
     ConversationThread,
-    ThreadStatus,
 )
+from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 
 logger = logging.getLogger(__name__)

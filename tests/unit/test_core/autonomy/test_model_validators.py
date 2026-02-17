@@ -10,12 +10,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
-    SessionLimits,
-    SessionStatus,
-    StepProofRecord,
-)
+from foundry_mcp.core.autonomy.models.enums import SessionStatus
+from foundry_mcp.core.autonomy.models.session_config import SessionLimits
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import StepProofRecord
 
 
 class TestSessionLimitsHeartbeatOrdering:

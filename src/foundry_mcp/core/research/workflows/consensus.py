@@ -15,12 +15,12 @@ from foundry_mcp.core.llm_config import ProviderSpec
 from foundry_mcp.core.providers import ProviderHooks, ProviderRequest, ProviderStatus
 from foundry_mcp.core.providers.registry import available_providers, resolve_provider
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.consensus import (
     ConsensusConfig,
     ConsensusState,
-    ConsensusStrategy,
     ModelResponse,
 )
+from foundry_mcp.core.research.models.enums import ConsensusStrategy
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 
 logger = logging.getLogger(__name__)

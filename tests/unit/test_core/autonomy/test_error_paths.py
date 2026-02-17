@@ -15,15 +15,17 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from foundry_mcp.core.autonomy.models import (
-    LastStepIssued,
-    LastStepResult,
-    NextStep,
+from foundry_mcp.core.autonomy.models.enums import (
     PauseReason,
     SessionStatus,
-    StepInstruction,
     StepOutcome,
     StepType,
+)
+from foundry_mcp.core.autonomy.models.responses import NextStep
+from foundry_mcp.core.autonomy.models.steps import (
+    LastStepIssued,
+    LastStepResult,
+    StepInstruction,
 )
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_ALL_TASKS_BLOCKED,
@@ -257,7 +259,7 @@ class TestStepProofExpired:
     def test_expired_proof_returns_error_through_handler(self, tmp_path):
         """A proof consumed beyond grace window returns STEP_PROOF_EXPIRED."""
         from foundry_mcp.core.autonomy.memory import AutonomyStorage
-        from foundry_mcp.core.autonomy.models import StepProofRecord
+        from foundry_mcp.core.autonomy.models.steps import StepProofRecord
 
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
@@ -385,7 +387,7 @@ class TestStepProofConflict:
     def test_conflict_detected_when_payload_differs(self, tmp_path):
         """Same proof token with different payload hash returns PROOF_CONFLICT."""
         from foundry_mcp.core.autonomy.memory import AutonomyStorage
-        from foundry_mcp.core.autonomy.models import StepProofRecord
+        from foundry_mcp.core.autonomy.models.steps import StepProofRecord
 
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,

@@ -15,11 +15,13 @@ import asyncio
 
 import pytest
 
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
-    PhaseMetrics,
+)
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.fidelity import PhaseMetrics
+from foundry_mcp.core.research.models.sources import (
     ResearchMode,
     ResearchSource,
     SourceType,

@@ -37,7 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.sources import (
     ResearchSource,
     SourceQuality,
     SourceType,

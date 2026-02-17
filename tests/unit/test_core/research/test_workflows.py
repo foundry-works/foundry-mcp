@@ -14,7 +14,7 @@ import pytest
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.providers import ProviderResult, ProviderStatus
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.enums import (
     ConfidenceLevel,
     ConsensusStrategy,
     IdeationPhase,
@@ -1090,7 +1090,7 @@ class TestFileStorageRobustness:
     def test_load_handles_concurrent_delete(self, tmp_path: Path):
         """Should handle file being deleted between existence check and read."""
         from foundry_mcp.core.research.memory import FileStorageBackend
-        from foundry_mcp.core.research.models import ConversationThread
+        from foundry_mcp.core.research.models.conversations import ConversationThread
 
         backend = FileStorageBackend(
             storage_path=tmp_path / "threads",
@@ -1105,7 +1105,7 @@ class TestFileStorageRobustness:
     def test_delete_handles_missing_file(self, tmp_path: Path):
         """Should return False when deleting non-existent item."""
         from foundry_mcp.core.research.memory import FileStorageBackend
-        from foundry_mcp.core.research.models import ConversationThread
+        from foundry_mcp.core.research.models.conversations import ConversationThread
 
         backend = FileStorageBackend(
             storage_path=tmp_path / "threads",
@@ -1119,7 +1119,7 @@ class TestFileStorageRobustness:
     def test_delete_cleans_orphaned_lock_files(self, tmp_path: Path):
         """Should clean up orphaned lock files when data file is missing."""
         from foundry_mcp.core.research.memory import FileStorageBackend
-        from foundry_mcp.core.research.models import ConversationThread
+        from foundry_mcp.core.research.models.conversations import ConversationThread
 
         backend = FileStorageBackend(
             storage_path=tmp_path / "threads",
@@ -1141,7 +1141,7 @@ class TestFileStorageRobustness:
     def test_load_with_ttl_expiry_inside_lock(self, tmp_path: Path):
         """Should check expiry inside lock to avoid TOCTOU race."""
         from foundry_mcp.core.research.memory import FileStorageBackend
-        from foundry_mcp.core.research.models import ConversationThread
+        from foundry_mcp.core.research.models.conversations import ConversationThread
         import time
 
         # Create backend with very short TTL

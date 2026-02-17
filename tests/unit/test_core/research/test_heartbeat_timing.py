@@ -12,11 +12,11 @@ import asyncio
 
 import pytest
 
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 

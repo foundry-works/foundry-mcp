@@ -25,19 +25,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
     FailureReason,
     GatePolicy,
-    LastStepIssued,
     PauseReason,
-    PendingManualGateAck,
-    SessionCounters,
-    SessionLimits,
     SessionStatus,
     StepType,
+)
+from foundry_mcp.core.autonomy.models.gates import PendingManualGateAck
+from foundry_mcp.core.autonomy.models.session_config import (
+    SessionCounters,
+    SessionLimits,
     StopConditions,
 )
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued
 from .conftest import make_session, make_spec_data
 
 
@@ -2400,7 +2402,8 @@ class TestOperatorObservabilityFields:
 
         # Manually set last_step_issued on the session to simulate step issuance
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
-        from foundry_mcp.core.autonomy.models import LastStepIssued, StepType
+        from foundry_mcp.core.autonomy.models.enums import StepType
+        from foundry_mcp.core.autonomy.models.steps import LastStepIssued
 
         storage = _get_storage(config, str(workspace))
         session = storage.load(session_id)
@@ -2443,7 +2446,8 @@ class TestOperatorObservabilityFields:
         session_id = data["session_id"]
 
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
-        from foundry_mcp.core.autonomy.models import LastStepIssued, StepType
+        from foundry_mcp.core.autonomy.models.enums import StepType
+        from foundry_mcp.core.autonomy.models.steps import LastStepIssued
 
         storage = _get_storage(config, str(workspace))
         session = storage.load(session_id)

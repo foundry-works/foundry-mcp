@@ -18,19 +18,21 @@ from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.memory import (
     VersionConflictError,
 )
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
+    FailureReason,
+    GatePolicy,
+    OverrideReasonCode,
+    PauseReason,
     SessionStatus,
     TERMINAL_STATUSES,
-    PauseReason,
-    FailureReason,
+)
+from foundry_mcp.core.autonomy.models.session_config import (
+    SessionContext,
     SessionCounters,
     SessionLimits,
     StopConditions,
-    SessionContext,
-    GatePolicy,
-    OverrideReasonCode,
 )
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,

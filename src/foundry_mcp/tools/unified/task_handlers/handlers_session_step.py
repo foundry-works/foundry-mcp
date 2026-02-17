@@ -24,15 +24,17 @@ from typing import Any, Dict, List, Optional
 from pydantic import ValidationError
 
 from foundry_mcp.config.server import ServerConfig
-from foundry_mcp.core.autonomy.models import (
-    LastStepResult,
-    NextStep,
+from foundry_mcp.core.autonomy.models.enums import (
     PhaseGateStatus,
     SessionStatus,
-    SessionStepResponseData,
     StepOutcome,
     StepType,
 )
+from foundry_mcp.core.autonomy.models.responses import (
+    NextStep,
+    SessionStepResponseData,
+)
+from foundry_mcp.core.autonomy.models.steps import LastStepResult
 from foundry_mcp.core.autonomy.orchestrator import (
     OrchestrationResult,
     StepOrchestrator,

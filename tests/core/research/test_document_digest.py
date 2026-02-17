@@ -16,7 +16,7 @@ import unicodedata
 import pytest
 from pydantic import ValidationError
 
-from foundry_mcp.core.research.models import DigestPayload, EvidenceSnippet
+from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnippet
 from foundry_mcp.core.research.document_digest import (
     deserialize_payload,
     serialize_payload,
@@ -1039,7 +1039,7 @@ class TestEligibilityOffPolicy:
             DigestConfig,
             DigestPolicy,
         )
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         mock_summarizer = MagicMock()
         mock_pdf_extractor = MagicMock()
@@ -1052,21 +1052,21 @@ class TestEligibilityOffPolicy:
 
     def test_off_policy_high_quality_ineligible(self, digestor):
         """Test OFF policy rejects HIGH quality content."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 10000  # Long content
         assert digestor._is_eligible(content, SourceQuality.HIGH) is False
 
     def test_off_policy_medium_quality_ineligible(self, digestor):
         """Test OFF policy rejects MEDIUM quality content."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 10000
         assert digestor._is_eligible(content, SourceQuality.MEDIUM) is False
 
     def test_off_policy_any_content_ineligible(self, digestor):
         """Test OFF policy rejects any content regardless of quality."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 10000
         assert digestor._is_eligible(content, SourceQuality.HIGH) is False
@@ -1106,14 +1106,14 @@ class TestEligibilityAlwaysPolicy:
 
     def test_always_policy_low_quality_eligible(self, digestor):
         """Test ALWAYS policy accepts LOW quality content."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "Some content"
         assert digestor._is_eligible(content, SourceQuality.LOW) is True
 
     def test_always_policy_unknown_quality_eligible(self, digestor):
         """Test ALWAYS policy accepts UNKNOWN quality content."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "Some content"
         assert digestor._is_eligible(content, SourceQuality.UNKNOWN) is True
@@ -1154,7 +1154,7 @@ class TestEligibilityAutoPolicy:
             DigestConfig,
             DigestPolicy,
         )
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         mock_summarizer = MagicMock()
         mock_pdf_extractor = MagicMock()
@@ -1171,28 +1171,28 @@ class TestEligibilityAutoPolicy:
 
     def test_auto_policy_high_quality_long_content_eligible(self, digestor):
         """Test AUTO policy accepts HIGH quality content above threshold."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 600  # Above min_content_length
         assert digestor._is_eligible(content, SourceQuality.HIGH) is True
 
     def test_auto_policy_medium_quality_long_content_eligible(self, digestor):
         """Test AUTO policy accepts MEDIUM quality content above threshold."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 600
         assert digestor._is_eligible(content, SourceQuality.MEDIUM) is True
 
     def test_auto_policy_low_quality_ineligible(self, digestor):
         """Test AUTO policy rejects LOW quality content."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 600
         assert digestor._is_eligible(content, SourceQuality.LOW) is False
 
     def test_auto_policy_unknown_quality_ineligible(self, digestor):
         """Test AUTO policy rejects UNKNOWN quality content."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 600
         assert digestor._is_eligible(content, SourceQuality.UNKNOWN) is False
@@ -1204,21 +1204,21 @@ class TestEligibilityAutoPolicy:
 
     def test_auto_policy_short_content_ineligible(self, digestor):
         """Test AUTO policy rejects content below size threshold."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 400  # Below min_content_length of 500
         assert digestor._is_eligible(content, SourceQuality.HIGH) is False
 
     def test_auto_policy_exact_threshold_eligible(self, digestor):
         """Test AUTO policy accepts content exactly at size threshold."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 500  # Exactly at min_content_length
         assert digestor._is_eligible(content, SourceQuality.HIGH) is True
 
     def test_auto_policy_skip_reason_size(self, digestor):
         """Test AUTO policy returns correct skip reason for size."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 100  # Below threshold
         reason = digestor._get_skip_reason(content, SourceQuality.HIGH)
@@ -1227,7 +1227,7 @@ class TestEligibilityAutoPolicy:
 
     def test_auto_policy_skip_reason_quality(self, digestor):
         """Test AUTO policy returns correct skip reason for quality."""
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         content = "x" * 600  # Above size threshold
         reason = digestor._get_skip_reason(content, SourceQuality.LOW)
@@ -1252,7 +1252,7 @@ class TestEligibilityCustomQualityThreshold:
             DigestConfig,
             DigestPolicy,
         )
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         mock_summarizer = MagicMock()
         mock_pdf_extractor = MagicMock()
@@ -1282,7 +1282,7 @@ class TestEligibilityCustomQualityThreshold:
             DigestConfig,
             DigestPolicy,
         )
-        from foundry_mcp.core.research.models import SourceQuality
+        from foundry_mcp.core.research.models.sources import SourceQuality
 
         mock_summarizer = MagicMock()
         mock_pdf_extractor = MagicMock()
@@ -1685,7 +1685,7 @@ class TestRawContentLifecycle:
     @pytest.fixture
     def source(self):
         """Create a ResearchSource with _raw_content in metadata."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         return ResearchSource(
             title="Test Source",
@@ -1696,7 +1696,7 @@ class TestRawContentLifecycle:
     @pytest.fixture
     def source_without_raw(self):
         """Create a ResearchSource without _raw_content."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         return ResearchSource(
             title="Test Source",
@@ -1756,7 +1756,7 @@ class TestRawContentLifecycle:
 
     def test_all_underscore_keys_filtered(self):
         """Test all underscore-prefixed metadata keys are filtered."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(
             title="Test",
@@ -1775,7 +1775,7 @@ class TestRawContentLifecycle:
 
     def test_lifecycle_set_use_delete(self):
         """Test full lifecycle: set _raw_content, use it, delete it."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(
             title="Test",
@@ -2041,7 +2041,7 @@ class TestContractFidelityEnvelope:
 
     def test_fidelity_level_digest_exists_in_model(self):
         """FidelityLevel.DIGEST is a valid fidelity level."""
-        from foundry_mcp.core.research.models import FidelityLevel
+        from foundry_mcp.core.research.models.fidelity import FidelityLevel
 
         assert FidelityLevel.DIGEST is not None
         assert FidelityLevel.DIGEST.value == "digest"

@@ -9,10 +9,10 @@ from typing import Any, Optional
 
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.enums import IdeationPhase
+from foundry_mcp.core.research.models.ideation import (
     Idea,
     IdeaCluster,
-    IdeationPhase,
     IdeationState,
 )
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult

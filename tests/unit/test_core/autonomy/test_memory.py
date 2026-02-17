@@ -32,8 +32,8 @@ from foundry_mcp.core.autonomy.memory import (
     encode_cursor,
     sanitize_id,
 )
-from foundry_mcp.core.autonomy.models import SessionStatus
-from foundry_mcp.core.autonomy.models import StepProofRecord
+from foundry_mcp.core.autonomy.models.enums import SessionStatus
+from foundry_mcp.core.autonomy.models.steps import StepProofRecord
 
 from .conftest import make_session
 
@@ -765,7 +765,7 @@ class TestProofStoreBounds:
 
     def test_proof_store_bounded_under_load(self, storage):
         """After 600 inserts via save_proof_record, verify <= MAX_PROOF_RECORDS remain."""
-        from foundry_mcp.core.autonomy.models import StepProofRecord as SPR
+        from foundry_mcp.core.autonomy.models.steps import StepProofRecord as SPR
 
         session_id = "bounded-session"
         now = datetime.now(timezone.utc)

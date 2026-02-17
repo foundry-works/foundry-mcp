@@ -17,9 +17,7 @@ from typing import List
 from unittest.mock import MagicMock
 
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
-from foundry_mcp.core.autonomy.models import (
-    SessionCounters,
-)
+from foundry_mcp.core.autonomy.models.session_config import SessionCounters
 from .conftest import make_session, make_spec_data
 
 

@@ -9,8 +9,8 @@ from typing import Any, Optional
 
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.thinkdeep import (
     Hypothesis,
     InvestigationStep,
     ThinkDeepState,

@@ -478,7 +478,7 @@ class TestThreadOperationsE2E:
 
     def test_thread_list(self, mock_config, mock_memory):
         """Thread-list returns all threads."""
-        from foundry_mcp.core.research.models import ThreadStatus
+        from foundry_mcp.core.research.models.enums import ThreadStatus
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(
@@ -509,7 +509,7 @@ class TestThreadOperationsE2E:
 
     def test_thread_get(self, mock_config, mock_memory):
         """Thread-get returns specific thread details."""
-        from foundry_mcp.core.research.models import ThreadStatus
+        from foundry_mcp.core.research.models.enums import ThreadStatus
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
         with patch(

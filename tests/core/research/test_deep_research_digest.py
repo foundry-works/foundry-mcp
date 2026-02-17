@@ -22,14 +22,10 @@ from foundry_mcp.core.research.document_digest import (
 )
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.pdf_extractor import PDFExtractionResult
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
-    DigestPayload,
-    EvidenceSnippet,
-    FidelityLevel,
-    ResearchSource,
-    SourceQuality,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnippet
+from foundry_mcp.core.research.models.fidelity import FidelityLevel
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
 

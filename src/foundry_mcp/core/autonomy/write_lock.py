@@ -107,7 +107,7 @@ READ_ONLY_TASK_ACTIONS: FrozenSet[str] = frozenset({
 })
 
 # Import canonical terminal statuses from models
-from foundry_mcp.core.autonomy.models import (
+from foundry_mcp.core.autonomy.models.enums import (
     TERMINAL_STATUSES as _TERMINAL_STATUSES_ENUM,
     SessionStatus as _SessionStatus,
 )

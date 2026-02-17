@@ -5,13 +5,15 @@ Covers every branch of derive_loop_signal() with one row per mapping.
 
 import pytest
 
-from foundry_mcp.core.autonomy.models import (
-    derive_loop_signal,
+from foundry_mcp.core.autonomy.models.enums import (
     LoopSignal,
-    SessionStatus,
     PauseReason,
+    SessionStatus,
+)
+from foundry_mcp.core.autonomy.models.signals import (
     _BLOCKED_RUNTIME_ERROR_CODES,
     _PAUSED_NEEDS_ATTENTION_REASONS,
+    derive_loop_signal,
 )
 
 

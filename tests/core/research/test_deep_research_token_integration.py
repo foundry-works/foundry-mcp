@@ -22,12 +22,11 @@ from foundry_mcp.core.research.context_budget import (
     ContentItem,
     ContextBudgetManager,
 )
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
-    ResearchSource,
-    SourceQuality,
+    DeepResearchState,
 )
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 
 
 # =============================================================================
@@ -597,7 +596,7 @@ class TestStateFidelityTracking:
 
     def test_state_fidelity_updates(self):
         """Test fidelity fields can be updated via record_item_fidelity."""
-        from foundry_mcp.core.research.models import FidelityLevel
+        from foundry_mcp.core.research.models.fidelity import FidelityLevel
 
         state = DeepResearchState(
             id="test",

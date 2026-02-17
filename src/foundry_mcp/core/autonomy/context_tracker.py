@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Tuple
 
 if TYPE_CHECKING:
-    from foundry_mcp.core.autonomy.models import AutonomousSessionState
+    from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 
 logger = logging.getLogger(__name__)
 

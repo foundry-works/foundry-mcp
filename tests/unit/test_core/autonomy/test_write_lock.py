@@ -27,7 +27,7 @@ from foundry_mcp.core.autonomy.write_lock import (
     is_protected_action,
     make_write_lock_error_response,
 )
-from foundry_mcp.core.autonomy.models import SessionStatus
+from foundry_mcp.core.autonomy.models.enums import SessionStatus
 
 
 # =============================================================================

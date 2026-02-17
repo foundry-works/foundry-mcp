@@ -20,25 +20,28 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
     FailureReason,
     GatePolicy,
     GateVerdict,
-    LastStepIssued,
-    LastStepResult,
     PauseReason,
-    PendingGateEvidence,
-    PhaseGateRecord,
     PhaseGateStatus,
-    SessionContext,
-    SessionCounters,
-    SessionLimits,
     SessionStatus,
     StepOutcome,
     StepType,
+)
+from foundry_mcp.core.autonomy.models.gates import (
+    PendingGateEvidence,
+    PhaseGateRecord,
+)
+from foundry_mcp.core.autonomy.models.session_config import (
+    SessionContext,
+    SessionCounters,
+    SessionLimits,
     StopConditions,
 )
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued, LastStepResult
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_SPEC_REBASE_REQUIRED,
     OrchestrationResult,

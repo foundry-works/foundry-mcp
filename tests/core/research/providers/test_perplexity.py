@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from foundry_mcp.core.research.models import SourceType
+from foundry_mcp.core.research.models.sources import SourceType
 from foundry_mcp.core.research.providers.perplexity import (
     DEFAULT_RATE_LIMIT,
     DEFAULT_TIMEOUT,

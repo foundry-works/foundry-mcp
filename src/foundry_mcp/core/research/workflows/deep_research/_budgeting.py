@@ -26,12 +26,9 @@ from foundry_mcp.core.research.document_digest import (
     DocumentDigestor,
     deserialize_payload,
 )
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
-    DeepResearchState,
-    ResearchSource,
-    SourceQuality,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 from foundry_mcp.core.research.token_management import (
     TokenBudget,
     PreflightResult,

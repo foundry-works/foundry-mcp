@@ -4,23 +4,31 @@ This package provides conversation threading, multi-model consensus,
 hypothesis-driven investigation, and creative brainstorming workflows.
 """
 
-from foundry_mcp.core.research.models import (
-    ConfidenceLevel,
+from foundry_mcp.core.research.models.consensus import (
     ConsensusConfig,
     ConsensusState,
-    ConsensusStrategy,
+    ModelResponse,
+)
+from foundry_mcp.core.research.models.conversations import (
     ConversationMessage,
     ConversationThread,
-    Hypothesis,
+)
+from foundry_mcp.core.research.models.enums import (
+    ConfidenceLevel,
+    ConsensusStrategy,
+    IdeationPhase,
+    ThreadStatus,
+    WorkflowType,
+)
+from foundry_mcp.core.research.models.ideation import (
     Idea,
     IdeaCluster,
-    IdeationPhase,
     IdeationState,
+)
+from foundry_mcp.core.research.models.thinkdeep import (
+    Hypothesis,
     InvestigationStep,
-    ModelResponse,
-    ThreadStatus,
     ThinkDeepState,
-    WorkflowType,
 )
 from foundry_mcp.core.research.memory import (
     FileStorageBackend,

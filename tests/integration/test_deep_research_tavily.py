@@ -15,9 +15,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from foundry_mcp.config.research import ResearchConfig
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
+)
+from foundry_mcp.core.research.models.sources import (
     ResearchMode,
     ResearchSource,
     SourceType,

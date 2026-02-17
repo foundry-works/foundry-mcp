@@ -13,10 +13,8 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.observability import audit_log, get_metrics
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
-    SourceQuality,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.sources import SourceQuality
 from foundry_mcp.core.research.providers import (
     SearchProvider,
     SearchProviderError,

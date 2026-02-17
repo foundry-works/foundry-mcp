@@ -22,12 +22,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from filelock import FileLock, Timeout
 
-from .models import (
-    AutonomousSessionState,
-    SessionStatus,
-    SessionSummary,
-    TERMINAL_STATUSES,
-)
+from .models.enums import SessionStatus, TERMINAL_STATUSES
+from .models.responses import SessionSummary
+from .models.state import AutonomousSessionState
 from .state_migrations import (
     CURRENT_SCHEMA_VERSION,
     migrate_state,
@@ -622,7 +619,7 @@ class AutonomyStorage:
 
         Delegates to the shared implementation in models.py to avoid duplication.
         """
-        from foundry_mcp.core.autonomy.models import compute_effective_status
+        from foundry_mcp.core.autonomy.models.signals import compute_effective_status
         return compute_effective_status(session)
 
     # =========================================================================
@@ -1010,7 +1007,7 @@ class AutonomyStorage:
         Raises:
             Timeout: If lock acquisition times out
         """
-        from .models import StepProofRecord
+        from .models.steps import StepProofRecord
 
         proof_path = self._get_proof_path(session_id)
         lock_path = self._get_proof_lock_path(session_id)
@@ -1067,7 +1064,7 @@ class AutonomyStorage:
         Returns:
             StepProofRecord if found and not expired, None otherwise
         """
-        from .models import StepProofRecord
+        from .models.steps import StepProofRecord
 
         records = self.load_proof_records(session_id)
         record_data = records.get(step_proof)
@@ -1091,7 +1088,7 @@ class AutonomyStorage:
         response: Dict[str, Any],
     ) -> bool:
         """Attach response payload/hash to a previously-consumed proof record."""
-        from .models import StepProofRecord
+        from .models.steps import StepProofRecord
 
         lock_path = self._get_proof_lock_path(session_id)
         proof_path = self._get_proof_path(session_id)
@@ -1162,7 +1159,7 @@ class AutonomyStorage:
             - (False, None, "PROOF_CONFLICT"): Same proof with different payload
             - (False, record, "PROOF_EXPIRED"): Proof consumed but grace window expired
         """
-        from .models import StepProofRecord
+        from .models.steps import StepProofRecord
 
         lock_path = self._get_proof_lock_path(session_id)
 

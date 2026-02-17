@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.sources import (
     DOMAIN_TIERS,
     ResearchMode,
     SourceQuality,

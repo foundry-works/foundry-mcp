@@ -277,6 +277,73 @@ config/
 
 ---
 
+## 11. Research Models Decomposition — DONE
+
+### Status: All 4 waves complete (2026-02-17)
+
+Decomposed `core/research/models.py` (2,176 lines, 33 classes — the largest remaining file in `src/`) into a `core/research/models/` package with 8 focused sub-modules.
+
+**Wave 1** — Created package scaffold with `enums.py` (5 shared enums), `digest.py` (fragment utils + 2 classes), `conversations.py` (2 classes), and `__init__.py` with re-exports. `_remaining.py` staging shim held 24 not-yet-extracted symbols. Deleted original `models.py`.
+
+**Wave 2** — Extracted `thinkdeep.py` (3 classes), `ideation.py` (3 classes), `consensus.py` (3 classes). Trimmed `_remaining.py` to wave 3 symbols only.
+
+**Wave 3** — Extracted `fidelity.py` (4 classes), `sources.py` (3 enums + DOMAIN_TIERS + 4 data classes), `deep_research.py` (3 classes). Deleted `_remaining.py` — all 33 symbols in proper sub-modules.
+
+**Wave 4** — Migrated ~43 caller import sites (24 prod + 19 test files) to canonical sub-module paths (e.g., `models.sources`, `models.enums`, `models.deep_research`). Re-exports in `__init__.py` retained for external consumers.
+
+### Final Structure
+
+```
+core/research/models/
+    __init__.py       # Re-exports all 33 public symbols (~120 lines)
+    enums.py          # WorkflowType, ConfidenceLevel, ConsensusStrategy, ThreadStatus, IdeationPhase (~50 lines)
+    digest.py         # Fragment utils + EvidenceSnippet + DigestPayload (~275 lines)
+    conversations.py  # ConversationMessage + ConversationThread (~75 lines)
+    thinkdeep.py      # Hypothesis, InvestigationStep, ThinkDeepState (~115 lines)
+    ideation.py       # Idea, IdeaCluster, IdeationState (~110 lines)
+    consensus.py      # ModelResponse, ConsensusConfig, ConsensusState (~80 lines)
+    fidelity.py       # FidelityLevel, PhaseContentFidelityRecord, ContentFidelityRecord, PhaseMetrics (~260 lines)
+    sources.py        # SourceType, SourceQuality, ResearchMode, DOMAIN_TIERS, SubQuery, ResearchSource, ResearchFinding, ResearchGap (~500 lines)
+    deep_research.py  # DeepResearchConfig, DeepResearchPhase, DeepResearchState (~700 lines)
+```
+
+5,208 tests passing, 0 regressions across all 4 waves.
+
+---
+
+## 12. Autonomy Models Decomposition — DONE
+
+### Status: All 4 waves complete (2026-02-17)
+
+Decomposed `core/autonomy/models.py` (1,154 lines, 36 classes — the highest class density remaining in the codebase) into a `core/autonomy/models/` package with 8 focused sub-modules. Follows the exact pattern of item 11 (research models).
+
+**Wave 1** — Created package scaffold with `enums.py` (10 enums + `TERMINAL_STATUSES`), `verification.py` (2 classes + helper), `gates.py` (3 classes), and `__init__.py` with re-exports. `_remaining.py` staging shim held not-yet-extracted symbols. Deleted original `models.py`. 1,048 tests passing.
+
+**Wave 2** — Extracted `steps.py` (4 classes: `LastStepIssued`, `StepInstruction`, `LastStepResult`, `StepProofRecord`) and `session_config.py` (4 classes: `SessionCounters`, `SessionLimits`, `StopConditions`, `SessionContext`). 1,404 tests passing.
+
+**Wave 3** — Extracted `responses.py` (12 response/summary models), `state.py` (`AutonomousSessionState`), `signals.py` (4 functions + 2 frozensets). Deleted `_remaining.py` — all 36 symbols in proper sub-modules. 5,208 tests passing.
+
+**Wave 4** — Migrated ~40 caller import sites (12 prod + 22 test + 6 relative) to canonical sub-module paths (e.g., `models.enums`, `models.state`, `models.steps`). Re-exports in `__init__.py` retained for external consumers. 5,208 tests passing.
+
+### Final Structure
+
+```
+core/autonomy/models/
+    __init__.py       # Re-exports all 36 public symbols (~120 lines)
+    enums.py          # 10 enums + TERMINAL_STATUSES (112 lines)
+    verification.py   # VerificationReceipt, PendingVerificationReceipt, issue_verification_receipt (121 lines)
+    gates.py          # PendingGateEvidence, PendingManualGateAck, PhaseGateRecord (52 lines)
+    steps.py          # LastStepIssued, StepInstruction, LastStepResult, StepProofRecord (106 lines)
+    session_config.py # SessionCounters, SessionLimits, StopConditions, SessionContext (95 lines)
+    responses.py      # 12 response/summary models (196 lines)
+    state.py          # AutonomousSessionState (148 lines)
+    signals.py        # 4 functions + 2 frozensets (283 lines)
+```
+
+5,208 tests passing, 0 regressions across all 4 waves.
+
+---
+
 ## What's Working Well
 
 - **Response envelope consistency**: 100% of production code uses `asdict(success_response(...))` / `asdict(error_response(...))` — zero hand-rolled responses
@@ -305,3 +372,5 @@ config/
 | 8 | Deep research framework | **Done** (Waves 1-5) | — | ~320 lines removed, 2 sources of truth |
 | 9 | Validation fix dispatch dict | **Done** | — | Quick win |
 | 10 | Config module decomposition | **Done** (Waves 1-4) | — | Largest god object eliminated |
+| 11 | Research models decomposition | **Done** (Waves 1-4) | — | 33 classes split into 8 sub-modules |
+| 12 | Autonomy models decomposition | **Done** (Waves 1-4) | — | 36 classes split into 8 sub-modules |

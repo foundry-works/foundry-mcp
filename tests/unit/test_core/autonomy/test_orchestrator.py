@@ -25,24 +25,29 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
     FailureReason,
     GatePolicy,
     GateVerdict,
-    LastStepIssued,
-    LastStepResult,
     PauseReason,
-    PendingGateEvidence,
-    PendingVerificationReceipt,
-    PhaseGateRecord,
     PhaseGateStatus,
-    SessionCounters,
-    SessionLimits,
     SessionStatus,
     StepOutcome,
     StepType,
+)
+from foundry_mcp.core.autonomy.models.gates import (
+    PendingGateEvidence,
+    PhaseGateRecord,
+)
+from foundry_mcp.core.autonomy.models.session_config import (
+    SessionCounters,
+    SessionLimits,
     StopConditions,
+)
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued, LastStepResult
+from foundry_mcp.core.autonomy.models.verification import (
+    PendingVerificationReceipt,
     VerificationReceipt,
 )
 from foundry_mcp.core.autonomy.orchestrator import (

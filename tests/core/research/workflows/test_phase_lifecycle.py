@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from foundry_mcp.core.errors.provider import ContextWindowError
-from foundry_mcp.core.research.models import (
+from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
     DeepResearchState,
 )

@@ -20,14 +20,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from foundry_mcp.core.autonomy.models import (
-    LastStepIssued,
-    NextStep,
+from foundry_mcp.core.autonomy.models.enums import (
     PauseReason,
     SessionStatus,
     StepOutcome,
     StepType,
 )
+from foundry_mcp.core.autonomy.models.responses import NextStep
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_ALL_TASKS_BLOCKED,
     ERROR_GATE_AUDIT_FAILURE,

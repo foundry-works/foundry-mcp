@@ -25,7 +25,8 @@ Usage:
         ContentItem,
         compute_priority,
     )
-    from foundry_mcp.core.research.models import SourceQuality, ConfidenceLevel
+    from foundry_mcp.core.research.models.enums import ConfidenceLevel
+    from foundry_mcp.core.research.models.sources import SourceQuality
 
     # Create content items (protected items won't be dropped)
     item1 = ContentItem(id="finding-1", content="...", priority=1)
@@ -64,7 +65,8 @@ from enum import Enum
 from typing import Any, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 from foundry_mcp.core.research.token_management import estimate_tokens
-from foundry_mcp.core.research.models import ConfidenceLevel, ResearchSource, SourceQuality
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 
 logger = logging.getLogger(__name__)
 

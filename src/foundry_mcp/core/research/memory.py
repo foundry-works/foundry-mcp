@@ -12,14 +12,12 @@ from typing import Generic, Optional, TypeVar
 
 from filelock import FileLock
 
-from foundry_mcp.core.research.models import (
-    ConsensusState,
-    ConversationThread,
-    DeepResearchState,
-    IdeationState,
-    ThinkDeepState,
-    ThreadStatus,
-)
+from foundry_mcp.core.research.models.consensus import ConsensusState
+from foundry_mcp.core.research.models.conversations import ConversationThread
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.enums import ThreadStatus
+from foundry_mcp.core.research.models.ideation import IdeationState
+from foundry_mcp.core.research.models.thinkdeep import ThinkDeepState
 
 logger = logging.getLogger(__name__)
 

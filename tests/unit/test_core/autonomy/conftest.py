@@ -10,18 +10,20 @@ from unittest.mock import MagicMock
 import pytest
 
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
+from foundry_mcp.core.autonomy.models.enums import (
     GatePolicy,
-    LastStepIssued,
     PauseReason,
-    PhaseGateRecord,
+    SessionStatus,
+)
+from foundry_mcp.core.autonomy.models.gates import PhaseGateRecord
+from foundry_mcp.core.autonomy.models.session_config import (
     SessionContext,
     SessionCounters,
     SessionLimits,
-    SessionStatus,
     StopConditions,
 )
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.models.steps import LastStepIssued
 
 
 def make_session(

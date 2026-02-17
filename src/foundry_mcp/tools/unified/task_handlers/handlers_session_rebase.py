@@ -13,13 +13,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config.server import ServerConfig
-from foundry_mcp.core.autonomy.models import (
-    AutonomousSessionState,
-    SessionStatus,
-    PhaseGateStatus,
-    RebaseResultDetail,
+from foundry_mcp.core.autonomy.models.enums import (
     OverrideReasonCode,
+    PhaseGateStatus,
+    SessionStatus,
 )
+from foundry_mcp.core.autonomy.models.responses import RebaseResultDetail
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,

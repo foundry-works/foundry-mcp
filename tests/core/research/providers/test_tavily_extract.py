@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from foundry_mcp.core.research.models import ResearchSource, SourceType
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.research.providers.tavily_extract import (
     DEFAULT_RATE_LIMIT,
     DEFAULT_TIMEOUT,

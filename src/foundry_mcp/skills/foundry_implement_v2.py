@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Mapping, MutableMapping, Optional
 
-from foundry_mcp.core.autonomy.models import issue_verification_receipt
+from foundry_mcp.core.autonomy.models.verification import issue_verification_receipt
 
 LoopSignalValue = Literal[
     "phase_complete",

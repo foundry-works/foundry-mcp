@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Optional
 
-from foundry_mcp.core.research.models import ConsensusStrategy
+from foundry_mcp.core.research.models.enums import ConsensusStrategy
 from foundry_mcp.core.research.workflows import (
     ChatWorkflow,
     ConsensusWorkflow,

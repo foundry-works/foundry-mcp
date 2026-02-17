@@ -966,11 +966,8 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     from ulid import ULID
 
     from foundry_mcp.core.autonomy.memory import AutonomyStorage
-    from foundry_mcp.core.autonomy.models import (
-        GateVerdict,
-        GatePolicy,
-        PendingGateEvidence,
-    )
+    from foundry_mcp.core.autonomy.models.enums import GatePolicy, GateVerdict
+    from foundry_mcp.core.autonomy.models.gates import PendingGateEvidence
     from foundry_mcp.core.autonomy.server_secret import compute_integrity_checksum
 
     start_time = time.perf_counter()

@@ -13,7 +13,8 @@ from ulid import ULID
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.authorization import set_server_role
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
-from foundry_mcp.core.autonomy.models import GateVerdict, PendingGateEvidence
+from foundry_mcp.core.autonomy.models.enums import GateVerdict
+from foundry_mcp.core.autonomy.models.gates import PendingGateEvidence
 from foundry_mcp.core.autonomy.server_secret import compute_integrity_checksum
 from foundry_mcp.skills.foundry_implement_v2 import StepExecutionResult, run_single_phase
 from foundry_mcp.tools.unified.server import _dispatch_server_action

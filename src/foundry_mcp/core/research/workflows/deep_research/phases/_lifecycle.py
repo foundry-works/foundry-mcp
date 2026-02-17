@@ -16,10 +16,8 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.research.models import (
-    DeepResearchState,
-    PhaseMetrics,
-)
+from foundry_mcp.core.research.models.deep_research import DeepResearchState
+from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
 if TYPE_CHECKING:

@@ -24,7 +24,8 @@ from foundry_mcp.core.research.context_budget import (
     compute_priority,
     compute_recency_score,
 )
-from foundry_mcp.core.research.models import ConfidenceLevel, SourceQuality
+from foundry_mcp.core.research.models.enums import ConfidenceLevel
+from foundry_mcp.core.research.models.sources import SourceQuality
 
 
 # =============================================================================
@@ -523,7 +524,7 @@ class TestTokenCacheResearchSource:
 
     def test_content_hash_deterministic(self):
         """Test _content_hash is deterministic for same content."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source1 = ResearchSource(title="Test", content="hello world")
         source2 = ResearchSource(title="Different", content="hello world")
@@ -532,14 +533,14 @@ class TestTokenCacheResearchSource:
 
     def test_content_hash_length(self):
         """Test _content_hash returns 32 characters."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="some content")
         assert len(source._content_hash()) == 32
 
     def test_content_hash_handles_none(self):
         """Test _content_hash handles None content gracefully."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content=None)
         # Should return hash of empty string
@@ -548,7 +549,7 @@ class TestTokenCacheResearchSource:
 
     def test_token_cache_key_format(self):
         """Test _token_cache_key includes all components."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello")
         key = source._token_cache_key("openai", "gpt-4")
@@ -562,7 +563,7 @@ class TestTokenCacheResearchSource:
 
     def test_cache_set_and_get(self):
         """Test _set_cached_token_count and _get_cached_token_count."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello world")
         source._set_cached_token_count("openai", "gpt-4", 150)
@@ -572,7 +573,7 @@ class TestTokenCacheResearchSource:
 
     def test_cache_miss_returns_none(self):
         """Test _get_cached_token_count returns None on miss."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello")
         cached = source._get_cached_token_count("openai", "gpt-4")
@@ -580,7 +581,7 @@ class TestTokenCacheResearchSource:
 
     def test_cache_schema_version(self):
         """Test cache has version field."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello")
         source._set_cached_token_count("openai", "gpt-4", 100)
@@ -591,7 +592,7 @@ class TestTokenCacheResearchSource:
 
     def test_public_metadata_excludes_cache(self):
         """Test public_metadata() excludes _token_cache."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello")
         source.metadata["public_field"] = "visible"
@@ -607,7 +608,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_cache_hit_returns_cached_value(self):
         """Test cache hit returns stored value without re-estimation."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         manager = ContextBudgetManager(provider="openai", model="gpt-4")
         source = ResearchSource(title="Test", content="hello world")
@@ -620,7 +621,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_content_item_source_ref_uses_cache(self):
         """ContentItem with source_ref should use cached token count."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         manager = ContextBudgetManager(provider="openai", model="gpt-4")
         source = ResearchSource(title="Test", content="hello world")
@@ -639,7 +640,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_content_item_source_ref_stores_cache_on_miss(self):
         """ContentItem with source_ref should populate cache on miss."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         manager = ContextBudgetManager(
             provider="openai",
@@ -662,7 +663,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_cache_miss_computes_and_stores(self):
         """Test cache miss computes and stores value."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         manager = ContextBudgetManager(provider="openai", model="gpt-4")
         source = ResearchSource(title="Test", content="hello world")
@@ -681,7 +682,7 @@ class TestTokenCacheContextBudgetManager:
     def test_fifo_eviction_at_50_entries(self):
         """Test FIFO eviction when cache exceeds 50 entries."""
         from foundry_mcp.core.research.context_budget import MAX_TOKEN_CACHE_ENTRIES
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         manager = ContextBudgetManager(provider="openai", model="gpt-4")
         source = ResearchSource(title="Test", content="test content")
@@ -701,7 +702,7 @@ class TestTokenCacheContextBudgetManager:
     def test_fifo_evicts_oldest_entry(self):
         """Test FIFO eviction removes the oldest entry."""
         from foundry_mcp.core.research.context_budget import MAX_TOKEN_CACHE_ENTRIES
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         manager = ContextBudgetManager(provider="openai", model="gpt-4")
         source = ResearchSource(title="Test", content="test content")
@@ -725,7 +726,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_loading_old_state_without_cache(self):
         """Test backward compatibility with old state files lacking _token_cache."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         # Simulate loading old state without cache
         source = ResearchSource(title="Old", content="legacy content")
@@ -741,7 +742,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_persistence_preserves_cache(self):
         """Test that cache is preserved through model_dump/model_validate cycle."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello")
         source._set_cached_token_count("openai", "gpt-4", 150)
@@ -757,7 +758,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_cache_different_providers(self):
         """Test caching works independently for different providers."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         source = ResearchSource(title="Test", content="hello")
         source._set_cached_token_count("openai", "gpt-4", 100)
@@ -768,7 +769,7 @@ class TestTokenCacheContextBudgetManager:
 
     def test_cache_ignored_without_provider(self):
         """Test that caching is skipped when provider/model not set."""
-        from foundry_mcp.core.research.models import ResearchSource
+        from foundry_mcp.core.research.models.sources import ResearchSource
 
         # Manager without provider/model
         manager = ContextBudgetManager()

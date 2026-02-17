@@ -25,12 +25,8 @@ from foundry_mcp.core.autonomy.context_tracker import (
     ContextTracker,
     is_sandbox_mode,
 )
-from foundry_mcp.core.autonomy.models import (
-    PauseReason,
-    SessionContext,
-    SessionLimits,
-    SessionStatus,
-)
+from foundry_mcp.core.autonomy.models.enums import PauseReason, SessionStatus
+from foundry_mcp.core.autonomy.models.session_config import SessionContext, SessionLimits
 
 from .conftest import make_session, make_spec_data
 
@@ -703,7 +699,7 @@ class TestStateMigration:
         assert len(warnings) == 0
 
     def test_migrated_state_loads_as_model(self):
-        from foundry_mcp.core.autonomy.models import AutonomousSessionState
+        from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
         from foundry_mcp.core.autonomy.state_migrations import migrate_state
 
         v1_state = {

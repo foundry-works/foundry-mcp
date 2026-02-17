@@ -32,7 +32,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from foundry_mcp.core.research.models import ResearchSource, SourceType
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
