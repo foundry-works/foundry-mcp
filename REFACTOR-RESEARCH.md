@@ -102,92 +102,43 @@ core/errors/
 
 ---
 
-## 4. Research Tool Module Decomposition (High)
+## 4. Research Tool Module Decomposition — DONE
 
-### Problem
+### Status: Waves 1-4 complete (2026-02-16)
 
-`tools/unified/research.py` (1,710 lines, 17 handler functions) is monolithic — unlike `task.py` and `authoring.py` which correctly delegate to sub-handler modules.
+**Wave 1** — Created `research_handlers/` package scaffold with `_helpers.py` (shared state, validation factory, constants) and `__init__.py` (router, dispatch, registration).
 
-### Current State
+**Wave 2** — Extracted all 17 handlers into 5 domain-focused modules:
+- `handlers_workflows.py` — chat, consensus, thinkdeep, ideate
+- `handlers_deep_research.py` — deep-research, -status, -report, -list, -delete
+- `handlers_threads.py` — thread-list, thread-get, thread-delete
+- `handlers_spec_nodes.py` — node-execute, node-record, node-status, node-findings
+- `handlers_extract.py` — extract
 
-- `task.py` (1 KB) delegates to `task_handlers/` (4 sub-modules)
-- `authoring.py` (1 KB) delegates to `authoring_handlers/` (4 sub-modules)
-- `research.py` (1,710 lines) — everything inline, 17 handlers with repetitive response wrapping
+**Wave 3** — Updated test patch paths in `test_research.py` and `test_deep_research.py`. Converted `research.py` to backward-compatible shim. Migrated `_validation_error` to `make_validation_error_fn("research")` factory.
 
-### 17 Research Handlers
-
-| Handler | Responsibility |
-|---------|---------------|
-| `_handle_chat` | Single-model conversation |
-| `_handle_consensus` | Multi-model parallel consultation |
-| `_handle_thinkdeep` | Hypothesis-driven investigation |
-| `_handle_ideate` | Creative brainstorming |
-| `_handle_deep_research` | Multi-phase deep research |
-| `_handle_deep_research_status` | Get research session status |
-| `_handle_deep_research_report` | Get final report |
-| `_handle_deep_research_list` | List sessions |
-| `_handle_deep_research_delete` | Delete session |
-| `_handle_thread_list` | List threads |
-| `_handle_thread_get` | Get thread details |
-| `_handle_thread_delete` | Delete thread |
-| `_handle_node_execute` | Execute research node |
-| `_handle_node_record` | Record node result |
-| `_handle_node_status` | Get node status |
-| `_handle_node_findings` | Get node findings |
-| `_handle_extract` | Extract content |
-
-### Repeated Pattern
-
-Each handler repeats:
-```python
-if result.success:
-    return asdict(success_response(data={...}))
-else:
-    return asdict(error_response(...))
-```
-
-### Recommendation
-
-Split into `research_handlers/` following existing pattern:
-```
-research_handlers/
-    __init__.py              # Router/dispatcher
-    handlers_chat.py         # chat, thread-list, thread-get, thread-delete
-    handlers_consensus.py    # consensus
-    handlers_deep.py         # deep-research, status, report, list, delete
-    handlers_ideate.py       # ideate
-    handlers_investigation.py # thinkdeep, node-*, extract
-```
-
-Also hand-rolls `_validation_error()` locally (lines 105-122) instead of using the `make_validation_error_fn()` factory.
+**Wave 4** — Simplified registration body: replaced 40-line manual parameter passthrough with `return _dispatch_research_action(**locals())`. Fixed stale patch paths in `test_research_e2e.py` (18 tests). Note: full `**kwargs` signature not viable — FastMCP derives MCP schema from function signature. 5183 tests passing.
 
 ---
 
 ## 5. Tool Registration Signature Bloat (Medium-High)
 
-### Problem
+### Status: Research tool done, task/authoring remaining
 
-Tool entry points have 40-55 parameter signatures that exist only to repack into a dict:
+**Finding**: `**kwargs` passthrough is **not viable** — FastMCP generates MCP tool parameter schemas by inspecting function signatures. Removing explicit params produces a broken schema. The viable approach is `locals()` passthrough in the function body, which eliminates the manual dict-packing while preserving the schema.
 
-```python
-def task(action, spec_id, task_id, workspace, status_filter,
-         # ... 50 more parameters ...
-         ) -> dict:
-    payload = {"spec_id": spec_id, "task_id": task_id, ...}
-    return _dispatch(action=action, payload=payload)
-```
+**Research tool** — Done (Wave 4 above). Body reduced from 40 lines to `return _dispatch_research_action(**locals())`.
 
-### Files Affected
+### Remaining Files
 
 | File | Parameters | Boilerplate Lines |
 |------|-----------|-------------------|
-| `task_handlers/__init__.py` | 55+ | ~200 |
-| `authoring_handlers/__init__.py` | 40+ | ~150 |
-| `research.py` register function | 40+ | ~150 |
+| `task_handlers/__init__.py` | 55+ | ~200 (manual `payload = {...}`) |
+| `authoring_handlers/__init__.py` | 40+ | ~150 (manual `payload = {...}`) |
 
 ### Recommendation
 
-Use `**kwargs` passthrough since FastMCP already handles parameter parsing from the MCP schema. Eliminates ~500 lines of pure dict-packing boilerplate.
+Apply same `locals()` passthrough pattern used for research. For task/authoring, the dispatch functions take `payload` dicts, so the pattern would be: `payload = {k: v for k, v in locals().items() if k != "action"}` followed by `_dispatch_*_action(action=action, payload=payload, config=config)`.
 
 ---
 
@@ -352,8 +303,8 @@ return handler(diag, spec_data) if handler else None
 | 1 | Declarative parameter validation framework | **In progress** (44/46 handlers, Waves 1-3 done) | 2-3 days remaining (Wave 4) | Highest ROI, ~15-20% handler reduction |
 | 2 | Unify error hierarchies | **Done** | — | Prerequisite for cleaner error handling |
 | 3 | Split god objects | **Done** (Waves 1-4) | — | Improves testability and maintainability |
-| 4 | Research sub-handlers | Pending | 2-3 days | Consistency win, follows existing pattern |
-| 5 | Tool signature cleanup | Pending | 1-2 days | Small effort, ~500 lines removed |
+| 4 | Research sub-handlers | **Done** (Waves 1-4) | — | Consistency win, follows existing pattern |
+| 5 | Tool signature cleanup | **Partial** (research done, task/authoring remaining) | 0.5 day | `locals()` passthrough, ~350 lines |
 | 6 | Test fixture consolidation | Pending | 2-3 days | Reduces test maintenance friction |
 | 7 | Observability consolidation | Pending | 3-4 days | Lower urgency, improves clarity |
 | 8 | Deep research framework | Pending | 3-4 days | Contained to one subsystem |

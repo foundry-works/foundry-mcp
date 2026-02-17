@@ -277,46 +277,7 @@ def register_unified_research_tool(mcp: FastMCP, config: ServerConfig) -> None:
         Returns:
             Response envelope with action results
         """
-        return _dispatch_research_action(
-            action=action,
-            prompt=prompt,
-            thread_id=thread_id,
-            investigation_id=investigation_id,
-            ideation_id=ideation_id,
-            research_id=research_id,
-            topic=topic,
-            query=query,
-            system_prompt=system_prompt,
-            provider_id=provider_id,
-            model=model,
-            providers=providers,
-            strategy=strategy,
-            synthesis_provider=synthesis_provider,
-            timeout_per_provider=timeout_per_provider,
-            timeout_per_operation=timeout_per_operation,
-            max_concurrent=max_concurrent,
-            require_all=require_all,
-            min_responses=min_responses,
-            max_depth=max_depth,
-            max_iterations=max_iterations,
-            max_sub_queries=max_sub_queries,
-            max_sources_per_query=max_sources_per_query,
-            follow_links=follow_links,
-            deep_research_action=deep_research_action,
-            task_timeout=task_timeout,
-            ideate_action=ideate_action,
-            perspective=perspective,
-            perspectives=perspectives,
-            cluster_ids=cluster_ids,
-            scoring_criteria=scoring_criteria,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            title=title,
-            status=status,
-            limit=limit,
-            cursor=cursor,
-            completed_only=completed_only,
-        )
+        return _dispatch_research_action(**locals())
 
     logger.debug("Registered unified research tool")
 
