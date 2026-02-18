@@ -348,6 +348,12 @@ class StepOrchestrator(StepEmitterMixin):
             )
 
         # =================================================================
+        # Step 4b: Reconcile completed tasks against spec truth
+        # =================================================================
+        if spec_data is not None:
+            self._reconcile_completed_tasks(session, spec_data, last_step_result)
+
+        # =================================================================
         # Step 5: Check Terminal States
         # Per ADR: only COMPLETED and ENDED are truly terminal.
         # FAILED can transition to running via resume(force=true) or rebase.
@@ -794,6 +800,89 @@ class StepOrchestrator(StepEmitterMixin):
         )
 
         session.updated_at = now
+
+    def _reconcile_completed_tasks(
+        self,
+        session: AutonomousSessionState,
+        spec_data: Dict[str, Any],
+        last_step_result: Optional[LastStepResult],
+    ) -> None:
+        """Cross-check recently completed tasks against spec truth.
+
+        Called after spec_data is loaded (Step 4b) to detect phantom
+        completions where the orchestrator recorded a task as completed
+        based on the runner's self-reported outcome, but the spec task
+        remains pending.
+
+        If a phantom is detected, the task is removed from
+        completed_task_ids, the counter is decremented, and the task
+        will be re-issued on the next step cycle (self-healing).
+        """
+        if last_step_result is None:
+            return
+
+        # Only reconcile for step types that record task completions
+        if last_step_result.step_type not in (
+            StepType.IMPLEMENT_TASK,
+            StepType.EXECUTE_VERIFICATION,
+        ):
+            return
+
+        # Only reconcile successful outcomes (failures don't record completions)
+        if last_step_result.outcome != StepOutcome.SUCCESS:
+            return
+
+        task_id = last_step_result.task_id
+        if not task_id or task_id not in session.completed_task_ids:
+            return
+
+        # Look up the task's actual status in spec_data
+        spec_task_status = self._get_spec_task_status(spec_data, task_id)
+        if spec_task_status is None:
+            # Task not found in spec — treat as phantom
+            logger.warning(
+                "Phantom completion detected: task %s not found in spec, revoking",
+                task_id,
+            )
+        elif spec_task_status == "completed":
+            # Spec agrees — no action needed
+            return
+        else:
+            logger.warning(
+                "Phantom completion detected: task %s has spec status '%s' (not 'completed'), revoking",
+                task_id,
+                spec_task_status,
+            )
+
+        # Revoke the phantom completion
+        session.completed_task_ids.remove(task_id)
+        session.counters.tasks_completed = max(0, session.counters.tasks_completed - 1)
+
+        self._emit_audit_event(
+            session,
+            AuditEventType.STEP_CONSUMED,
+            action="phantom_completion_revoked",
+            task_id=task_id,
+            metadata={
+                "spec_status": spec_task_status,
+                "step_id": last_step_result.step_id,
+            },
+        )
+
+    @staticmethod
+    def _get_spec_task_status(
+        spec_data: Dict[str, Any],
+        task_id: str,
+    ) -> Optional[str]:
+        """Look up a task's status in the spec phases array.
+
+        Returns the status string if found, None if the task doesn't exist.
+        """
+        for phase in spec_data.get("phases", []):
+            for task in phase.get("tasks", []):
+                if task.get("id") == task_id:
+                    return task.get("status")
+        return None
 
     def _record_gate_outcome(
         self,

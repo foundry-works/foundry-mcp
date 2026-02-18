@@ -1725,7 +1725,9 @@ class TestAuditIntegration:
         )
         entries = ledger.get_entries(event_type=AuditEventType.STEP_CONSUMED)
         assert len(entries) >= 1
-        consumed = entries[0]
+        consume_entries = [e for e in entries if e.action == "consume_step"]
+        assert len(consume_entries) >= 1
+        consumed = consume_entries[0]
         assert consumed.session_id == session.id
         assert consumed.action == "consume_step"
         assert consumed.metadata["outcome"] == "success"
@@ -2277,7 +2279,213 @@ class TestCommandlessVerifyNodeValidation:
             step_proof=result1.next_step.step_proof,
         )
 
+        # Update spec on disk to reflect task-1 completion (mimics task(action="complete"))
+        spec_path = tmp_path / "ws" / "specs" / "active" / f"{spec_data.get('spec_id', 'test-spec-001')}.json"
+        on_disk = json.loads(spec_path.read_text())
+        on_disk["hierarchy"]["task-1"]["status"] = "completed"
+        spec_path.write_text(json.dumps(on_disk, indent=2))
+        orch.invalidate_spec_cache()
+
         # Step 2: get second task
         result2 = orch.compute_next_step(session, last_step_result=step_result)
         assert result2.success is True
         assert result2.next_step.task_id == "task-2"
+
+
+# =============================================================================
+# Phantom Task Completion Reconciliation (Step 4b)
+# =============================================================================
+
+
+class TestPhantomTaskCompletionReconciliation:
+    """Tests for _reconcile_completed_tasks (Step 4b).
+
+    Verifies that the orchestrator detects and revokes phantom completions
+    where session.completed_task_ids includes a task whose spec status is
+    not 'completed'.
+    """
+
+    def test_phantom_completion_revoked_when_spec_status_not_completed(self, tmp_path):
+        """Task in completed_task_ids but spec status='pending' is revoked."""
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+            last_step_issued=_issued(step_id="step-001", task_id="task-1"),
+        )
+
+        last_result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+            phase_id="phase-1",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        assert "task-1" not in session.completed_task_ids
+        assert session.counters.tasks_completed == 0
+
+    def test_confirmed_completion_preserved_when_spec_agrees(self, tmp_path):
+        """Task in completed_task_ids with spec status='completed' is kept."""
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task 1", "type": "task", "status": "completed"},
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+            last_step_issued=_issued(step_id="step-001", task_id="task-1"),
+        )
+
+        last_result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+            phase_id="phase-1",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        assert "task-1" in session.completed_task_ids
+        assert session.counters.tasks_completed == 1
+
+    def test_noop_for_failure_outcomes(self, tmp_path):
+        """Reconciliation is a no-op when outcome is FAILURE."""
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task 1", "type": "task", "status": "pending"},
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+        )
+
+        last_result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.FAILURE,
+            task_id="task-1",
+            phase_id="phase-1",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        # No change — failure outcomes don't trigger reconciliation
+        assert "task-1" in session.completed_task_ids
+        assert session.counters.tasks_completed == 1
+
+    def test_noop_for_gate_steps(self, tmp_path):
+        """Reconciliation is a no-op for RUN_FIDELITY_GATE steps."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+        )
+
+        last_result = _result(
+            step_id="step-gate-001",
+            step_type=StepType.RUN_FIDELITY_GATE,
+            outcome=StepOutcome.SUCCESS,
+            task_id=None,
+            phase_id="phase-1",
+            gate_attempt_id="gate-attempt-001",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        # No change — gate steps are excluded from reconciliation
+        assert "task-1" in session.completed_task_ids
+        assert session.counters.tasks_completed == 1
+
+    def test_noop_when_last_step_result_is_none(self, tmp_path):
+        """Reconciliation is a no-op when last_step_result is None."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, None)
+
+        assert "task-1" in session.completed_task_ids
+        assert session.counters.tasks_completed == 1
+
+    def test_phantom_revoked_for_execute_verification(self, tmp_path):
+        """Phantom detection also works for EXECUTE_VERIFICATION step type."""
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "verify-1", "title": "Verify 1", "type": "verify", "status": "pending"},
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["verify-1"],
+            counters=SessionCounters(tasks_completed=1),
+        )
+
+        last_result = _result(
+            step_id="step-verify-001",
+            step_type=StepType.EXECUTE_VERIFICATION,
+            outcome=StepOutcome.SUCCESS,
+            task_id="verify-1",
+            phase_id="phase-1",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        assert "verify-1" not in session.completed_task_ids
+        assert session.counters.tasks_completed == 0

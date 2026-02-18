@@ -143,6 +143,19 @@ def _persist_step_proof_response(
 _attach_loop_fields = attach_loop_metadata  # local alias for backward compat
 
 
+def _generate_replacement_proof(session_id: str, step_id: str) -> str:
+    """Generate a replacement proof token for crash recovery.
+
+    Same algorithm as StepOrchestrator._issue_step_proof but intentionally
+    duplicated so the handler doesn't import orchestrator internals.
+    """
+    from ulid import ULID
+
+    now = datetime.now(timezone.utc)
+    seed = f"{session_id}:{step_id}:{now.isoformat()}:{ULID()}"
+    return hashlib.sha256(seed.encode()).hexdigest()
+
+
 def _map_orchestrator_error_to_response(
     error_code: Optional[str],
     error_message: str,
@@ -820,11 +833,52 @@ def _handle_session_step_replay(
             )
         )
 
+    # Detect consumed proof and reissue if needed (crash recovery)
+    cached_response = session.last_issued_response
+    next_step_data = cached_response.get("next_step")
+    if isinstance(next_step_data, dict):
+        old_proof = next_step_data.get("step_proof")
+        if old_proof:
+            proof_record = storage.get_proof_record(
+                session.id,
+                old_proof,
+                include_expired=True,
+            )
+            if proof_record is not None:
+                # Proof was consumed — reissue a fresh one
+                step_id = next_step_data.get("step_id", "")
+                new_proof = _generate_replacement_proof(session.id, step_id)
+
+                # Update cached response and session state
+                next_step_data["step_proof"] = new_proof
+                cached_response["next_step"] = next_step_data
+                session.last_issued_response = cached_response
+
+                if session.last_step_issued is not None:
+                    session.last_step_issued.step_proof = new_proof
+
+                try:
+                    storage.save(session)
+                except (OSError, ValueError, TimeoutError) as exc:
+                    logger.warning(
+                        "Failed to persist reissued proof for session %s: %s",
+                        session.id,
+                        exc,
+                    )
+
+                logger.warning(
+                    "Proof reissued during crash recovery: session=%s step=%s old_proof=%s new_proof=%s",
+                    session.id,
+                    step_id,
+                    old_proof[:16],
+                    new_proof[:16],
+                )
+
     logger.info("Replaying cached response for session %s", session.id)
     return _attach_loop_fields(
         asdict(
             success_response(
-                data=session.last_issued_response,
+                data=cached_response,
                 request_id=request_id,
             )
         )

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b8] - 2026-02-18
+
+### Fixed
+
+- **Phantom task completions**: Added Step 4b reconciliation (`_reconcile_completed_tasks`) that cross-checks `session.completed_task_ids` against actual spec task status after spec data is loaded. When the runner self-reports success but the spec task remains pending (e.g., `task(action="complete")` was never called), the phantom completion is revoked and the task is re-issued on the next step cycle. Self-healing — no manual intervention required.
+- **Proof deadlock on crash recovery**: Enhanced `session-step-replay` to detect consumed proof tokens and reissue fresh ones. Previously, if a crash occurred between proof consumption and session state update, recovery agents received a dead proof from replay and were permanently stuck (`STEP_PROOF_CONFLICT`). Now replay checks `get_proof_record()`, generates a replacement proof, and persists the updated session state.
+
 ## [0.12.0b7] - 2026-02-18
 
 ### Fixed

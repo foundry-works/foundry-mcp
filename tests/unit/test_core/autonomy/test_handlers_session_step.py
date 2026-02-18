@@ -1417,3 +1417,160 @@ class TestSessionStepContractConformance:
         )
         assert_response_contract(resp)
         assert resp["success"] is False
+
+
+# =============================================================================
+# Proof Reissue on Replay (Crash Recovery)
+# =============================================================================
+
+
+class TestProofReissueOnReplay:
+    """Tests for proof reissue logic in _handle_session_step_replay.
+
+    When a proof in the cached response has been consumed (crash between
+    proof consumption and session state update), replay should detect this
+    and reissue a fresh proof token.
+    """
+
+    def test_consumed_proof_triggers_reissue(self, tmp_path):
+        """Replay detects consumed proof and returns a new one."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_replay,
+        )
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+
+        old_proof = "proof-consumed-001"
+
+        # Set up cached response with a proof
+        session.last_issued_response = {
+            "session_id": session_id,
+            "status": "running",
+            "state_version": 2,
+            "next_step": {
+                "step_id": "step-replay-proof-1",
+                "type": "implement_task",
+                "task_id": "task-1",
+                "phase_id": "phase-1",
+                "step_proof": old_proof,
+            },
+        }
+        session.last_step_issued = LastStepIssued(
+            step_id="step-replay-proof-1",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+            step_proof=old_proof,
+        )
+        storage.save(session)
+
+        # Simulate the proof being consumed (crash scenario)
+        consumed, _, _ = storage.consume_proof_with_lock(
+            session_id,
+            old_proof,
+            payload_hash="dummy-hash",
+            step_id="step-replay-proof-1",
+        )
+        assert consumed is True
+
+        # Replay should detect the consumed proof and reissue
+        resp = _handle_session_step_replay(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        assert resp["success"] is True
+        data = resp["data"]
+        new_proof = data["next_step"]["step_proof"]
+        assert new_proof != old_proof
+        assert len(new_proof) == 64  # SHA-256 hex
+
+        # Verify session state was updated
+        updated_session = storage.load(session_id)
+        assert updated_session.last_step_issued.step_proof == new_proof
+        assert updated_session.last_issued_response["next_step"]["step_proof"] == new_proof
+
+    def test_unconsumed_proof_returns_unchanged(self, tmp_path):
+        """Replay returns unchanged response when proof is not consumed."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_replay,
+        )
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+
+        original_proof = "proof-unconsumed-001"
+
+        session.last_issued_response = {
+            "session_id": session_id,
+            "status": "running",
+            "state_version": 2,
+            "next_step": {
+                "step_id": "step-unchanged-1",
+                "type": "implement_task",
+                "task_id": "task-1",
+                "phase_id": "phase-1",
+                "step_proof": original_proof,
+            },
+        }
+        session.last_step_issued = LastStepIssued(
+            step_id="step-unchanged-1",
+            type=StepType.IMPLEMENT_TASK,
+            task_id="task-1",
+            phase_id="phase-1",
+            issued_at=datetime.now(timezone.utc),
+            step_proof=original_proof,
+        )
+        storage.save(session)
+
+        # No proof consumption — proof record doesn't exist
+        resp = _handle_session_step_replay(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        assert resp["success"] is True
+        assert resp["data"]["next_step"]["step_proof"] == original_proof
+
+    def test_response_without_proof_returns_unchanged(self, tmp_path):
+        """Replay returns unchanged response when cached response has no proof."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_replay,
+        )
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+        storage = _get_storage(config, str(workspace))
+        session = storage.load(session_id)
+        assert session is not None
+
+        cached = {
+            "session_id": session_id,
+            "status": "running",
+            "state_version": 2,
+            "next_step": {
+                "step_id": "step-no-proof-1",
+                "type": "implement_task",
+                "task_id": "task-1",
+                "phase_id": "phase-1",
+            },
+        }
+        session.last_issued_response = cached
+        storage.save(session)
+
+        resp = _handle_session_step_replay(
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
+        )
+        assert resp["success"] is True
+        # No step_proof in response — unchanged
+        assert "step_proof" not in resp["data"]["next_step"]
