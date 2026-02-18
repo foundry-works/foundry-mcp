@@ -34,6 +34,7 @@ from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
 from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.core.authorization import (
     check_action_allowed,
@@ -205,7 +206,7 @@ def _find_backup_with_hash(
         if backup_file.name == "latest.json":
             continue
         try:
-            backup_data = json.loads(backup_file.read_text())
+            backup_data = load_spec_file(backup_file)
             backup_hash = compute_spec_structure_hash(backup_data)
             if backup_hash == target_hash:
                 logger.debug("Found matching backup: %s", backup_file)
@@ -308,7 +309,7 @@ def _handle_session_rebase(
         ))
 
     try:
-        current_spec_data = json.loads(spec_path.read_text())
+        current_spec_data = load_spec_file(spec_path)
         current_hash = compute_spec_structure_hash(current_spec_data)
         current_metadata = get_spec_file_metadata(spec_path)
     except (OSError, json.JSONDecodeError, ValueError) as e:

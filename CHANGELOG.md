@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b3] - 2026-02-18
+
+### Added
+
+- **Spec adapter** (`core/autonomy/spec_adapter.py`): New module that bridges hierarchy-based spec data to the phases-array view expected by the orchestrator. Provides `load_spec_file()` as the single entry point for loading spec files in the autonomy layer, and `ensure_phases_view()` for converting hierarchy format to phases format non-destructively. Handles nested subtasks, group nodes, and is idempotent.
+
+### Changed
+
+- **Spec loading centralized**: All spec file loading in the autonomy layer (`orchestrator.py`, `handlers_session_lifecycle.py`, `handlers_session_rebase.py`) now uses `load_spec_file()` from the spec adapter instead of inline `json.loads()` calls. This ensures hierarchy-format specs are automatically converted to the phases view.
+
 ## [0.12.0b2] - 2026-02-18
 
 ### Removed

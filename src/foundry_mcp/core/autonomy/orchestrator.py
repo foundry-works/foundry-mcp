@@ -1014,11 +1014,10 @@ class StepOrchestrator(StepEmitterMixin):
 
     def _load_spec_file(self, spec_path: Path) -> Optional[Dict[str, Any]]:
         """Load and parse a spec file."""
-        import json
+        from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
 
         try:
-            with open(spec_path, "r") as f:
-                return json.load(f)
+            return load_spec_file(spec_path)
         except (json.JSONDecodeError, OSError) as e:
             logger.error("Failed to load spec %s: %s", spec_path, e)
             return None

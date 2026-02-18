@@ -107,6 +107,9 @@ from .memory import (
     AutonomyStorage,
     SessionCorrupted,
 )
+from .spec_adapter import (
+    load_spec_file,
+)
 from .spec_hash import (
     SpecFileMetadata,
     StructuralDiff,
@@ -205,6 +208,8 @@ __all__ = [
     "is_sandbox_mode",
     # Storage
     "AutonomyStorage",
+    # Spec adapter
+    "load_spec_file",
     # Spec hash module
     "SpecFileMetadata",
     "StructuralDiff",

@@ -45,6 +45,7 @@ from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
 from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.core.authorization import (
     Role,
@@ -237,7 +238,7 @@ def _load_spec_for_session_start(
         ))
 
     try:
-        spec_data = json.loads(spec_path.read_text())
+        spec_data = load_spec_file(spec_path)
         spec_structure_hash = compute_spec_structure_hash(spec_data)
         spec_metadata = get_spec_file_metadata(spec_path)
     except (OSError, json.JSONDecodeError, ValueError) as e:
@@ -703,7 +704,7 @@ def _handle_session_resume(
 
             if spec_path:
                 try:
-                    current_spec_data = json.loads(spec_path.read_text())
+                    current_spec_data = load_spec_file(spec_path)
                     current_hash = compute_spec_structure_hash(current_spec_data)
                     if current_hash != session.spec_structure_hash:
                         return asdict(error_response(
