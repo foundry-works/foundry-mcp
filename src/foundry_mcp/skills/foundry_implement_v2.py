@@ -730,6 +730,24 @@ def _start_session_with_compatibility(
     write_lock_enforced = bool(status_data.get("write_lock_enforced"))
     if not isinstance(stop_conditions, Mapping):
         stop_conditions = {}
+    # Reject sessions paused at fidelity cycle limit — requires human review
+    pause_reason = status_data.get("pause_reason")
+    if isinstance(pause_reason, str) and pause_reason.strip().lower() == "fidelity_cycle_limit":
+        raise FoundryImplementV2Error(
+            "SESSION_REUSE_PAUSED_GATE_LIMIT",
+            "Cannot reuse session paused due to fidelity cycle limit. "
+            "The phase exhausted its fidelity review budget and needs human review.",
+            remediation="Review gate evidence, then end the session and retry with a new one.",
+            details={
+                "session_id": candidate_id,
+                "pause_reason": pause_reason,
+                "fidelity_review_cycles": status_data.get("counters", {}).get(
+                    "fidelity_review_cycles_in_active_phase"
+                ),
+            },
+            response=status_response,
+        )
+
     compatible = bool(stop_conditions.get("stop_on_phase_completion")) and write_lock_enforced
     if not compatible:
         raise FoundryImplementV2Error(

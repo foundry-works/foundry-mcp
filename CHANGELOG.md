@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b11] - 2026-02-18
+
+### Fixed
+
+- **Session reuse ignores fidelity cycle limit**: `foundry-implement-auto` would reuse a session paused at `fidelity_cycle_limit` (gate retries exhausted), then immediately hit the same wall. The skill now detects this pause reason and raises `SESSION_REUSE_PAUSED_GATE_LIMIT` with clear remediation guidance instead of entering a futile retry loop.
+
 ## [0.12.0b10] - 2026-02-18
 
 ### Fixed
