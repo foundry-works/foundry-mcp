@@ -26,11 +26,11 @@ from foundry_mcp.core.context import (
     get_correlation_id,
 )
 from foundry_mcp.core.observability import MetricsCollector
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    error_response,
 )
+from foundry_mcp.core.responses.builders import error_response
 from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.errors.execution import ActionRouterError
 from foundry_mcp.tools.unified.router import ActionRouter

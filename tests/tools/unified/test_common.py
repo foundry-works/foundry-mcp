@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from dataclasses import dataclass
 
-from foundry_mcp.core.responses import ErrorCode
+from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.tools.unified.common import (
     build_request_id,
     dispatch_with_standard_errors,

@@ -695,7 +695,11 @@ class TestFeatureFlag:
         """Feature flag error response should follow response-v2 format."""
         from dataclasses import asdict
 
-        from foundry_mcp.core.responses import ErrorCode, ErrorType, error_response
+        from foundry_mcp.core.responses.types import (
+            ErrorCode,
+            ErrorType,
+        )
+        from foundry_mcp.core.responses.builders import error_response
 
         # The research tool returns this error when feature flag is disabled
         response = error_response(

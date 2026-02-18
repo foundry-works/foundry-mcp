@@ -17,9 +17,11 @@ from foundry_mcp.core.pagination import (
     normalize_page_size,
     paginated_response,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

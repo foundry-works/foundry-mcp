@@ -40,15 +40,17 @@ from foundry_mcp.core.prompts.fidelity_review import (
 )
 
 # Response helpers
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    ai_no_provider_error,
-    ai_provider_timeout_error,
-    ai_provider_error,
-    ai_context_too_large_error,
-    ai_prompt_not_found_error,
+)
+from foundry_mcp.core.responses.errors_ai import (
     ai_cache_stale_error,
+    ai_context_too_large_error,
+    ai_no_provider_error,
+    ai_prompt_not_found_error,
+    ai_provider_error,
+    ai_provider_timeout_error,
 )
 
 

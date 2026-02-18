@@ -14,7 +14,10 @@ from foundry_mcp.core.spec import (
     find_spec_file,
     get_node,
 )
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 
 
 def is_unblocked(spec_data: Dict[str, Any], task_id: str, task_data: Dict[str, Any]) -> bool:

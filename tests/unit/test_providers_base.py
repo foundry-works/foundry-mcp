@@ -31,7 +31,7 @@ from foundry_mcp.core.providers.base import (
     ProviderExecutionError,
     ProviderTimeoutError,
 )
-from foundry_mcp.core.responses import ErrorType
+from foundry_mcp.core.responses.types import ErrorType
 
 
 # =============================================================================

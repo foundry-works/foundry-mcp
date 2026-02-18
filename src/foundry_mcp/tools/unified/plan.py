@@ -23,13 +23,15 @@ from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import available_providers
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    ai_no_provider_error,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.errors_ai import ai_no_provider_error
 from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_specs_directory

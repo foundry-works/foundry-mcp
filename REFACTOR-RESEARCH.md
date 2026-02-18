@@ -448,6 +448,38 @@ core/research/workflows/deep_research/phases/analysis.py + 3 sub-mixins (_analys
 
 ---
 
+## 16. Response Module Decomposition — DONE
+
+### Status: All 4 waves complete (2026-02-18)
+
+Decomposed `core/responses.py` (1,697 lines — the single largest remaining file in `src/`, 62 import sites — the highest caller count of any remaining monolith) into a `core/responses/` package with 7 focused sub-modules.
+
+**Wave 1** — Created package scaffold with `types.py` (ErrorCode, ErrorType, ToolResponse, _build_meta), `builders.py` (success_response, error_response), and `__init__.py` with re-exports + inline remainder. Deleted original `responses.py`. 5,208 tests passing.
+
+**Wave 2** — Extracted `errors_generic.py` (8 HTTP-analog helpers), `errors_spec.py` (12 spec-domain helpers), `errors_ai.py` (6 AI/LLM helpers), `sanitization.py` (sanitize_error_message), `batch_schemas.py` (11 Pydantic models). Trimmed `__init__.py` to pure re-exports (91 lines). 5,208 tests passing.
+
+**Wave 3** — Migrated 60 caller import sites (35 tools/unified + 9 core + 16 CLI/tests) to canonical sub-module paths (e.g., `responses.types`, `responses.builders`, `responses.errors_ai`). Re-exports in `__init__.py` retained for external consumers. 5,208 tests passing.
+
+**Wave 4** — Verified zero remaining old-path imports outside `__init__.py`. All ~45 public symbols re-exported. Full test suite: 5,208 passed, 48 skipped, 0 regressions.
+
+### Final Structure
+
+```
+core/responses/
+    __init__.py       # Re-exports all public symbols (91 lines)
+    types.py          # ErrorCode, ErrorType, ToolResponse, _build_meta (202 lines)
+    builders.py       # success_response, error_response (164 lines)
+    errors_generic.py # 8 generic HTTP-analog helpers (267 lines)
+    errors_spec.py    # 12 spec-domain error helpers (444 lines)
+    errors_ai.py      # 6 AI/LLM provider error helpers (279 lines)
+    sanitization.py   # sanitize_error_message (65 lines)
+    batch_schemas.py  # 11 Pydantic models + PYDANTIC_AVAILABLE guard (240 lines)
+```
+
+5,208 tests passing, 0 regressions across all 4 waves.
+
+---
+
 ## What's Working Well
 
 - **Response envelope consistency**: 100% of production code uses `asdict(success_response(...))` / `asdict(error_response(...))` — zero hand-rolled responses
@@ -481,3 +513,4 @@ core/research/workflows/deep_research/phases/analysis.py + 3 sub-mixins (_analys
 | 13 | LLM config module decomposition | **Done** (Waves 1-4) | — | 7 classes split into 5 sub-modules, 18 callers |
 | 14 | Discovery module decomposition | **Done** (Waves 1-4) | — | 6 classes split into 10 sub-modules, 55% metadata separated |
 | 15 | Research infrastructure decomposition | **Done** (Waves 1-7) | — | 7 monoliths → 40 focused modules, ~9,936 lines decomposed |
+| 16 | Response module decomposition | **Done** (Waves 1-4) | — | 1,697 lines → 7 sub-modules, 60 callers migrated |

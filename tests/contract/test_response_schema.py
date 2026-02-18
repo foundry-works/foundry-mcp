@@ -18,17 +18,21 @@ try:
 except ImportError:
     pytest.skip("jsonschema not installed", allow_module_level=True)
 
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
     ToolResponse,
-    conflict_error,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.errors_generic import (
+    conflict_error,
     forbidden_error,
     internal_error,
     not_found_error,
     rate_limit_error,
-    success_response,
     unauthorized_error,
     unavailable_error,
     validation_error,

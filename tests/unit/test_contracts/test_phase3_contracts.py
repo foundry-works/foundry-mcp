@@ -14,11 +14,13 @@ from typing import Any, Dict
 
 import pytest
 
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    success_response,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
+    success_response,
 )
 
 

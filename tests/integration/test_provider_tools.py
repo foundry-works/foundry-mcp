@@ -6,7 +6,10 @@ from dataclasses import asdict
 
 import pytest
 
-from foundry_mcp.core.responses import error_response, success_response
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 from tests.conftest import extract_response_dict
 
 

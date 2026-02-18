@@ -500,7 +500,7 @@ class TestPhase7FixtureFreshness:
 
     def test_error_codes_are_valid(self, temp_specs_dir):
         """Error codes should be from ErrorCode enum."""
-        from foundry_mcp.core.responses import ErrorCode
+        from foundry_mcp.core.responses.types import ErrorCode
 
         response = call_spec_handler(
             "completeness-check",

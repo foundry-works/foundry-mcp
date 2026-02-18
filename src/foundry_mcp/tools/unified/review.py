@@ -31,9 +31,11 @@ from foundry_mcp.core.llm_config.consultation import get_consultation_config, lo
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import get_provider_statuses
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

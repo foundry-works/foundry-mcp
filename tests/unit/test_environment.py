@@ -35,7 +35,7 @@ class TestVerifyToolchain:
         # Mock all tools as available
         mock_which.return_value = "/usr/bin/tool"
 
-        from foundry_mcp.core.responses import success_response
+        from foundry_mcp.core.responses.builders import success_response
         from dataclasses import asdict
 
         required_tools = ["python", "git"]
@@ -68,7 +68,7 @@ class TestVerifyToolchain:
 
         mock_which.side_effect = which_side_effect
 
-        from foundry_mcp.core.responses import error_response
+        from foundry_mcp.core.responses.builders import error_response
         from dataclasses import asdict
 
         data = {
@@ -137,7 +137,7 @@ class TestInitWorkspace:
 
     def test_permission_error_handling(self):
         """Test that permission errors are handled gracefully."""
-        from foundry_mcp.core.responses import error_response
+        from foundry_mcp.core.responses.builders import error_response
         from dataclasses import asdict
 
         result = asdict(
@@ -313,7 +313,7 @@ class TestVerifyEnvironment:
 
     def test_all_valid_environment(self):
         """Test response when all environment checks pass."""
-        from foundry_mcp.core.responses import success_response
+        from foundry_mcp.core.responses.builders import success_response
         from dataclasses import asdict
 
         data = {
@@ -330,7 +330,7 @@ class TestVerifyEnvironment:
 
     def test_invalid_environment_with_issues(self):
         """Test error response when environment validation fails."""
-        from foundry_mcp.core.responses import error_response
+        from foundry_mcp.core.responses.builders import error_response
         from dataclasses import asdict
 
         issues = ["Git not found in PATH", "Required package not found: nonexistent"]
@@ -450,7 +450,7 @@ class TestSddSetup:
 
     def test_invalid_preset_validation(self):
         """Test validation of invalid permissions preset."""
-        from foundry_mcp.core.responses import error_response
+        from foundry_mcp.core.responses.builders import error_response
         from dataclasses import asdict
 
         invalid_preset = "invalid_preset"
@@ -468,7 +468,7 @@ class TestSddSetup:
 
     def test_path_not_found_validation(self):
         """Test validation when path does not exist."""
-        from foundry_mcp.core.responses import error_response
+        from foundry_mcp.core.responses.builders import error_response
         from dataclasses import asdict
 
         nonexistent_path = "/nonexistent/path/xyz123"
@@ -486,7 +486,7 @@ class TestSddSetup:
 
     def test_response_envelope_compliance(self):
         """Test that success response follows v2 contract."""
-        from foundry_mcp.core.responses import success_response
+        from foundry_mcp.core.responses.builders import success_response
         from dataclasses import asdict
 
         data = {

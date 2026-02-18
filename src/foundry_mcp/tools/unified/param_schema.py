@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple, Union
 
-from foundry_mcp.core.responses import ErrorCode
+from foundry_mcp.core.responses.types import ErrorCode
 
 
 # ---------------------------------------------------------------------------
@@ -134,10 +134,8 @@ def validate_payload(
     """
     from dataclasses import asdict as _asdict
 
-    from foundry_mcp.core.responses import (
-        ErrorType,
-        error_response,
-    )
+    from foundry_mcp.core.responses.types import ErrorType
+    from foundry_mcp.core.responses.builders import error_response
 
     def _error(
         field: str,

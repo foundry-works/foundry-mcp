@@ -333,7 +333,7 @@ def validate_input_size(
             if all_violations:
                 # Import here to avoid circular dependency
                 try:
-                    from foundry_mcp.core.responses import error_response
+                    from foundry_mcp.core.responses.builders import error_response
                     return asdict(error_response(
                         "Input validation failed",
                         error_code="VALIDATION_ERROR",
@@ -384,7 +384,7 @@ def validate_input_size(
 
             if all_violations:
                 try:
-                    from foundry_mcp.core.responses import error_response
+                    from foundry_mcp.core.responses.builders import error_response
                     return asdict(error_response(
                         "Input validation failed",
                         error_code="VALIDATION_ERROR",

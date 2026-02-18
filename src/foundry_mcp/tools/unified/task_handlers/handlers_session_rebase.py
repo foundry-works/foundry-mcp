@@ -26,9 +26,11 @@ from foundry_mcp.core.autonomy.spec_hash import (
     compute_structural_diff,
     StructuralDiff,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

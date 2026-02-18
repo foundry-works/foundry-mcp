@@ -28,9 +28,11 @@ from foundry_mcp.core.autonomy.models.responses import (
 )
 from foundry_mcp.core.autonomy.models.signals import derive_loop_signal
 from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

@@ -18,9 +18,11 @@ from foundry_mcp.core.health import (
 )
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability.prometheus import get_prometheus_exporter
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

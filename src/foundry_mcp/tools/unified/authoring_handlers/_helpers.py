@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.responses import ErrorCode
+from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.core.spec import list_assumptions, load_spec
 from foundry_mcp.tools.unified.common import (
     build_request_id,

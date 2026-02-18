@@ -20,7 +20,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Sequence, Set
 
 if TYPE_CHECKING:
-    from foundry_mcp.core.responses import ErrorType
+    from foundry_mcp.core.responses.types import ErrorType
 
 
 class ProviderCapability(Enum):
@@ -110,7 +110,7 @@ class ProviderStatus(Enum):
         Raises:
             ValueError: If called on SUCCESS status (not an error)
         """
-        from foundry_mcp.core.responses import ErrorType
+        from foundry_mcp.core.responses.types import ErrorType
 
         if self == ProviderStatus.SUCCESS:
             raise ValueError("SUCCESS status cannot be mapped to an error type")

@@ -4,20 +4,24 @@ Tests for response helper functions and standard format validation.
 Verifies that the response contract is properly implemented across all tools.
 """
 
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
     ToolResponse,
-    success_response,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
-    validation_error,
+    success_response,
+)
+from foundry_mcp.core.responses.errors_generic import (
+    conflict_error,
+    forbidden_error,
+    internal_error,
     not_found_error,
     rate_limit_error,
     unauthorized_error,
-    forbidden_error,
-    conflict_error,
-    internal_error,
     unavailable_error,
+    validation_error,
 )
 
 

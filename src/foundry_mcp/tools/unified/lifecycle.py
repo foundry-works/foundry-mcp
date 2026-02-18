@@ -12,13 +12,15 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
-    sanitize_error_message,
     success_response,
 )
+from foundry_mcp.core.responses.sanitization import sanitize_error_message
 from foundry_mcp.core.lifecycle import (
     VALID_FOLDERS,
     MoveResult,

@@ -63,10 +63,10 @@ from foundry_mcp.core.journal import (
     save_journal,
 )
 
-from foundry_mcp.core.responses import (
-    ToolResponse,
-    success_response,
+from foundry_mcp.core.responses.types import ToolResponse
+from foundry_mcp.core.responses.builders import (
     error_response,
+    success_response,
 )
 from foundry_mcp.core.naming import canonical_tool
 

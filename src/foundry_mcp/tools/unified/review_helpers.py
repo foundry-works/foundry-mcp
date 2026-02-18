@@ -16,14 +16,18 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.errors_ai import (
     ai_no_provider_error,
     ai_provider_error,
     ai_provider_timeout_error,
-    error_response,
-    success_response,
 )
 
 logger = logging.getLogger(__name__)

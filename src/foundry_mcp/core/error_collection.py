@@ -405,7 +405,10 @@ class ErrorCollector:
             Tuple of (error_code, error_type)
         """
         # Import here to avoid circular imports
-        from foundry_mcp.core.responses import ErrorCode, ErrorType
+        from foundry_mcp.core.responses.types import (
+            ErrorCode,
+            ErrorType,
+        )
 
         exception_name = type(error).__name__
 
@@ -540,7 +543,10 @@ class ErrorCollector:
 
         try:
             # Import here to avoid circular imports
-            from foundry_mcp.core.responses import ErrorCode, ErrorType
+            from foundry_mcp.core.responses.types import (
+                ErrorCode,
+                ErrorType,
+            )
 
             # Determine error details
             if error:

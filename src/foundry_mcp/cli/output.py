@@ -19,7 +19,10 @@ from dataclasses import asdict
 from typing import Any, Mapping, Sequence, NoReturn
 
 from foundry_mcp.cli.logging import generate_request_id, get_request_id, set_request_id
-from foundry_mcp.core.responses import error_response, success_response
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 
 
 def _ensure_request_id() -> str:

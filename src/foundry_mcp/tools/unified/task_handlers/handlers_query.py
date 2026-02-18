@@ -18,9 +18,11 @@ from foundry_mcp.core.progress import (
     get_progress_summary,
     list_phases,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

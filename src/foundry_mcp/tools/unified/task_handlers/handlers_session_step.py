@@ -57,9 +57,11 @@ from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_GATE_INTEGRITY_CHECKSUM,
     ERROR_GATE_AUDIT_FAILURE,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

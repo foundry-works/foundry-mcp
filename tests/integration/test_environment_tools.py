@@ -13,7 +13,10 @@ from pathlib import Path
 from dataclasses import asdict
 
 
-from foundry_mcp.core.responses import success_response, error_response
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
 
 
 class TestEnvironmentToolResponseEnvelopes:

@@ -7,9 +7,11 @@ from typing import Any, Optional
 
 from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.workflows import ChatWorkflow
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

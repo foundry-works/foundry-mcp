@@ -32,9 +32,11 @@ from foundry_mcp.core.pagination import (
     encode_cursor,
     paginated_response,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

@@ -37,9 +37,11 @@ from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

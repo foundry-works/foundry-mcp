@@ -16,9 +16,11 @@ from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.memory import (
     ListSessionsResult,
 )
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )

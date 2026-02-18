@@ -56,7 +56,7 @@ import json
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from foundry_mcp.core.responses import success_response
+from foundry_mcp.core.responses.builders import success_response
 
 
 # ---------------------------------------------------------------------------

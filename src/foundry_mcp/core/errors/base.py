@@ -52,7 +52,10 @@ from foundry_mcp.core.errors.storage import (
     SessionCorrupted,
     VersionConflictError,
 )
-from foundry_mcp.core.responses import ErrorCode, ErrorType
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 
 ERROR_MAPPINGS: Dict[Type[Exception], Tuple[ErrorCode, ErrorType]] = {
     # --- Provider errors ---
@@ -108,7 +111,7 @@ def error_to_response(exc: Exception) -> Optional[dict]:
 
     from dataclasses import asdict
 
-    from foundry_mcp.core.responses import error_response
+    from foundry_mcp.core.responses.builders import error_response
 
     code, error_type = mapping
     return asdict(error_response(str(exc), error_code=code, error_type=error_type))

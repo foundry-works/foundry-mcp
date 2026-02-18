@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from foundry_mcp.core.responses import ErrorCode
+from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.tools.unified.param_schema import (
     AtLeastOne,
     Bool,

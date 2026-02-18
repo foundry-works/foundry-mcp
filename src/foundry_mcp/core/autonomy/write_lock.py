@@ -37,12 +37,12 @@ from typing import Any, Dict, FrozenSet, Optional
 
 import logging
 
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-    error_response,
     ToolResponse,
 )
+from foundry_mcp.core.responses.builders import error_response
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.authorization import get_server_role, Role
 

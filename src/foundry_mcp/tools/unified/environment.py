@@ -16,9 +16,11 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config.server import ServerConfig, _PACKAGE_VERSION
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
-from foundry_mcp.core.responses import (
+from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
+)
+from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
