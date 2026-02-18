@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b5] - 2026-02-18
+
+### Added
+
+- **Stale session recovery**: Replay-based recovery for autonomous sessions where a prior agent died mid-step. New agents probe for unreported pending steps via `session-step replay`, recovering the step proof without counter resets, session cycling, or gate bypass. Covers all `loop_signal` states with deterministic escalation or continuation.
+- **Skill documentation**: Updated `foundry-implement-auto` flow diagram, session management reference, and step loop docs to document the full stale session recovery sequence, safety guarantees, state-specific behavior, and edge cases.
+
 ## [0.12.0b4] - 2026-02-18
 
 ### Added

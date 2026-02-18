@@ -25,7 +25,9 @@ Entry → [spec_id arg present?]
   → [all pass?]
     → [no] → ! FoundryImplementAutoError + remediation → EXIT
     → [yes] → SessionStart
-      → [SPEC_SESSION_EXISTS?] → §SessionReuse
+      → [SPEC_SESSION_EXISTS?]
+        → [yes] → §SessionReuse → §StaleSessionRecovery (replay probe) → StepLoop
+        → [no]  → StepLoop (fresh session, no stale steps possible)
   → StepLoop (max 200 iterations) ↻
     → task(session-step, command="next")
     → [loop_signal?]
@@ -74,13 +76,19 @@ claude -p /foundry-implement-auto <spec-id> .
 - Arg 1: `spec_id` — **required.** The spec to execute. If missing or empty, emit `SPEC_ID_MISSING` error and EXIT immediately. Never prompt, list specs, or offer choices.
 - Arg 2: workspace path (default `.`).
 
-**Argument extraction:** The spec_id is passed as the first positional argument after the skill name. Parse it directly from the invocation arguments. Strip any `.json` suffix if present (e.g., `hello-world-python-2026-02-18-001.json` → `hello-world-python-2026-02-18-001`).
+**Argument extraction:** After skill expansion, the spec_id appears as text in the user's message — typically the remaining content after the skill name or command tag. To extract it:
+
+1. **Look in the user message** for any text following `/foundry-implement-auto` or any `<command-name>` tag. The spec_id is the first whitespace-delimited token after the skill name.
+2. **Scan the full conversation turn** for a string matching a spec ID pattern (hyphenated slug, e.g., `hello-world-python-2026-02-18-001` or `hello-world-python-2026-02-18-001.json`).
+3. Strip any `.json` suffix if present (e.g., `hello-world-python-2026-02-18-001.json` → `hello-world-python-2026-02-18-001`).
+
+If no spec_id is found after checking all locations, emit `SPEC_ID_MISSING` error and EXIT.
 
 ## Preflight
 
 All checks must pass before session start. Any failure produces a structured error with error code and remediation hint. **Never prompt the user on failure — emit the error and EXIT.**
 
-0. **Extract spec_id from invocation arguments.** If no spec_id argument was provided, emit `SPEC_ID_MISSING` error and EXIT. Do not list specs, offer choices, or ask for input.
+0. **Extract spec_id from the user's message.** Scan the user's message text in the current conversation turn for the spec_id (see Argument extraction above). If none found, emit `SPEC_ID_MISSING` error and EXIT. Do not list specs, offer choices, or ask for input.
 1. Resolve spec via `spec(action="find")`
 2. Detect action shape (canonical vs legacy)
 3. Verify feature flags via `server(action="capabilities")`
@@ -108,6 +116,7 @@ Start a session with hardened one-phase defaults:
 These parameters are hardcoded — never configurable, never weakened.
 
 > Session reuse and rebase handling: [references/session-management.md](./references/session-management.md)
+> Stale session recovery: [references/session-management.md](./references/session-management.md#stale-session-recovery)
 
 ## Step Loop
 
@@ -122,6 +131,8 @@ Repeat up to `max_iterations=200`:
 > Step handler details: [references/step-handlers.md](./references/step-handlers.md)
 > Verification receipt construction: [references/verification-receipts.md](./references/verification-receipts.md)
 > Step proof protocol: [references/step-proofs.md](./references/step-proofs.md)
+
+**Recovered-step entry:** When stale session recovery returns a pending step (see [references/session-management.md](./references/session-management.md#stale-session-recovery)), that step becomes the first iteration of the step loop. Dispatch it through the same step handler path (step 3 above) using the recovered `next_step` and `step_proof`. No special handling is needed — the step loop is agnostic to whether a step came from `next` or `replay`. The report response provides a fresh proof for subsequent iterations.
 
 ## Deterministic Exit Table
 

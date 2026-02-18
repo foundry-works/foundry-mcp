@@ -15,9 +15,13 @@ All checks must pass before session start. Any failure produces a structured err
 
 ## Step 0: Extract Spec ID
 
-Extract the `spec_id` from the first positional argument provided after the skill name. Strip `.json` suffix if present.
+After skill expansion, the spec_id appears as text in the user's message. To extract it:
 
-If no spec_id argument was provided (empty or missing), emit error and EXIT:
+1. **Look in the user message** for any text following `/foundry-implement-auto` or any `<command-name>` tag. The spec_id is the first whitespace-delimited token after the skill name.
+2. **Scan the full conversation turn** for a string matching a spec ID pattern (hyphenated slug, e.g., `hello-world-python-2026-02-18-001` or `hello-world-python-2026-02-18-001.json`).
+3. Strip any `.json` suffix if present.
+
+If no spec_id is found after checking all locations, emit error and EXIT:
 
 ```
 FoundryImplementAutoError {
