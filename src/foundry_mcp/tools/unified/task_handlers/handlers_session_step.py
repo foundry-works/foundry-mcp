@@ -434,37 +434,73 @@ def _handle_session_step_next(
     consumed_step_proof: Optional[str] = None
     consumed_step_id: Optional[str] = None
     if last_step_result:
-        try:
-            # Convert outcome string to enum
-            outcome_str = last_step_result.get("outcome", "success")
-            outcome = StepOutcome(outcome_str)
+        # Collect all validation errors up-front instead of failing on the first one.
+        _parse_errors: list[str] = []
 
-            # step_type is required in LastStepResult
-            step_type_str = last_step_result.get("step_type")
-            if not step_type_str:
-                return _attach_loop_fields(
-                    asdict(
-                        error_response(
-                            "step_type is required in last_step_result",
-                            error_code=ErrorCode.VALIDATION_ERROR,
-                            error_type=ErrorType.VALIDATION,
-                            request_id=request_id,
-                            details={
-                                "action": "session-step-next",
-                                "field": "last_step_result.step_type",
-                                "hint": "Provide step_type matching the last issued step",
-                            },
-                        )
+        # --- outcome ---
+        outcome: Optional[StepOutcome] = None
+        outcome_str = last_step_result.get("outcome", "success")
+        try:
+            outcome = StepOutcome(outcome_str)
+        except ValueError:
+            _parse_errors.append(
+                f"outcome '{outcome_str}' is invalid; must be one of: success, failure, skipped"
+            )
+
+        # --- step_type ---
+        step_type: Optional[StepType] = None
+        step_type_str = last_step_result.get("step_type")
+        if not step_type_str:
+            _parse_errors.append("step_type is required in last_step_result")
+        else:
+            try:
+                step_type = StepType(step_type_str)
+            except ValueError:
+                valid = ", ".join(t.value for t in StepType)
+                _parse_errors.append(
+                    f"step_type '{step_type_str}' is invalid; must be one of: {valid}"
+                )
+
+        # --- step_id ---
+        step_id_val = last_step_result.get("step_id")
+        if not step_id_val:
+            _parse_errors.append(
+                "step_id is required inside last_step_result (not as a top-level parameter)"
+            )
+
+        # Return aggregated errors before attempting Pydantic construction
+        if _parse_errors:
+            combined = "; ".join(_parse_errors)
+            logger.warning("last_step_result validation errors: %s", combined)
+            return _attach_loop_fields(
+                asdict(
+                    error_response(
+                        f"Invalid last_step_result: {combined}",
+                        error_code=ErrorCode.VALIDATION_ERROR,
+                        error_type=ErrorType.VALIDATION,
+                        request_id=request_id,
+                        details={
+                            "action": "session-step-next",
+                            "field": "last_step_result",
+                            "errors": _parse_errors,
+                            "hint": (
+                                "Ensure outcome is one of: success, failure, skipped; "
+                                "step_type matches the issued step; "
+                                "step_id is inside last_step_result."
+                            ),
+                        },
                     )
                 )
-            step_type = StepType(step_type_str)
+            )
 
+        # All pre-checks passed — construct the Pydantic model
+        try:
             parsed_last_step_result = LastStepResult(
-                step_id=last_step_result.get("step_id", ""),
-                step_type=step_type,
+                step_id=step_id_val,
+                step_type=step_type,  # type: ignore[arg-type]  # validated above
                 task_id=last_step_result.get("task_id"),
                 phase_id=last_step_result.get("phase_id"),
-                outcome=outcome,
+                outcome=outcome,  # type: ignore[arg-type]  # validated above
                 note=last_step_result.get("note"),
                 files_touched=last_step_result.get("files_touched"),
                 gate_attempt_id=last_step_result.get("gate_attempt_id"),
@@ -483,7 +519,11 @@ def _handle_session_step_next(
                         details={
                             "action": "session-step-next",
                             "field": "last_step_result",
-                            "hint": "Ensure outcome is one of: success, failure, skipped",
+                            "hint": (
+                                "Ensure outcome is one of: success, failure, skipped; "
+                                "step_type matches the issued step; "
+                                "step_id and task_id/phase_id are inside last_step_result."
+                            ),
                         },
                     )
                 )
@@ -564,6 +604,38 @@ def _handle_session_step_next(
                     session_id=session.id,
                     state_version=session.state_version,
                 )
+
+            # Pre-check step identity BEFORE consuming proof to avoid burning
+            # the one-time token on payloads with obvious structural mismatches
+            # (e.g., empty step_id, wrong step_type).
+            if session.last_step_issued is not None:
+                _last = session.last_step_issued
+                _identity_errors: list[str] = []
+                if not parsed_last_step_result.step_id:
+                    _identity_errors.append(
+                        f"step_id is empty; expected {_last.step_id}"
+                    )
+                elif parsed_last_step_result.step_id != _last.step_id:
+                    _identity_errors.append(
+                        f"step_id mismatch: expected {_last.step_id}, "
+                        f"got {parsed_last_step_result.step_id}"
+                    )
+                if parsed_last_step_result.step_type != _last.type:
+                    _identity_errors.append(
+                        f"step_type mismatch: expected {_last.type.value}, "
+                        f"got {parsed_last_step_result.step_type.value}"
+                    )
+                if _identity_errors:
+                    return _map_orchestrator_error_to_response(
+                        error_code=ERROR_STEP_MISMATCH,
+                        error_message=(
+                            "Step identity pre-check failed (proof NOT consumed): "
+                            + "; ".join(_identity_errors)
+                        ),
+                        request_id=request_id,
+                        session_id=session.id,
+                        state_version=session.state_version,
+                    )
 
             consumed, existing_record, proof_error = storage.consume_proof_with_lock(
                 session.id,

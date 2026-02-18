@@ -114,6 +114,7 @@ def execute_verification(
     record: bool = False,
     timeout: int = 300,
     cwd: Optional[str] = None,
+    command_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute verification command and capture results.
@@ -127,6 +128,8 @@ def execute_verification(
         record: If True, automatically record result to spec using add_verification().
         timeout: Command timeout in seconds (default: 300).
         cwd: Working directory for command execution (default: current directory).
+        command_override: Optional command to use as fallback when the verify node
+            has no embedded command in its metadata.
 
     Returns:
         Dict with execution results:
@@ -179,12 +182,15 @@ def execute_verification(
         )
         return response
 
-    # Get command from metadata
+    # Get command from metadata, falling back to caller-provided override
     metadata = node.get("metadata", {})
-    command = metadata.get("command")
+    command = metadata.get("command") or command_override
 
     if not command:
-        response["error"] = f"No command defined in verify node '{verify_id}' metadata"
+        response["error"] = (
+            f"No command defined in verify node '{verify_id}' metadata "
+            f"and no command parameter provided as fallback"
+        )
         return response
 
     response["command"] = command

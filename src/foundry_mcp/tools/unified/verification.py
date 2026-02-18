@@ -67,6 +67,7 @@ _ADD_SCHEMA = {
 _EXECUTE_SCHEMA = {
     "spec_id": Str(required=True, remediation='Use spec(action="list") to discover valid specification IDs'),
     "verify_id": Str(required=True, remediation="Provide the verification identifier"),
+    "command": Str(remediation="Provide a verification command to run (used as fallback if verify node has no embedded command)"),
     "record": Bool(default=False),
     "path": Str(),
 }
@@ -246,6 +247,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
 
     spec_id = payload["spec_id"]
     verify_id = payload["verify_id"]
+    command_override = payload.get("command")
     record = payload.get("record", False)
     path = payload.get("path")
 
@@ -292,6 +294,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
             verify_id=verify_id,
             record=record,
             cwd=path,
+            command_override=command_override,
         )
     except Exception as exc:
         logger.exception("Unexpected error executing verification")
