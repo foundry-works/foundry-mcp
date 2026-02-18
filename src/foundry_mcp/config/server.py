@@ -96,8 +96,6 @@ class ServerConfig(_ServerConfigLoader):
     # Tool registration control
     disabled_tools: List[str] = field(default_factory=list)
 
-    # Feature flags for enabling/disabling experimental features
-    feature_flags: Dict[str, bool] = field(default_factory=dict)
     startup_warnings: List[str] = field(default_factory=list, repr=False)
 
     def _add_startup_warning(self, message: str) -> None:

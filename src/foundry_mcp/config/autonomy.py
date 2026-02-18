@@ -30,7 +30,8 @@ class AutonomySecurityConfig:
             skipping quality checkpoints.
         role: Server role for authorization decisions. Determines what
             actions are allowed. Can be overridden by FOUNDRY_MCP_ROLE env var.
-            Default: "observer" (fail-closed to read-only).
+            Default: "maintainer" (full interactive access; autonomous
+            sessions use posture-driven role override).
         rate_limit_max_consecutive_denials: Maximum consecutive authorization
             denials before rate limiting kicks in. Default: 10.
         rate_limit_denial_window_seconds: Sliding window in seconds for
@@ -42,7 +43,7 @@ class AutonomySecurityConfig:
     allow_lock_bypass: bool = False
     allow_gate_waiver: bool = False
     enforce_required_phase_gates: bool = True
-    role: str = "observer"
+    role: str = "maintainer"
     rate_limit_max_consecutive_denials: int = 10
     rate_limit_denial_window_seconds: int = 60
     rate_limit_retry_after_seconds: int = 5

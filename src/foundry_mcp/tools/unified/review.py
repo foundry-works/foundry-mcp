@@ -974,17 +974,6 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
 
     start_time = time.perf_counter()
 
-    # Enforce the runtime feature flag from server config.
-    if not bool(config.feature_flags.get("autonomy_fidelity_gates", False)):
-        return asdict(
-            error_response(
-                "Fidelity gates feature is not enabled",
-                error_code=ErrorCode.FEATURE_DISABLED,
-                error_type=ErrorType.UNAVAILABLE,
-                remediation="Enable autonomy_fidelity_gates feature flag to use this action.",
-            )
-        )
-
     # Required parameters
     spec_id = payload.get("spec_id")
     session_id = payload.get("session_id")

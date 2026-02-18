@@ -91,9 +91,7 @@ def build_server_context_response(
         try:
             from foundry_mcp.core.discovery.capabilities import get_capabilities
 
-            payload["capabilities"] = get_capabilities(
-                feature_flags=config.feature_flags
-            )
+            payload["capabilities"] = get_capabilities()
         except Exception as exc:
             logger.debug("Failed to compute capabilities: %s", exc)
             payload["capabilities"] = {}

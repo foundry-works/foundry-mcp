@@ -36,8 +36,6 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _request_id,
     _resolve_session,
     _validate_context_usage_pct,
-    _is_feature_enabled,
-    _feature_disabled_response,
 )
 from foundry_mcp.tools.unified.task_handlers._session_common import (
     _load_spec_for_session,
@@ -212,10 +210,6 @@ def _handle_session_status(
     """
     request_id = _request_id()
 
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-status", request_id)
-
     storage = _get_storage(config, workspace, request_id=request_id)
     if isinstance(storage, dict):
         return storage
@@ -248,10 +242,6 @@ def _handle_session_events(
     This is intentionally a filtered view over existing spec journal entries.
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-events", request_id)
 
     page_size = normalize_page_size(
         limit,
@@ -415,10 +405,6 @@ def _handle_session_list(
     """
     request_id = _request_id()
 
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-list", request_id)
-
     # Validate limit
     limit = max(1, min(limit, 100))
 
@@ -504,10 +490,6 @@ def _handle_session_heartbeat(
         Response dict confirming heartbeat or error
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-heartbeat", request_id)
 
     # Validate context_usage_pct
     pct_err = _validate_context_usage_pct(context_usage_pct, "session-heartbeat", request_id)

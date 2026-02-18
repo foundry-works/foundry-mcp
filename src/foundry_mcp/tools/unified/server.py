@@ -382,7 +382,7 @@ def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 def _handle_capabilities(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     request_id = _request_id()
     try:
-        caps = get_capabilities(feature_flags=config.feature_flags)
+        caps = get_capabilities()
         runtime_warnings = caps.pop("runtime_warnings", None)
         runtime = caps.setdefault("runtime", {})
         autonomy_runtime = runtime.setdefault("autonomy", {})
@@ -424,10 +424,10 @@ def _handle_capabilities(*, config: ServerConfig, payload: Dict[str, Any]) -> di
                 "tool": "task",
                 "params": {"action": "session-list", "limit": 1},
             },
-            "fail_fast_on": ["AUTHORIZATION", "FEATURE_DISABLED"],
+            "fail_fast_on": ["AUTHORIZATION"],
             "guidance": (
                 "Run role preflight before session-start and stop immediately "
-                "when authorization or feature gates are denied."
+                "when authorization is denied."
             ),
         }
 

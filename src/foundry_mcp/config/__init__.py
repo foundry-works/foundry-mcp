@@ -4,7 +4,7 @@ Re-exports all public symbols for backward compatibility. Callers can
 continue to use ``from foundry_mcp.config import ServerConfig`` etc.
 
 Sub-modules:
-    parsing    – Boolean/provider-spec/feature-flag parsing helpers
+    parsing    – Boolean/provider-spec parsing helpers
     research   – ResearchConfig dataclass
     domains    – GitSettings, ObservabilityConfig, HealthConfig, ErrorCollectionConfig,
                  MetricsPersistenceConfig, RunnerConfig, TestConfig
@@ -19,15 +19,9 @@ Sub-modules:
 # Re-exports from sub-modules
 # ---------------------------------------------------------------------------
 from foundry_mcp.config.parsing import (  # noqa: F401
-    _FEATURE_FLAG_DEPENDENCIES,
-    _FEATURE_FLAG_ENV_PREFIX,
-    _FEATURE_FLAG_ENV_VAR,
     _VALID_COMMIT_CADENCE,
     _normalize_commit_cadence,
-    _normalize_feature_flag_name,
     _parse_bool,
-    _parse_feature_flags_env,
-    _parse_feature_flags_mapping,
     _parse_provider_spec,
     _try_parse_bool,
 )

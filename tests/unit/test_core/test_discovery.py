@@ -341,7 +341,9 @@ class TestServerCapabilities:
         assert caps.max_batch_size == 100
         assert caps.rate_limit_headers is True
         assert caps.supported_formats == ["json"]
-        assert caps.feature_flags_enabled is False
+        assert caps.autonomy_sessions is True
+        assert caps.autonomy_fidelity_gates is True
+        assert caps.autonomy_gate_invariants is True
 
     def test_to_dict(self):
         """Should convert to dict."""
@@ -355,7 +357,9 @@ class TestServerCapabilities:
         assert d["max_batch_size"] == 100
         assert d["rate_limit_headers"] is True
         assert d["formats"] == ["json"]
-        assert d["feature_flags"] is False
+        assert d["autonomy_sessions"] is True
+        assert d["autonomy_fidelity_gates"] is True
+        assert d["autonomy_gate_invariants"] is True
 
 
 class TestGetCapabilities:
@@ -371,40 +375,20 @@ class TestGetCapabilities:
         assert "server_version" in caps
         assert "api_version" in caps
 
-    def test_runtime_feature_flags_override_defaults(self):
-        """Runtime feature flags should override static capability defaults."""
+    def test_autonomy_always_enabled(self):
+        """Autonomy capabilities should always be enabled."""
         set_capabilities(ServerCapabilities())
-        caps = get_capabilities(
-            feature_flags={
-                "autonomy_sessions": True,
-                "autonomy_fidelity_gates": True,
-            }
-        )
+        caps = get_capabilities()
 
         assert caps["capabilities"]["autonomy_sessions"] is True
         assert caps["capabilities"]["autonomy_fidelity_gates"] is True
+        assert caps["capabilities"]["autonomy_gate_invariants"] is True
         assert (
             caps["runtime"]["autonomy"]["supported_by_binary"]["autonomy_sessions"]
             is True
         )
         assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_sessions"] is True
-
-    def test_runtime_dependency_warnings_for_inconsistent_flags(self):
-        """Inconsistent runtime flags should be surfaced as warnings."""
-        set_capabilities(ServerCapabilities())
-        caps = get_capabilities(
-            feature_flags={
-                "autonomy_fidelity_gates": True,
-            }
-        )
-
-        assert caps["capabilities"]["autonomy_sessions"] is False
-        assert caps["capabilities"]["autonomy_fidelity_gates"] is False
-        assert "runtime_warnings" in caps
-        assert any(
-            "autonomy_fidelity_gates" in warning
-            for warning in caps["runtime_warnings"]
-        )
+        assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_fidelity_gates"] is True
 
 
 class TestNegotiateCapabilities:

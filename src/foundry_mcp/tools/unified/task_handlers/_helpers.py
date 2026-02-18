@@ -482,43 +482,6 @@ def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
     return attach_loop_metadata(response, overwrite=False)
 
 
-def _is_feature_enabled(config: ServerConfig, feature_name: str) -> bool:
-    """Check if a feature flag is enabled.
-
-    Args:
-        config: Server configuration
-        feature_name: Name of the feature flag to check
-
-    Returns:
-        True if the feature is explicitly enabled, False otherwise.
-    """
-    return bool(config.feature_flags.get(feature_name, False))
-
-
-def _feature_disabled_response(action: str, request_id: str, feature_flag: str = "autonomy_sessions") -> dict:
-    """Return feature disabled error response.
-
-    Args:
-        action: The action that was attempted
-        request_id: Request ID for the response
-        feature_flag: The feature flag that is disabled
-
-    Returns:
-        Error response dict with FEATURE_DISABLED error code
-    """
-    return asdict(error_response(
-        f"{feature_flag} feature is not enabled",
-        error_code=ErrorCode.FEATURE_DISABLED,
-        error_type=ErrorType.FEATURE_FLAG,
-        request_id=request_id,
-        details={
-            "action": action,
-            "feature_flag": feature_flag,
-            "hint": f"Enable {feature_flag} feature flag to use this functionality",
-        },
-    ))
-
-
 def _resolve_specs_dir(
     config: ServerConfig, workspace: Optional[str]
 ) -> tuple[Optional[Path], Optional[dict]]:

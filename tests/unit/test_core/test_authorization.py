@@ -70,20 +70,20 @@ class TestServerRoleVar:
     """Test server role context variable."""
 
     def teardown_method(self):
-        set_server_role("observer")
+        set_server_role("maintainer")
 
-    def test_default_role_is_observer(self):
-        assert get_server_role() == "observer"
+    def test_default_role_is_maintainer(self):
+        assert get_server_role() == "maintainer"
 
     def test_set_server_role(self):
-        set_server_role("maintainer")
-        assert get_server_role() == "maintainer"
-        # Reset
         set_server_role("observer")
-
-    def test_set_invalid_role_falls_back_to_observer(self):
-        set_server_role("invalid_role")
         assert get_server_role() == "observer"
+        # Reset
+        set_server_role("maintainer")
+
+    def test_set_invalid_role_falls_back_to_maintainer(self):
+        set_server_role("invalid_role")
+        assert get_server_role() == "maintainer"
 
     def test_role_propagates_to_new_thread_via_process_fallback(self):
         set_server_role("maintainer")
@@ -184,10 +184,10 @@ class TestCheckActionAllowed:
 class TestInitializeRoleFromConfig:
     """Test initialize_role_from_config function."""
 
-    def test_default_is_observer(self):
+    def test_default_is_maintainer(self):
         with patch.dict(os.environ, {}, clear=True):
             role = initialize_role_from_config()
-            assert role == "observer"
+            assert role == "maintainer"
 
     def test_env_var_overrides_config(self):
         with patch.dict(os.environ, {"FOUNDRY_MCP_ROLE": "maintainer"}, clear=True):
@@ -429,7 +429,7 @@ class TestRunIsolatedSubprocess:
 
     def teardown_method(self):
         reset_runner_isolation_config()
-        set_server_role("observer")
+        set_server_role("maintainer")
 
     def test_stdin_timeout_cap_applies_when_timeout_not_provided(self):
         set_runner_isolation_config(RunnerIsolationConfig(stdin_timeout_seconds=0.1))
@@ -480,7 +480,7 @@ class TestValidateRunnerPath:
 
     def teardown_method(self):
         reset_runner_isolation_config()
-        set_server_role("observer")
+        set_server_role("maintainer")
 
     def test_relative_existing_path_returns_workspace_resolved_path(self, tmp_path, monkeypatch):
         workspace = tmp_path / "workspace"

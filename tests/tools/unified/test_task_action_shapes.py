@@ -203,64 +203,6 @@ def test_dispatch_session_step_authorization_denial_includes_loop_signal() -> No
     assert response["data"]["recommended_actions"]
 
 
-def test_dispatch_session_step_feature_disabled_includes_loop_signal() -> None:
-    from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
-
-    with patch(
-        "foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors"
-    ) as mock_dispatch:
-        mock_dispatch.return_value = {
-            "success": False,
-            "data": {
-                "error_code": "FEATURE_DISABLED",
-                "error_type": "feature_flag",
-                "details": {"feature_flag": "autonomy_sessions"},
-            },
-            "error": "Feature disabled",
-            "meta": {"version": "response-v2"},
-        }
-
-        response = _dispatch_task_action(
-            action="session-step-next",
-            payload={"session_id": "sess-001"},
-            config=_mock_config(),
-        )
-
-    assert response["data"]["loop_signal"] == "blocked_runtime"
-    assert response["data"]["recommended_actions"]
-
-
-def test_dispatch_legacy_action_feature_disabled_includes_deprecation_metadata() -> None:
-    """T4: Legacy actions include meta.deprecated even when feature flag check fails."""
-    from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
-
-    with patch(
-        "foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors"
-    ) as mock_dispatch:
-        mock_dispatch.return_value = {
-            "success": False,
-            "data": {
-                "error_code": "FEATURE_DISABLED",
-                "error_type": "feature_flag",
-                "details": {"feature_flag": "autonomy_sessions"},
-            },
-            "error": "Feature disabled",
-            "meta": {"version": "response-v2"},
-        }
-
-        response = _dispatch_task_action(
-            action="session-start",
-            payload={"spec_id": "spec-001"},
-            config=_mock_config(),
-        )
-
-    # Deprecation metadata must be present even on feature-disabled error
-    deprecated = response["meta"].get("deprecated")
-    assert deprecated is not None
-    assert deprecated["action"] == "session-start"
-    assert deprecated["replacement"] == 'task(action="session", command="start")'
-
-
 @pytest.mark.parametrize(
     "example_input",
     [

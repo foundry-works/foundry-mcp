@@ -77,10 +77,6 @@ def test_foundry_implement_v2_completes_single_phase_in_unattended_posture(tmp_p
     config = ServerConfig(
         workspace_roots=[workspace],
         specs_dir=workspace / "specs",
-        feature_flags={
-            "autonomy_sessions": True,
-            "autonomy_fidelity_gates": True,
-        },
     )
     config.apply_autonomy_posture_profile("unattended", source="test")
     config._validate_startup_configuration()

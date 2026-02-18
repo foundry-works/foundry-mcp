@@ -5,8 +5,8 @@ constraining what operations different roles can perform.
 
 Roles:
 - autonomy_runner: Session and step management actions only
-- maintainer: Full mutation access (wildcard)
-- observer: Read-only operations (default)
+- maintainer: Full mutation access (wildcard, default)
+- observer: Read-only operations
 
 Runtime Isolation (P2.2):
 - workspace_root: Restricts runner file operations to a path prefix
@@ -124,7 +124,7 @@ _ROLE_ALLOWLISTS: Dict[str, FrozenSet[str]] = {
 
 server_role_var: ContextVar[Optional[str]] = ContextVar("server_role", default=None)
 """Process-level server role for authorization decisions."""
-_configured_server_role: str = Role.OBSERVER.value
+_configured_server_role: str = Role.MAINTAINER.value
 _configured_server_role_lock = Lock()
 
 
@@ -132,7 +132,7 @@ def get_server_role() -> str:
     """Get the current server role from context.
 
     Returns:
-        Current role string (default: "observer")
+        Current role string (default: "maintainer")
     """
     context_role = server_role_var.get()
     if isinstance(context_role, str) and context_role:
@@ -153,11 +153,11 @@ def set_server_role(role: str) -> None:
         Role(role)
     except ValueError:
         logger.warning(
-            "Invalid role '%s', falling back to observer. Valid roles: %s",
+            "Invalid role '%s', falling back to maintainer. Valid roles: %s",
             role,
             ", ".join(r.value for r in Role),
         )
-        role = Role.OBSERVER.value
+        role = Role.MAINTAINER.value
 
     global _configured_server_role
 
@@ -186,7 +186,7 @@ class AuthzResult:
 
     allowed: bool
     denied_action: Optional[str] = None
-    configured_role: str = Role.OBSERVER.value
+    configured_role: str = Role.MAINTAINER.value
     required_role: Optional[str] = None
 
 
@@ -361,7 +361,7 @@ def initialize_role_from_config(config_role: Optional[str] = None) -> str:
     Priority:
     1. FOUNDRY_MCP_ROLE environment variable
     2. config_role parameter (from config file)
-    3. Default: "observer"
+    3. Default: "maintainer"
 
     Args:
         config_role: Role from config file
@@ -380,8 +380,8 @@ def initialize_role_from_config(config_role: Optional[str] = None) -> str:
         set_server_role(config_role)
         return get_server_role()
 
-    # Default to observer (fail-closed)
-    set_server_role(Role.OBSERVER.value)
+    # Default to maintainer (full interactive access)
+    set_server_role(Role.MAINTAINER.value)
     return get_server_role()
 
 

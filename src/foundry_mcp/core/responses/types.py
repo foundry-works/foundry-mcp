@@ -56,7 +56,6 @@ class ErrorCode(str, Enum):
     AUTHORIZATION = "AUTHORIZATION"
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
     RATE_LIMITED = "RATE_LIMITED"
-    FEATURE_DISABLED = "FEATURE_DISABLED"
 
     # System errors
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -112,7 +111,6 @@ class ErrorType(str, Enum):
     NOT_FOUND = "not_found"  # 404 - No retry
     CONFLICT = "conflict"  # 409 - Maybe retry, check state
     RATE_LIMIT = "rate_limit"  # 429 - Yes, after delay
-    FEATURE_FLAG = "feature_flag"  # 403 - No retry, check flag status
     INTERNAL = "internal"  # 500 - Yes, with backoff
     UNAVAILABLE = "unavailable"  # 503 - Yes, with backoff
     AI_PROVIDER = "ai_provider"  # AI-specific - Retry varies by error

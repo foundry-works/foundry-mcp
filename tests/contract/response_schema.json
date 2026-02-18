@@ -166,7 +166,6 @@
             "UNAUTHORIZED",
             "FORBIDDEN",
             "RATE_LIMIT_EXCEEDED",
-            "FEATURE_DISABLED",
             "INTERNAL_ERROR",
             "UNAVAILABLE"
           ]
@@ -181,7 +180,6 @@
             "not_found",
             "conflict",
             "rate_limit",
-            "feature_flag",
             "internal",
             "unavailable"
           ]

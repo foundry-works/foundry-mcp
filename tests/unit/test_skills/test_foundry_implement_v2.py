@@ -130,21 +130,6 @@ class TestStartupPreflight:
         assert invoker.calls[2][1]["action"] == "session-list"
         assert invoker.calls[4][1]["action"] == "session-list"
 
-    def test_fails_fast_when_autonomy_sessions_disabled(self) -> None:
-        invoker = _QueuedInvoker(
-            [
-                _success({"spec_id": "spec-001"}),
-                _success({"sessions": []}),
-                _capabilities(False, True),
-            ]
-        )
-
-        with pytest.raises(FoundryImplementV2Error) as exc_info:
-            run_startup_preflight(spec_id="spec-001", invoke=invoker)
-
-        assert exc_info.value.code == "FEATURE_DISABLED"
-        assert exc_info.value.details["feature_flag"] == "autonomy_sessions"
-
     def test_fails_fast_when_role_preflight_denied(self) -> None:
         invoker = _QueuedInvoker(
             [
@@ -186,8 +171,7 @@ class TestStartupPreflight:
         )
 
         result = run_startup_preflight(spec_id="spec-001", invoke=invoker)
-        assert result.autonomy_sessions_enabled is True
-        assert result.autonomy_fidelity_gates_enabled is True
+        assert result.spec_id == "spec-001"
 
 
 class TestStepDispatch:

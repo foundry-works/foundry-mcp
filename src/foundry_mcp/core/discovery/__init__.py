@@ -41,14 +41,10 @@ from .deprecation import (  # noqa: F401
     is_deprecated,
 )
 
-# --- Feature flags ---
+# --- Feature flag descriptors (used by metadata modules) ---
 
 from .flags import (  # noqa: F401
-    AUTONOMY_FEATURE_FLAGS,
     FeatureFlagDescriptor,
-    get_autonomy_capabilities,
-    get_autonomy_feature_flag,
-    is_autonomy_feature_flag,
 )
 
 # --- Metadata (environment, LLM, provider) ---

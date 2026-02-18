@@ -38,14 +38,8 @@ from foundry_mcp.config.domains import (
     TestConfig,
 )
 from foundry_mcp.config.parsing import (
-    _FEATURE_FLAG_DEPENDENCIES,
-    _FEATURE_FLAG_ENV_PREFIX,
-    _FEATURE_FLAG_ENV_VAR,
     _normalize_commit_cadence,
-    _normalize_feature_flag_name,
     _parse_bool,
-    _parse_feature_flags_env,
-    _parse_feature_flags_mapping,
     _try_parse_bool,
 )
 from foundry_mcp.config.research import ResearchConfig
@@ -162,22 +156,6 @@ class _ServerConfigLoader:
                 tools_cfg = data["tools"]
                 if "disabled_tools" in tools_cfg:
                     self.disabled_tools = tools_cfg["disabled_tools"]
-
-            # Feature flag configuration
-            if "feature_flags" in data:
-                feature_flags_data = data["feature_flags"]
-                if isinstance(feature_flags_data, dict):
-                    parsed_flags, parse_warnings = _parse_feature_flags_mapping(
-                        feature_flags_data,
-                        source=f"{path}: [feature_flags]",
-                    )
-                    self.feature_flags.update(parsed_flags)
-                    for warning in parse_warnings:
-                        self._add_startup_warning(warning)
-                else:
-                    self._add_startup_warning(
-                        f"Ignoring [feature_flags] in {path}: expected table/dict, got {type(feature_flags_data).__name__}"
-                    )
 
             # Git workflow settings
             if "git" in data:
@@ -459,33 +437,6 @@ class _ServerConfigLoader:
         # Disabled tools (comma-separated list)
         if disabled := os.environ.get("FOUNDRY_MCP_DISABLED_TOOLS"):
             self.disabled_tools = [t.strip() for t in disabled.split(",") if t.strip()]
-
-        # Feature flags from env:
-        # 1) bulk list/map via FOUNDRY_MCP_FEATURE_FLAGS
-        # 2) per-flag overrides via FOUNDRY_MCP_FEATURE_FLAG_<NAME>
-        if bulk_flags := os.environ.get(_FEATURE_FLAG_ENV_VAR):
-            parsed_flags, parse_warnings = _parse_feature_flags_env(bulk_flags)
-            self.feature_flags.update(parsed_flags)
-            for warning in parse_warnings:
-                self._add_startup_warning(warning)
-
-        for env_key, env_value in os.environ.items():
-            if not env_key.startswith(_FEATURE_FLAG_ENV_PREFIX):
-                continue
-            raw_name = env_key[len(_FEATURE_FLAG_ENV_PREFIX):]
-            name = _normalize_feature_flag_name(raw_name)
-            if not name:
-                self._add_startup_warning(
-                    f"Ignoring malformed feature-flag override env var: {env_key}"
-                )
-                continue
-            parsed = _try_parse_bool(env_value)
-            if parsed is None:
-                self._add_startup_warning(
-                    f"Ignoring {env_key}: expected true/false value, got {env_value!r}"
-                )
-                continue
-            self.feature_flags[name] = parsed
 
         # Autonomy posture profile defaults (can be overridden by explicit env vars below)
         if posture_profile := os.environ.get(_AUTONOMY_POSTURE_ENV_VAR):
@@ -847,34 +798,6 @@ class _ServerConfigLoader:
 
     def _validate_startup_configuration(self) -> None:
         """Validate startup configuration. Raises on critical misconfigurations."""
-        # Hard error: feature flag dependencies must be satisfied
-        for flag_name, dependencies in _FEATURE_FLAG_DEPENDENCIES.items():
-            if not self.feature_flags.get(flag_name, False):
-                continue
-
-            missing = [dep for dep in dependencies if not self.feature_flags.get(dep, False)]
-            if missing:
-                msg = (
-                    f"Feature flag '{flag_name}' requires [{', '.join(missing)}] "
-                    f"to be enabled. Either enable the dependencies or disable '{flag_name}'."
-                )
-                raise ValueError(msg)
-
-        # Warn when autonomy-only security toggles are configured while sessions are off.
-        if not self.feature_flags.get("autonomy_sessions", False):
-            non_default_controls: List[str] = []
-            if self.autonomy_security.allow_lock_bypass:
-                non_default_controls.append("allow_lock_bypass=true")
-            if self.autonomy_security.allow_gate_waiver:
-                non_default_controls.append("allow_gate_waiver=true")
-            if not self.autonomy_security.enforce_required_phase_gates:
-                non_default_controls.append("enforce_required_phase_gates=false")
-            if non_default_controls:
-                self._add_startup_warning(
-                    "Autonomy security controls configured while autonomy_sessions is disabled: "
-                    + ", ".join(non_default_controls)
-                )
-
         profile = self.autonomy_posture.profile
         if profile == "unattended":
             unsafe_conditions: List[str] = []

@@ -38,7 +38,6 @@ _BLOCKED_RUNTIME_ERROR_CODES = frozenset(
         "ERROR_GATE_AUDIT_FAILURE",
         "GATE_INTEGRITY_CHECKSUM",
         "ERROR_GATE_INTEGRITY_CHECKSUM",
-        "FEATURE_DISABLED",
         "AUTHORIZATION",
         "STEP_PROOF_MISSING",
         "STEP_PROOF_MISMATCH",
@@ -206,13 +205,6 @@ def derive_recommended_actions(
         )
 
     if loop_signal == LoopSignal.BLOCKED_RUNTIME:
-        if normalized_error_code == "FEATURE_DISABLED":
-            return [
-                RecommendedAction(
-                    action="enable_required_feature_flag",
-                    description="Enable required autonomy feature flags before retrying.",
-                )
-            ]
         if normalized_error_code == "AUTHORIZATION":
             return [
                 RecommendedAction(

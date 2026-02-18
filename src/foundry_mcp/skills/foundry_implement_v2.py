@@ -35,10 +35,9 @@ _SUPPORTED_STEP_TYPES = {
     "pause",
     "complete_spec",
 }
-_SHAPE_DETECTION_NON_TERMINAL_ERRORS = {"AUTHORIZATION", "FEATURE_DISABLED"}
+_SHAPE_DETECTION_NON_TERMINAL_ERRORS = {"AUTHORIZATION"}
 _BLOCKED_RUNTIME_ERROR_CODES = {
     "AUTHORIZATION",
-    "FEATURE_DISABLED",
     "ERROR_REQUIRED_GATE_UNSATISFIED",
     "ERROR_GATE_AUDIT_FAILURE",
     "ERROR_GATE_INTEGRITY_CHECKSUM",
@@ -81,8 +80,6 @@ class StartupPreflightResult:
 
     spec_id: str
     action_shape: ActionShapeAdapter
-    autonomy_sessions_enabled: bool
-    autonomy_fidelity_gates_enabled: bool
     capabilities_warnings: tuple[str, ...] = ()
 
 
@@ -187,28 +184,6 @@ def _as_pause_reason(response: Mapping[str, Any]) -> Optional[str]:
     return normalized or None
 
 
-def _read_runtime_autonomy_flags(capabilities_response: Mapping[str, Any]) -> tuple[bool, bool]:
-    data = capabilities_response.get("data")
-    if not isinstance(data, Mapping):
-        return False, False
-
-    runtime = data.get("runtime")
-    if not isinstance(runtime, Mapping):
-        return False, False
-
-    autonomy = runtime.get("autonomy")
-    if not isinstance(autonomy, Mapping):
-        return False, False
-
-    enabled_now = autonomy.get("enabled_now")
-    if not isinstance(enabled_now, Mapping):
-        return False, False
-
-    return bool(enabled_now.get("autonomy_sessions")), bool(
-        enabled_now.get("autonomy_fidelity_gates")
-    )
-
-
 def _read_runtime_posture_profile(capabilities_response: Mapping[str, Any]) -> Optional[str]:
     data = capabilities_response.get("data")
     if not isinstance(data, Mapping):
@@ -307,27 +282,6 @@ def run_startup_preflight(
             response=capabilities_response,
         )
 
-    sessions_enabled, fidelity_enabled = _read_runtime_autonomy_flags(capabilities_response)
-    if not sessions_enabled:
-        raise FoundryImplementV2Error(
-            "FEATURE_DISABLED",
-            "Runtime reports autonomy_sessions is disabled.",
-            remediation="Enable feature_flags.autonomy_sessions before running foundry-implement-v2.",
-            details={"feature_flag": "autonomy_sessions"},
-            response=capabilities_response,
-        )
-    if require_fidelity_gate and not fidelity_enabled:
-        raise FoundryImplementV2Error(
-            "FEATURE_DISABLED",
-            "Runtime reports autonomy_fidelity_gates is disabled.",
-            remediation=(
-                "Enable feature_flags.autonomy_fidelity_gates or disable fidelity-gated "
-                "execution mode for this run."
-            ),
-            details={"feature_flag": "autonomy_fidelity_gates"},
-            response=capabilities_response,
-        )
-
     posture_profile = _read_runtime_posture_profile(capabilities_response)
     if posture_profile == "debug":
         raise FoundryImplementV2Error(
@@ -344,13 +298,12 @@ def run_startup_preflight(
     role_probe = _invoke_task(action_shape.session_payload("list", limit=1))
     if not bool(role_probe.get("success")):
         error_code = _as_error_code(role_probe)
-        if error_code in {"AUTHORIZATION", "FEATURE_DISABLED"}:
+        if error_code == "AUTHORIZATION":
             raise FoundryImplementV2Error(
                 error_code,
-                "Role/capability preflight rejected autonomous session operations.",
+                "Role preflight rejected autonomous session operations.",
                 remediation=(
-                    "Use a role allowed for session operations (for example autonomy_runner) "
-                    "and ensure autonomy feature flags are enabled."
+                    "Use a role allowed for session operations (for example autonomy_runner)."
                 ),
                 details={"recommended_call": action_shape.session_payload("list", limit=1)},
                 response=role_probe,
@@ -373,8 +326,6 @@ def run_startup_preflight(
     return StartupPreflightResult(
         spec_id=spec_id,
         action_shape=action_shape,
-        autonomy_sessions_enabled=sessions_enabled,
-        autonomy_fidelity_gates_enabled=fidelity_enabled,
         capabilities_warnings=warnings,
     )
 

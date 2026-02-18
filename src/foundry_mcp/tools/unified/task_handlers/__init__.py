@@ -150,7 +150,7 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="session-config", handler=_handle_session_config, summary="Get/set autonomous session configuration"),
     ActionDefinition(name="session", handler=_handle_session_action, summary="Canonical autonomous session lifecycle entrypoint (requires command)"),
     ActionDefinition(name="session-step", handler=_handle_session_step_action, summary="Canonical autonomous session-step entrypoint (requires command)"),
-    # Session lifecycle actions (feature-flag guarded by autonomy_sessions)
+    # Session lifecycle actions
     ActionDefinition(name="session-start", handler=_handle_session_start, summary="Start a new autonomous session for a spec"),
     ActionDefinition(name="session-pause", handler=_handle_session_pause, summary="Pause an active autonomous session"),
     ActionDefinition(name="session-resume", handler=_handle_session_resume, summary="Resume a paused autonomous session"),
@@ -162,7 +162,7 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="[Deprecated: use session-step-heartbeat] Update session heartbeat and context metrics"),
     ActionDefinition(name="session-reset", handler=_handle_session_reset, summary="Reset a failed session to allow retry"),
     ActionDefinition(name="gate-waiver", handler=_handle_gate_waiver, summary="Privileged gate waiver for required-gate invariant failures (maintainer only)"),
-    # Session-step actions (feature-flag guarded by autonomy_sessions)
+    # Session-step actions
     ActionDefinition(name="session-step-next", handler=_handle_session_step_next, summary="Get the next step to execute in a session"),
     ActionDefinition(name="session-step-report", handler=_handle_session_step_report, summary="Report the outcome of a step execution"),
     ActionDefinition(name="session-step-replay", handler=_handle_session_step_replay, summary="Replay the last issued response for safe retry"),
@@ -255,7 +255,7 @@ def register_unified_task_tool(mcp: FastMCP, config: ServerConfig) -> None:
         completions: Optional[List[Dict[str, Any]]] = None,
         # reset-batch specific parameters
         threshold_hours: Optional[float] = None,
-        # session lifecycle parameters (autonomy_sessions feature flag)
+        # session lifecycle parameters
         session_id: Optional[str] = None,
         force: bool = False,
         acknowledge_gate_review: Optional[bool] = None,

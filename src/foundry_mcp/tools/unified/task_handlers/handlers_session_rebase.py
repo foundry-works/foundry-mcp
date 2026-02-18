@@ -46,8 +46,6 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _request_id,
     _resolve_session,
     _validate_reason_detail,
-    _is_feature_enabled,
-    _feature_disabled_response,
 )
 from foundry_mcp.tools.unified.task_handlers._session_common import (
     _save_with_version_check,
@@ -259,10 +257,6 @@ def _handle_session_rebase(
         Response dict with rebase result or error
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-rebase", request_id)
 
     # Role check - only maintainer can rebase sessions
     # Deferred import: tests mock-patch get_server_role on the handlers_session shim module
@@ -545,10 +539,6 @@ def _handle_gate_waiver(
         Response dict with waiver result or error
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("gate-waiver", request_id)
 
     # Check if gate waiver is globally enabled
     if not config.autonomy_security.allow_gate_waiver:

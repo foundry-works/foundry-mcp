@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b2] - 2026-02-18
+
+### Removed
+
+- **Feature flag system**: Removed the entire feature flag infrastructure (parsing, env vars, config loading, validation, dependency resolution). Autonomy features (`autonomy_sessions`, `autonomy_fidelity_gates`) are now always enabled — no opt-in required.
+- **`FEATURE_DISABLED` error code**: Removed `ErrorCode.FEATURE_DISABLED` and `ErrorType.FEATURE_FLAG` from the response schema and autonomy signal handling.
+- **Feature flag discovery metadata**: Removed `AUTONOMY_FEATURE_FLAGS` registry, `get_autonomy_capabilities()`, `is_autonomy_feature_flag()`, and `get_autonomy_feature_flag()` from discovery module.
+- **Stale files**: Removed `REFACTOR-RESEARCH.md` and `skills/foundry-implement-v2/SKILL.md`.
+
+### Changed
+
+- **Default role**: Changed default server role from `observer` (fail-closed read-only) to `maintainer` (full interactive access). Autonomous sessions continue to use posture-driven role overrides.
+- **Capabilities endpoint**: `get_capabilities()` no longer accepts `feature_flags` parameter; always reports autonomy as enabled.
+- **Config loader**: Removed `[feature_flags]` TOML section parsing, `FOUNDRY_MCP_FEATURE_FLAGS` env var, and per-flag `FOUNDRY_MCP_FEATURE_FLAG_<NAME>` overrides.
+- **Startup validation**: Removed feature flag dependency checks and autonomy-only security toggle warnings.
+
 ## [0.12.0b1] - 2026-02-18
 
 ### Added

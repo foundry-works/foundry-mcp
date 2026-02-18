@@ -74,22 +74,3 @@ def test_review_list_tools_returns_envelope(test_config: ServerConfig):
     assert "review_types" in result["data"]
 
 
-def test_fidelity_gate_uses_runtime_feature_flag(test_config: ServerConfig):
-    from foundry_mcp.tools.unified.review import _dispatch_review_action
-
-    disabled = _dispatch_review_action(
-        action="fidelity-gate",
-        payload={},
-        config=test_config,
-    )
-    assert disabled["success"] is False
-    assert disabled["data"]["error_code"] == "FEATURE_DISABLED"
-
-    test_config.feature_flags["autonomy_fidelity_gates"] = True
-    enabled = _dispatch_review_action(
-        action="fidelity-gate",
-        payload={"spec_id": "spec-001"},
-        config=test_config,
-    )
-    assert enabled["success"] is False
-    assert enabled["data"]["error_code"] != "FEATURE_DISABLED"

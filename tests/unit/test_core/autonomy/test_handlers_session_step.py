@@ -60,7 +60,6 @@ def _make_config(workspace: Path) -> MagicMock:
     config = MagicMock()
     config.workspace_path = str(workspace)
     config.specs_dir = str(workspace / "specs")
-    config.feature_flags = {"autonomy_sessions": True}
     return config
 
 
@@ -432,7 +431,6 @@ class TestLoopSignalMapping:
             ERROR_GATE_INTEGRITY_CHECKSUM,
             ERROR_STEP_PROOF_MISSING,
             ERROR_STEP_PROOF_CONFLICT,
-            "FEATURE_DISABLED",
             "AUTHORIZATION",
         ],
     )

@@ -128,7 +128,6 @@ def mock_config():
     config = MagicMock()
     config.workspace_path = None
     config.specs_dir = None
-    config.feature_flags = {"autonomy_sessions": True}
     return config
 
 

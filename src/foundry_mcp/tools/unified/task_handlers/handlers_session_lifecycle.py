@@ -58,8 +58,6 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _session_not_found_response,
     _validation_error,
     _validate_reason_detail,
-    _is_feature_enabled,
-    _feature_disabled_response,
 )
 from foundry_mcp.tools.unified.task_handlers._session_common import (
     _save_with_version_check,
@@ -427,10 +425,6 @@ def _handle_session_start(
     """
     request_id = _request_id()
 
-    # --- Early validation ---
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-start", request_id)
-
     params = {"spec_id": spec_id}
     err = validate_payload(params, _SESSION_START_SCHEMA,
                            tool_name="task", action="session-start",
@@ -592,10 +586,6 @@ def _handle_session_pause(
     """
     request_id = _request_id()
 
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-pause", request_id)
-
     storage = _get_storage(config, workspace, request_id=request_id)
     if isinstance(storage, dict):
         return storage
@@ -685,10 +675,6 @@ def _handle_session_resume(
         Response dict with session state and next step or error
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-resume", request_id)
 
     storage = _get_storage(config, workspace, request_id=request_id)
     if isinstance(storage, dict):
@@ -844,10 +830,6 @@ def _handle_session_end(
     """
     request_id = _request_id()
 
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-end", request_id)
-
     params = {"reason_code": reason_code}
     err = validate_payload(params, _SESSION_END_SCHEMA,
                            tool_name="task", action="session-end",
@@ -955,10 +937,6 @@ def _handle_session_reset(
         Response dict confirming reset or error
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _feature_disabled_response("session-reset", request_id)
 
     params = {"reason_code": reason_code, "session_id": session_id}
     err = validate_payload(params, _SESSION_RESET_SCHEMA,

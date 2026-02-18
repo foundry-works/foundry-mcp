@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "foundry-mcp"
-version = "0.12.0b1"
+version = "0.12.0b2"
 description = "MCP server for spec-driven development management"
 readme = "README.md"
 license = "MIT"

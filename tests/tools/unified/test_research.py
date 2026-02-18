@@ -689,41 +689,12 @@ class TestFeatureFlag:
         ):
             yield
 
-    def test_feature_flag_error_response_format(
+    def test_dispatch_research_action_directly(
         self, mock_config, mock_memory
     ):
-        """Feature flag error response should follow response-v2 format."""
-        from dataclasses import asdict
-
-        from foundry_mcp.core.responses.types import (
-            ErrorCode,
-            ErrorType,
-        )
-        from foundry_mcp.core.responses.builders import error_response
-
-        # The research tool returns this error when feature flag is disabled
-        response = error_response(
-            "Research tools are not enabled",
-            error_code=ErrorCode.FEATURE_DISABLED,
-            error_type=ErrorType.UNAVAILABLE,
-            remediation="Enable 'research_tools' feature flag in configuration",
-        )
-        result = asdict(response)
-
-        assert result["success"] is False
-        assert "not enabled" in result["error"]
-        assert result["data"]["error_code"] == "FEATURE_DISABLED"
-        assert result["data"]["error_type"] == "unavailable"
-        assert result["meta"]["version"] == "response-v2"
-
-    def test_dispatch_without_feature_flag_check(
-        self, mock_config, mock_memory
-    ):
-        """Dispatch should work when called directly (feature flag in wrapper)."""
+        """Dispatch should work when called directly."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        # _dispatch_research_action doesn't check feature flag
-        # The feature flag is checked in the registered tool function wrapper
         result = _dispatch_research_action(action="thread-list")
 
         assert result["success"] is True

@@ -335,7 +335,6 @@ class TestErrorCodeEnum:
         assert ErrorCode.UNAUTHORIZED.value == "UNAUTHORIZED"
         assert ErrorCode.FORBIDDEN.value == "FORBIDDEN"
         assert ErrorCode.RATE_LIMIT_EXCEEDED.value == "RATE_LIMIT_EXCEEDED"
-        assert ErrorCode.FEATURE_DISABLED.value == "FEATURE_DISABLED"
 
     def test_system_error_codes(self):
         """Test system error codes are defined."""
@@ -374,7 +373,6 @@ class TestErrorTypeEnum:
         assert ErrorType.NOT_FOUND.value == "not_found"
         assert ErrorType.CONFLICT.value == "conflict"
         assert ErrorType.RATE_LIMIT.value == "rate_limit"
-        assert ErrorType.FEATURE_FLAG.value == "feature_flag"
         assert ErrorType.INTERNAL.value == "internal"
         assert ErrorType.UNAVAILABLE.value == "unavailable"
 

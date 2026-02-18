@@ -84,16 +84,11 @@ class TestServerDispatchExceptionHandling:
 class TestCapabilitiesAction:
     """Tests for server(action='capabilities')."""
 
-    def test_capabilities_reflect_runtime_feature_flags(self):
-        """Runtime config flags should be reflected in capability response."""
+    def test_capabilities_report_autonomy_always_enabled(self):
+        """Autonomy capabilities should always be reported as enabled."""
         from foundry_mcp.tools.unified.server import _handle_capabilities
 
-        config = ServerConfig(
-            feature_flags={
-                "autonomy_sessions": True,
-                "autonomy_fidelity_gates": True,
-            }
-        )
+        config = ServerConfig()
 
         result = _handle_capabilities(config=config, payload={})
 
@@ -106,32 +101,11 @@ class TestCapabilitiesAction:
             is True
         )
 
-    def test_capabilities_surface_dependency_warning(self):
-        """Inconsistent runtime feature flags should emit warnings."""
-        from foundry_mcp.tools.unified.server import _handle_capabilities
-
-        config = ServerConfig(
-            feature_flags={
-                "autonomy_fidelity_gates": True,
-            }
-        )
-
-        result = _handle_capabilities(config=config, payload={})
-
-        assert result["success"] is True
-        assert result["data"]["capabilities"]["autonomy_sessions"] is False
-        assert result["data"]["capabilities"]["autonomy_fidelity_gates"] is False
-        assert "warnings" in result["meta"]
-        assert any(
-            "autonomy_fidelity_gates" in warning
-            for warning in result["meta"]["warnings"]
-        )
-
     def test_capabilities_include_role_preflight_convention(self):
         """Capabilities include role preflight guidance for consumers."""
         from foundry_mcp.tools.unified.server import _handle_capabilities
 
-        config = ServerConfig(feature_flags={"autonomy_sessions": True})
+        config = ServerConfig()
         result = _handle_capabilities(config=config, payload={})
 
         assert result["success"] is True
@@ -145,7 +119,7 @@ class TestCapabilitiesAction:
         """Capabilities expose runtime posture/session defaults for operators."""
         from foundry_mcp.tools.unified.server import _handle_capabilities
 
-        config = ServerConfig(feature_flags={"autonomy_sessions": True})
+        config = ServerConfig()
         config.autonomy_posture.profile = "unattended"
         config.autonomy_security.role = "autonomy_runner"
         config.autonomy_security.allow_lock_bypass = False

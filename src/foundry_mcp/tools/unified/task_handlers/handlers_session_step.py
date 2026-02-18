@@ -8,7 +8,7 @@ Phase B (current):
 - report: Reports step outcome (Phase B)
 - replay: Returns cached last response for safe retry (Phase B)
 
-All actions are feature-flag guarded by 'autonomy_sessions'.
+All session actions require an active autonomous session.
 """
 
 from __future__ import annotations
@@ -74,8 +74,6 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _resolve_session,
     _session_not_found_response,
     _validate_context_usage_pct,
-    _is_feature_enabled,
-    _feature_disabled_response,
     attach_loop_metadata,
 )
 
@@ -405,12 +403,6 @@ def _handle_session_step_next(
     """
     request_id = _request_id()
 
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _attach_loop_fields(
-            _feature_disabled_response("session-step-next", request_id)
-        )
-
     # Validate context_usage_pct
     pct_err = _validate_context_usage_pct(context_usage_pct, "session-step-next", request_id)
     if pct_err:
@@ -739,12 +731,6 @@ def _handle_session_step_report(
     """
     request_id = _request_id()
 
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _attach_loop_fields(
-            _feature_disabled_response("session-step-report", request_id)
-        )
-
     params = {"spec_id": spec_id, "session_id": session_id,
               "step_id": step_id, "step_type": step_type, "outcome": outcome}
     err = validate_payload(params, _STEP_REPORT_SCHEMA,
@@ -802,12 +788,6 @@ def _handle_session_step_replay(
         Response dict with last issued response or error
     """
     request_id = _request_id()
-
-    # Feature flag check - fail-closed
-    if not _is_feature_enabled(config, "autonomy_sessions"):
-        return _attach_loop_fields(
-            _feature_disabled_response("session-step-replay", request_id)
-        )
 
     storage = _get_storage(config, workspace, request_id=request_id)
     if isinstance(storage, dict):
