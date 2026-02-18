@@ -777,6 +777,13 @@ class StepOrchestrator(StepEmitterMixin):
                 session.completed_task_ids.append(result.task_id)
                 session.counters.tasks_completed += 1
 
+                # When write_lock is enforced, the runner cannot persist task
+                # completions to the spec file.  The orchestrator must do it
+                # server-side so that _reconcile_completed_tasks (Step 4b) does
+                # not revoke the completion as a phantom.
+                if session.write_lock_enforced:
+                    self._persist_task_completion_to_spec(session, result.task_id)
+
         # Record gate result and increment fidelity cycle counter (ADR step 3)
         if result.step_type == StepType.RUN_FIDELITY_GATE and result.gate_attempt_id:
             session.counters.fidelity_review_cycles_in_active_phase += 1
@@ -800,6 +807,54 @@ class StepOrchestrator(StepEmitterMixin):
         )
 
         session.updated_at = now
+
+    def _persist_task_completion_to_spec(
+        self,
+        session: AutonomousSessionState,
+        task_id: str,
+    ) -> None:
+        """Persist task completion to the spec file on behalf of the runner.
+
+        When write_lock_enforced is true, the runner cannot call
+        task(action="complete") directly.  The orchestrator persists the
+        completion server-side so that _reconcile_completed_tasks does not
+        revoke it as a phantom.
+
+        Best-effort: failures are logged but do not block orchestration.
+        """
+        try:
+            from foundry_mcp.core.journal import update_task_status
+            from foundry_mcp.core.spec import load_spec, save_spec
+
+            specs_dir = self.workspace_path / "specs"
+            spec_data = load_spec(session.spec_id, specs_dir)
+            if spec_data is None:
+                logger.debug(
+                    "Cannot persist task completion: spec %s not found",
+                    session.spec_id,
+                )
+                return
+
+            updated = update_task_status(spec_data, task_id, "completed")
+            if updated:
+                save_spec(session.spec_id, spec_data, specs_dir)
+                # Invalidate spec cache since we just wrote to the file
+                self._spec_cache = None
+                logger.info(
+                    "Orchestrator persisted task completion to spec: "
+                    "session=%s task=%s",
+                    session.id,
+                    task_id,
+                )
+            else:
+                logger.warning(
+                    "Failed to update task status in spec: task=%s not found",
+                    task_id,
+                )
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
+            logger.warning(
+                "Best-effort task completion persistence failed: %s", e
+            )
 
     def _reconcile_completed_tasks(
         self,
@@ -874,10 +929,19 @@ class StepOrchestrator(StepEmitterMixin):
         spec_data: Dict[str, Any],
         task_id: str,
     ) -> Optional[str]:
-        """Look up a task's status in the spec phases array.
+        """Look up a task's status in the spec.
+
+        Checks both the hierarchy dict (canonical format used by real specs)
+        and the phases array (denormalized format used by some test fixtures).
 
         Returns the status string if found, None if the task doesn't exist.
         """
+        # Check hierarchy first (canonical format for production specs)
+        hierarchy = spec_data.get("hierarchy", {})
+        if task_id in hierarchy:
+            return hierarchy[task_id].get("status")
+
+        # Fall back to phases array (denormalized format)
         for phase in spec_data.get("phases", []):
             for task in phase.get("tasks", []):
                 if task.get("id") == task_id:

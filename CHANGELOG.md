@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b9] - 2026-02-18
+
+### Fixed
+
+- **Write-lock task completion deadlock**: When `write_lock_enforced=true`, the autonomous runner cannot call `task(action="complete")` (blocked by write lock), but the orchestrator also never persisted completions to the spec file. The phantom reconciler (Step 4b) would then see the spec task as still "pending", revoke the session-level completion, and re-issue the same task indefinitely. The orchestrator now calls `_persist_task_completion_to_spec()` server-side during Step 3 when write lock is enforced.
+- **Phantom reconciler blind to hierarchy format**: `_get_spec_task_status()` only checked the `phases` array, but production specs use the `hierarchy` dict (no `phases` key). This caused every completion to be treated as phantom and revoked. Now checks `hierarchy` first, falling back to `phases` for test fixtures.
+
 ## [0.12.0b8] - 2026-02-18
 
 ### Fixed

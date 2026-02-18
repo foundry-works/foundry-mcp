@@ -2489,3 +2489,190 @@ class TestPhantomTaskCompletionReconciliation:
 
         assert "verify-1" not in session.completed_task_ids
         assert session.counters.tasks_completed == 0
+
+    def test_hierarchy_spec_task_status_resolved_correctly(self, tmp_path):
+        """_get_spec_task_status reads from hierarchy dict (production format)."""
+        spec_data = {
+            "spec_id": "test-spec-001",
+            "hierarchy": {
+                "spec-root": {"type": "spec", "children": ["phase-1"], "status": "in_progress"},
+                "phase-1": {"type": "phase", "children": ["task-1"], "status": "in_progress"},
+                "task-1": {"type": "task", "status": "completed", "children": []},
+            },
+        }
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        assert orch._get_spec_task_status(spec_data, "task-1") == "completed"
+        assert orch._get_spec_task_status(spec_data, "nonexistent") is None
+
+    def test_reconciliation_uses_hierarchy_when_phases_absent(self, tmp_path):
+        """Reconciliation preserves completion when hierarchy says completed."""
+        spec_data = {
+            "spec_id": "test-spec-001",
+            "hierarchy": {
+                "spec-root": {"type": "spec", "children": ["phase-1"], "status": "in_progress"},
+                "phase-1": {"type": "phase", "children": ["task-1"], "status": "in_progress"},
+                "task-1": {"type": "task", "status": "completed", "children": []},
+            },
+        }
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+            last_step_issued=_issued(step_id="step-001", task_id="task-1"),
+        )
+
+        last_result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+            phase_id="phase-1",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        # Completion preserved — hierarchy confirms task is completed
+        assert "task-1" in session.completed_task_ids
+        assert session.counters.tasks_completed == 1
+
+    def test_phantom_revoked_when_hierarchy_shows_pending(self, tmp_path):
+        """Reconciliation revokes completion when hierarchy says pending."""
+        spec_data = {
+            "spec_id": "test-spec-001",
+            "hierarchy": {
+                "spec-root": {"type": "spec", "children": ["phase-1"], "status": "in_progress"},
+                "phase-1": {"type": "phase", "children": ["task-1"], "status": "in_progress"},
+                "task-1": {"type": "task", "status": "pending", "children": []},
+            },
+        }
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            completed_task_ids=["task-1"],
+            counters=SessionCounters(tasks_completed=1),
+            last_step_issued=_issued(step_id="step-001", task_id="task-1"),
+        )
+
+        last_result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+            phase_id="phase-1",
+        )
+
+        orch._reconcile_completed_tasks(session, spec_data, last_result)
+
+        # Revoked — hierarchy says pending
+        assert "task-1" not in session.completed_task_ids
+        assert session.counters.tasks_completed == 0
+
+
+# =============================================================================
+# Write-Lock Task Completion Persistence (Step 3 enhancement)
+# =============================================================================
+
+
+class TestWriteLockTaskCompletionPersistence:
+    """Tests for _persist_task_completion_to_spec.
+
+    Verifies that when write_lock_enforced is true, the orchestrator
+    persists task completions to the spec file so that the phantom
+    reconciler does not revoke them.
+    """
+
+    def test_persist_called_when_write_lock_enforced(self, tmp_path):
+        """_record_step_outcome calls _persist when write_lock_enforced=True."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            write_lock_enforced=True,
+            last_step_issued=_issued(step_id="step-001", task_id="task-1"),
+        )
+
+        result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+        )
+
+        with patch.object(orch, "_persist_task_completion_to_spec") as mock_persist:
+            orch._record_step_outcome(session, result, datetime.now(timezone.utc))
+            mock_persist.assert_called_once_with(session, "task-1")
+
+    def test_persist_not_called_when_write_lock_not_enforced(self, tmp_path):
+        """_record_step_outcome skips _persist when write_lock_enforced=False."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            write_lock_enforced=False,
+            last_step_issued=_issued(step_id="step-001", task_id="task-1"),
+        )
+
+        result = _result(
+            step_id="step-001",
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+        )
+
+        with patch.object(orch, "_persist_task_completion_to_spec") as mock_persist:
+            orch._record_step_outcome(session, result, datetime.now(timezone.utc))
+            mock_persist.assert_not_called()
+
+    def test_persist_updates_hierarchy_spec_on_disk(self, tmp_path):
+        """_persist_task_completion_to_spec writes completed status to spec file."""
+        spec_data = {
+            "spec_id": "test-spec-001",
+            "hierarchy": {
+                "spec-root": {"type": "spec", "children": ["phase-1"], "status": "in_progress"},
+                "phase-1": {"type": "phase", "children": ["task-1"], "status": "in_progress"},
+                "task-1": {"type": "task", "status": "pending", "children": []},
+            },
+        }
+        workspace = tmp_path / "ws"
+        specs_dir = workspace / "specs" / "active"
+        specs_dir.mkdir(parents=True, exist_ok=True)
+        spec_file = specs_dir / "test-spec-001.json"
+        spec_file.write_text(json.dumps(spec_data, indent=2))
+
+        storage = MagicMock()
+        orch = StepOrchestrator(
+            storage=storage,
+            spec_loader=MagicMock(),
+            workspace_path=workspace,
+        )
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            write_lock_enforced=True,
+        )
+
+        orch._persist_task_completion_to_spec(session, "task-1")
+
+        # Reload and check
+        reloaded = json.loads(spec_file.read_text())
+        assert reloaded["hierarchy"]["task-1"]["status"] == "completed"
+
+    def test_persist_failure_is_best_effort(self, tmp_path):
+        """_persist_task_completion_to_spec does not raise on failure."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_id="nonexistent-spec",
+            spec_structure_hash="a" * 64,
+            write_lock_enforced=True,
+        )
+
+        # Should not raise — best-effort
+        orch._persist_task_completion_to_spec(session, "task-1")
