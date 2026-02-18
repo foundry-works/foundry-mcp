@@ -122,11 +122,13 @@ These parameters are hardcoded — never configurable, never weakened.
 
 Repeat up to `max_iterations=200`:
 
-1. Call `task(action="session-step", command="next", session_id=...)`.
+1. Call `task(action="session-step", command="next", session_id=..., heartbeat=true)`.
 2. Read `data.loop_signal` — apply deterministic exit (see table below).
 3. If no terminal signal, extract `data.next_step` and dispatch by `next_step.type`.
 4. If `next_step.step_proof` is present, pass it through verbatim in `last_step_result.step_proof`.
-5. Report outcome via simple report or extended `last_step_result` envelope.
+5. Report outcome via `last_step_result` envelope (always use the extended transport — see [references/step-handlers.md](./references/step-handlers.md)).
+
+**Heartbeat protocol:** Always pass `heartbeat=true` on every `session-step` call (both initial `next` and reporting via `last_step_result`). This keeps the session alive during long operations like fidelity gate reviews (~90s each). Without heartbeats, the session will pause with `heartbeat_stale` after the grace window expires (default 5 minutes).
 
 > Step handler details: [references/step-handlers.md](./references/step-handlers.md)
 > Verification receipt construction: [references/verification-receipts.md](./references/verification-receipts.md)

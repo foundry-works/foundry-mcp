@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b13] - 2026-02-18
+
+### Fixed
+
+- **Verification gate ignoring pending gate evidence**: `_should_run_fidelity_gate()` could re-emit a fidelity gate step while `pending_gate_evidence` was still waiting for Step 13 (`_handle_gate_evidence`) to process it. Now defers when evidence is pending, allowing auto-retry routing to `address_fidelity_feedback` to proceed correctly.
+- **Spec-status fallback polluting session verification evidence**: `_find_next_verification()` and `_should_run_fidelity_gate()` fell back to `task.get("status") == "completed"` from the spec when a verification wasn't in `session.completed_task_ids`. This let stale completions from prior sessions count as evidence for the current session's fidelity gate. Now only `session.completed_task_ids` is authoritative.
+
+### Added
+
+- **`session-step-heartbeat` in autonomy runner allowlist**: Enables autonomous agents to send heartbeats during long operations (e.g., fidelity gate reviews ~90s each), preventing `heartbeat_stale` pauses.
+
+### Changed
+
+- **Step handler docs**: Unified all step types to always use the extended `last_step_result` envelope (removed simple `command="report"` transport). Added concrete JSON examples with required fields for every step type. Documented heartbeat protocol.
+
 ## [0.12.0b12] - 2026-02-18
 
 ### Fixed

@@ -55,6 +55,7 @@ class TestRoleAllowlists:
         assert "session-status" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-step-next" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-step-replay" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "session-step-heartbeat" in AUTONOMY_RUNNER_ALLOWLIST
         assert "review-fidelity-gate" in AUTONOMY_RUNNER_ALLOWLIST
         assert "prepare" in AUTONOMY_RUNNER_ALLOWLIST
 

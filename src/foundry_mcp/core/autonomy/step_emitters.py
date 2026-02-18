@@ -528,7 +528,6 @@ class StepEmitterMixin:
             if (
                 task_type == "verify"
                 and task_id not in session.completed_task_ids
-                and task.get("status") != "completed"
             ):
                 return task
 
@@ -558,6 +557,11 @@ class StepEmitterMixin:
         if not phase_id:
             return False
 
+        # If there's unprocessed gate evidence, let _handle_gate_evidence (Step 13)
+        # process it first — it handles auto-retry routing to address_fidelity_feedback.
+        if session.pending_gate_evidence:
+            return False
+
         # Check if gate already passed
         gate_record = session.phase_gates.get(phase_id)
         if gate_record and gate_record.status == PhaseGateStatus.PASSED:
@@ -570,16 +574,15 @@ class StepEmitterMixin:
         ):
             return False
 
-        # Check if verifications are complete (or no verifications exist)
-        # A verification is complete if it's in session.completed_task_ids
-        # OR if the spec already marks it as completed (e.g. from a prior session).
+        # Check if verifications are complete (or no verifications exist).
+        # Only session.completed_task_ids counts — spec status from prior sessions
+        # does not provide evidence for the current session's fidelity gate.
         for task in phase.get("tasks", []):
             task_type = task.get("type", "task")
             task_id = task.get("id", "")
             if (
                 task_type == "verify"
                 and task_id not in session.completed_task_ids
-                and task.get("status") != "completed"
             ):
                 return False  # Verifications still pending
 
