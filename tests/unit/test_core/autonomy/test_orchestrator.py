@@ -67,7 +67,7 @@ from foundry_mcp.core.autonomy.orchestrator import (
 )
 from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
 
-from .conftest import make_session, make_spec_data
+from .conftest import make_hierarchy_spec_data, make_session, make_spec_data
 
 
 # =============================================================================
@@ -1884,3 +1884,329 @@ class TestVerificationReceiptTimingBoundaries:
         error = orch._validate_verification_receipt(session, result)
         assert error is not None
         assert "earlier" in error.lower()
+
+
+# =============================================================================
+# Hierarchy-Format Spec Integration
+# =============================================================================
+
+
+class TestHierarchySpecIntegration:
+    """Integration tests verifying the full orchestrator pipeline works with
+    hierarchy-format specs (the production format).
+
+    All other orchestrator tests use the denormalized phases-array format.
+    These tests ensure that when a hierarchy-format spec is written to disk and
+    loaded via ``load_spec_file()``, the adapter conversion produces data that
+    the orchestrator can consume correctly for task discovery, phase advancement,
+    fidelity gates, and hash consistency.
+    """
+
+    def test_initial_step_discovers_first_task(self, tmp_path):
+        """Orchestrator finds the first pending task from a hierarchy spec."""
+        spec_data = make_hierarchy_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        # load_spec_file() is called inside _validate_spec_integrity;
+        # compute the hash from the converted view to match
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            last_step_issued=None,
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.IMPLEMENT_TASK
+        assert result.next_step.task_id == "task-1"
+
+    def test_phase_advancement_across_phases(self, tmp_path):
+        """After completing all phase-1 tasks and satisfying the gate,
+        orchestrator advances to phase-2."""
+        spec_data = make_hierarchy_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1", "task-2", "verify-1"],
+            last_step_issued=None,
+            # Pre-satisfy the fidelity gate so the orchestrator can advance
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PASSED,
+                    verdict=GateVerdict.PASS,
+                ),
+            },
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.task_id == "task-3"
+        assert session.active_phase_id == "phase-2"
+
+    def test_verification_after_implementation(self, tmp_path):
+        """Verify tasks are scheduled after all implementation tasks complete."""
+        spec_data = make_hierarchy_spec_data(
+            phase_defs=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "children": ["task-1", "verify-1"],
+                    "metadata": {},
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            last_step_issued=None,
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.EXECUTE_VERIFICATION
+        assert result.next_step.task_id == "verify-1"
+
+    def test_fidelity_gate_triggered(self, tmp_path):
+        """Fidelity gate fires when all tasks in a gated phase are complete."""
+        spec_data = make_hierarchy_spec_data(
+            phase_defs=[
+                {
+                    "id": "phase-1",
+                    "title": "Gated Phase",
+                    "children": ["task-1"],
+                    "metadata": {"requires_gate": True},
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            last_step_issued=None,
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.RUN_FIDELITY_GATE
+        assert result.next_step.phase_id == "phase-1"
+
+    def test_hash_equivalence_with_phases_format(self):
+        """Hierarchy spec produces the same structure hash as an equivalent phases spec."""
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        hierarchy = make_hierarchy_spec_data(
+            spec_id="hash-equiv",
+            phase_defs=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "children": ["task-1"],
+                    "metadata": {},
+                },
+            ],
+        )
+        converted = ensure_phases_view(dict(hierarchy))
+        hash_from_hierarchy = compute_spec_structure_hash(converted)
+
+        # Build the equivalent phases-format spec
+        phases_spec = make_spec_data(
+            spec_id="hash-equiv",
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task task-1", "type": "task", "status": "pending"},
+                    ],
+                },
+            ],
+        )
+        hash_from_phases = compute_spec_structure_hash(phases_spec)
+
+        assert hash_from_hierarchy == hash_from_phases
+
+    def test_spec_integrity_check_passes(self, tmp_path):
+        """_validate_spec_integrity succeeds for hierarchy specs on disk."""
+        spec_data = make_hierarchy_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+        )
+
+        loaded, error = orch._validate_spec_integrity(session, datetime.now(timezone.utc))
+
+        assert error is None
+        assert loaded is not None
+        assert "phases" in loaded
+        assert len(loaded["phases"]) == 2
+
+    def test_complete_spec_after_all_tasks(self, tmp_path):
+        """Orchestrator issues COMPLETE_SPEC when all tasks are done and gate is satisfied."""
+        spec_data = make_hierarchy_spec_data(
+            phase_defs=[
+                {
+                    "id": "phase-1",
+                    "title": "Only Phase",
+                    "children": ["task-1"],
+                    "metadata": {},
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1"],
+            last_step_issued=None,
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PASSED,
+                    verdict=GateVerdict.PASS,
+                ),
+            },
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.COMPLETE_SPEC
+
+    def test_subtask_expansion(self, tmp_path):
+        """Parent tasks with subtask children are expanded to leaf nodes."""
+        spec_data = make_hierarchy_spec_data(
+            phase_defs=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "children": ["task-parent"],
+                    "metadata": {},
+                },
+            ],
+        )
+        # Give the parent task subtask children
+        spec_data["hierarchy"]["task-parent"]["children"] = ["subtask-1", "subtask-2"]
+        for sid in ["subtask-1", "subtask-2"]:
+            spec_data["hierarchy"][sid] = {
+                "type": "subtask",
+                "title": f"Subtask {sid}",
+                "status": "pending",
+                "parent": "task-parent",
+                "children": [],
+                "total_tasks": 1,
+                "completed_tasks": 0,
+                "metadata": {},
+                "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
+            }
+
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            last_step_issued=None,
+        )
+
+        result = orch.compute_next_step(session, last_step_result=None)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.IMPLEMENT_TASK
+        assert result.next_step.task_id in ("subtask-1", "subtask-2")
+
+    def test_multi_step_progression(self, tmp_path):
+        """Walk through multiple orchestrator steps on a hierarchy spec."""
+        spec_data = make_hierarchy_spec_data(
+            phase_defs=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "children": ["task-1", "task-2"],
+                    "metadata": {},
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
+
+        converted = ensure_phases_view(dict(spec_data))
+        spec_hash = compute_spec_structure_hash(converted)
+
+        session = make_session(
+            spec_structure_hash=spec_hash,
+            last_step_issued=None,
+        )
+
+        # Step 1: get first task
+        result1 = orch.compute_next_step(session, last_step_result=None)
+        assert result1.success is True
+        assert result1.next_step.task_id == "task-1"
+
+        # Report success on task-1
+        step_result = _result(
+            step_id=result1.next_step.step_id,
+            step_type=StepType.IMPLEMENT_TASK,
+            outcome=StepOutcome.SUCCESS,
+            task_id="task-1",
+            phase_id="phase-1",
+            step_proof=result1.next_step.step_proof,
+        )
+
+        # Step 2: get second task
+        result2 = orch.compute_next_step(session, last_step_result=step_result)
+        assert result2.success is True
+        assert result2.next_step.task_id == "task-2"

@@ -81,6 +81,8 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset({
     "session-step-report",
     # Fidelity gate
     "review-fidelity-gate",
+    # Verification execution (required for proof-carrying receipts)
+    "verification-execute",
 })
 
 # Actions allowed for maintainer role - full mutation access (wildcard)
