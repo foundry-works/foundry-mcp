@@ -1,0 +1,367 @@
+{
+  "spec_id": "ruff-pyright-ci-2026-02-18-001",
+  "title": "ruff-pyright-ci",
+  "generated": "2026-02-18T23:35:56.469421Z",
+  "last_updated": "2026-02-18T23:36:57.999670Z",
+  "metadata": {
+    "description": "",
+    "mission": "Introduce Ruff linting/formatting and Pyright type-checking to CI in a phased, low-churn rollout \u2014 advisory first, then blocking.",
+    "objectives": [],
+    "complexity": "low",
+    "estimated_hours": 0,
+    "assumptions": [
+      "pyproject.toml already has a basic [tool.pyright] section; pyright is not installed via dependency groups",
+      "No existing Ruff, Black, isort, or flake8 configuration in the repo",
+      "CI uses actions/checkout@v4 and actions/setup-python@v5 conventions",
+      "Baseline: ~5,659 Ruff issues, 553 Pyright errors, 96 Pyright warnings as of 2026-02-18"
+    ],
+    "owner": "",
+    "category": "implementation",
+    "template": "empty"
+  },
+  "progress_percentage": 0,
+  "status": "pending",
+  "current_phase": null,
+  "hierarchy": {
+    "spec-root": {
+      "type": "spec",
+      "title": "ruff-pyright-ci",
+      "status": "pending",
+      "parent": null,
+      "children": [
+        "phase-1",
+        "phase-2",
+        "phase-3"
+      ],
+      "total_tasks": 10,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-1": {
+      "type": "phase",
+      "title": "Tooling + Advisory CI (PR A)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-1-1",
+        "task-1-2",
+        "task-1-3",
+        "verify-1-1"
+      ],
+      "total_tasks": 4,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Wire up Ruff and Pyright config, add dev dependency group, create CI workflow with all checks advisory (continue-on-error). No source code formatting changes in this phase."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-2"
+        ],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-1": {
+      "type": "task",
+      "title": "Add conservative Ruff config to pyproject.toml",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add [tool.ruff], [tool.ruff.format], [tool.ruff.lint], [tool.ruff.lint.isort], and [tool.ruff.lint.per-file-ignores] sections after existing [tool.pyright]. Settings: target-version py310, line-length 120, src=['src','tests'], select F/E/W/I/B, ignore E501 (handled by formatter), known-first-party=['foundry_mcp'], quote-style double, indent-style space, docstring-code-format true.",
+        "file_path": "pyproject.toml",
+        "acceptance_criteria": [
+          "Ruff config present in pyproject.toml with target-version py310",
+          "line-length set to 120",
+          "Selected rules: F, E, W, I, B",
+          "E501 ignored (formatter handles line length)",
+          "isort known-first-party includes foundry_mcp",
+          "per-file-ignores section exists (can be empty initially)"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-2": {
+      "type": "task",
+      "title": "Add dev dependency group to pyproject.toml",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Add [project.optional-dependencies] dev group with ruff>=0.9.0,<0.10, pyright>=1.1.390, and foundry-mcp[test].",
+        "file_path": "pyproject.toml",
+        "acceptance_criteria": [
+          "dev extra defined in pyproject.toml",
+          "ruff pinned to >=0.9.0,<0.10",
+          "pyright pinned to >=1.1.390",
+          "foundry-mcp[test] included in dev deps",
+          "pip install -e '.[dev]' succeeds"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-1-3": {
+      "type": "task",
+      "title": "Create lint CI workflow (advisory)",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create GitHub Actions workflow triggered on push/PR to main+beta. Single Python 3.11 runner (lint results don't vary across patch versions). Steps: checkout, setup-python with pip cache, install via pip install -e '.[dev]', then three advisory steps (all continue-on-error: true): ruff format --check src/ tests/, ruff check src/ tests/ --statistics, pyright.",
+        "file_path": ".github/workflows/lint.yml",
+        "acceptance_criteria": [
+          "Workflow triggers on push and PR to main and beta branches",
+          "Uses Python 3.11 with pip cache",
+          "Installs via pip install -e '.[dev]'",
+          "Ruff format check runs with continue-on-error: true",
+          "Ruff lint check runs with continue-on-error: true and --statistics flag",
+          "Pyright runs with continue-on-error: true",
+          "Overall workflow stays green regardless of check results"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-1-1": {
+      "type": "verify",
+      "title": "Verify Phase 1: Advisory CI operational",
+      "status": "pending",
+      "parent": "phase-1",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Confirm CI workflow runs on pushes/PRs, produces visible Ruff/Pyright output in logs, overall workflow stays green, and no source formatting changes were introduced.",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-2": {
+      "type": "phase",
+      "title": "Ruff Cleanup + Blocking Ruff (PR B)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-2-1",
+        "task-2-2",
+        "verify-2-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Bulk auto-fix existing Ruff issues in a dedicated cleanup commit, add .git-blame-ignore-revs, resolve remaining manual fixes, then promote Ruff lint + format to blocking in CI."
+      },
+      "dependencies": {
+        "blocks": [
+          "phase-3"
+        ],
+        "blocked_by": [
+          "phase-1"
+        ],
+        "depends": []
+      }
+    },
+    "task-2-1": {
+      "type": "task",
+      "title": "Bulk autofix + format cleanup",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Run ruff check --fix src/ tests/, then ruff format src/ tests/, then verify ruff check src/ tests/ passes. Commit as single commit (e.g. 'chore: ruff autofix + format'). Add commit SHA to .git-blame-ignore-revs with comment explaining bulk format. Resolve remaining high-signal manual items (F821, B904) in follow-up commits. Run full test suite after autofix to verify no behavioral changes.",
+        "file_path": "src/foundry_mcp/__init__.py",
+        "acceptance_criteria": [
+          "ruff check --fix and ruff format run across src/ and tests/",
+          "Single dedicated commit for bulk autofix + format",
+          "Commit SHA added to .git-blame-ignore-revs",
+          ".git-blame-ignore-revs has explanatory comment",
+          "Remaining high-signal items (F821, B904) resolved manually",
+          "Full test suite passes after autofix"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-2-2": {
+      "type": "task",
+      "title": "Make Ruff blocking in CI",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Remove continue-on-error: true from both the Ruff format and Ruff lint steps in .github/workflows/lint.yml. Keep Pyright step advisory (continue-on-error: true). Add quality job as required status check on main and beta branch protection rules.",
+        "file_path": ".github/workflows/lint.yml",
+        "acceptance_criteria": [
+          "Ruff format step no longer has continue-on-error",
+          "Ruff lint step no longer has continue-on-error",
+          "Pyright step still has continue-on-error: true",
+          "quality job added as required status check on main branch protection",
+          "quality job added as required status check on beta branch protection",
+          "CI fails if Ruff lint or format violations are introduced"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-2-1": {
+      "type": "verify",
+      "title": "Verify Phase 2: Ruff blocking and clean",
+      "status": "pending",
+      "parent": "phase-2",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Confirm Ruff lint + format pass cleanly on the full codebase, CI fails on Ruff violations, Pyright remains advisory, and .git-blame-ignore-revs is correctly configured.",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "phase-3": {
+      "type": "phase",
+      "title": "Pyright Ratchet + Blocking Pyright (PR C+)",
+      "status": "pending",
+      "parent": "spec-root",
+      "children": [
+        "task-3-1",
+        "task-3-2",
+        "verify-3-1"
+      ],
+      "total_tasks": 3,
+      "completed_tasks": 0,
+      "metadata": {
+        "purpose": "",
+        "description": "Implement a Pyright error ratchet to prevent regressions during incremental cleanup. Once error count reaches zero, promote Pyright to a blocking CI gate."
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [
+          "phase-2"
+        ],
+        "depends": []
+      }
+    },
+    "task-3-1": {
+      "type": "task",
+      "title": "Implement Pyright ratchet mechanism",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Create .pyright-threshold file containing the current error count (553). Update the Pyright step in .github/workflows/lint.yml to: run pyright --outputjson writing to temp file (to decouple exit codes from set -eo pipefail), parse JSON output with python3 to extract summary.errorCount, compare against threshold, fail if errors exceed threshold. Keep as advisory (continue-on-error: true) initially. The ratchet ensures cleanup PRs can lower the threshold without touching CI config.",
+        "file_path": ".pyright-threshold",
+        "acceptance_criteria": [
+          ".pyright-threshold file exists with initial count 553",
+          "Pyright step uses --outputjson and writes to temp file",
+          "Python3 script parses JSON and extracts summary.errorCount",
+          "Step fails if error count exceeds threshold",
+          "Step remains advisory (continue-on-error: true)",
+          "Cleanup PRs only need to update .pyright-threshold number"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "task-3-2": {
+      "type": "task",
+      "title": "Make Pyright blocking",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "When Pyright error count reaches zero and is stable: remove continue-on-error from Pyright step, remove the ratchet threshold wrapper (replace with plain pyright invocation), delete .pyright-threshold file. Verify the quality job is already a required status check from Phase 2 \u2014 no additional branch protection changes needed.",
+        "file_path": ".github/workflows/lint.yml",
+        "acceptance_criteria": [
+          "Pyright step no longer has continue-on-error",
+          "Ratchet wrapper removed \u2014 plain pyright command",
+          ".pyright-threshold file deleted",
+          "quality job already required in branch protection (from Phase 2)",
+          "CI fails on any Pyright errors"
+        ],
+        "task_category": "implementation"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    },
+    "verify-3-1": {
+      "type": "verify",
+      "title": "Verify Phase 3: Pyright blocking and clean",
+      "status": "pending",
+      "parent": "phase-3",
+      "children": [],
+      "total_tasks": 1,
+      "completed_tasks": 0,
+      "metadata": {
+        "description": "Confirm Pyright passes cleanly with zero errors, CI fails on type errors, and the full quality gate (Ruff + Pyright) is enforced.",
+        "verification_type": "fidelity"
+      },
+      "dependencies": {
+        "blocks": [],
+        "blocked_by": [],
+        "depends": []
+      }
+    }
+  },
+  "journal": []
+}
