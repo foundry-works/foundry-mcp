@@ -192,6 +192,7 @@ def _build_test_results(
         for entry in journal
         if "test" in entry.get("title", "").lower()
         or "verify" in entry.get("title", "").lower()
+        or "verification" in entry.get("title", "").lower()
     ]
     if test_entries:
         lines = ["*Recent test-related journal entries:*"]
@@ -214,6 +215,22 @@ def _build_journal_entries(
     journal = spec_data.get("journal", [])
     if task_id:
         journal = [entry for entry in journal if entry.get("task_id") == task_id]
+    elif phase_id:
+        # Filter to entries from tasks belonging to this phase
+        phase = _find_phase(spec_data, phase_id)
+        if phase:
+            phase_task_ids = {
+                child["id"]
+                for child in _get_child_nodes(spec_data, phase)
+                if "id" in child
+            }
+            # Include entries that belong to phase tasks or have no task_id (phase-level)
+            journal = [
+                entry
+                for entry in journal
+                if entry.get("task_id") in phase_task_ids
+                or (not entry.get("task_id") and entry.get("metadata", {}).get("phase_id") == phase_id)
+            ]
     if journal:
         lines = [f"*{len(journal)} journal entries found:*"]
         for entry in journal[-5:]:
@@ -226,6 +243,11 @@ def _build_journal_entries(
             lines.append(
                 f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({timestamp})"
             )
+            if entry.get("content"):
+                content = entry["content"][:500]
+                if len(entry["content"]) > 500:
+                    content += "..."
+                lines.append(f"  {content}")
         return "\n".join(lines)
     return "*No journal entries found*"
 

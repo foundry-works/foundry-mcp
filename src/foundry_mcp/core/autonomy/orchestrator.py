@@ -1029,6 +1029,18 @@ class StepOrchestrator(StepEmitterMixin):
             if result.files_touched:
                 content += f"\n\nFiles touched: {', '.join(result.files_touched)}"
 
+            # Enrich verification step entries with receipt evidence
+            if (
+                result.step_type == StepType.EXECUTE_VERIFICATION
+                and result.verification_receipt
+            ):
+                receipt = result.verification_receipt
+                content += (
+                    f"\n\nVerification evidence: exit_code={receipt.exit_code}, "
+                    f"command_hash={receipt.command_hash[:16]}..., "
+                    f"output_digest={receipt.output_digest[:16]}..."
+                )
+
             logger.info(
                 "Step outcome: session=%s step=%s type=%s outcome=%s",
                 session.id,

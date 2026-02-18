@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b10] - 2026-02-18
+
+### Fixed
+
+- **Fidelity gate blind to verification evidence**: The fidelity gate reviewer received no meaningful verification evidence, causing gates to fail in a retry loop. Four bugs fixed:
+  - `_build_journal_entries()` only rendered entry titles (not content) — the reviewer saw one-liners like "Step execute_verification: success" with zero detail
+  - `_build_journal_entries()` ignored `phase_id` parameter — when the gate passed `phase_id` without `task_id`, no filtering occurred; now filters to entries from the phase's child tasks
+  - `_build_test_results()` checked for `"verify"` substring but journal titles contain `"verification"` (not a match) — added `"verification"` to the keyword filter
+  - `_write_step_journal()` wrote terse content for verification steps without receipt evidence — now includes exit_code, command_hash, and output_digest when a verification receipt is present
+
 ## [0.12.0b9] - 2026-02-18
 
 ### Fixed
