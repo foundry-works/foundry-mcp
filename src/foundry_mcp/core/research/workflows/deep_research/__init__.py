@@ -9,7 +9,7 @@ from foundry_mcp.core.research.workflows.deep_research.core import *  # noqa: F4
 
 # Explicit re-exports for symbols from extracted modules.
 # These classes are patched at module paths by tests (test_deep_research_digest.py)
-# and now live in phases.analysis / _budgeting after extraction.
+# and are re-exported from phases.analysis for backward compatibility.
 from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (  # noqa: F401
     ContentSummarizer,
     DocumentDigestor,

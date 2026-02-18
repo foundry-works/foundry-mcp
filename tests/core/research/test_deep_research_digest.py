@@ -149,13 +149,13 @@ class TestEndToEndDigestFlow:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -238,7 +238,7 @@ class TestEndToEndDigestFlow:
         )
 
         with patch(
-            "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+            "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
         ) as MockPDFExtractor:
             mock_instance = MockPDFExtractor.return_value
             mock_instance.extract_from_url = AsyncMock(return_value=pdf_result)
@@ -283,13 +283,13 @@ class TestRankingUsesRawContent:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -325,13 +325,13 @@ class TestRankingUsesRawContent:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -365,13 +365,13 @@ class TestRankingUsesRawContent:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -408,13 +408,13 @@ class TestBudgetUsesCompressedSize:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -450,13 +450,13 @@ class TestBudgetUsesCompressedSize:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -648,13 +648,13 @@ class TestMultiIterationNoReDigest:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -683,13 +683,13 @@ class TestMultiIterationNoReDigest:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -709,13 +709,13 @@ class TestMultiIterationNoReDigest:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -741,13 +741,13 @@ class TestMultiIterationNoReDigest:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -789,13 +789,13 @@ class TestTimeoutBudgeting:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -837,13 +837,13 @@ class TestMaxSourcesLimit:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -879,13 +879,13 @@ class TestFidelityTrackingOnErrors:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -908,13 +908,13 @@ class TestFidelityTrackingOnErrors:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -959,13 +959,13 @@ class TestDigestArchiveSafety:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value
@@ -1001,13 +1001,13 @@ class TestDigestArchiveSafety:
 
         with (
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.DocumentDigestor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.ContentSummarizer"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
             ),
             patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases.analysis.PDFExtractor"
+                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
             ),
         ):
             mock_instance = MockDigestor.return_value

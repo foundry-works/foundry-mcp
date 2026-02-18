@@ -741,7 +741,7 @@ class TestExecuteWithResilience:
         async def always_fail():
             raise Exception("429 Too Many Requests")
 
-        with patch("foundry_mcp.core.research.providers.resilience.asyncio.sleep", fake_sleep):
+        with patch("foundry_mcp.core.research.providers.resilience.execution.asyncio.sleep", fake_sleep):
             with pytest.raises(Exception):
                 await execute_with_resilience(
                     always_fail,
@@ -784,7 +784,7 @@ class TestDeterministicJitterIntegration:
             return "success"
 
         # Patch asyncio.sleep at module level
-        with patch("foundry_mcp.core.research.providers.resilience.asyncio.sleep", tracking_sleep):
+        with patch("foundry_mcp.core.research.providers.resilience.execution.asyncio.sleep", tracking_sleep):
             result = await execute_with_resilience(
                 fail_twice,
                 "tavily",

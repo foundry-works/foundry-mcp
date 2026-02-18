@@ -414,6 +414,40 @@ core/discovery/
 
 ---
 
+## 15. Research Infrastructure Decomposition — DONE
+
+### Status: All 7 waves complete (2026-02-17)
+
+Split 7 monolithic research infrastructure modules (~9,936 lines total) into focused sub-packages with backward-compatible `__init__.py` re-exports. All imports go through re-exports; no external consumer changes needed.
+
+**Wave 1** — Split `document_digest.py` (2,093 lines) → `document_digest/` sub-package (7 modules: config, cache, results, text_processing, evidence, circuit_breaker, digestor). Added `DigestPayload` and `EvidenceSnippet` re-exports for backward compatibility. 202/202 tests pass.
+
+**Wave 2** — Split `context_budget.py` (1,994 lines) → `context_budget/` sub-package (7 modules: constants, priority, models, degradation_models, degradation_pipeline, manager). Added `ProtectedContentOverflowError` re-export. 5,208/5,208 tests pass.
+
+**Wave 3** — Split `deep_research/core.py` (1,597 lines) into 5 extracted mixins (persistence, audit, error_handling, action_handlers, workflow_execution). Followed existing mixin composition pattern; `core.py` remains the composition point. 5,208/5,208 tests pass.
+
+**Wave 4** — Split `summarization.py` (1,347 lines) → `summarization/` sub-package (5 modules: constants, models, cache, summarizer). Error classes remain in `core.errors.research`, re-exported from `__init__.py`. 1,275/1,275 research tests pass.
+
+**Wave 5** — Split `analysis.py` (1,085 lines) into 3 sub-mixins (_analysis_digest, _analysis_prompts, _analysis_parsing). `AnalysisPhaseMixin` inherits all three. Updated test patch targets in `test_deep_research_digest.py`. 1,487/1,487 research tests pass.
+
+**Wave 6** — Split `token_management.py` (1,002 lines) → `token_management/` sub-package (7 modules: models, registry, limits, budget, estimation, preflight). Re-exported `_PROVIDER_TOKENIZERS`, `_get_cached_encoding`, `_TIKTOKEN_AVAILABLE` for test access. 1,275/1,275 research tests pass.
+
+**Wave 7** — Split `providers/resilience.py` (818 lines) → `resilience/` sub-package (6 modules: models, config, manager, retry, execution). Updated 2 test patch targets for `asyncio.sleep` to point to `execution` module. 1,275/1,275 research tests pass.
+
+### Final Structures
+
+```
+core/research/document_digest/      7 modules (config, cache, results, text_processing, evidence, circuit_breaker, digestor)
+core/research/context_budget/       7 modules (constants, priority, models, degradation_models, degradation_pipeline, manager)
+core/research/summarization/        5 modules (constants, models, cache, summarizer)
+core/research/token_management/     7 modules (models, registry, limits, budget, estimation, preflight)
+core/research/providers/resilience/ 6 modules (models, config, manager, retry, execution)
+core/research/workflows/deep_research/core.py        + 5 mixins (persistence, audit, error_handling, action_handlers, workflow_execution)
+core/research/workflows/deep_research/phases/analysis.py + 3 sub-mixins (_analysis_digest, _analysis_prompts, _analysis_parsing)
+```
+
+---
+
 ## What's Working Well
 
 - **Response envelope consistency**: 100% of production code uses `asdict(success_response(...))` / `asdict(error_response(...))` — zero hand-rolled responses
@@ -446,3 +480,4 @@ core/discovery/
 | 12 | Autonomy models decomposition | **Done** (Waves 1-4) | — | 36 classes split into 8 sub-modules |
 | 13 | LLM config module decomposition | **Done** (Waves 1-4) | — | 7 classes split into 5 sub-modules, 18 callers |
 | 14 | Discovery module decomposition | **Done** (Waves 1-4) | — | 6 classes split into 10 sub-modules, 55% metadata separated |
+| 15 | Research infrastructure decomposition | **Done** (Waves 1-7) | — | 7 monoliths → 40 focused modules, ~9,936 lines decomposed |
