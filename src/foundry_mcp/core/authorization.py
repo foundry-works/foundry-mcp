@@ -79,6 +79,7 @@ AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset({
     # Session-step actions
     "session-step-next",
     "session-step-report",
+    "session-step-replay",
     # Fidelity gate
     "review-fidelity-gate",
     # Verification execution (required for proof-carrying receipts)

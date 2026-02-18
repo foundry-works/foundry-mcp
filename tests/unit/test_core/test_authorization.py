@@ -54,6 +54,7 @@ class TestRoleAllowlists:
         assert "session-list" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-status" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-step-next" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "session-step-replay" in AUTONOMY_RUNNER_ALLOWLIST
         assert "review-fidelity-gate" in AUTONOMY_RUNNER_ALLOWLIST
 
     def test_maintainer_allowlist_has_wildcard(self):

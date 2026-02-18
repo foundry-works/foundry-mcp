@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b6] - 2026-02-18
+
+### Fixed
+
+- **Stale session recovery authorization**: Added `session-step-replay` to `AUTONOMY_RUNNER_ALLOWLIST`, enabling autonomous agents to probe for unreported pending steps during stale session recovery. Previously, replay was documented in the skill but blocked at the server with `AUTHORIZATION` error.
+
 ## [0.12.0b5] - 2026-02-18
 
 ### Added
