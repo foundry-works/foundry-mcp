@@ -571,10 +571,16 @@ class StepEmitterMixin:
             return False
 
         # Check if verifications are complete (or no verifications exist)
+        # A verification is complete if it's in session.completed_task_ids
+        # OR if the spec already marks it as completed (e.g. from a prior session).
         for task in phase.get("tasks", []):
             task_type = task.get("type", "task")
             task_id = task.get("id", "")
-            if task_type == "verify" and task_id not in session.completed_task_ids:
+            if (
+                task_type == "verify"
+                and task_id not in session.completed_task_ids
+                and task.get("status") != "completed"
+            ):
                 return False  # Verifications still pending
 
         return True

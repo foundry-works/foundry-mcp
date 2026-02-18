@@ -391,6 +391,18 @@ class StepOrchestrator(StepEmitterMixin):
                 )
 
         # =================================================================
+        # Step 6b: Clear consumed step to prevent proof deadlocks
+        # =================================================================
+        # After staleness checks, the step result has been fully consumed.
+        # Clear last_step_issued and advance state_version so that if a
+        # later pipeline stage (e.g. gate invariant at Step 17) returns an
+        # error with should_persist=True, the session won't be saved with
+        # a stale last_step_issued pointing to a consumed proof token.
+        if last_step_result is not None and session.last_step_issued is not None:
+            session.last_step_issued = None
+            session.state_version += 1
+
+        # =================================================================
         # Step 7: Enforce Heartbeat Staleness
         # =================================================================
         heartbeat_stale_warning = False
@@ -837,7 +849,10 @@ class StepOrchestrator(StepEmitterMixin):
 
             updated = update_task_status(spec_data, task_id, "completed")
             if updated:
-                save_spec(session.spec_id, spec_data, specs_dir)
+                # Skip validation — this is a targeted status update, not a
+                # structural change, and the spec may use phases-only format
+                # which lacks the "hierarchy" key that validation requires.
+                save_spec(session.spec_id, spec_data, specs_dir, validate=False)
                 # Invalidate spec cache since we just wrote to the file
                 self._spec_cache = None
                 logger.info(

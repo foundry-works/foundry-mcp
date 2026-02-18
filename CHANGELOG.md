@@ -5,10 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0b11] - 2026-02-18
+## [0.12.0b12] - 2026-02-18
 
 ### Fixed
 
+- **Proof deadlock on gate invariant errors**: When the orchestrator consumed a step proof (Step 3) but a later pipeline stage (e.g. `REQUIRED_GATE_UNSATISFIED` at Step 17) returned an error with `should_persist=True`, the session was saved with `last_step_issued` still pointing to the consumed proof. The next call required a proof that no longer existed — unrecoverable deadlock. Now clears `last_step_issued` and advances `state_version` after step consumption (Step 6b), before the next-step computation pipeline.
+- **Fidelity gate skipped for spec-completed verifications**: `_should_run_fidelity_gate()` only checked `session.completed_task_ids` for verification status, but when a prior session already completed verifications in the spec, the new session's `completed_task_ids` didn't include them. The gate checker said "verifications pending" while the verification finder said "nothing to issue" — deadlock between Steps 12 and 16. Now also checks `task.get("status") == "completed"` from the spec.
+- **`update_task_status()` blind to phases-format specs**: Only checked `hierarchy` dict. Now falls back to `phases` array for specs using the denormalized format.
+- **`_persist_task_completion_to_spec()` silently failed on phases-format specs**: `save_spec()` with default `validate=True` rejected specs without a `hierarchy` key. Now passes `validate=False` since this is a targeted status update.
 - **Session reuse ignores fidelity cycle limit**: `foundry-implement-auto` would reuse a session paused at `fidelity_cycle_limit` (gate retries exhausted), then immediately hit the same wall. The skill now detects this pause reason and raises `SESSION_REUSE_PAUSED_GATE_LIMIT` with clear remediation guidance instead of entering a futile retry loop.
 
 ## [0.12.0b10] - 2026-02-18

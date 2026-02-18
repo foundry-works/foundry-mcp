@@ -516,10 +516,23 @@ def update_task_status(
         return False
 
     hierarchy = spec_data.get("hierarchy", {})
-    if task_id not in hierarchy:
+    task: Optional[Dict[str, Any]] = None
+
+    if task_id in hierarchy:
+        task = hierarchy[task_id]
+    else:
+        # Fall back to phases array (denormalized format used by some specs/tests)
+        for phase in spec_data.get("phases", []):
+            for t in phase.get("tasks", []):
+                if t.get("id") == task_id:
+                    task = t
+                    break
+            if task is not None:
+                break
+
+    if task is None:
         return False
 
-    task = hierarchy[task_id]
     timestamp = _get_timestamp()
 
     # Update status
