@@ -37,6 +37,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Autonomy posture profiles**: Added fixed posture profiles (`unattended`, `supervised`, `debug`) with runtime defaults for role, escape-hatch policy, and session-start defaults.
 - **Capability response enhancements**: `server(action="capabilities")` now includes runtime posture/security/session-default details and a role-preflight convention contract for consumers.
 - **Session-start default expansion**: `task(action="session", command="start")` now uses config-driven session defaults (`gate_policy`, stop/retry behavior, bounded limits) when request fields are omitted.
+- **Declarative parameter validation framework** (`tools/unified/param_schema.py`): Migrated 69 handlers across 5 waves from imperative `_validation_error()` calls to declarative schemas. ~370 validation calls reduced to 4 (irreducibly runtime-dependent). ~15-20% handler file size reduction.
+- **Unified error hierarchy** (`core/errors/`): Consolidated all 37 error classes from 17 source files into a structured package (9 domain modules). Added `ERROR_MAPPINGS` registry with 24 error-to-code mappings and `error_to_response()` helper.
+- **God object decomposition**: Split 3 core monoliths into sub-module packages:
+  - `core/validation/` (2,342 lines → 10 sub-modules)
+  - `core/ai_consultation/` (1,774 lines → 4 sub-modules)
+  - `core/observability/` (1,218 lines → 6 sub-modules)
+- **Research tool decomposition**: Extracted 17 handlers from monolithic `research.py` into `research_handlers/` package with 5 domain-focused modules.
+- **Tool registration signature cleanup**: Replaced manual payload dict construction (~470 lines) with `locals()` filter pattern in task, authoring, and research tool registrations.
+- **Observability/metrics consolidation** (`core/metrics/`, `core/observability/`): Merged 6 standalone files into 2 bounded packages with deprecation shims.
+- **Deep research phase execution framework** (`phases/_lifecycle.py`, `_run_phase()`): Extracted shared LLM call lifecycle and orchestrator dispatch boilerplate from 4 phase mixins. ~350 lines of phase boilerplate and ~250 lines of dispatch boilerplate eliminated.
+- **Config module decomposition** (`config/`): Split `config.py` (2,771 lines, 24 dataclasses) into 7 focused sub-modules (server, loader, research, autonomy, domains, parsing, decorators).
+- **Research models decomposition** (`core/research/models/`): Split 2,176-line models file (33 classes) into 8 sub-modules (enums, digest, conversations, thinkdeep, ideation, consensus, fidelity, sources, deep_research).
+- **Autonomy models decomposition** (`core/autonomy/models/`): Split 1,154-line models file (36 classes) into 8 sub-modules (enums, verification, gates, steps, session_config, responses, state, signals).
+- **LLM config decomposition** (`core/llm_config/`): Split 1,419-line module into 5 sub-modules (paths, provider_spec, llm, workflow, consultation).
+- **Discovery module decomposition** (`core/discovery/`): Split 1,811-line module (55% metadata dicts) into 10 sub-modules with metadata separated from infrastructure.
+- **Research infrastructure decomposition**: Split 7 monolithic modules (~9,936 lines total) into focused sub-packages: `document_digest/`, `context_budget/`, `summarization/`, `token_management/`, `providers/resilience/`, plus deep research core/analysis mixin extraction.
+- **Response module decomposition** (`core/responses/`): Split 1,697-line module (62 import sites) into 7 sub-modules (types, builders, errors_generic, errors_spec, errors_ai, sanitization, batch_schemas).
+- **Tool router handler decomposition**: Split 3 remaining large routers (spec 1,180 lines, environment 1,373 lines, review 1,268 lines) into handler packages with 29 handlers across 11 files.
+- **Test fixture consolidation**: Created 5 `conftest.py` files centralizing duplicate fixtures across the test suite. ~820 lines deduplicated.
+- **Validation fix dispatch dict**: Replaced 12 sequential `if code ==` branches with two dispatch dicts in `core/validation/fixes.py`.
+- All refactoring completed with zero test regressions (5,208 tests passing). Backward-compatible `__init__.py` re-exports preserved for all decomposed packages.
 
 ### Migration
 
