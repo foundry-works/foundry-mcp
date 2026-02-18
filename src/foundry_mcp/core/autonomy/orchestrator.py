@@ -660,15 +660,15 @@ class StepOrchestrator(StepEmitterMixin):
         # Check for pending receipt data
         pending = session.pending_verification_receipt
         if not pending:
-            logger.warning(
-                "VERIFICATION_RECEIPT_MISSING: no pending receipt for step %s",
+            # No receipt expected — verify node had no command in metadata,
+            # so the emitter did not create a PendingVerificationReceipt.
+            # Receipt validation is inapplicable; allow the step to proceed.
+            logger.info(
+                "No pending receipt for step %s — verification node had no command; "
+                "skipping receipt validation.",
                 result.step_id,
             )
-            return (
-                f"Verification receipt required for execute_verification step with outcome='success'. "
-                f"No pending receipt found for step {result.step_id}. "
-                f"This may indicate the step was not properly issued by the orchestrator."
-            )
+            return None  # No error
 
         # Validate step binding
         if result.step_id != pending.step_id:

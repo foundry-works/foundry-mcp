@@ -751,6 +751,11 @@ def _handle_session_step_report(
     if files_touched:
         last_step_result["files_touched"] = files_touched
 
+    # Strip keys already consumed or built into last_step_result
+    _CONSUMED_REPORT_KEYS = {"step_id", "step_type", "outcome", "note", "files_touched",
+                              "spec_id", "session_id", "workspace", "last_step_result"}
+    filtered = {k: v for k, v in payload.items() if k not in _CONSUMED_REPORT_KEYS}
+
     # Delegate to session-step-next
     return _handle_session_step_next(
         config=config,
@@ -758,7 +763,7 @@ def _handle_session_step_report(
         session_id=session_id,
         workspace=workspace,
         last_step_result=last_step_result,
-        **payload,
+        **filtered,
     )
 
 

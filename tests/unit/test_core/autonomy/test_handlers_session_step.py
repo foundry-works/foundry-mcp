@@ -1167,6 +1167,37 @@ class TestSessionStepReport:
         assert call_kwargs["last_step_result"]["note"] == "all good"
         assert call_kwargs["last_step_result"]["files_touched"] == ["src/main.py"]
 
+    def test_report_filters_consumed_keys_from_payload(self, tmp_path):
+        """Stray kwargs that duplicate consumed fields must not cause TypeError."""
+        from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
+            _handle_session_step_report,
+        )
+
+        workspace, config, session_id = _create_session_for_step_tests(tmp_path)
+
+        with patch(
+            "foundry_mcp.tools.unified.task_handlers.handlers_session_step._handle_session_step_next"
+        ) as mock_next:
+            mock_next.return_value = {"success": True, "data": {}, "error": None, "meta": {"version": "response-v2"}}
+            # Pass last_step_result as a stray kwarg — previously caused TypeError
+            _handle_session_step_report(
+                config=config,
+                spec_id="test-spec-001",
+                session_id=session_id,
+                step_id="step-001",
+                step_type="implement_task",
+                outcome="success",
+                workspace=str(workspace),
+                last_step_result={"should": "be filtered"},
+            )
+
+        # Verify delegation happened without TypeError
+        mock_next.assert_called_once()
+        call_kwargs = mock_next.call_args.kwargs
+        # The explicitly constructed last_step_result wins, not the stray kwarg
+        assert call_kwargs["last_step_result"]["step_id"] == "step-001"
+        assert "should" not in call_kwargs["last_step_result"]
+
     def test_report_accepts_session_id_without_spec_id(self, tmp_path):
         """session-step-report should resolve by session_id when spec_id is omitted."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (

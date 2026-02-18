@@ -56,6 +56,7 @@ class TestRoleAllowlists:
         assert "session-step-next" in AUTONOMY_RUNNER_ALLOWLIST
         assert "session-step-replay" in AUTONOMY_RUNNER_ALLOWLIST
         assert "review-fidelity-gate" in AUTONOMY_RUNNER_ALLOWLIST
+        assert "prepare" in AUTONOMY_RUNNER_ALLOWLIST
 
     def test_maintainer_allowlist_has_wildcard(self):
         assert "*" in MAINTAINER_ALLOWLIST
@@ -168,6 +169,10 @@ class TestCheckActionAllowed:
     def test_autonomy_runner_can_perform_session_preflight_list(self):
         result = check_action_allowed("autonomy_runner", "session", "list")
         assert result.allowed is True
+
+    def test_autonomy_runner_can_prepare_task(self):
+        result = check_action_allowed("autonomy_runner", "task", "prepare")
+        assert result.allowed
 
     def test_autonomy_runner_cannot_mutate_tasks(self):
         result = check_action_allowed("autonomy_runner", "task", "complete")

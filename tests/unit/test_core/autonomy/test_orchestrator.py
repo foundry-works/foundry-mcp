@@ -2121,6 +2121,77 @@ class TestHierarchySpecIntegration:
         assert result.next_step is not None
         assert result.next_step.type == StepType.COMPLETE_SPEC
 
+
+# =============================================================================
+# Commandless Verify Node Receipt Validation (Fix 4)
+# =============================================================================
+
+
+class TestCommandlessVerifyNodeValidation:
+    """Receipt validation must skip when no receipt was ever pending (commandless verify)."""
+
+    def test_commandless_verify_no_pending_receipt_passes(self, tmp_path):
+        """When pending_verification_receipt is None, success outcome passes validation."""
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(
+            pending_verification_receipt=None,
+            last_step_issued=_issued(
+                step_id="step-verify-cmdless",
+                step_type=StepType.EXECUTE_VERIFICATION,
+                task_id="verify-1",
+                phase_id="phase-1",
+                step_proof="proof-cmdless",
+            ),
+        )
+
+        result = _result(
+            step_id="step-verify-cmdless",
+            step_type=StepType.EXECUTE_VERIFICATION,
+            task_id="verify-1",
+            phase_id="phase-1",
+            outcome=StepOutcome.SUCCESS,
+            step_proof="proof-cmdless",
+        )
+
+        error = orch._validate_verification_receipt(session, result)
+        assert error is None
+
+    def test_verify_with_command_still_requires_receipt(self, tmp_path):
+        """When pending receipt exists, success outcome without receipt still fails."""
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        expected_hash = "e" * 64
+        session = make_session(
+            last_step_issued=_issued(
+                step_id="step-verify-cmd",
+                step_type=StepType.EXECUTE_VERIFICATION,
+                task_id="verify-1",
+                phase_id="phase-1",
+                step_proof="proof-cmd",
+            ),
+            pending_verification_receipt=PendingVerificationReceipt(
+                step_id="step-verify-cmd",
+                task_id="verify-1",
+                expected_command_hash=expected_hash,
+                issued_at=now,
+            ),
+        )
+
+        # Report success WITHOUT providing a verification_receipt
+        result = _result(
+            step_id="step-verify-cmd",
+            step_type=StepType.EXECUTE_VERIFICATION,
+            task_id="verify-1",
+            phase_id="phase-1",
+            outcome=StepOutcome.SUCCESS,
+            step_proof="proof-cmd",
+            verification_receipt=None,
+        )
+
+        error = orch._validate_verification_receipt(session, result)
+        # Should fail because receipt IS pending but not provided
+        assert error is not None
+
     def test_subtask_expansion(self, tmp_path):
         """Parent tasks with subtask children are expanded to leaf nodes."""
         spec_data = make_hierarchy_spec_data(

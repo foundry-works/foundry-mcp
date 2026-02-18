@@ -21,13 +21,16 @@ Dispatched by `next_step.type` from the step loop. Each handler reports outcome 
 
 Rationale: `session-step-report` is optimized for small payloads; extended fields require the full `last_step_result` envelope.
 
+**Outcome values:** `"success"` | `"failure"` | `"skipped"`. No other values are accepted.
+
 ## implement_task
 
-1. Read task details from `next_step.instruction`.
-2. Use `task(action="prepare", spec_id=...)` as needed to understand scope.
+1. Read task details from `next_step.instruction` — this is always available and is the primary context source.
+2. Optionally call `task(action="prepare", spec_id=...)` for additional scope context (acceptance criteria, file hints).
 3. Apply code changes to source files.
 4. Run relevant checks (imports, syntax, basic tests).
 5. Report `last_step_result` with `task_id`, `note`, and `files_touched`.
+   - `outcome`: `"success"` | `"failure"` | `"skipped"`
 
 ## execute_verification
 

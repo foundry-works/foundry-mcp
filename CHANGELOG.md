@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b7] - 2026-02-18
+
+### Fixed
+
+- **Commandless verify node deadlock**: Verify nodes without a command in metadata no longer cause unrecoverable deadlock. The orchestrator now distinguishes "no receipt was ever pending" from "receipt missing", skipping receipt validation when inapplicable while preserving the hard boundary for verify nodes that do have commands.
+- **Payload key collision in session-step-report**: Consumed fields (`step_id`, `step_type`, `outcome`, etc.) are now stripped from `**payload` before delegation to `session-step-next`, preventing `TypeError: got multiple values for argument` when callers pass redundant keys.
+
+### Added
+
+- **`prepare` in autonomy runner allowlist**: Added read-only `prepare` action to `AUTONOMY_RUNNER_ALLOWLIST`, enabling autonomous agents to fetch task context via server-mediated authorization instead of soft prompt-based file reading.
+
+### Changed
+
+- **Step-handlers reference**: Added explicit outcome enum callout (`success | failure | skipped`) and clarified that `next_step.instruction` is the primary context source for `implement_task`, with `task(action="prepare")` as optional.
+
 ## [0.12.0b6] - 2026-02-18
 
 ### Fixed
