@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b4] - 2026-02-18
+
+### Added
+
+- **Verification-execute authorization**: Added `verification-execute` to `AUTONOMY_RUNNER_ALLOWLIST`, enabling autonomous sessions to execute verification commands for proof-carrying receipts.
+- **Hierarchy spec integration tests**: Comprehensive test suite (`TestHierarchySpecIntegration`) verifying the full orchestrator pipeline works with hierarchy-format specs (the production format), covering task discovery, phase advancement, fidelity gates, hash equivalence, subtask expansion, and multi-step progression.
+- **Hierarchy spec test factory**: New `make_hierarchy_spec_data()` factory and `hierarchy_spec_factory` fixture in autonomy test conftest for building realistic production-format spec data.
+
 ## [0.12.0b3] - 2026-02-18
 
 ### Added
