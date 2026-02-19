@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b14] - 2026-02-19
+
+### Changed
+
+- **Rebrand SDD to Foundry**: Renamed all SDD references to Foundry across the codebase, including CLI commands (`foundry run`, `foundry stop`, `foundry watch`), skill prefixes, environment variables (`SDD_` to `FOUNDRY_`), and documentation.
+- **Type safety overhaul**: Added ruff and pyright tooling; fixed all 573 type errors to zero across the codebase.
+
+### Fixed
+
+- **Agent-facing validation UX**: Aggregate validation errors into a single response instead of failing on the first error. Protect step proofs from being consumed on validation failure. Verification command fallback when no command is configured.
+
+### Added
+
+- **Specs directory**: Added spec definitions, autonomy session records, and plan review artifacts.
+
 ## [0.12.0b13] - 2026-02-18
 
 ### Fixed
