@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b15] - 2026-02-19
+
+### Fixed
+
+- **`foundry run` timeout crash**: The run command applied a 5-second SIGALRM timeout to the entire function, but `tmux attach` / `tmux switch-client` are interactive blocking calls. The alarm fired during attach, crashing with `TimeoutException`. Now cancels the alarm before entering interactive tmux commands.
+
 ## [0.12.0b14] - 2026-02-19
 
 ### Changed
