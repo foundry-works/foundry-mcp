@@ -166,13 +166,42 @@ The MCP server enforces authorization for MCP tool calls. Native Claude Code too
 
 ## Exit Payload
 
-Always emit a complete exit packet:
+The exit packet is the skill's only output. The supervisor uses it to decide next actions — it must be machine-parseable.
 
-- `spec_id`, `session_id`, `final_status`, `loop_signal`
-- `pause_reason` (if paused)
-- `active_phase_id`, `last_step_id`
-- `recommended_actions` (if present — machine-readable escalation actions)
-- `details.response_success`, `details.error_code`, `details.recommended_actions`
-- Concise summary
+**Format:** Emit one brief human-readable summary line, then a fenced JSON block containing the complete exit packet. The JSON block **must** be present and complete on every exit — never replace it with a table, bullet list, or prose.
 
-The exit packet is the skill's only output. The supervisor uses it to decide next actions.
+````
+Deterministic exit: <loop_signal>.
+
+```json
+{
+  "spec_id": "<spec-id>",
+  "session_id": "<session-id>",
+  "final_status": "paused | completed | failed",
+  "loop_signal": "phase_complete | spec_complete | paused_needs_attention | failed | blocked_runtime",
+  "pause_reason": "<string or null>",
+  "active_phase_id": "<phase-id or null>",
+  "last_step_id": "<step-id or null>",
+  "gates_satisfied": ["<phase-id>", "..."],
+  "steps_executed": "<count> (<step_type>, ...)",
+  "summary": "<1-2 sentence description of outcome>",
+  "details": {
+    "response_success": true,
+    "error_code": "<string or null>",
+    "recommended_actions": [
+      {
+        "action": "<action-key>",
+        "description": "<human-readable remediation>",
+        "command": "<canonical MCP tool invocation or null>"
+      }
+    ]
+  }
+}
+```
+````
+
+**Rules:**
+- Populate every field. Use `null` for absent values, `[]` for empty lists.
+- `recommended_actions` is `[]` when there are no escalation actions — never omit the key.
+- Do not add keys beyond those shown above. The schema is fixed.
+- The summary line before the JSON block is for human convenience only — supervisors parse the JSON.
