@@ -15,7 +15,7 @@ from foundry_mcp.cli.registry import register_all_commands
 @click.group()
 @click.option(
     "--specs-dir",
-    envvar=["FOUNDRY_SPECS_DIR", "SDD_SPECS_DIR"],
+    envvar="FOUNDRY_SPECS_DIR",
     type=click.Path(exists=False),
     help="Override specs directory path",
 )

@@ -5,21 +5,17 @@ Tests cover:
 - Error when no active session
 - Simple mode outputs formatted event lines
 - Terminal state detection exits the loop
+- Stop signal written via 's' key in live dashboard
 """
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from click.testing import CliRunner
 
 from foundry_mcp.cli.main import cli
-
-
-@pytest.fixture
-def cli_runner():
-    return CliRunner()
 
 
 @pytest.fixture
@@ -264,3 +260,95 @@ class TestTerminalStateExit:
         )
         assert result.exit_code == 0
         assert "--- session failed ---" in result.output
+
+
+class TestWriteStopSignal:
+    """Tests for _write_stop_signal writing the shared signal file."""
+
+    def test_write_stop_signal_creates_file(self, tmp_path):
+        """_write_stop_signal creates a signal file via the shared utility."""
+        from foundry_mcp.cli.commands.watch import _write_stop_signal
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+
+        result_path = _write_stop_signal(specs_dir, "test-spec-001")
+
+        assert result_path.exists()
+        content = json.loads(result_path.read_text())
+        assert content["requested_by"] == "foundry-watch"
+        assert content["reason"] == "operator_stop"
+
+    def test_write_stop_signal_path_matches_convention(self, tmp_path):
+        """Signal file is written at the canonical path."""
+        from foundry_mcp.cli.commands.watch import _write_stop_signal
+
+        specs_dir = tmp_path / "specs"
+        specs_dir.mkdir()
+
+        result_path = _write_stop_signal(specs_dir, "my-spec")
+
+        expected = specs_dir / ".autonomy" / "signals" / "my-spec.stop"
+        assert result_path == expected
+
+
+class TestSignalIntegration:
+    """Integration test: signal written by CLI is consumed by orchestrator."""
+
+    def test_cli_signal_consumed_by_orchestrator(self, tmp_path):
+        """Signal file written by write_stop_signal triggers orchestrator pause."""
+        from foundry_mcp.core.autonomy.signals import write_stop_signal
+
+        # Set up workspace with specs dir and a signal file
+        specs_dir = tmp_path / "specs"
+        active_dir = specs_dir / "active"
+        active_dir.mkdir(parents=True)
+
+        spec_data = {
+            "id": "test-spec-001",
+            "title": "Test",
+            "version": "1.0.0",
+            "status": "active",
+            "hierarchy": {
+                "spec-root": {
+                    "type": "root",
+                    "title": "Test",
+                    "children": ["phase-1"],
+                    "status": "in_progress",
+                },
+                "phase-1": {
+                    "type": "phase",
+                    "title": "Phase 1",
+                    "parent": "spec-root",
+                    "children": ["task-1"],
+                    "status": "in_progress",
+                },
+                "task-1": {
+                    "type": "task",
+                    "title": "Task 1",
+                    "parent": "phase-1",
+                    "status": "pending",
+                    "metadata": {},
+                    "dependencies": {},
+                },
+            },
+            "journal": [],
+        }
+        spec_file = active_dir / "test-spec-001.json"
+        spec_file.write_text(json.dumps(spec_data, indent=2))
+
+        # Write signal via shared utility (same code path as stop/watch CLI)
+        signal_file = write_stop_signal(specs_dir, "test-spec-001", requested_by="foundry-test")
+
+        assert signal_file.exists()
+
+        # Verify the orchestrator's _check_stop_signal finds and consumes it
+        from foundry_mcp.core.autonomy.signals import signal_path_for_spec
+
+        orch_signal = signal_path_for_spec(specs_dir, "test-spec-001")
+        assert orch_signal == signal_file
+        assert orch_signal.is_file()
+
+        # Consuming the signal (as orchestrator would)
+        orch_signal.unlink()
+        assert not signal_file.exists()

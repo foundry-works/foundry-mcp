@@ -1337,10 +1337,10 @@ class StepOrchestrator(StepEmitterMixin):
         Returns:
             OrchestrationResult if signal detected, None otherwise
         """
-        signal_path = (
-            self.workspace_path / "specs" / ".autonomy" / "signals"
-            / f"{session.spec_id}.stop"
-        )
+        from foundry_mcp.core.autonomy.signals import signal_path_for_spec
+
+        specs_dir = self.workspace_path / "specs"
+        signal_path = signal_path_for_spec(specs_dir, session.spec_id)
 
         if not signal_path.is_file():
             return None

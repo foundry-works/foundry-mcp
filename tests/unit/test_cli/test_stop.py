@@ -13,42 +13,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from click.testing import CliRunner
 
 from foundry_mcp.cli.main import cli
-
-
-@pytest.fixture
-def cli_runner():
-    return CliRunner()
-
-
-@pytest.fixture
-def temp_specs_dir(tmp_path):
-    """Create a temporary specs directory with a resolvable spec."""
-    specs_dir = tmp_path / "specs"
-    active_dir = specs_dir / "active"
-    active_dir.mkdir(parents=True)
-
-    test_spec = {
-        "id": "test-spec-001",
-        "title": "Test Specification",
-        "version": "1.0.0",
-        "status": "active",
-        "hierarchy": {
-            "spec-root": {
-                "type": "root",
-                "title": "Test",
-                "children": [],
-                "status": "in_progress",
-            }
-        },
-        "journal": [],
-    }
-    spec_file = active_dir / "test-spec-001.json"
-    spec_file.write_text(json.dumps(test_spec, indent=2))
-
-    return specs_dir
 
 
 class TestStopSignalFileCreation:
@@ -138,6 +104,44 @@ class TestStopForceMode:
         data = json.loads(result.output)
         assert data["data"]["action"] == "force_stop"
         assert data["data"]["killed_pids"] == []
+
+
+class TestStopForceRegexEscaping:
+    """Tests for regex escaping in --force mode pgrep pattern."""
+
+    @patch("foundry_mcp.cli.commands.stop.subprocess.run")
+    def test_pgrep_pattern_escapes_regex_metacharacters(
+        self, mock_run, cli_runner, temp_specs_dir
+    ):
+        """--force escapes regex metacharacters in spec_id for pgrep -f."""
+        import re
+
+        # Create a spec with regex metacharacters in the name
+        active_dir = temp_specs_dir / "active"
+        tricky_id = "spec.with+regex*chars"
+        spec_data = {
+            "id": tricky_id,
+            "title": "Tricky",
+            "version": "1.0.0",
+            "status": "active",
+            "hierarchy": {"spec-root": {"type": "root", "title": "T", "children": [], "status": "in_progress"}},
+            "journal": [],
+        }
+        (active_dir / f"{tricky_id}.json").write_text(json.dumps(spec_data))
+
+        # pgrep returns no matches
+        mock_run.return_value = SimpleNamespace(returncode=1, stdout="", stderr="")
+
+        result = cli_runner.invoke(
+            cli,
+            ["--specs-dir", str(temp_specs_dir), "stop", "--force", tricky_id],
+        )
+        assert result.exit_code == 0
+
+        # Check that the pgrep call used re.escape(spec_id)
+        pgrep_call = mock_run.call_args_list[0]
+        pattern = pgrep_call[0][0][2]  # ["pgrep", "-f", <pattern>]
+        assert re.escape(tricky_id) in pattern
 
 
 class TestStopWaitMode:

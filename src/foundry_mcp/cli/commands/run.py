@@ -4,7 +4,9 @@ Creates a tmux session with the agent in one pane and the watcher in another,
 providing the best DX for running autonomous sessions.
 """
 
+import hashlib
 import os
+import shlex
 import shutil
 import subprocess
 
@@ -71,6 +73,7 @@ def run_cmd(
             remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
+        return
 
     # Verify tmux is installed
     if shutil.which("tmux") is None:
@@ -81,6 +84,7 @@ def run_cmd(
             remediation="Install tmux: apt install tmux (Debian/Ubuntu), brew install tmux (macOS)",
             details={"dependency": "tmux"},
         )
+        return
 
     # Validate spec exists
     from foundry_mcp.core.spec import resolve_spec_file
@@ -94,9 +98,12 @@ def run_cmd(
             remediation="Check the spec ID and ensure the spec exists",
             details={"spec_id": spec_id},
         )
+        return
 
     # Generate tmux session name (tmux names can't contain dots/colons)
-    session_name = f"foundry-{spec_id[:30]}".replace(".", "-").replace(":", "-")
+    # Append a short hash to avoid collisions from truncation
+    id_hash = hashlib.sha256(spec_id.encode()).hexdigest()[:6]
+    session_name = f"foundry-{spec_id[:30]}-{id_hash}".replace(".", "-").replace(":", "-")
 
     # Check if session already exists
     check_result = subprocess.run(
@@ -112,20 +119,26 @@ def run_cmd(
             remediation=f"Attach with: tmux attach -t {session_name}  |  Kill with: tmux kill-session -t {session_name}",
             details={"session_name": session_name},
         )
+        return
 
-    # Build agent command
+    # Build agent command (shell-escape user-provided values to prevent injection)
+    safe_spec_id = shlex.quote(spec_id)
+    safe_posture = shlex.quote(posture)
     agent_cmd = (
         f"FOUNDRY_MCP_ROLE=autonomy_runner "
-        f"FOUNDRY_MCP_AUTONOMY_POSTURE={posture} "
-        f"claude -p '/foundry-implement-auto {spec_id}' --dangerously-skip-permissions"
+        f"FOUNDRY_MCP_AUTONOMY_POSTURE={safe_posture} "
+        f"claude -p '/foundry-implement-auto {safe_spec_id}'"
     )
+    if posture == "unattended":
+        agent_cmd += " --dangerously-skip-permissions"
 
     # Build watcher command (delay to let the agent start first)
-    watcher_cmd = f"sleep 5 && foundry watch {spec_id}"
+    watcher_cmd = f"sleep 5 && foundry watch {safe_spec_id}"
 
     # Split direction flag: -v = vertical (top/bottom), -h = horizontal (side-by-side)
     split_flag = "-v" if layout == "vertical" else "-h"
 
+    session_created = False
     try:
         # Create tmux session with agent pane
         subprocess.run(
@@ -134,6 +147,7 @@ def run_cmd(
             capture_output=True,
             text=True,
         )
+        session_created = True
 
         # Split window for watcher pane
         subprocess.run(
@@ -151,6 +165,13 @@ def run_cmd(
             text=True,
         )
     except subprocess.CalledProcessError as e:
+        # Clean up the tmux session if it was created but a later step failed
+        if session_created:
+            subprocess.run(
+                ["tmux", "kill-session", "-t", session_name],
+                capture_output=True,
+                text=True,
+            )
         emit_error(
             f"Failed to create tmux session: {e}",
             code="TMUX_ERROR",
@@ -158,6 +179,7 @@ def run_cmd(
             remediation="Check tmux is running correctly and try again",
             details={"stderr": e.stderr, "returncode": e.returncode},
         )
+        return
 
     already_in_tmux = bool(os.environ.get("TMUX"))
     reattach_cmd = f"tmux attach -t {session_name}"
@@ -177,7 +199,9 @@ def run_cmd(
                     "message": f"Switching to tmux session '{session_name}'...",
                 }
             )
-            subprocess.run(["tmux", "switch-client", "-t", session_name])
+            result = subprocess.run(["tmux", "switch-client", "-t", session_name])
+            if result.returncode != 0:
+                logger.warning("tmux switch-client failed with code %d", result.returncode)
         else:
             # Not inside tmux — attach normally
             emit_success(
@@ -191,7 +215,9 @@ def run_cmd(
                     "message": f"Attaching to tmux session '{session_name}'...",
                 }
             )
-            subprocess.run(["tmux", "attach", "-t", session_name])
+            result = subprocess.run(["tmux", "attach", "-t", session_name])
+            if result.returncode != 0:
+                logger.warning("tmux attach failed with code %d", result.returncode)
     else:
         emit_success(
             {

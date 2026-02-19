@@ -4,16 +4,22 @@ Assembles session state, audit events, and spec progress from disk,
 then presents them via a Rich Live dashboard or simple streaming output.
 """
 
-import json
-import select
 import sys
-import termios
 import time
-import tty
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional
+
+try:
+    import select as _select_mod
+    import termios
+    import tty
+
+    _HAS_TERMIOS = True
+except ImportError:
+    _select_mod = None  # type: ignore[assignment]
+    _HAS_TERMIOS = False
 
 import click
 
@@ -21,14 +27,14 @@ from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
-    FAST_TIMEOUT,
     handle_keyboard_interrupt,
-    with_sync_timeout,
 )
 
 logger = get_cli_logger()
 
-_TERMINAL_STATUSES = frozenset({"paused", "completed", "ended", "failed"})
+from foundry_mcp.core.autonomy.signals import TERMINAL_STATUSES as _TERMINAL_STATUSES
+
+_PROGRESS_BAR_WIDTH = 20
 
 
 def _assemble_watch_data(
@@ -172,8 +178,8 @@ def _build_dashboard(data: dict[str, Any]) -> Any:
     total = progress.get("total_tasks", 0)
     completed = progress.get("completed_tasks", 0)
     pct = round((completed / total * 100) if total > 0 else 0, 1)
-    bar_filled = int(pct / 5)  # 20-char bar
-    bar_empty = 20 - bar_filled
+    bar_filled = int(pct * _PROGRESS_BAR_WIDTH / 100)
+    bar_empty = _PROGRESS_BAR_WIDTH - bar_filled
     progress_bar = f"[green]{'█' * bar_filled}[/green][dim]{'░' * bar_empty}[/dim] {completed}/{total} ({pct}%)"
 
     status_val = session.get("status", "unknown")
@@ -264,9 +270,10 @@ def _build_dashboard(data: dict[str, Any]) -> Any:
 def _raw_terminal() -> Iterator[None]:
     """Context manager to put terminal in raw mode for non-blocking key reads.
 
-    Restores original terminal settings on exit.
+    Restores original terminal settings on exit. Falls back to a no-op
+    on platforms without termios (e.g. Windows).
     """
-    if not sys.stdin.isatty():
+    if not _HAS_TERMIOS or not sys.stdin.isatty():
         yield
         return
 
@@ -284,11 +291,12 @@ def _read_key_nonblocking() -> Optional[str]:
 
     Returns:
         The key character, or None if no key was pressed.
+        Always returns None on platforms without select (e.g. Windows).
     """
-    if not sys.stdin.isatty():
+    if _select_mod is None or not sys.stdin.isatty():
         return None
 
-    readable, _, _ = select.select([sys.stdin], [], [], 0)
+    readable, _, _ = _select_mod.select([sys.stdin], [], [], 0)
     if readable:
         return sys.stdin.read(1)
     return None
@@ -297,7 +305,7 @@ def _read_key_nonblocking() -> Optional[str]:
 def _write_stop_signal(specs_dir: Path, spec_id: str) -> Path:
     """Write a stop signal file for the given spec.
 
-    Reuses the same signal file format as the stop command.
+    Delegates to the shared signal utility.
 
     Args:
         specs_dir: Path to the specs directory.
@@ -306,17 +314,9 @@ def _write_stop_signal(specs_dir: Path, spec_id: str) -> Path:
     Returns:
         Path to the written signal file.
     """
-    signal_dir = specs_dir / ".autonomy" / "signals"
-    signal_dir.mkdir(parents=True, exist_ok=True)
+    from foundry_mcp.core.autonomy.signals import write_stop_signal
 
-    signal_file = signal_dir / f"{spec_id}.stop"
-    payload = {
-        "requested_at": datetime.now(timezone.utc).isoformat(),
-        "requested_by": "foundry-watch",
-        "reason": "operator_stop",
-    }
-    signal_file.write_text(json.dumps(payload, indent=2))
-    return signal_file
+    return write_stop_signal(specs_dir, spec_id, requested_by="foundry-watch")
 
 
 def _run_live_dashboard(
@@ -341,7 +341,7 @@ def _run_live_dashboard(
     data = _assemble_watch_data(specs_dir, spec_id, max_events=max_events)
     layout = _build_dashboard(data)
 
-    with _raw_terminal(), Live(layout, console=console, refresh_per_second=1, screen=False) as live:
+    with _raw_terminal(), Live(layout, console=console, refresh_per_second=1, screen=True) as live:
         while True:
             status = data["session"].get("status", "")
             if status in _TERMINAL_STATUSES:
@@ -420,8 +420,8 @@ def _run_simple_stream(
 
     # Initial event fetch to set baseline sequence
     last_seq = 0
+    ledger = AuditLedger(spec_id=spec_id, workspace_path=workspace_path)
     try:
-        ledger = AuditLedger(spec_id=spec_id, workspace_path=workspace_path)
         initial_events = ledger.get_entries(limit=max_events)
         if initial_events:
             last_seq = initial_events[-1].sequence
@@ -430,7 +430,7 @@ def _run_simple_stream(
     except Exception as exc:
         logger.warning(f"Failed to load initial events: {exc}")
 
-    # Tail loop
+    # Tail loop — reuse storage and ledger instances
     while True:
         session = storage.load(session_id)
         if session is None or session.status.value in _TERMINAL_STATUSES:
@@ -441,7 +441,6 @@ def _run_simple_stream(
         time.sleep(interval)
 
         try:
-            ledger = AuditLedger(spec_id=spec_id, workspace_path=workspace_path)
             new_events = ledger.get_entries(limit=50, since_sequence=last_seq)
             for evt in new_events:
                 _print_event_line(evt)
@@ -484,7 +483,6 @@ def _print_event_line(evt: Any) -> None:
 @click.pass_context
 @cli_command("watch")
 @handle_keyboard_interrupt()
-@with_sync_timeout(FAST_TIMEOUT, "Watch command timed out")
 def watch_cmd(
     ctx: click.Context,
     spec_id: str,
@@ -508,6 +506,7 @@ def watch_cmd(
             remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
+        return
 
     from foundry_mcp.core.spec import resolve_spec_file
 
@@ -520,6 +519,7 @@ def watch_cmd(
             remediation="Check the spec ID and ensure the spec exists",
             details={"spec_id": spec_id},
         )
+        return
 
     if simple:
         _run_simple_stream(specs_dir, spec_id, interval, max_events=events)

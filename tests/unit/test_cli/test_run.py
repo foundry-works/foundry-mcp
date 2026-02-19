@@ -1,46 +1,18 @@
 """Unit tests for the foundry run CLI command."""
 
+import hashlib
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from click.testing import CliRunner
 
 from foundry_mcp.cli.main import cli
 
-
-@pytest.fixture
-def cli_runner():
-    return CliRunner()
-
-
-@pytest.fixture
-def temp_specs_dir(tmp_path):
-    """Create a temporary specs directory with a resolvable spec."""
-    specs_dir = tmp_path / "specs"
-    active_dir = specs_dir / "active"
-    active_dir.mkdir(parents=True)
-
-    test_spec = {
-        "id": "test-spec-001",
-        "title": "Test Specification",
-        "version": "1.0.0",
-        "status": "active",
-        "hierarchy": {
-            "spec-root": {
-                "type": "root",
-                "title": "Test",
-                "children": [],
-                "status": "in_progress",
-            }
-        },
-        "journal": [],
-    }
-    spec_file = active_dir / "test-spec-001.json"
-    spec_file.write_text(json.dumps(test_spec, indent=2))
-
-    return specs_dir
+# Compute expected session suffix so tests aren't coupled to a magic string.
+_SPEC_ID = "test-spec-001"
+_ID_HASH = hashlib.sha256(_SPEC_ID.encode()).hexdigest()[:6]
+_SESSION_NAME = f"foundry-{_SPEC_ID}-{_ID_HASH}"
 
 
 class TestRunTmuxMissing:
@@ -238,7 +210,7 @@ class TestRunDefaultOptions:
 
         attach_call = mock_run.call_args_list[4]
         cmd_args = attach_call[0][0]
-        assert cmd_args == ["tmux", "attach", "-t", "foundry-test-spec-001"]
+        assert cmd_args == ["tmux", "attach", "-t", _SESSION_NAME]
 
 
 class TestRunInsideTmux:
@@ -266,7 +238,7 @@ class TestRunInsideTmux:
 
         switch_call = mock_run.call_args_list[4]
         cmd_args = switch_call[0][0]
-        assert cmd_args == ["tmux", "switch-client", "-t", "foundry-test-spec-001"]
+        assert cmd_args == ["tmux", "switch-client", "-t", _SESSION_NAME]
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
@@ -452,6 +424,31 @@ class TestRunPostureOption:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    def test_supervised_posture_omits_skip_permissions(
+        self, mock_which, mock_run, cli_runner, temp_specs_dir
+    ):
+        """--posture supervised does NOT include --dangerously-skip-permissions."""
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=1, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = cli_runner.invoke(
+            cli,
+            [
+                "--specs-dir", str(temp_specs_dir),
+                "run", "--posture", "supervised", "--detach", "test-spec-001",
+            ],
+        )
+
+        new_session_call = mock_run.call_args_list[1]
+        agent_cmd = new_session_call[0][0][-1]
+        assert "--dangerously-skip-permissions" not in agent_cmd
+
+    @patch("foundry_mcp.cli.commands.run.subprocess.run")
+    @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
     def test_default_posture_is_unattended(
         self, mock_which, mock_run, cli_runner, temp_specs_dir
     ):
@@ -471,6 +468,81 @@ class TestRunPostureOption:
         new_session_call = mock_run.call_args_list[1]
         agent_cmd = new_session_call[0][0][-1]
         assert "FOUNDRY_MCP_AUTONOMY_POSTURE=unattended" in agent_cmd
+        assert "--dangerously-skip-permissions" in agent_cmd
+
+
+class TestRunShellEscaping:
+    """Tests for shell-safe escaping of spec_id."""
+
+    @patch("foundry_mcp.cli.commands.run.subprocess.run")
+    @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    def test_spec_id_is_shell_escaped_in_agent_cmd(
+        self, mock_which, mock_run, cli_runner, temp_specs_dir
+    ):
+        """spec_id with shell metacharacters is escaped in agent command."""
+        import shlex
+
+        # Use a spec_id with shell-dangerous chars (but valid for filenames)
+        tricky_id = "test$(whoami)"
+        active_dir = temp_specs_dir / "active"
+        spec_data = {
+            "id": tricky_id,
+            "title": "Tricky",
+            "version": "1.0.0",
+            "status": "active",
+            "hierarchy": {"spec-root": {"type": "root", "title": "T", "children": [], "status": "in_progress"}},
+            "journal": [],
+        }
+        import json as _json
+        (active_dir / f"{tricky_id}.json").write_text(_json.dumps(spec_data))
+
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=1, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = cli_runner.invoke(
+            cli,
+            ["--specs-dir", str(temp_specs_dir), "run", "--detach", tricky_id],
+        )
+
+        new_session_call = mock_run.call_args_list[1]
+        agent_cmd = new_session_call[0][0][-1]
+        # The spec_id should be shell-quoted, not appearing raw
+        assert shlex.quote(tricky_id) in agent_cmd
+
+
+class TestRunTmuxCleanup:
+    """Tests for tmux session cleanup on partial failure."""
+
+    @patch("foundry_mcp.cli.commands.run.subprocess.run")
+    @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    def test_kills_session_on_split_window_failure(
+        self, mock_which, mock_run, cli_runner, temp_specs_dir
+    ):
+        """If split-window fails, the created session is killed."""
+        from subprocess import CalledProcessError
+
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=1, stdout="", stderr=""),  # has-session
+            SimpleNamespace(returncode=0, stdout="", stderr=""),  # new-session OK
+            CalledProcessError(1, "tmux split-window", stderr="split failed"),  # split FAILS
+            SimpleNamespace(returncode=0, stdout="", stderr=""),  # kill-session cleanup
+        ]
+
+        result = cli_runner.invoke(
+            cli,
+            ["--specs-dir", str(temp_specs_dir), "run", "--detach", "test-spec-001"],
+        )
+
+        assert result.exit_code == 1
+        # Verify kill-session was called for cleanup
+        kill_call = mock_run.call_args_list[3]
+        cmd_args = kill_call[0][0]
+        assert cmd_args[0] == "tmux"
+        assert cmd_args[1] == "kill-session"
 
 
 class TestRunSessionExists:

@@ -190,16 +190,13 @@ class ContextTracker:
         """Load limits from environment variables."""
         self._default_limits = SessionLimits(
             max_consultations=int(
-                os.environ.get("FOUNDRY_MAX_CONSULTATIONS")
-                or os.environ.get("SDD_MAX_CONSULTATIONS", "50")
+                os.environ.get("FOUNDRY_MAX_CONSULTATIONS", "50")
             ),
             max_context_tokens=int(
-                os.environ.get("FOUNDRY_MAX_CONTEXT_TOKENS")
-                or os.environ.get("SDD_MAX_CONTEXT_TOKENS", "100000")
+                os.environ.get("FOUNDRY_MAX_CONTEXT_TOKENS", "100000")
             ),
             warn_at_percentage=float(
-                os.environ.get("FOUNDRY_WARN_PERCENTAGE")
-                or os.environ.get("SDD_WARN_PERCENTAGE", "0.8")
+                os.environ.get("FOUNDRY_WARN_PERCENTAGE", "0.8")
             ),
         )
 

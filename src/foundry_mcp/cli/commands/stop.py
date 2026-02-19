@@ -4,12 +4,11 @@ Writes a signal file that the orchestrator checks at Step 7b to trigger
 a clean PAUSE without modifying session state directly.
 """
 
-import json
 import os
+import re
 import signal
 import subprocess
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -18,9 +17,7 @@ from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
-    FAST_TIMEOUT,
     handle_keyboard_interrupt,
-    with_sync_timeout,
 )
 
 logger = get_cli_logger()
@@ -40,7 +37,6 @@ logger = get_cli_logger()
 @click.pass_context
 @cli_command("stop")
 @handle_keyboard_interrupt()
-@with_sync_timeout(FAST_TIMEOUT, "Stop command timed out")
 def stop_cmd(
     ctx: click.Context,
     spec_id: str,
@@ -64,6 +60,7 @@ def stop_cmd(
             remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
             details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
+        return
 
     from foundry_mcp.core.spec import resolve_spec_file
 
@@ -76,28 +73,23 @@ def stop_cmd(
             remediation="Check the spec ID and ensure the spec exists",
             details={"spec_id": spec_id},
         )
+        return
 
     # Write signal file
-    signal_dir = specs_dir / ".autonomy" / "signals"
-    signal_dir.mkdir(parents=True, exist_ok=True)
+    from foundry_mcp.core.autonomy.signals import write_stop_signal
 
-    signal_file = signal_dir / f"{spec_id}.stop"
-    payload = {
-        "requested_at": datetime.now(timezone.utc).isoformat(),
-        "requested_by": "foundry-cli",
-        "reason": "operator_stop",
-    }
-
+    signal_file: Path | None = None
     try:
-        signal_file.write_text(json.dumps(payload, indent=2))
+        signal_file = write_stop_signal(specs_dir, spec_id, requested_by="foundry-cli")
     except OSError as e:
         emit_error(
             f"Failed to write signal file: {e}",
             code="IO_ERROR",
             error_type="io",
             remediation="Check file system permissions for the specs directory",
-            details={"signal_path": str(signal_file)},
+            details={"signal_path": str(specs_dir / ".autonomy" / "signals" / f"{spec_id}.stop")},
         )
+        return
 
     killed_pids: list[int] = []
     if force:
@@ -142,16 +134,18 @@ def _force_kill_processes(spec_id: str) -> list[int]:
     """Find and SIGTERM processes matching the spec_id.
 
     Uses pgrep to find processes with the spec_id in their command line,
-    then sends SIGTERM to each.
+    then sends SIGTERM to each. Filters out the current process to avoid
+    self-termination.
 
     Returns:
         List of PIDs that were successfully signaled.
     """
     killed: list[int] = []
+    own_pid = os.getpid()
 
     try:
         result = subprocess.run(
-            ["pgrep", "-f", f"foundry.*{spec_id}"],
+            ["pgrep", "-f", f"foundry.*{re.escape(spec_id)}"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -161,6 +155,8 @@ def _force_kill_processes(spec_id: str) -> list[int]:
             return killed
 
         pids = [int(p) for p in result.stdout.strip().split("\n") if p.strip()]
+        # Filter out own PID to avoid self-termination
+        pids = [p for p in pids if p != own_pid]
     except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
         logger.warning(f"Failed to search for processes: {e}")
         return killed
@@ -178,7 +174,6 @@ def _force_kill_processes(spec_id: str) -> list[int]:
     return killed
 
 
-_TERMINAL_STATUSES = frozenset({"paused", "completed", "ended", "failed"})
 _POLL_INTERVAL = 2  # seconds
 
 
@@ -208,8 +203,10 @@ def _wait_for_stop(specs_dir: Path, spec_id: str, timeout: int) -> str | None:
         if session is None:
             return "no_active_session"
 
+        from foundry_mcp.core.autonomy.signals import TERMINAL_STATUSES
+
         status = session.status.value
-        if status in _TERMINAL_STATUSES:
+        if status in TERMINAL_STATUSES:
             return status
 
         time.sleep(_POLL_INTERVAL)

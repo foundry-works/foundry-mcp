@@ -444,7 +444,7 @@ def create_spec(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Ensure pending directory exists
@@ -529,7 +529,7 @@ def add_assumption(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -622,7 +622,7 @@ def add_revision(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -708,7 +708,7 @@ def list_assumptions(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -791,7 +791,7 @@ def update_frontmatter(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec

@@ -495,10 +495,10 @@ def _load_spec_data(
     if specs_dir is None:
         return None, asdict(
             error_response(
-                "No specs directory found. Use --specs-dir or set SDD_SPECS_DIR.",
+                "No specs directory found. Use --specs-dir or set FOUNDRY_SPECS_DIR.",
                 error_code=ErrorCode.NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
-                remediation="Set SDD_SPECS_DIR or invoke with --specs-dir",
+                remediation="Set FOUNDRY_SPECS_DIR or invoke with --specs-dir",
                 request_id=request_id,
             )
         )

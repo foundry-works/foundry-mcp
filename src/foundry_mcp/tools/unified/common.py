@@ -148,7 +148,7 @@ def resolve_specs_dir(
                 "No specs directory found",
                 error_code=ErrorCode.NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
-                remediation="Set SDD_SPECS_DIR or provide a workspace path",
+                remediation="Set FOUNDRY_SPECS_DIR or provide a workspace path",
             )
         )
 
