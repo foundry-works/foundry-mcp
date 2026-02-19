@@ -139,13 +139,21 @@ def run_cmd(
         return
 
     safe_claude = shlex.quote(claude_bin)
-    agent_cmd = (
+    claude_inner = (
         f"FOUNDRY_MCP_ROLE=autonomy_runner "
         f"FOUNDRY_MCP_AUTONOMY_POSTURE={safe_posture} "
         f"{safe_claude} -p '/foundry-implement-auto {safe_spec_id}'"
     )
     if posture == "unattended":
-        agent_cmd += " --dangerously-skip-permissions"
+        claude_inner += " --dangerously-skip-permissions"
+
+    # Wrap in a login shell so the full user environment is available,
+    # and echo diagnostics so errors are visible in remain-on-exit panes
+    agent_cmd = (
+        f"echo 'Starting agent: {claude_bin}' && "
+        f"{claude_inner} 2>&1; "
+        f"echo '\\n--- Agent exited with code: '$?' ---'"
+    )
 
     # Resolve the absolute path to foundry for the same reason
     foundry_bin = shutil.which("foundry")
@@ -155,7 +163,8 @@ def run_cmd(
     # then launch the dashboard. If it fails, remain-on-exit keeps the error visible.
     watcher_cmd = (
         f"echo 'Waiting for agent to start...' && sleep 15 && "
-        f"{safe_foundry} watch {safe_spec_id}"
+        f"{safe_foundry} watch {safe_spec_id} 2>&1; "
+        f"echo '\\n--- Watcher exited with code: '$?' ---'"
     )
 
     # Split direction flag: -v = vertical (top/bottom), -h = horizontal (side-by-side)
