@@ -4,11 +4,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
-def _build_spec_requirements(spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]) -> str:
+def _is_fidelity_verify_node(node: Dict[str, Any]) -> bool:
+    """Return True if the node is a verify node with verification_type 'fidelity'."""
+    return node.get("type") == "verify" and node.get("metadata", {}).get("verification_type") == "fidelity"
+
+
+def _build_spec_requirements(
+    spec_data: Dict[str, Any],
+    task_id: Optional[str],
+    phase_id: Optional[str],
+    exclude_fidelity_verify: bool = False,
+) -> str:
     lines: list[str] = []
     if task_id:
         task = _find_task(spec_data, task_id)
         if task:
+            if exclude_fidelity_verify and _is_fidelity_verify_node(task):
+                return "*Task excluded from review context (fidelity-verify node)*"
             lines.append(f"### Task: {task.get('title', task_id)}")
             lines.append(f"- **Status:** {task.get('status', 'unknown')}")
             if task.get("metadata", {}).get("details"):
@@ -26,6 +38,8 @@ def _build_spec_requirements(spec_data: Dict[str, Any], task_id: Optional[str], 
             if child_nodes:
                 lines.append("- **Tasks:**")
                 for child in child_nodes:
+                    if exclude_fidelity_verify and _is_fidelity_verify_node(child):
+                        continue
                     lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
     else:
         lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
@@ -92,6 +106,7 @@ def _build_implementation_artifacts(
     incremental: bool,
     base_branch: str,
     workspace_root: Optional[Path] = None,
+    exclude_fidelity_verify: bool = False,
 ) -> str:
     lines: list[str] = []
     file_paths: list[str] = []
@@ -107,6 +122,8 @@ def _build_implementation_artifacts(
         phase = _find_phase(spec_data, phase_id)
         if phase:
             for child in _get_child_nodes(spec_data, phase):
+                if exclude_fidelity_verify and _is_fidelity_verify_node(child):
+                    continue
                 if child.get("metadata", {}).get("file_path"):
                     file_paths.extend(_split_file_paths(child["metadata"]["file_path"]))
     else:
@@ -114,6 +131,8 @@ def _build_implementation_artifacts(
         hierarchy_nodes = _get_hierarchy_nodes(spec_data)
         for node in hierarchy_nodes.values():
             if node.get("type") in ("task", "subtask", "verify"):
+                if exclude_fidelity_verify and _is_fidelity_verify_node(node):
+                    continue
                 if node.get("metadata", {}).get("file_path"):
                     file_paths.extend(_split_file_paths(node["metadata"]["file_path"]))
     if file_paths:
@@ -169,8 +188,19 @@ def _build_implementation_artifacts(
     return "\n".join(lines)
 
 
-def _build_test_results(spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]) -> str:
+def _build_test_results(
+    spec_data: Dict[str, Any],
+    task_id: Optional[str],
+    phase_id: Optional[str],
+    exclude_fidelity_verify: bool = False,
+) -> str:
     journal = spec_data.get("journal", [])
+    if exclude_fidelity_verify and phase_id:
+        phase = _find_phase(spec_data, phase_id)
+        if phase:
+            children = _get_child_nodes(spec_data, phase)
+            excluded_ids = {c["id"] for c in children if "id" in c and _is_fidelity_verify_node(c)}
+            journal = [e for e in journal if e.get("task_id") not in excluded_ids]
     test_entries = [
         entry
         for entry in journal
@@ -191,15 +221,27 @@ def _build_test_results(spec_data: Dict[str, Any], task_id: Optional[str], phase
     return "*No test results available*"
 
 
-def _build_journal_entries(spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]) -> str:
+def _build_journal_entries(
+    spec_data: Dict[str, Any],
+    task_id: Optional[str],
+    phase_id: Optional[str],
+    exclude_fidelity_verify: bool = False,
+) -> str:
     journal = spec_data.get("journal", [])
     if task_id:
+        if exclude_fidelity_verify:
+            task = _find_task(spec_data, task_id)
+            if task and _is_fidelity_verify_node(task):
+                return "*No journal entries found*"
         journal = [entry for entry in journal if entry.get("task_id") == task_id]
     elif phase_id:
         # Filter to entries from tasks belonging to this phase
         phase = _find_phase(spec_data, phase_id)
         if phase:
-            phase_task_ids = {child["id"] for child in _get_child_nodes(spec_data, phase) if "id" in child}
+            children = _get_child_nodes(spec_data, phase)
+            if exclude_fidelity_verify:
+                children = [c for c in children if not _is_fidelity_verify_node(c)]
+            phase_task_ids = {c["id"] for c in children if "id" in c}
             # Include entries that belong to phase tasks or have no task_id (phase-level)
             journal = [
                 entry

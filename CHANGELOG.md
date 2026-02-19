@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b24] - 2026-02-19
+
+### Fixed
+
+- **Fidelity review self-referential context**: Fidelity reviews no longer include fidelity-verify nodes in the review context (spec requirements, implementation artifacts, test results, journal entries), preventing the reviewer from evaluating its own gate task.
+
+### Added
+
+- **Pre-commit config**: Added `.pre-commit-config.yaml` with ruff format and lint hooks.
+- **Makefile**: Added `make lint`, `make fmt`, `make test`, and `make ci` shortcuts.
+- **Documentation helpers tests**: Added unit tests for `exclude_fidelity_verify` filtering in `documentation_helpers.py`.
+
 ## [0.12.0b23] - 2026-02-19
 
 ### Fixed

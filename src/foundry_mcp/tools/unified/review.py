@@ -816,7 +816,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     provider_review_paths: List[Dict[str, Any]] = []
     review_path: Optional[str] = None
 
-    spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id)
+    spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
     implementation_artifacts = _build_implementation_artifacts(
         spec_data,
         task_id,
@@ -825,9 +825,12 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         incremental,
         base_branch,
         workspace_root=ws_path,
+        exclude_fidelity_verify=True,
     )
-    test_results = _build_test_results(spec_data, task_id, phase_id) if include_tests else ""
-    journal_entries = _build_journal_entries(spec_data, task_id, phase_id)
+    test_results = (
+        _build_test_results(spec_data, task_id, phase_id, exclude_fidelity_verify=True) if include_tests else ""
+    )
+    journal_entries = _build_journal_entries(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
 
     preferred_providers = ai_tools if isinstance(ai_tools, list) else []
     first_provider = preferred_providers[0] if preferred_providers else None
