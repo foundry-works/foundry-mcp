@@ -125,19 +125,37 @@ def run_cmd(
     # Build agent command (shell-escape user-provided values to prevent injection)
     safe_spec_id = shlex.quote(spec_id)
     safe_posture = shlex.quote(posture)
+
+    # Resolve the absolute path to claude so tmux doesn't depend on shell aliases/PATH
+    claude_bin = shutil.which("claude")
+    if claude_bin is None:
+        emit_error(
+            "claude CLI is not installed or not found in PATH",
+            code="DEPENDENCY_MISSING",
+            error_type="validation",
+            remediation="Install Claude Code: https://docs.anthropic.com/en/docs/claude-code",
+            details={"dependency": "claude"},
+        )
+        return
+
+    safe_claude = shlex.quote(claude_bin)
     agent_cmd = (
         f"FOUNDRY_MCP_ROLE=autonomy_runner "
         f"FOUNDRY_MCP_AUTONOMY_POSTURE={safe_posture} "
-        f"claude -p '/foundry-implement-auto {safe_spec_id}'"
+        f"{safe_claude} -p '/foundry-implement-auto {safe_spec_id}'"
     )
     if posture == "unattended":
         agent_cmd += " --dangerously-skip-permissions"
+
+    # Resolve the absolute path to foundry for the same reason
+    foundry_bin = shutil.which("foundry")
+    safe_foundry = shlex.quote(foundry_bin) if foundry_bin else "foundry"
 
     # Build watcher command — wait for the agent to boot and create a session,
     # then launch the dashboard. If it fails, remain-on-exit keeps the error visible.
     watcher_cmd = (
         f"echo 'Waiting for agent to start...' && sleep 15 && "
-        f"foundry watch {safe_spec_id}"
+        f"{safe_foundry} watch {safe_spec_id}"
     )
 
     # Split direction flag: -v = vertical (top/bottom), -h = horizontal (side-by-side)
