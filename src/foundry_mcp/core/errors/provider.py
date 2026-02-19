@@ -4,7 +4,7 @@ Moved from foundry_mcp.core.providers.base and foundry_mcp.core.providers.valida
 for centralized error management.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 
 class ProviderError(RuntimeError):
@@ -90,14 +90,12 @@ class ContextWindowError(ProviderExecutionError):
         super().__init__(message, provider=provider)
         self.prompt_tokens = prompt_tokens
         self.max_tokens = max_tokens
-        self.truncation_needed = (
-            (prompt_tokens - max_tokens) if prompt_tokens and max_tokens else None
-        )
+        self.truncation_needed = (prompt_tokens - max_tokens) if prompt_tokens and max_tokens else None
 
 
 class ValidationError(ProviderExecutionError):
     """Raised when input validation fails."""
 
-    def __init__(self, message: str, field: Optional[str] = None, **kwargs: object) -> None:
+    def __init__(self, message: str, field: Optional[str] = None, **kwargs: Any) -> None:
         self.field = field
         super().__init__(message, **kwargs)

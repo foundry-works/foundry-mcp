@@ -6,10 +6,15 @@ logic into its own module keeps ``server.py`` focused on field definitions and
 simple accessor methods.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+
+if TYPE_CHECKING:
+    from foundry_mcp.config.server import ServerConfig
 
 try:
     import tomllib
@@ -17,8 +22,6 @@ except ImportError:
     import tomli as tomllib  # Python < 3.11 fallback
 
 from foundry_mcp.config.autonomy import (
-    AutonomySecurityConfig,
-    AutonomySessionDefaultsConfig,
     _AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE_ENV_VAR,
     _AUTONOMY_DEFAULT_GATE_POLICY_ENV_VAR,
     _AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR,
@@ -29,6 +32,8 @@ from foundry_mcp.config.autonomy import (
     _AUTONOMY_POSTURE_ENV_VAR,
     _VALID_AUTONOMY_POSTURES,
     _VALID_GATE_POLICIES,
+    AutonomySecurityConfig,
+    AutonomySessionDefaultsConfig,
 )
 from foundry_mcp.config.domains import (
     ErrorCollectionConfig,
@@ -54,8 +59,37 @@ class _ServerConfigLoader:
     ``server.py``.  At runtime ``self`` is always a ``ServerConfig`` instance.
     """
 
+    if TYPE_CHECKING:
+
+        def __init_subclass__(cls, **kwargs: Any) -> None: ...
+
+        workspace_roots: List[Path]
+        specs_dir: Optional[Path]
+        notes_dir: Optional[Path]
+        research_dir: Optional[Path]
+        log_level: str
+        structured_logging: bool
+        api_keys: List[str]
+        require_auth: bool
+        server_name: str
+        server_version: str
+        disabled_tools: List[str]
+        git: Any
+        observability: ObservabilityConfig
+        health: HealthConfig
+        error_collection: ErrorCollectionConfig
+        metrics_persistence: MetricsPersistenceConfig
+        test: TestConfig
+        research: ResearchConfig
+        autonomy_posture: Any
+        autonomy_session_defaults: AutonomySessionDefaultsConfig
+        autonomy_security: AutonomySecurityConfig
+        _startup_warnings: List[str]
+
+        def _add_startup_warning(self, warning: str) -> None: ...
+
     @classmethod
-    def from_env(cls, config_file: Optional[str] = None) -> "ServerConfig":  # type: ignore[name-defined]
+    def from_env(cls, config_file: Optional[str] = None) -> "ServerConfig":
         """
         Create configuration from environment variables and optional TOML file.
 
@@ -104,7 +138,7 @@ class _ServerConfigLoader:
         config._load_env()
         config._validate_startup_configuration()
 
-        return config
+        return cast("ServerConfig", config)
 
     def _load_toml(self, path: Path) -> None:
         """Load configuration from TOML file."""
@@ -169,19 +203,13 @@ class _ServerConfigLoader:
                 if "auto_pr" in git_cfg:
                     self.git.auto_pr = _parse_bool(git_cfg["auto_pr"])
                 if "show_before_commit" in git_cfg:
-                    self.git.show_before_commit = _parse_bool(
-                        git_cfg["show_before_commit"]
-                    )
+                    self.git.show_before_commit = _parse_bool(git_cfg["show_before_commit"])
                 if "commit_cadence" in git_cfg:
-                    self.git.commit_cadence = _normalize_commit_cadence(
-                        str(git_cfg["commit_cadence"])
-                    )
+                    self.git.commit_cadence = _normalize_commit_cadence(str(git_cfg["commit_cadence"]))
 
             # Observability settings
             if "observability" in data:
-                self.observability = ObservabilityConfig.from_toml_dict(
-                    data["observability"]
-                )
+                self.observability = ObservabilityConfig.from_toml_dict(data["observability"])
 
             # Health check settings
             if "health" in data:
@@ -189,15 +217,11 @@ class _ServerConfigLoader:
 
             # Error collection settings
             if "error_collection" in data:
-                self.error_collection = ErrorCollectionConfig.from_toml_dict(
-                    data["error_collection"]
-                )
+                self.error_collection = ErrorCollectionConfig.from_toml_dict(data["error_collection"])
 
             # Metrics persistence settings
             if "metrics_persistence" in data:
-                self.metrics_persistence = MetricsPersistenceConfig.from_toml_dict(
-                    data["metrics_persistence"]
-                )
+                self.metrics_persistence = MetricsPersistenceConfig.from_toml_dict(data["metrics_persistence"])
 
             # Test runner settings
             if "test" in data:
@@ -341,16 +365,12 @@ class _ServerConfigLoader:
         # Health check settings
         if health_enabled := os.environ.get("FOUNDRY_MCP_HEALTH_ENABLED"):
             self.health.enabled = _parse_bool(health_enabled)
-        if health_liveness_timeout := os.environ.get(
-            "FOUNDRY_MCP_HEALTH_LIVENESS_TIMEOUT"
-        ):
+        if health_liveness_timeout := os.environ.get("FOUNDRY_MCP_HEALTH_LIVENESS_TIMEOUT"):
             try:
                 self.health.liveness_timeout = float(health_liveness_timeout)
             except ValueError:
                 pass
-        if health_readiness_timeout := os.environ.get(
-            "FOUNDRY_MCP_HEALTH_READINESS_TIMEOUT"
-        ):
+        if health_readiness_timeout := os.environ.get("FOUNDRY_MCP_HEALTH_READINESS_TIMEOUT"):
             try:
                 self.health.readiness_timeout = float(health_readiness_timeout)
             except ValueError:
@@ -417,9 +437,7 @@ class _ServerConfigLoader:
             except ValueError:
                 pass
         if persist_list := os.environ.get("FOUNDRY_MCP_METRICS_PERSIST_METRICS"):
-            self.metrics_persistence.persist_metrics = [
-                m.strip() for m in persist_list.split(",") if m.strip()
-            ]
+            self.metrics_persistence.persist_metrics = [m.strip() for m in persist_list.split(",") if m.strip()]
 
         # Search provider API keys (direct env vars, no FOUNDRY_MCP_ prefix)
         # These use standard env var names that match provider documentation
@@ -456,9 +474,7 @@ class _ServerConfigLoader:
                     f"{', '.join(sorted(_VALID_GATE_POLICIES))}, got {gate_policy!r}"
                 )
 
-        if stop_on_phase_completion := os.environ.get(
-            _AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION_ENV_VAR
-        ):
+        if stop_on_phase_completion := os.environ.get(_AUTONOMY_DEFAULT_STOP_ON_PHASE_COMPLETION_ENV_VAR):
             parsed_stop_on_phase_completion = _try_parse_bool(stop_on_phase_completion)
             if parsed_stop_on_phase_completion is None:
                 self._add_startup_warning(
@@ -466,13 +482,9 @@ class _ServerConfigLoader:
                     f"expected true/false value, got {stop_on_phase_completion!r}"
                 )
             else:
-                self.autonomy_session_defaults.stop_on_phase_completion = (
-                    parsed_stop_on_phase_completion
-                )
+                self.autonomy_session_defaults.stop_on_phase_completion = parsed_stop_on_phase_completion
 
-        if auto_retry_fidelity_gate := os.environ.get(
-            _AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE_ENV_VAR
-        ):
+        if auto_retry_fidelity_gate := os.environ.get(_AUTONOMY_DEFAULT_AUTO_RETRY_FIDELITY_GATE_ENV_VAR):
             parsed_auto_retry_fidelity_gate = _try_parse_bool(auto_retry_fidelity_gate)
             if parsed_auto_retry_fidelity_gate is None:
                 self._add_startup_warning(
@@ -480,21 +492,16 @@ class _ServerConfigLoader:
                     f"expected true/false value, got {auto_retry_fidelity_gate!r}"
                 )
             else:
-                self.autonomy_session_defaults.auto_retry_fidelity_gate = (
-                    parsed_auto_retry_fidelity_gate
-                )
+                self.autonomy_session_defaults.auto_retry_fidelity_gate = parsed_auto_retry_fidelity_gate
 
-        if max_tasks_per_session := os.environ.get(
-            _AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR
-        ):
+        if max_tasks_per_session := os.environ.get(_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR):
             try:
                 parsed = int(max_tasks_per_session)
                 if parsed > 0:
                     self.autonomy_session_defaults.max_tasks_per_session = parsed
                 else:
                     self._add_startup_warning(
-                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR}: "
-                        "value must be > 0"
+                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_TASKS_PER_SESSION_ENV_VAR}: value must be > 0"
                     )
             except ValueError:
                 self._add_startup_warning(
@@ -502,17 +509,14 @@ class _ServerConfigLoader:
                     f"expected integer > 0, got {max_tasks_per_session!r}"
                 )
 
-        if max_consecutive_errors := os.environ.get(
-            _AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR
-        ):
+        if max_consecutive_errors := os.environ.get(_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR):
             try:
                 parsed = int(max_consecutive_errors)
                 if parsed > 0:
                     self.autonomy_session_defaults.max_consecutive_errors = parsed
                 else:
                     self._add_startup_warning(
-                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR}: "
-                        "value must be > 0"
+                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_CONSECUTIVE_ERRORS_ENV_VAR}: value must be > 0"
                     )
             except ValueError:
                 self._add_startup_warning(
@@ -520,19 +524,14 @@ class _ServerConfigLoader:
                     f"expected integer > 0, got {max_consecutive_errors!r}"
                 )
 
-        if max_fidelity_cycles := os.environ.get(
-            _AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR
-        ):
+        if max_fidelity_cycles := os.environ.get(_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR):
             try:
                 parsed = int(max_fidelity_cycles)
                 if parsed > 0:
-                    self.autonomy_session_defaults.max_fidelity_review_cycles_per_phase = (
-                        parsed
-                    )
+                    self.autonomy_session_defaults.max_fidelity_review_cycles_per_phase = parsed
                 else:
                     self._add_startup_warning(
-                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR}: "
-                        "value must be > 0"
+                        f"Ignoring {_AUTONOMY_DEFAULT_MAX_FIDELITY_REVIEW_CYCLES_ENV_VAR}: value must be > 0"
                     )
             except ValueError:
                 self._add_startup_warning(
@@ -541,28 +540,20 @@ class _ServerConfigLoader:
                 )
 
         # Autonomy security settings (provenance-logged per H4)
-        if allow_lock_bypass := os.environ.get(
-            "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS"
-        ):
+        if allow_lock_bypass := os.environ.get("FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS"):
             self.autonomy_security.allow_lock_bypass = _parse_bool(allow_lock_bypass)
             logger.info(
                 "Config: autonomy_security.allow_lock_bypass = %s (source: FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS env var)",
                 self.autonomy_security.allow_lock_bypass,
             )
-        if allow_gate_waiver := os.environ.get(
-            "FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER"
-        ):
+        if allow_gate_waiver := os.environ.get("FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER"):
             self.autonomy_security.allow_gate_waiver = _parse_bool(allow_gate_waiver)
             logger.info(
                 "Config: autonomy_security.allow_gate_waiver = %s (source: FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_GATE_WAIVER env var)",
                 self.autonomy_security.allow_gate_waiver,
             )
-        if enforce_required_gates := os.environ.get(
-            "FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES"
-        ):
-            self.autonomy_security.enforce_required_phase_gates = _parse_bool(
-                enforce_required_gates
-            )
+        if enforce_required_gates := os.environ.get("FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES"):
+            self.autonomy_security.enforce_required_phase_gates = _parse_bool(enforce_required_gates)
             logger.info(
                 "Config: autonomy_security.enforce_required_phase_gates = %s (source: FOUNDRY_MCP_AUTONOMY_SECURITY_ENFORCE_REQUIRED_PHASE_GATES env var)",
                 self.autonomy_security.enforce_required_phase_gates,
@@ -573,27 +564,21 @@ class _ServerConfigLoader:
                 "Config: autonomy_security.role = %s (source: FOUNDRY_MCP_ROLE env var)",
                 self.autonomy_security.role,
             )
-        if max_denials := os.environ.get(
-            "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS"
-        ):
+        if max_denials := os.environ.get("FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_MAX_CONSECUTIVE_DENIALS"):
             try:
                 parsed = int(max_denials)
                 if parsed > 0:
                     self.autonomy_security.rate_limit_max_consecutive_denials = parsed
             except ValueError:
                 pass
-        if denial_window := os.environ.get(
-            "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_DENIAL_WINDOW_SECONDS"
-        ):
+        if denial_window := os.environ.get("FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_DENIAL_WINDOW_SECONDS"):
             try:
                 parsed = int(denial_window)
                 if parsed > 0:
                     self.autonomy_security.rate_limit_denial_window_seconds = parsed
             except ValueError:
                 pass
-        if retry_after := os.environ.get(
-            "FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_RETRY_AFTER_SECONDS"
-        ):
+        if retry_after := os.environ.get("FOUNDRY_MCP_AUTONOMY_SECURITY_RATE_LIMIT_RETRY_AFTER_SECONDS"):
             try:
                 parsed = int(retry_after)
                 if parsed > 0:
@@ -628,7 +613,8 @@ class _ServerConfigLoader:
         self.autonomy_posture.profile = normalized_profile
         logger.info(
             "Config: autonomy_posture.profile = %s (source: %s)",
-            normalized_profile, source,
+            normalized_profile,
+            source,
         )
 
         current_security = self.autonomy_security
@@ -645,41 +631,30 @@ class _ServerConfigLoader:
             if old_val != new_val:
                 logger.info(
                     "Config: autonomy_security.%s overridden by %s posture (%s \u2190 %s)",
-                    field_name, normalized_profile, new_val, old_val,
+                    field_name,
+                    normalized_profile,
+                    new_val,
+                    old_val,
                 )
 
         self.autonomy_security = AutonomySecurityConfig(
             allow_lock_bypass=bool(security_defaults["allow_lock_bypass"]),
             allow_gate_waiver=bool(security_defaults["allow_gate_waiver"]),
-            enforce_required_phase_gates=bool(
-                security_defaults["enforce_required_phase_gates"]
-            ),
+            enforce_required_phase_gates=bool(security_defaults["enforce_required_phase_gates"]),
             role=str(security_defaults["role"]),
-            rate_limit_max_consecutive_denials=(
-                current_security.rate_limit_max_consecutive_denials
-            ),
-            rate_limit_denial_window_seconds=(
-                current_security.rate_limit_denial_window_seconds
-            ),
-            rate_limit_retry_after_seconds=(
-                current_security.rate_limit_retry_after_seconds
-            ),
+            rate_limit_max_consecutive_denials=(current_security.rate_limit_max_consecutive_denials),
+            rate_limit_denial_window_seconds=(current_security.rate_limit_denial_window_seconds),
+            rate_limit_retry_after_seconds=(current_security.rate_limit_retry_after_seconds),
         )
 
         session_defaults = profile_defaults["autonomy_session_defaults"]
         self.autonomy_session_defaults = AutonomySessionDefaultsConfig(
             gate_policy=str(session_defaults["gate_policy"]),
-            stop_on_phase_completion=bool(
-                session_defaults["stop_on_phase_completion"]
-            ),
-            auto_retry_fidelity_gate=bool(
-                session_defaults["auto_retry_fidelity_gate"]
-            ),
+            stop_on_phase_completion=bool(session_defaults["stop_on_phase_completion"]),
+            auto_retry_fidelity_gate=bool(session_defaults["auto_retry_fidelity_gate"]),
             max_tasks_per_session=int(session_defaults["max_tasks_per_session"]),
             max_consecutive_errors=int(session_defaults["max_consecutive_errors"]),
-            max_fidelity_review_cycles_per_phase=int(
-                session_defaults["max_fidelity_review_cycles_per_phase"]
-            ),
+            max_fidelity_review_cycles_per_phase=int(session_defaults["max_fidelity_review_cycles_per_phase"]),
         )
 
     def _apply_autonomy_session_defaults(
@@ -690,9 +665,7 @@ class _ServerConfigLoader:
     ) -> None:
         """Apply autonomy session default overrides from config."""
         if not isinstance(defaults_data, dict):
-            self._add_startup_warning(
-                f"Ignoring autonomy session defaults from {source}: expected table/dict"
-            )
+            self._add_startup_warning(f"Ignoring autonomy session defaults from {source}: expected table/dict")
             return
 
         current = self.autonomy_session_defaults
@@ -741,9 +714,7 @@ class _ServerConfigLoader:
                 if parsed > 0:
                     max_tasks_per_session = parsed
                 else:
-                    self._add_startup_warning(
-                        f"Ignoring max_tasks_per_session from {source}: value must be > 0"
-                    )
+                    self._add_startup_warning(f"Ignoring max_tasks_per_session from {source}: value must be > 0")
             except (TypeError, ValueError):
                 self._add_startup_warning(
                     f"Ignoring max_tasks_per_session from {source}: expected integer > 0, got {raw_value!r}"
@@ -757,17 +728,13 @@ class _ServerConfigLoader:
                 if parsed > 0:
                     max_consecutive_errors = parsed
                 else:
-                    self._add_startup_warning(
-                        f"Ignoring max_consecutive_errors from {source}: value must be > 0"
-                    )
+                    self._add_startup_warning(f"Ignoring max_consecutive_errors from {source}: value must be > 0")
             except (TypeError, ValueError):
                 self._add_startup_warning(
                     f"Ignoring max_consecutive_errors from {source}: expected integer > 0, got {raw_value!r}"
                 )
 
-        max_fidelity_review_cycles_per_phase = (
-            current.max_fidelity_review_cycles_per_phase
-        )
+        max_fidelity_review_cycles_per_phase = current.max_fidelity_review_cycles_per_phase
         if "max_fidelity_review_cycles_per_phase" in defaults_data:
             raw_value = defaults_data["max_fidelity_review_cycles_per_phase"]
             try:
@@ -776,8 +743,7 @@ class _ServerConfigLoader:
                     max_fidelity_review_cycles_per_phase = parsed
                 else:
                     self._add_startup_warning(
-                        "Ignoring max_fidelity_review_cycles_per_phase from "
-                        f"{source}: value must be > 0"
+                        f"Ignoring max_fidelity_review_cycles_per_phase from {source}: value must be > 0"
                     )
             except (TypeError, ValueError):
                 self._add_startup_warning(
@@ -791,9 +757,7 @@ class _ServerConfigLoader:
             auto_retry_fidelity_gate=auto_retry_fidelity_gate,
             max_tasks_per_session=max_tasks_per_session,
             max_consecutive_errors=max_consecutive_errors,
-            max_fidelity_review_cycles_per_phase=(
-                max_fidelity_review_cycles_per_phase
-            ),
+            max_fidelity_review_cycles_per_phase=(max_fidelity_review_cycles_per_phase),
         )
 
     def _validate_startup_configuration(self) -> None:
@@ -802,31 +766,21 @@ class _ServerConfigLoader:
         if profile == "unattended":
             unsafe_conditions: List[str] = []
             if self.autonomy_security.role != "autonomy_runner":
-                unsafe_conditions.append(
-                    "role must be autonomy_runner for unattended posture"
-                )
+                unsafe_conditions.append("role must be autonomy_runner for unattended posture")
             if self.autonomy_security.allow_lock_bypass:
                 unsafe_conditions.append("allow_lock_bypass must be false")
             if self.autonomy_security.allow_gate_waiver:
                 unsafe_conditions.append("allow_gate_waiver must be false")
             if not self.autonomy_security.enforce_required_phase_gates:
-                unsafe_conditions.append(
-                    "enforce_required_phase_gates must be true"
-                )
+                unsafe_conditions.append("enforce_required_phase_gates must be true")
             if self.autonomy_session_defaults.gate_policy != "strict":
                 unsafe_conditions.append("gate_policy should be strict")
             if not self.autonomy_session_defaults.stop_on_phase_completion:
-                unsafe_conditions.append(
-                    "stop_on_phase_completion should be true"
-                )
+                unsafe_conditions.append("stop_on_phase_completion should be true")
             if unsafe_conditions:
-                self._add_startup_warning(
-                    "UNSAFE unattended posture configuration: "
-                    + "; ".join(unsafe_conditions)
-                )
+                self._add_startup_warning("UNSAFE unattended posture configuration: " + "; ".join(unsafe_conditions))
 
         if profile == "debug" and self.autonomy_security.role == "autonomy_runner":
             self._add_startup_warning(
-                "Debug posture is intended for supervised/manual operation; "
-                "autonomy_runner role should not be used."
+                "Debug posture is intended for supervised/manual operation; autonomy_runner role should not be used."
             )

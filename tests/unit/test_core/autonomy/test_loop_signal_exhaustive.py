@@ -16,7 +16,6 @@ from foundry_mcp.core.autonomy.models.signals import (
     derive_loop_signal,
 )
 
-
 # Build parametrize rows for all _BLOCKED_RUNTIME_ERROR_CODES
 _BLOCKED_ROWS = [
     (f"blocked_{code.lower()}", dict(error_code=code), LoopSignal.BLOCKED_RUNTIME)

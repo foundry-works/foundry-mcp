@@ -54,18 +54,14 @@ def keyed_spec_data() -> dict:
 
 def test_build_spec_requirements_lists_children(keyed_spec_data):
     """_build_spec_requirements should include child tasks for keyed hierarchy phases."""
-    output = review._build_spec_requirements(
-        keyed_spec_data, task_id=None, phase_id="phase-1"
-    )
+    output = review._build_spec_requirements(keyed_spec_data, task_id=None, phase_id="phase-1")
 
     assert "Phase: Phase 1" in output
     assert "task-1-1" in output
     assert "task-1-2" in output
 
 
-def test_build_implementation_artifacts_reads_phase_files(
-    keyed_spec_data, tmp_path, monkeypatch
-):
+def test_build_implementation_artifacts_reads_phase_files(keyed_spec_data, tmp_path, monkeypatch):
     """_build_implementation_artifacts should resolve child file paths by ID."""
     project_root = tmp_path / "project"
     (project_root / "src").mkdir(parents=True)
@@ -87,9 +83,7 @@ def test_build_implementation_artifacts_reads_phase_files(
     assert "print('cli')" in output
 
 
-def test_build_implementation_artifacts_full_spec_review(
-    keyed_spec_data, tmp_path, monkeypatch
-):
+def test_build_implementation_artifacts_full_spec_review(keyed_spec_data, tmp_path, monkeypatch):
     """_build_implementation_artifacts should collect all task files for full spec review."""
     project_root = tmp_path / "project"
     (project_root / "src").mkdir(parents=True)

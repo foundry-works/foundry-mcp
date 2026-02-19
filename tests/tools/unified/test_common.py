@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from dataclasses import dataclass
 
 from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.tools.unified.common import (
@@ -21,6 +21,7 @@ from foundry_mcp.tools.unified.router import ActionRouter
 @dataclass
 class MockAuthzResult:
     """Mock authorization result for testing."""
+
     allowed: bool
     denied_action: str = ""
     configured_role: str = "observer"
@@ -43,24 +44,30 @@ class TestBuildRequestId:
             assert build_request_id("task") == "existing_abc123"
 
     def test_generates_new_id_with_prefix(self):
-        with patch(
-            "foundry_mcp.tools.unified.common.get_correlation_id",
-            return_value=None,
-        ), patch(
-            "foundry_mcp.tools.unified.common.generate_correlation_id",
-            return_value="task_deadbeef1234",
-        ) as mock_gen:
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_correlation_id",
+                return_value=None,
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.generate_correlation_id",
+                return_value="task_deadbeef1234",
+            ) as mock_gen,
+        ):
             result = build_request_id("task")
             assert result == "task_deadbeef1234"
             mock_gen.assert_called_once_with(prefix="task")
 
     def test_different_prefixes(self):
-        with patch(
-            "foundry_mcp.tools.unified.common.get_correlation_id",
-            return_value=None,
-        ), patch(
-            "foundry_mcp.tools.unified.common.generate_correlation_id",
-            side_effect=lambda prefix: f"{prefix}_abc",
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_correlation_id",
+                return_value=None,
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.generate_correlation_id",
+                side_effect=lambda prefix: f"{prefix}_abc",
+            ),
         ):
             assert build_request_id("authoring") == "authoring_abc"
             assert build_request_id("server") == "server_abc"
@@ -84,16 +91,10 @@ class TestMakeMetricName:
         assert make_metric_name("task", "phase_add") == "task.phase_add"
 
     def test_compound_prefix(self):
-        assert (
-            make_metric_name("unified_tools.task", "prepare")
-            == "unified_tools.task.prepare"
-        )
+        assert make_metric_name("unified_tools.task", "prepare") == "unified_tools.task.prepare"
 
     def test_multiple_hyphens(self):
-        assert (
-            make_metric_name("test", "run-all-suites")
-            == "test.run_all_suites"
-        )
+        assert make_metric_name("test", "run-all-suites") == "test.run_all_suites"
 
 
 # -----------------------------------------------------------------------
@@ -199,9 +200,7 @@ class TestDispatchWithStandardErrors:
     def test_success_passthrough(self):
         router = self._make_router()
         with self._mock_authz_allowed():
-            result = dispatch_with_standard_errors(
-                router, "test", "do-thing", config="cfg"
-            )
+            result = dispatch_with_standard_errors(router, "test", "do-thing", config="cfg")
         assert result["success"] is True
 
     def test_unsupported_action_returns_error(self):
@@ -301,12 +300,13 @@ class TestDispatchWithStandardErrors:
     def test_authorization_denied_emits_metric(self):
         """Test that authorization denial emits authz.denied metric."""
         router = self._make_router()
-        with patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="observer",
-        ), patch(
-            "foundry_mcp.tools.unified.common.MetricsCollector"
-        ) as mock_metrics_class:
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="observer",
+            ),
+            patch("foundry_mcp.tools.unified.common.MetricsCollector") as mock_metrics_class,
+        ):
             mock_collector = MagicMock()
             mock_metrics_class.return_value = mock_collector
 
@@ -329,25 +329,25 @@ class TestDispatchWithStandardErrors:
         mock_tracker = MagicMock()
         mock_tracker.check_rate_limit.return_value = None
 
-        with patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="observer",
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_client_id",
-            return_value="client-123",
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
-            return_value=mock_tracker,
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="observer",
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_client_id",
+                return_value="client-123",
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+                return_value=mock_tracker,
+            ),
         ):
             result = dispatch_with_standard_errors(router, "test", "do-thing")
 
         assert result["data"]["error_code"] == "AUTHORIZATION"
-        mock_tracker.check_rate_limit.assert_called_once_with(
-            "test.do-thing|client:client-123"
-        )
-        mock_tracker.record_denial.assert_called_once_with(
-            "test.do-thing|client:client-123"
-        )
+        mock_tracker.check_rate_limit.assert_called_once_with("test.do-thing|client:client-123")
+        mock_tracker.record_denial.assert_called_once_with("test.do-thing|client:client-123")
 
     def test_authorization_denial_key_falls_back_to_role_scope(self):
         """Anonymous requests should rate-limit by role scope."""
@@ -355,25 +355,25 @@ class TestDispatchWithStandardErrors:
         mock_tracker = MagicMock()
         mock_tracker.check_rate_limit.return_value = None
 
-        with patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="observer",
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_client_id",
-            return_value="anonymous",
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
-            return_value=mock_tracker,
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="observer",
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_client_id",
+                return_value="anonymous",
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+                return_value=mock_tracker,
+            ),
         ):
             result = dispatch_with_standard_errors(router, "test", "do-thing")
 
         assert result["data"]["error_code"] == "AUTHORIZATION"
-        mock_tracker.check_rate_limit.assert_called_once_with(
-            "test.do-thing|role:observer"
-        )
-        mock_tracker.record_denial.assert_called_once_with(
-            "test.do-thing|role:observer"
-        )
+        mock_tracker.check_rate_limit.assert_called_once_with("test.do-thing|role:observer")
+        mock_tracker.record_denial.assert_called_once_with("test.do-thing|role:observer")
 
     def test_untrusted_principal_hints_do_not_influence_scope(self):
         """Rate-limit scope must ignore caller-supplied principal hints."""
@@ -381,15 +381,19 @@ class TestDispatchWithStandardErrors:
         mock_tracker = MagicMock()
         mock_tracker.check_rate_limit.return_value = None
 
-        with patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="observer",
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_client_id",
-            return_value=None,
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
-            return_value=mock_tracker,
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="observer",
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_client_id",
+                return_value=None,
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+                return_value=mock_tracker,
+            ),
         ):
             result = dispatch_with_standard_errors(
                 router,
@@ -399,12 +403,8 @@ class TestDispatchWithStandardErrors:
             )
 
         assert result["data"]["error_code"] == "AUTHORIZATION"
-        mock_tracker.check_rate_limit.assert_called_once_with(
-            "test.do-thing|role:observer"
-        )
-        mock_tracker.record_denial.assert_called_once_with(
-            "test.do-thing|role:observer"
-        )
+        mock_tracker.check_rate_limit.assert_called_once_with("test.do-thing|role:observer")
+        mock_tracker.record_denial.assert_called_once_with("test.do-thing|role:observer")
 
     def test_authorization_allowed_for_maintainer(self):
         """Test that maintainer role has access to all actions."""
@@ -488,12 +488,15 @@ class TestMakeValidationErrorFn:
 
     def test_auto_generates_request_id(self):
         fn = make_validation_error_fn("task", include_request_id=True)
-        with patch(
-            "foundry_mcp.tools.unified.common.get_correlation_id",
-            return_value=None,
-        ), patch(
-            "foundry_mcp.tools.unified.common.generate_correlation_id",
-            return_value="task_auto123",
+        with (
+            patch(
+                "foundry_mcp.tools.unified.common.get_correlation_id",
+                return_value=None,
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.generate_correlation_id",
+                return_value="task_auto123",
+            ),
         ):
             result = fn(
                 field="spec_id",

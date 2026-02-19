@@ -16,18 +16,10 @@ class ConversationMessage(BaseModel):
     role: str = Field(..., description="Message role: 'user' or 'assistant'")
     content: str = Field(..., description="Message content")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    provider_id: Optional[str] = Field(
-        default=None, description="Provider that generated this message"
-    )
-    model_used: Optional[str] = Field(
-        default=None, description="Model that generated this message"
-    )
-    tokens_used: Optional[int] = Field(
-        default=None, description="Tokens consumed for this message"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional message metadata"
-    )
+    provider_id: Optional[str] = Field(default=None, description="Provider that generated this message")
+    model_used: Optional[str] = Field(default=None, description="Model that generated this message")
+    tokens_used: Optional[int] = Field(default=None, description="Tokens consumed for this message")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional message metadata")
 
 
 class ConversationThread(BaseModel):
@@ -39,15 +31,9 @@ class ConversationThread(BaseModel):
     messages: list[ConversationMessage] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    provider_id: Optional[str] = Field(
-        default=None, description="Default provider for this thread"
-    )
-    system_prompt: Optional[str] = Field(
-        default=None, description="System prompt for this thread"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional thread metadata"
-    )
+    provider_id: Optional[str] = Field(default=None, description="Default provider for this thread")
+    system_prompt: Optional[str] = Field(default=None, description="System prompt for this thread")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional thread metadata")
 
     def add_message(
         self,
@@ -71,9 +57,7 @@ class ConversationThread(BaseModel):
         self.updated_at = datetime.utcnow()
         return message
 
-    def get_context_messages(
-        self, max_messages: Optional[int] = None
-    ) -> list[ConversationMessage]:
+    def get_context_messages(self, max_messages: Optional[int] = None) -> list[ConversationMessage]:
         """Get messages for context, optionally limited to recent N messages."""
         if max_messages is None or max_messages >= len(self.messages):
             return self.messages

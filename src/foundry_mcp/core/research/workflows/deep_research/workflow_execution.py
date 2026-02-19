@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 import traceback
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
@@ -44,6 +44,27 @@ class WorkflowExecutionMixin:
     - self._check_cancellation(): defined here
     - Phase execution methods from phase mixins
     """
+
+    config: Any
+    memory: Any
+    hooks: Any
+    orchestrator: Any
+    _tasks: dict[str, Any]
+    _tasks_lock: threading.Lock
+    _search_providers: dict[str, Any]
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        def _record_workflow_error(self, *args: Any, **kwargs: Any) -> None: ...
+        def _safe_orchestrator_transition(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_planning_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_gathering_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_analysis_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_synthesis_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_refinement_async(self, *args: Any, **kwargs: Any) -> Any: ...
+        async def _execute_extract_followup_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def _check_cancellation(self, state: DeepResearchState) -> None:
         """Check if cancellation has been requested for this research session.
@@ -306,15 +327,9 @@ class WorkflowExecutionMixin:
                     "total_tokens_used": state.total_tokens_used,
                     "total_duration_ms": state.total_duration_ms,
                     # Token breakdown totals
-                    "total_input_tokens": sum(
-                        m.input_tokens for m in state.phase_metrics
-                    ),
-                    "total_output_tokens": sum(
-                        m.output_tokens for m in state.phase_metrics
-                    ),
-                    "total_cached_tokens": sum(
-                        m.cached_tokens for m in state.phase_metrics
-                    ),
+                    "total_input_tokens": sum(m.input_tokens for m in state.phase_metrics),
+                    "total_output_tokens": sum(m.output_tokens for m in state.phase_metrics),
+                    "total_cached_tokens": sum(m.cached_tokens for m in state.phase_metrics),
                     # Per-phase metrics
                     "phase_metrics": [
                         {
@@ -333,11 +348,7 @@ class WorkflowExecutionMixin:
                     "total_search_queries": sum(state.search_provider_stats.values()),
                     # Source hostnames
                     "source_hostnames": sorted(
-                        set(
-                            h
-                            for s in state.sources
-                            if s.url and (h := _extract_hostname(s.url))
-                        )
+                        set(h for s in state.sources if s.url and (h := _extract_hostname(s.url)))
                     ),
                     # Research mode
                     "research_mode": state.research_mode.value,
@@ -488,9 +499,9 @@ class WorkflowExecutionMixin:
             for provider in self._search_providers.values():
                 try:
                     # Check if provider has async close method
-                    if hasattr(provider, 'aclose'):
+                    if hasattr(provider, "aclose"):
                         await provider.aclose()
-                    elif hasattr(provider, 'close'):
+                    elif hasattr(provider, "close"):
                         provider.close()
                 except Exception as cleanup_exc:
                     logger.warning(

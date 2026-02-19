@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,29 +18,35 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.ai_consultation import (
+    ConsensusResult,
     ConsultationOrchestrator,
     ConsultationRequest,
     ConsultationResult,
     ConsultationWorkflow,
-    ConsensusResult,
-)
-from foundry_mcp.core.prompts.fidelity_review import (
-    FIDELITY_SYNTHESIZED_RESPONSE_SCHEMA,
 )
 from foundry_mcp.core.llm_config.consultation import get_consultation_config, load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
-from foundry_mcp.core.providers import get_provider_statuses
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
+from foundry_mcp.core.prompts.fidelity_review import (
+    FIDELITY_SYNTHESIZED_RESPONSE_SCHEMA,
 )
+from foundry_mcp.core.providers import get_provider_statuses
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_spec_file, find_specs_directory, load_spec
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
+from foundry_mcp.tools.unified.router import (
+    ActionDefinition,
+    ActionRouter,
+)
+
 from .documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
@@ -54,11 +60,6 @@ from .review_helpers import (
     _run_ai_review,
     _run_quick_review,
 )
-from foundry_mcp.tools.unified.router import (
-    ActionDefinition,
-    ActionRouter,
-)
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
@@ -129,11 +130,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         ("ai_provider", ai_provider),
         ("model", model),
     ]:
-        if (
-            field_value
-            and isinstance(field_value, str)
-            and is_prompt_injection(field_value)
-        ):
+        if field_value and isinstance(field_value, str) and is_prompt_injection(field_value):
             return asdict(
                 error_response(
                     f"Input validation failed for {field_name}",
@@ -207,9 +204,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
         )
 
     consultation_cache_value = payload.get("consultation_cache", True)
-    if consultation_cache_value is not None and not isinstance(
-        consultation_cache_value, bool
-    ):
+    if consultation_cache_value is not None and not isinstance(consultation_cache_value, bool):
         return asdict(
             error_response(
                 "consultation_cache must be a boolean",
@@ -219,9 +214,7 @@ def _handle_spec_review(*, config: ServerConfig, payload: Dict[str, Any]) -> dic
                 details={"field": "consultation_cache"},
             )
         )
-    consultation_cache = (
-        consultation_cache_value if isinstance(consultation_cache_value, bool) else True
-    )
+    consultation_cache = consultation_cache_value if isinstance(consultation_cache_value, bool) else True
 
     return _run_ai_review(
         spec_id=spec_id,
@@ -408,24 +401,28 @@ def _format_fidelity_markdown(
     # Requirement Alignment
     req_align = parsed.get("requirement_alignment", {})
     if req_align:
-        lines.extend([
-            "## Requirement Alignment",
-            f"**Status:** {req_align.get('answer', 'unknown')}",
-            "",
-            req_align.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Requirement Alignment",
+                f"**Status:** {req_align.get('answer', 'unknown')}",
+                "",
+                req_align.get("details", ""),
+                "",
+            ]
+        )
 
     # Success Criteria
     success = parsed.get("success_criteria", {})
     if success:
-        lines.extend([
-            "## Success Criteria",
-            f"**Status:** {success.get('met', 'unknown')}",
-            "",
-            success.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Success Criteria",
+                f"**Status:** {success.get('met', 'unknown')}",
+                "",
+                success.get("details", ""),
+                "",
+            ]
+        )
 
     # Deviations
     deviations = parsed.get("deviations", [])
@@ -443,13 +440,15 @@ def _format_fidelity_markdown(
     # Test Coverage
     test_cov = parsed.get("test_coverage", {})
     if test_cov:
-        lines.extend([
-            "## Test Coverage",
-            f"**Status:** {test_cov.get('status', 'unknown')}",
-            "",
-            test_cov.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Test Coverage",
+                f"**Status:** {test_cov.get('status', 'unknown')}",
+                "",
+                test_cov.get("details", ""),
+                "",
+            ]
+        )
 
     # Code Quality
     code_quality = parsed.get("code_quality", {})
@@ -465,13 +464,15 @@ def _format_fidelity_markdown(
     # Documentation
     doc = parsed.get("documentation", {})
     if doc:
-        lines.extend([
-            "## Documentation",
-            f"**Status:** {doc.get('status', 'unknown')}",
-            "",
-            doc.get("details", ""),
-            "",
-        ])
+        lines.extend(
+            [
+                "## Documentation",
+                f"**Status:** {doc.get('status', 'unknown')}",
+                "",
+                doc.get("details", ""),
+                "",
+            ]
+        )
 
     # Issues
     issues = parsed.get("issues", [])
@@ -517,10 +518,12 @@ def _format_fidelity_markdown(
             lines.append(f"- Synthesis provider: {synth_meta['synthesis_provider']}")
         lines.append("")
 
-    lines.extend([
-        "---",
-        "*Generated by Foundry MCP Fidelity Review*",
-    ])
+    lines.extend(
+        [
+            "---",
+            "*Generated by Foundry MCP Fidelity Review*",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -565,9 +568,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                 details={"field": "include_tests"},
             )
         )
-    include_tests = (
-        include_tests_value if isinstance(include_tests_value, bool) else True
-    )
+    include_tests = include_tests_value if isinstance(include_tests_value, bool) else True
     base_branch = payload.get("base_branch", "main")
     workspace = payload.get("workspace")
 
@@ -591,11 +592,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    if (
-        not isinstance(consensus_threshold, int)
-        or consensus_threshold < 1
-        or consensus_threshold > 5
-    ):
+    if not isinstance(consensus_threshold, int) or consensus_threshold < 1 or consensus_threshold > 5:
         return asdict(
             error_response(
                 f"Invalid consensus_threshold: {consensus_threshold}. Must be between 1 and 5.",
@@ -613,11 +610,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         ("base_branch", base_branch),
         ("workspace", workspace),
     ]:
-        if (
-            field_value
-            and isinstance(field_value, str)
-            and is_prompt_injection(field_value)
-        ):
+        if field_value and isinstance(field_value, str) and is_prompt_injection(field_value):
             return asdict(
                 error_response(
                     f"Input validation failed for {field_name}",
@@ -639,9 +632,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                     )
                 )
 
-    ws_path = (
-        Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
-    )
+    ws_path = Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
     specs_dir = find_specs_directory(str(ws_path))
     if not specs_dir:
         return asdict(
@@ -697,9 +688,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         base_branch,
         workspace_root=ws_path,
     )
-    test_results = (
-        _build_test_results(spec_data, task_id, phase_id) if include_tests else ""
-    )
+    test_results = _build_test_results(spec_data, task_id, phase_id) if include_tests else ""
     journal_entries = _build_journal_entries(spec_data, task_id, phase_id)
 
     preferred_providers = ai_tools if isinstance(ai_tools, list) else []
@@ -746,15 +735,9 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     if is_consensus:
         # Extract provider details for visibility
-        failed_providers = [
-            {"provider_id": r.provider_id, "error": r.error}
-            for r in result.responses
-            if not r.success
-        ]
+        failed_providers = [{"provider_id": r.provider_id, "error": r.error} for r in result.responses if not r.success]
         # Filter for truly successful responses (success=True AND non-empty content)
-        successful_responses = [
-            r for r in result.responses if r.success and r.content.strip()
-        ]
+        successful_responses = [r for r in result.responses if r.success and r.content.strip()]
         successful_providers = [r.provider_id for r in successful_responses]
 
         if len(successful_responses) >= 2:
@@ -762,8 +745,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             model_reviews_json = ""
             for response in successful_responses:
                 model_reviews_json += (
-                    f"\n---\n## Review by {response.provider_id}\n\n"
-                    f"```json\n{response.content}\n```\n"
+                    f"\n---\n## Review by {response.provider_id}\n\n```json\n{response.content}\n```\n"
                 )
 
             # Write individual provider review files
@@ -783,10 +765,12 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                             provider_id=response.provider_id,
                         )
                         provider_file.write_text(provider_md, encoding="utf-8")
-                        provider_review_paths.append({
-                            "provider_id": response.provider_id,
-                            "path": str(provider_file),
-                        })
+                        provider_review_paths.append(
+                            {
+                                "provider_id": response.provider_id,
+                                "path": str(provider_file),
+                            }
+                        )
                     else:
                         # JSON parsing failed - write raw content as fallback
                         logger.warning(
@@ -800,11 +784,13 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                             f"## Raw Response\n\n```\n{response.content}\n```\n"
                         )
                         provider_file.write_text(raw_md, encoding="utf-8")
-                        provider_review_paths.append({
-                            "provider_id": response.provider_id,
-                            "path": str(provider_file),
-                            "parse_error": True,
-                        })
+                        provider_review_paths.append(
+                            {
+                                "provider_id": response.provider_id,
+                                "path": str(provider_file),
+                                "parse_error": True,
+                            }
+                        )
             except Exception as e:
                 logger.warning("Failed to write provider review files: %s", e)
 
@@ -965,6 +951,7 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     - findings: Summary of issues (if any)
     """
     from datetime import datetime, timezone
+
     from ulid import ULID
 
     from foundry_mcp.core.autonomy.memory import AutonomyStorage
@@ -1015,9 +1002,7 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
             )
 
     workspace = payload.get("workspace")
-    ws_path = (
-        Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
-    )
+    ws_path = Path(workspace) if isinstance(workspace, str) and workspace else Path.cwd()
 
     # Load session to get gate_policy
     storage = AutonomyStorage(workspace_path=ws_path)
@@ -1123,10 +1108,12 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     if deviations:
         for dev in deviations[:10]:  # Cap at 10 for response size
             if isinstance(dev, dict):
-                findings.append({
-                    "type": dev.get("type", "unknown"),
-                    "description": dev.get("description", str(dev)),
-                })
+                findings.append(
+                    {
+                        "type": dev.get("type", "unknown"),
+                        "description": dev.get("description", str(dev)),
+                    }
+                )
             else:
                 findings.append({"type": "issue", "description": str(dev)})
 
@@ -1185,12 +1172,8 @@ _ACTIONS = [
 _REVIEW_ROUTER = ActionRouter(tool_name="review", actions=_ACTIONS)
 
 
-def _dispatch_review_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _REVIEW_ROUTER, "review", action, payload=payload, config=config
-    )
+def _dispatch_review_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_REVIEW_ROUTER, "review", action, payload=payload, config=config)
 
 
 def register_unified_review_tool(mcp: FastMCP, config: ServerConfig) -> None:

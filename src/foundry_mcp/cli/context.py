@@ -4,16 +4,17 @@ Provides session markers, consultation limits, and context window tracking
 for CLI-driven LLM workflows.
 """
 
+import os
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
-import os
-import uuid
 
 
 @dataclass
 class SessionLimits:
     """Configurable limits for a CLI session."""
+
     max_consultations: int = 50  # Max LLM consultations per session
     max_context_tokens: int = 100000  # Approximate token budget
     warn_at_percentage: float = 0.8  # Warn at 80% usage
@@ -22,6 +23,7 @@ class SessionLimits:
 @dataclass
 class SessionStats:
     """Runtime statistics for a CLI session."""
+
     consultation_count: int = 0
     estimated_tokens_used: int = 0
     commands_executed: int = 0
@@ -50,6 +52,7 @@ class AutonomousSession:
         batch_size: Number of tasks to execute before pausing in batch mode.
         batch_remaining: Tasks remaining in current batch (None = not tracking).
     """
+
     enabled: bool = False
     tasks_completed: int = 0
     pause_reason: Optional[str] = None
@@ -97,6 +100,7 @@ class ContextSession:
     Note: Autonomous mode tracking has been migrated to the autonomy module
     (AutonomousSessionState in core/autonomy/models.py).
     """
+
     session_id: str
     started_at: str
     limits: SessionLimits = field(default_factory=SessionLimits)
@@ -131,16 +135,16 @@ class ContextSession:
     def should_warn(self) -> bool:
         """Whether to warn about approaching limits."""
         return (
-            self.consultation_usage_percentage >= self.limits.warn_at_percentage * 100 or
-            self.token_usage_percentage >= self.limits.warn_at_percentage * 100
+            self.consultation_usage_percentage >= self.limits.warn_at_percentage * 100
+            or self.token_usage_percentage >= self.limits.warn_at_percentage * 100
         )
 
     @property
     def at_limit(self) -> bool:
         """Whether session has reached its limits."""
         return (
-            self.stats.consultation_count >= self.limits.max_consultations or
-            self.stats.estimated_tokens_used >= self.limits.max_context_tokens
+            self.stats.consultation_count >= self.limits.max_consultations
+            or self.stats.estimated_tokens_used >= self.limits.max_context_tokens
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -189,15 +193,9 @@ class ContextTracker:
     def _load_from_env(self) -> None:
         """Load limits from environment variables."""
         self._default_limits = SessionLimits(
-            max_consultations=int(
-                os.environ.get("FOUNDRY_MAX_CONSULTATIONS", "50")
-            ),
-            max_context_tokens=int(
-                os.environ.get("FOUNDRY_MAX_CONTEXT_TOKENS", "100000")
-            ),
-            warn_at_percentage=float(
-                os.environ.get("FOUNDRY_WARN_PERCENTAGE", "0.8")
-            ),
+            max_consultations=int(os.environ.get("FOUNDRY_MAX_CONSULTATIONS", "50")),
+            max_context_tokens=int(os.environ.get("FOUNDRY_MAX_CONTEXT_TOKENS", "100000")),
+            warn_at_percentage=float(os.environ.get("FOUNDRY_WARN_PERCENTAGE", "0.8")),
         )
 
     def start_session(
@@ -220,7 +218,8 @@ class ContextTracker:
         self._session = ContextSession(
             session_id=session_id or self._generate_session_id(),
             started_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            limits=limits or SessionLimits(
+            limits=limits
+            or SessionLimits(
                 max_consultations=self._default_limits.max_consultations,
                 max_context_tokens=self._default_limits.max_context_tokens,
                 warn_at_percentage=self._default_limits.warn_at_percentage,

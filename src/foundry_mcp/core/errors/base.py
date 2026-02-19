@@ -17,15 +17,19 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Dict, Optional, Tuple, Type
 
 from foundry_mcp.core.errors.authorization import PathValidationError
 from foundry_mcp.core.errors.execution import ActionRouterError, ExecutorExhaustedError
 from foundry_mcp.core.errors.llm import (
     AuthenticationError as LLMAuthenticationError,
+)
+from foundry_mcp.core.errors.llm import (
     ContentFilterError,
     InvalidRequestError,
     ModelNotFoundError,
+)
+from foundry_mcp.core.errors.llm import (
     RateLimitError as LLMRateLimitError,
 )
 from foundry_mcp.core.errors.provider import (
@@ -42,7 +46,11 @@ from foundry_mcp.core.errors.resilience import (
 )
 from foundry_mcp.core.errors.search import (
     AuthenticationError as SearchAuthenticationError,
+)
+from foundry_mcp.core.errors.search import (
     RateLimitError as SearchRateLimitError,
+)
+from foundry_mcp.core.errors.search import (
     SearchProviderError,
 )
 from foundry_mcp.core.errors.storage import (

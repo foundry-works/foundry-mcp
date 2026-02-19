@@ -17,15 +17,14 @@ import pytest
 
 from foundry_mcp.core.providers.detectors import (
     ProviderDetector,
-    register_detector,
-    get_detector,
     detect_provider_availability,
+    get_detector,
     get_provider_statuses,
     get_provider_unavailability_reasons,
     list_detectors,
+    register_detector,
     reset_detectors,
 )
-
 
 # =============================================================================
 # Test Fixtures
@@ -239,10 +238,13 @@ class TestTestMode:
 
     def test_test_mode_respects_override(self, custom_detector):
         """In test mode with override, should respect override."""
-        with patch.dict(os.environ, {
-            "FOUNDRY_PROVIDER_TEST_MODE": "1",
-            "TEST_PROVIDER_OVERRIDE": "true",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "FOUNDRY_PROVIDER_TEST_MODE": "1",
+                "TEST_PROVIDER_OVERRIDE": "true",
+            },
+        ):
             assert custom_detector.is_available() is True
 
     def test_test_mode_off_checks_binary(self):
@@ -262,9 +264,7 @@ class TestTestMode:
 # =============================================================================
 
 # Check if test mode is enabled (real probes disabled)
-_TEST_MODE_ENABLED = os.environ.get("FOUNDRY_PROVIDER_TEST_MODE", "").lower() in (
-    "1", "true", "yes", "on"
-)
+_TEST_MODE_ENABLED = os.environ.get("FOUNDRY_PROVIDER_TEST_MODE", "").lower() in ("1", "true", "yes", "on")
 
 
 class TestProbeExecution:
@@ -274,10 +274,7 @@ class TestProbeExecution:
     FOUNDRY_PROVIDER_TEST_MODE since test mode disables real probes.
     """
 
-    @pytest.mark.skipif(
-        _TEST_MODE_ENABLED,
-        reason="Test mode disables real probe execution"
-    )
+    @pytest.mark.skipif(_TEST_MODE_ENABLED, reason="Test mode disables real probe execution")
     def test_probe_success(self):
         """Successful probe should return True."""
         detector = ProviderDetector(
@@ -301,10 +298,7 @@ class TestProbeExecution:
         result = detector.is_available(use_probe=True)
         assert result is False
 
-    @pytest.mark.skipif(
-        _TEST_MODE_ENABLED,
-        reason="Test mode disables real probe execution"
-    )
+    @pytest.mark.skipif(_TEST_MODE_ENABLED, reason="Test mode disables real probe execution")
     def test_skip_probe_only_checks_path(self):
         """use_probe=False should only check PATH resolution."""
         detector = ProviderDetector(
@@ -316,10 +310,7 @@ class TestProbeExecution:
         result = detector.is_available(use_probe=False)
         assert result is True
 
-    @pytest.mark.skipif(
-        _TEST_MODE_ENABLED,
-        reason="Test mode disables real probe execution"
-    )
+    @pytest.mark.skipif(_TEST_MODE_ENABLED, reason="Test mode disables real probe execution")
     def test_empty_probe_args_skips_probe(self):
         """Empty probe_args should skip probe execution."""
         detector = ProviderDetector(
@@ -417,10 +408,13 @@ class TestGetProviderStatuses:
 
     def test_respects_overrides(self):
         """Should respect per-provider overrides."""
-        with patch.dict(os.environ, {
-            "FOUNDRY_PROVIDER_TEST_MODE": "1",
-            "FOUNDRY_GEMINI_AVAILABLE_OVERRIDE": "true",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "FOUNDRY_PROVIDER_TEST_MODE": "1",
+                "FOUNDRY_GEMINI_AVAILABLE_OVERRIDE": "true",
+            },
+        ):
             statuses = get_provider_statuses()
             assert statuses["gemini"] is True
             assert statuses["codex"] is False  # No override
@@ -455,6 +449,7 @@ class TestResetDetectors:
         """reset should restore default detectors."""
         # Clear all detectors
         from foundry_mcp.core.providers.detectors import _DETECTORS
+
         _DETECTORS.clear()
         assert get_detector("gemini") is None
 
@@ -553,10 +548,7 @@ class TestGetUnavailabilityReason:
         assert "not found in PATH" in reason
         assert "nonexistent-binary-xyz-12345" in reason
 
-    @pytest.mark.skipif(
-        _TEST_MODE_ENABLED,
-        reason="Test mode disables real probe execution"
-    )
+    @pytest.mark.skipif(_TEST_MODE_ENABLED, reason="Test mode disables real probe execution")
     def test_returns_reason_for_probe_failure(self):
         """Should return reason when health probe fails."""
         detector = ProviderDetector(
@@ -568,10 +560,7 @@ class TestGetUnavailabilityReason:
         assert reason is not None
         assert "Health probe failed" in reason
 
-    @pytest.mark.skipif(
-        _TEST_MODE_ENABLED,
-        reason="Test mode disables real probe execution"
-    )
+    @pytest.mark.skipif(_TEST_MODE_ENABLED, reason="Test mode disables real probe execution")
     def test_returns_none_for_available_provider(self):
         """Should return None when provider is available."""
         detector = ProviderDetector(
@@ -606,10 +595,13 @@ class TestGetProviderUnavailabilityReasons:
 
     def test_respects_overrides(self):
         """Should return None for providers with available override."""
-        with patch.dict(os.environ, {
-            "FOUNDRY_PROVIDER_TEST_MODE": "1",
-            "FOUNDRY_GEMINI_AVAILABLE_OVERRIDE": "true",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "FOUNDRY_PROVIDER_TEST_MODE": "1",
+                "FOUNDRY_GEMINI_AVAILABLE_OVERRIDE": "true",
+            },
+        ):
             reasons = get_provider_unavailability_reasons()
             assert reasons["gemini"] is None  # Available via override
             assert reasons["codex"] is not None  # No override, test mode

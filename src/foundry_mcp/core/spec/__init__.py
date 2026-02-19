@@ -21,12 +21,34 @@ from foundry_mcp.core.spec._constants import (
     FRONTMATTER_KEYS,
     MAX_BACKUP_PAGE_SIZE,
     PHASE_TEMPLATES,
-    TEMPLATES,
     TEMPLATE_DESCRIPTIONS,
+    TEMPLATES,
     VERIFICATION_TYPES,
 )
+from foundry_mcp.core.spec._monolith import (
+    # Find and replace
+    find_replace_in_spec,
+)
+from foundry_mcp.core.spec.analysis import (
+    # Analysis and validation
+    check_spec_completeness,
+    detect_duplicate_tasks,
+)
+from foundry_mcp.core.spec.hierarchy import (
+    # Phase operations
+    add_phase,
+    add_phase_bulk,
+    # Hierarchy/node functions
+    get_node,
+    move_phase,
+    recalculate_actual_hours,
+    recalculate_estimated_hours,
+    remove_phase,
+    update_node,
+    update_phase_metadata,
+)
 from foundry_mcp.core.spec.io import (
-    _apply_backup_retention,
+    _apply_backup_retention,  # noqa: F401
     backup_spec,
     diff_specs,
     find_git_root,
@@ -40,42 +62,20 @@ from foundry_mcp.core.spec.io import (
     rollback_spec,
     save_spec,
 )
-from foundry_mcp.core.spec.hierarchy import (
-    # Hierarchy/node functions
-    get_node,
-    update_node,
-    # Phase operations
-    add_phase,
-    add_phase_bulk,
-    move_phase,
-    recalculate_actual_hours,
-    recalculate_estimated_hours,
-    remove_phase,
-    update_phase_metadata,
-)
 from foundry_mcp.core.spec.templates import (
-    # Spec creation
-    create_spec,
-    generate_spec_data,
-    get_template_structure,
-    # Phase template operations
-    apply_phase_template,
-    get_phase_template_structure,
-    # Frontmatter and metadata
-    update_frontmatter,
     # Assumptions and revisions
     add_assumption,
     add_revision,
+    # Phase template operations
+    apply_phase_template,
+    # Spec creation
+    create_spec,
+    generate_spec_data,
+    get_phase_template_structure,
+    get_template_structure,
     list_assumptions,
-)
-from foundry_mcp.core.spec.analysis import (
-    # Analysis and validation
-    check_spec_completeness,
-    detect_duplicate_tasks,
-)
-from foundry_mcp.core.spec._monolith import (
-    # Find and replace
-    find_replace_in_spec,
+    # Frontmatter and metadata
+    update_frontmatter,
 )
 
 __all__ = [

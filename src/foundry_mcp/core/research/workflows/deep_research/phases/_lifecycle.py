@@ -12,18 +12,13 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from foundry_mcp.core.errors.provider import ContextWindowError
 from foundry_mcp.core.observability import get_metrics
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.fidelity import PhaseMetrics
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +32,7 @@ class LLMCallResult:
 
 
 async def execute_llm_call(
-    workflow: DeepResearchWorkflow,
+    workflow: Any,
     state: DeepResearchState,
     phase_name: str,
     system_prompt: str,
@@ -125,8 +120,7 @@ async def execute_llm_call(
         )
 
         logger.error(
-            "%s phase context window exceeded: prompt_tokens=%s, "
-            "max_tokens=%s, truncation_needed=%s, provider=%s",
+            "%s phase context window exceeded: prompt_tokens=%s, max_tokens=%s, truncation_needed=%s, provider=%s",
             phase_name.capitalize(),
             e.prompt_tokens,
             e.max_tokens,
@@ -206,7 +200,7 @@ async def execute_llm_call(
 
 
 def finalize_phase(
-    workflow: DeepResearchWorkflow,
+    workflow: Any,
     state: DeepResearchState,
     phase_name: str,
     phase_start_time: float,

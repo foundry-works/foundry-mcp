@@ -69,9 +69,7 @@ class RequestContext:
     request_id: str
     client_id: str
     start_time: float
-    start_timestamp: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    start_timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def elapsed_seconds(self) -> float:
@@ -164,9 +162,7 @@ def get_current_context() -> RequestContext:
     """
     req_id = request_id.get()
     if not req_id:
-        raise RuntimeError(
-            "get_current_context() called outside of request_context"
-        )
+        raise RuntimeError("get_current_context() called outside of request_context")
 
     return RequestContext(
         request_id=req_id,
@@ -297,7 +293,7 @@ class GatherResult:
 
     def successful_results(self) -> List[Any]:
         """Get only the successful results."""
-        return [r for r, e in zip(self.results, self.errors) if e is None]
+        return [r for r, e in zip(self.results, self.errors, strict=False) if e is None]
 
     def failed_results(self) -> List[tuple[int, Exception]]:
         """Get failed results with their indices."""
@@ -422,9 +418,7 @@ class ConcurrencyLimiter:
 
         Example:
             >>> limiter = ConcurrencyLimiter(max_concurrent=5)
-            >>> result = await limiter.gather([
-            ...     fetch(url) for url in urls
-            ... ])
+            >>> result = await limiter.gather([fetch(url) for url in urls])
             >>> if result.all_succeeded:
             ...     process(result.results)
             ... else:
@@ -447,7 +441,7 @@ class ConcurrencyLimiter:
                 if not return_exceptions:
                     raise
             except asyncio.CancelledError as e:
-                errors[index] = e
+                errors[index] = e  # type: ignore[assignment]
                 stats.cancelled += 1
                 stats.failed += 1
                 if not return_exceptions:
@@ -459,10 +453,7 @@ class ConcurrencyLimiter:
                     raise
 
         try:
-            tasks = [
-                asyncio.create_task(run_one(i, coro))
-                for i, coro in enumerate(coros)
-            ]
+            tasks = [asyncio.create_task(run_one(i, coro)) for i, coro in enumerate(coros)]
             await asyncio.gather(*tasks, return_exceptions=return_exceptions)
         except Exception:
             # Cancel remaining tasks on failure
@@ -572,9 +563,7 @@ def configure_tool_limiter(
         timeout=timeout,
     )
     _tool_limiters[tool_name] = limiter
-    logger.debug(
-        f"Configured limiter for {tool_name}: max_concurrent={max_concurrent}"
-    )
+    logger.debug(f"Configured limiter for {tool_name}: max_concurrent={max_concurrent}")
     return limiter
 
 
@@ -625,7 +614,6 @@ async def cancellable_scope(
     Example:
         >>> async def cleanup():
         ...     await close_connections()
-        ...
         >>> async with cancellable_scope(cleanup_func=cleanup):
         ...     await long_running_operation()
 
@@ -657,7 +645,6 @@ def with_cancellation(
     Example:
         >>> async def close_db():
         ...     await db.close()
-        ...
         >>> @with_cancellation(cleanup_func=close_db)
         ... async def query_database():
         ...     return await db.query("SELECT * FROM users")
@@ -698,7 +685,6 @@ async def run_with_cancellation_checkpoints(
     Example:
         >>> async def process_item(item: str) -> dict:
         ...     return {"item": item, "processed": True}
-        ...
         >>> result = await run_with_cancellation_checkpoints(
         ...     items=["a", "b", "c"],
         ...     process_func=process_item,
@@ -719,9 +705,7 @@ async def run_with_cancellation_checkpoints(
             result = await process_func(item)
             results.append(result)
         except asyncio.CancelledError:
-            logger.info(
-                f"Operation cancelled at item {i}/{total}"
-            )
+            logger.info(f"Operation cancelled at item {i}/{total}")
             if return_partial:
                 return CancellationResult(
                     completed=False,
@@ -818,7 +802,6 @@ class CancellationToken:
         ...     while not token.is_cancelled:
         ...         await do_work()
         ...         await token.check()  # Raises if cancelled
-        ...
         >>> # Later, from another task:
         >>> token.cancel()
     """

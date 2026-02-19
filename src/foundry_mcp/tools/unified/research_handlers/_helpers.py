@@ -7,7 +7,6 @@ from typing import Optional
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.research.memory import ResearchMemory
-from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.tools.unified.common import (
     build_request_id,
     make_metric_name,

@@ -33,6 +33,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from ulid import ULID
 
+from foundry_mcp.core.autonomy.audit import AuditEventType, AuditLedger
 from foundry_mcp.core.autonomy.context_tracker import ContextTracker
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models.enums import (
@@ -47,42 +48,41 @@ from foundry_mcp.core.autonomy.models.enums import (
 from foundry_mcp.core.autonomy.models.responses import SessionStepResponseData
 from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.autonomy.models.steps import LastStepIssued, LastStepResult
+from foundry_mcp.core.autonomy.server_secret import (
+    verify_integrity_checksum,
+)
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,
 )
-from foundry_mcp.core.autonomy.server_secret import (
-    verify_integrity_checksum,
-)
-from foundry_mcp.core.autonomy.audit import AuditEventType, AuditLedger
-from foundry_mcp.core.spec import resolve_spec_file
-from foundry_mcp.core.task._helpers import check_all_blocked
 
 # Import mixin, result type, and error constants from step_emitters
 from foundry_mcp.core.autonomy.step_emitters import (
-    OrchestrationResult,
-    StepEmitterMixin,
-    ERROR_STEP_RESULT_REQUIRED,
-    ERROR_STEP_MISMATCH,
-    ERROR_STEP_PROOF_MISSING,
-    ERROR_STEP_PROOF_MISMATCH,
-    ERROR_STEP_PROOF_CONFLICT,
-    ERROR_STEP_PROOF_EXPIRED,
+    ERROR_ALL_TASKS_BLOCKED,
+    ERROR_AMBIGUOUS_ACTIVE_SESSION,
+    ERROR_GATE_AUDIT_FAILURE,
+    ERROR_GATE_BLOCKED,
+    ERROR_GATE_INTEGRITY_CHECKSUM,
+    ERROR_HEARTBEAT_STALE,
     ERROR_INVALID_GATE_EVIDENCE,
     ERROR_NO_ACTIVE_SESSION,
-    ERROR_AMBIGUOUS_ACTIVE_SESSION,
+    ERROR_REQUIRED_GATE_UNSATISFIED,
     ERROR_SESSION_UNRECOVERABLE,
     ERROR_SPEC_REBASE_REQUIRED,
-    ERROR_HEARTBEAT_STALE,
+    ERROR_STEP_MISMATCH,
+    ERROR_STEP_PROOF_CONFLICT,
+    ERROR_STEP_PROOF_EXPIRED,
+    ERROR_STEP_PROOF_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
+    ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
-    ERROR_ALL_TASKS_BLOCKED,
-    ERROR_GATE_BLOCKED,
-    ERROR_REQUIRED_GATE_UNSATISFIED,
-    ERROR_VERIFICATION_RECEIPT_MISSING,
     ERROR_VERIFICATION_RECEIPT_INVALID,
-    ERROR_GATE_INTEGRITY_CHECKSUM,
-    ERROR_GATE_AUDIT_FAILURE,
+    ERROR_VERIFICATION_RECEIPT_MISSING,
+    OrchestrationResult,
+    StepEmitterMixin,
 )
+from foundry_mcp.core.spec import resolve_spec_file
+from foundry_mcp.core.task._helpers import check_all_blocked
 
 logger = logging.getLogger(__name__)
 
@@ -212,9 +212,7 @@ class StepOrchestrator(StepEmitterMixin):
         now = datetime.now(timezone.utc)
 
         # Update context usage via the tracker (Tier 1/2/3 fallthrough)
-        effective_pct, source = self._context_tracker.get_effective_context_pct(
-            session, context_usage_pct, now
-        )
+        effective_pct, source = self._context_tracker.get_effective_context_pct(session, context_usage_pct, now)
         session.context.context_usage_pct = effective_pct
         session.context.context_source = source
         self._context_tracker.update_step_counter(session)
@@ -227,9 +225,7 @@ class StepOrchestrator(StepEmitterMixin):
         # =================================================================
         if last_step_result is not None and session.last_step_issued is not None:
             if last_step_result.step_id == session.last_step_issued.step_id:
-                proof_enforced = bool(
-                    session.last_step_issued.step_proof and last_step_result.step_proof
-                )
+                proof_enforced = bool(session.last_step_issued.step_proof and last_step_result.step_proof)
                 # Check if we already processed this step
                 if session.last_issued_response is not None and not proof_enforced:
                     logger.info(
@@ -277,9 +273,7 @@ class StepOrchestrator(StepEmitterMixin):
                     error_message=proof_error_message,
                     should_persist=False,
                 )
-            mismatch_reason = self._validate_step_identity(
-                session.last_step_issued, last_step_result
-            )
+            mismatch_reason = self._validate_step_identity(session.last_step_issued, last_step_result)
             if mismatch_reason:
                 logger.warning("STEP_MISMATCH: %s", mismatch_reason)
                 return OrchestrationResult(
@@ -491,9 +485,7 @@ class StepOrchestrator(StepEmitterMixin):
                 satisfied_gates=satisfied_gates if satisfied_gates else None,
                 missing_required_gates=missing_required_gates if missing_required_gates else None,
             )
-            session.last_issued_response = response_data.model_dump(
-                mode="json", by_alias=True
-            )
+            session.last_issued_response = response_data.model_dump(mode="json", by_alias=True)
 
         return next_step_result
 
@@ -512,16 +504,10 @@ class StepOrchestrator(StepEmitterMixin):
             None if valid, error message if mismatch
         """
         if result.step_id != last_issued.step_id:
-            return (
-                f"Step ID mismatch: expected {last_issued.step_id}, "
-                f"got {result.step_id}"
-            )
+            return f"Step ID mismatch: expected {last_issued.step_id}, got {result.step_id}"
 
         if result.step_type != last_issued.type:
-            return (
-                f"Step type mismatch: expected {last_issued.type.value}, "
-                f"got {result.step_type.value}"
-            )
+            return f"Step type mismatch: expected {last_issued.type.value}, got {result.step_type.value}"
 
         # Validate task/phase binding
         if last_issued.type in (StepType.IMPLEMENT_TASK, StepType.EXECUTE_VERIFICATION):
@@ -617,10 +603,7 @@ class StepOrchestrator(StepEmitterMixin):
 
         # Validate gate_attempt_id matches
         if result.gate_attempt_id != evidence.gate_attempt_id:
-            return (
-                f"Gate attempt ID mismatch: expected {evidence.gate_attempt_id}, "
-                f"got {result.gate_attempt_id}"
-            )
+            return f"Gate attempt ID mismatch: expected {evidence.gate_attempt_id}, got {result.gate_attempt_id}"
 
         # Validate step binding
         if session.last_step_issued and result.step_id != evidence.step_id:
@@ -689,23 +672,16 @@ class StepOrchestrator(StepEmitterMixin):
             # so the emitter did not create a PendingVerificationReceipt.
             # Receipt validation is inapplicable; allow the step to proceed.
             logger.info(
-                "No pending receipt for step %s — verification node had no command; "
-                "skipping receipt validation.",
+                "No pending receipt for step %s — verification node had no command; skipping receipt validation.",
                 result.step_id,
             )
             return None  # No error
 
         # Validate step binding
         if result.step_id != pending.step_id:
-            return (
-                f"Verification receipt step mismatch: expected step {pending.step_id}, "
-                f"got step {result.step_id}"
-            )
+            return f"Verification receipt step mismatch: expected step {pending.step_id}, got step {result.step_id}"
         if result.task_id != pending.task_id:
-            return (
-                f"Verification receipt task mismatch: expected task {pending.task_id}, "
-                f"got task {result.task_id}"
-            )
+            return f"Verification receipt task mismatch: expected task {pending.task_id}, got task {result.task_id}"
 
         # Check receipt presence
         receipt = result.verification_receipt
@@ -715,16 +691,13 @@ class StepOrchestrator(StepEmitterMixin):
                 result.step_id,
             )
             return (
-                f"Verification receipt is required when outcome='success' for execute_verification steps. "
-                f"Include verification_receipt with command_hash, exit_code, and output_digest in last_step_result."
+                "Verification receipt is required when outcome='success' for execute_verification steps. "
+                "Include verification_receipt with command_hash, exit_code, and output_digest in last_step_result."
             )
 
         # Validate step binding in receipt
         if receipt.step_id != result.step_id:
-            return (
-                f"Verification receipt step_id mismatch: expected {result.step_id}, "
-                f"got {receipt.step_id}"
-            )
+            return f"Verification receipt step_id mismatch: expected {result.step_id}, got {receipt.step_id}"
 
         # Validate command hash matches expected
         if receipt.command_hash != pending.expected_command_hash:
@@ -863,8 +836,7 @@ class StepOrchestrator(StepEmitterMixin):
                 # Invalidate spec cache since we just wrote to the file
                 self._spec_cache = None
                 logger.info(
-                    "Orchestrator persisted task completion to spec: "
-                    "session=%s task=%s",
+                    "Orchestrator persisted task completion to spec: session=%s task=%s",
                     session.id,
                     task_id,
                 )
@@ -874,9 +846,7 @@ class StepOrchestrator(StepEmitterMixin):
                     task_id,
                 )
         except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
-            logger.warning(
-                "Best-effort task completion persistence failed: %s", e
-            )
+            logger.warning("Best-effort task completion persistence failed: %s", e)
 
     def _reconcile_completed_tasks(
         self,
@@ -1011,9 +981,7 @@ class StepOrchestrator(StepEmitterMixin):
 
         # Audit: gate verdict
         audit_type = (
-            AuditEventType.GATE_PASSED
-            if gate_record.status == PhaseGateStatus.PASSED
-            else AuditEventType.GATE_FAILED
+            AuditEventType.GATE_PASSED if gate_record.status == PhaseGateStatus.PASSED else AuditEventType.GATE_FAILED
         )
         self._emit_audit_event(
             session,
@@ -1052,10 +1020,7 @@ class StepOrchestrator(StepEmitterMixin):
                 content += f"\n\nFiles touched: {', '.join(result.files_touched)}"
 
             # Enrich verification step entries with receipt evidence
-            if (
-                result.step_type == StepType.EXECUTE_VERIFICATION
-                and result.verification_receipt
-            ):
+            if result.step_type == StepType.EXECUTE_VERIFICATION and result.verification_receipt:
                 receipt = result.verification_receipt
                 content += (
                     f"\n\nVerification evidence: exit_code={receipt.exit_code}, "
@@ -1300,10 +1265,7 @@ class StepOrchestrator(StepEmitterMixin):
                 session,
                 PauseReason.ERROR_THRESHOLD,
                 now,
-                (
-                    f"{session.counters.consecutive_errors} consecutive errors. "
-                    f"Manual intervention required."
-                ),
+                (f"{session.counters.consecutive_errors} consecutive errors. Manual intervention required."),
             )
 
         # Task limit
@@ -1316,10 +1278,7 @@ class StepOrchestrator(StepEmitterMixin):
                 session,
                 PauseReason.TASK_LIMIT,
                 now,
-                (
-                    f"Task limit ({session.limits.max_tasks_per_session}) reached. "
-                    f"Start a new session to continue."
-                ),
+                (f"Task limit ({session.limits.max_tasks_per_session}) reached. Start a new session to continue."),
             )
 
         return None
@@ -1393,8 +1352,7 @@ class StepOrchestrator(StepEmitterMixin):
                 session,
                 PauseReason.BLOCKED,
                 now,
-                "All remaining tasks are blocked by dependencies. "
-                "Resolve blockers to continue.",
+                "All remaining tasks are blocked by dependencies. Resolve blockers to continue.",
             )
 
         return None

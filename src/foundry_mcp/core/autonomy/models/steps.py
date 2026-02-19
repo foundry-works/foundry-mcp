@@ -19,9 +19,7 @@ class LastStepIssued(BaseModel):
     task_id: Optional[str] = Field(None, description="Task ID if step involves a task")
     phase_id: Optional[str] = Field(None, description="Phase ID if step involves a phase")
     issued_at: datetime = Field(..., description="When the step was issued")
-    step_proof: Optional[str] = Field(
-        None, description="One-time proof token for this step (consumed on report)"
-    )
+    step_proof: Optional[str] = Field(None, description="One-time proof token for this step (consumed on report)")
 
 
 class StepInstruction(BaseModel):
@@ -56,23 +54,15 @@ class LastStepResult(BaseModel):
         """Validate required fields per step type (ADR section 4)."""
         if self.step_type in (StepType.IMPLEMENT_TASK, StepType.EXECUTE_VERIFICATION):
             if not self.task_id:
-                raise ValueError(
-                    f"task_id is required for step type {self.step_type.value}"
-                )
+                raise ValueError(f"task_id is required for step type {self.step_type.value}")
         if self.step_type == StepType.RUN_FIDELITY_GATE:
             if not self.phase_id:
-                raise ValueError(
-                    "phase_id is required for step type run_fidelity_gate"
-                )
+                raise ValueError("phase_id is required for step type run_fidelity_gate")
             if not self.gate_attempt_id:
-                raise ValueError(
-                    "gate_attempt_id is required for step type run_fidelity_gate"
-                )
+                raise ValueError("gate_attempt_id is required for step type run_fidelity_gate")
         if self.step_type == StepType.ADDRESS_FIDELITY_FEEDBACK:
             if not self.phase_id:
-                raise ValueError(
-                    "phase_id is required for step type address_fidelity_feedback"
-                )
+                raise ValueError("phase_id is required for step type address_fidelity_feedback")
         return self
 
 
@@ -88,11 +78,9 @@ class StepProofRecord(BaseModel):
     payload_hash: str = Field(..., description="SHA-256 hash of the original request payload")
     consumed_at: datetime = Field(..., description="When this proof was consumed")
     grace_expires_at: datetime = Field(..., description="When the replay grace window expires")
-    response_hash: Optional[str] = Field(
-        None, description="SHA-256 hash of the response for replay validation"
-    )
+    response_hash: Optional[str] = Field(default=None, description="SHA-256 hash of the response for replay validation")
     cached_response: Optional[Dict[str, Any]] = Field(
-        None, description="Cached response for idempotent replay within grace window"
+        default=None, description="Cached response for idempotent replay within grace window"
     )
 
     @model_validator(mode="after")

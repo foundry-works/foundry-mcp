@@ -96,12 +96,8 @@ def compute_priority(
         raise ValueError(f"relevance_score must be in [0.0, 1.0], got {relevance_score}")
 
     # Get scores with defaults
-    quality_score = SOURCE_QUALITY_SCORES.get(
-        source_quality or SourceQuality.UNKNOWN, 0.5
-    )
-    confidence_score = CONFIDENCE_SCORES.get(
-        confidence or ConfidenceLevel.MEDIUM, 0.7
-    )
+    quality_score = SOURCE_QUALITY_SCORES.get(source_quality or SourceQuality.UNKNOWN, 0.5)
+    confidence_score = CONFIDENCE_SCORES.get(confidence or ConfidenceLevel.MEDIUM, 0.7)
 
     # Compute weighted sum
     priority = (

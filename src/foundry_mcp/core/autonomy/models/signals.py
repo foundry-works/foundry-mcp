@@ -14,7 +14,6 @@ from .enums import (
 from .responses import RecommendedAction
 from .state import AutonomousSessionState
 
-
 _PAUSED_NEEDS_ATTENTION_REASONS = frozenset(
     {
         PauseReason.FIDELITY_CYCLE_LIMIT.value,
@@ -76,10 +75,7 @@ def derive_loop_signal(
     if normalized_pause_reason == PauseReason.PHASE_COMPLETE.value:
         return LoopSignal.PHASE_COMPLETE
 
-    if (
-        normalized_status == SessionStatus.COMPLETED.value
-        or normalized_pause_reason == "spec_complete"
-    ):
+    if normalized_status == SessionStatus.COMPLETED.value or normalized_pause_reason == "spec_complete":
         return LoopSignal.SPEC_COMPLETE
 
     if normalized_error_code in _BLOCKED_RUNTIME_ERROR_CODES:

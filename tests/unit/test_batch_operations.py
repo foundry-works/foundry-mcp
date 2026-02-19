@@ -6,29 +6,25 @@ parallel task execution.
 """
 
 import json
-import os
+
 import pytest
-from pathlib import Path
 
 from foundry_mcp.core.batch_operations import (
-    get_independent_tasks,
-    start_batch,
-    complete_batch,
-    reset_batch,
-    prepare_batch_context,
     _get_active_phases,
-    _paths_conflict,
-    _is_within_project_root,
     _has_direct_dependency,
-    DEFAULT_MAX_TASKS,
-    MAX_RETRY_COUNT,
-    STALE_TASK_THRESHOLD_HOURS,
+    _is_within_project_root,
+    _paths_conflict,
+    complete_batch,
+    get_independent_tasks,
+    prepare_batch_context,
+    reset_batch,
+    start_batch,
 )
-
 
 # =============================================================================
 # Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def test_specs_dir(tmp_path):
@@ -440,6 +436,7 @@ def retry_spec(test_specs_dir):
 # Helper Function Tests
 # =============================================================================
 
+
 class TestPathsConflict:
     """Tests for _paths_conflict helper."""
 
@@ -513,6 +510,7 @@ class TestGetActivePhases:
 
     def test_in_progress_before_pending(self, test_specs_dir, basic_spec):
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         phases = _get_active_phases(spec_data)
         assert "phase-1" in phases
@@ -531,6 +529,7 @@ class TestGetActivePhases:
         }
         (test_specs_dir / "active" / "completed-phase-001.json").write_text(json.dumps(spec))
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("completed-phase-001", test_specs_dir)
         phases = _get_active_phases(spec_data)
         assert "phase-1" not in phases
@@ -540,6 +539,7 @@ class TestGetActivePhases:
 # =============================================================================
 # get_independent_tasks Tests
 # =============================================================================
+
 
 class TestGetIndependentTasksBasic:
     """Basic functionality tests for get_independent_tasks."""
@@ -715,6 +715,7 @@ class TestGetIndependentTasksLeafPreference:
 # Security Tests
 # =============================================================================
 
+
 class TestSecurityValidation:
     """Tests for security-related validation."""
 
@@ -757,6 +758,7 @@ class TestSecurityValidation:
 # =============================================================================
 # Edge Cases
 # =============================================================================
+
 
 class TestEdgeCases:
     """Tests for edge cases and error conditions."""
@@ -819,6 +821,7 @@ class TestEdgeCases:
 # Integration Tests: start_batch
 # =============================================================================
 
+
 class TestStartBatchAtomic:
     """Tests for start_batch atomic behavior."""
 
@@ -836,6 +839,7 @@ class TestStartBatchAtomic:
 
         # Verify tasks are actually in_progress
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         assert spec_data["hierarchy"]["task-1-1"]["status"] == "in_progress"
         assert spec_data["hierarchy"]["task-1-2"]["status"] == "in_progress"
@@ -857,6 +861,7 @@ class TestStartBatchAtomic:
 
         # Verify NO tasks were changed (all-or-nothing)
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         assert spec_data["hierarchy"]["task-1-1"]["status"] == "pending"
 
@@ -939,6 +944,7 @@ class TestStartBatchAtomic:
 # Integration Tests: complete_batch
 # =============================================================================
 
+
 class TestCompleteBatchPartialFailures:
     """Tests for complete_batch partial failure handling."""
 
@@ -960,6 +966,7 @@ class TestCompleteBatchPartialFailures:
 
         # Verify tasks are completed
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         assert spec_data["hierarchy"]["task-1-1"]["status"] == "completed"
         assert spec_data["hierarchy"]["task-1-2"]["status"] == "completed"
@@ -983,6 +990,7 @@ class TestCompleteBatchPartialFailures:
 
         # Verify task statuses and retry_count
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         assert spec_data["hierarchy"]["task-1-1"]["status"] == "completed"
         assert spec_data["hierarchy"]["task-1-2"]["status"] == "failed"
@@ -1024,6 +1032,7 @@ class TestCompleteBatchPartialFailures:
         assert result["results"]["task-1-1"]["retry_count"] == 3
 
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("retry-test-001", test_specs_dir)
         assert spec_data["hierarchy"]["task-1-1"]["metadata"]["retry_count"] == 3
 
@@ -1083,6 +1092,7 @@ class TestCompleteBatchPartialFailures:
 # Integration Tests: reset_batch
 # =============================================================================
 
+
 class TestResetBatch:
     """Tests for reset_batch function."""
 
@@ -1104,6 +1114,7 @@ class TestResetBatch:
 
         # Verify task-1-1 is pending, task-1-2 still in_progress
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         assert spec_data["hierarchy"]["task-1-1"]["status"] == "pending"
         assert spec_data["hierarchy"]["task-1-2"]["status"] == "in_progress"
@@ -1112,7 +1123,7 @@ class TestResetBatch:
 
     def test_reset_batch_auto_detect_stale(self, test_specs_dir):
         """reset_batch should auto-detect stale tasks by threshold."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
 
         # Create spec with a task that has old started_at
         old_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
@@ -1224,6 +1235,7 @@ class TestResetBatch:
 
         # Verify started_at is set
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("test-spec-001", test_specs_dir)
         assert "started_at" in spec_data["hierarchy"]["task-1-1"]["metadata"]
 
@@ -1243,6 +1255,7 @@ class TestResetBatch:
 # =============================================================================
 # Integration Tests: prepare_batch_context
 # =============================================================================
+
 
 class TestPrepareBatchContext:
     """Tests for prepare_batch_context function."""
@@ -1318,6 +1331,7 @@ class TestPrepareBatchContext:
 # =============================================================================
 # Stress Tests: Concurrent Batch Operations
 # =============================================================================
+
 
 class TestStartBatchConcurrency:
     """Stress tests for concurrent start_batch calls.
@@ -1408,10 +1422,11 @@ class TestStartBatchConcurrency:
         # At least one should succeed (first to acquire)
         assert success_count >= 1, f"Expected at least 1 success, got {success_count}"
         # Most should fail (task already in_progress)
-        assert failure_count >= 1, f"Expected at least 1 failure due to race condition"
+        assert failure_count >= 1, "Expected at least 1 failure due to race condition"
 
         # Verify final state is consistent
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("concurrent-spec-001", test_specs_dir)
         assert spec_data is not None, "Spec file should not be corrupted"
 
@@ -1451,6 +1466,7 @@ class TestStartBatchConcurrency:
 
         # All should eventually reach a consistent state
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("concurrent-spec-001", test_specs_dir)
         assert spec_data is not None, "Spec file should not be corrupted"
 
@@ -1477,8 +1493,8 @@ class TestStartBatchConcurrency:
         with each other. This test documents that behavior.
         """
         import concurrent.futures
-        import threading
         import random
+        import threading
         import time
 
         results = []
@@ -1523,9 +1539,7 @@ class TestStartBatchConcurrency:
 
         # Some operations should complete (with or without IO contention)
         total_operations = len(results) + len(io_errors)
-        assert total_operations == num_workers, (
-            f"Expected {num_workers} total operations, got {total_operations}"
-        )
+        assert total_operations == num_workers, f"Expected {num_workers} total operations, got {total_operations}"
 
         for worker_id, task_ids, result, error in results:
             # Each result should be a dict (even on error)
@@ -1535,6 +1549,7 @@ class TestStartBatchConcurrency:
 
         # Verify final spec state
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("concurrent-spec-001", test_specs_dir)
 
         # Under high contention, the spec file may be in a transient state
@@ -1596,14 +1611,13 @@ class TestStartBatchConcurrency:
 
         # Verify results
         from foundry_mcp.core.spec import load_spec
+
         spec_data = load_spec("concurrent-spec-001", test_specs_dir)
         assert spec_data is not None, "Spec file should not be corrupted"
 
         # task-1-1 should NOT be in_progress (was only in invalid batches)
         task_1_1 = spec_data["hierarchy"]["task-1-1"]
-        assert task_1_1["status"] == "pending", (
-            "task-1-1 should remain pending - it was only in invalid batches"
-        )
+        assert task_1_1["status"] == "pending", "task-1-1 should remain pending - it was only in invalid batches"
 
         # task-1-2 may be in_progress (from valid batch)
         task_1_2 = spec_data["hierarchy"]["task-1-2"]

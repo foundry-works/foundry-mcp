@@ -47,13 +47,7 @@ def _capabilities(
     if posture_profile is not None:
         autonomy_runtime["posture_profile"] = posture_profile
 
-    return _success(
-        {
-            "runtime": {
-                "autonomy": autonomy_runtime
-            }
-        }
-    )
+    return _success({"runtime": {"autonomy": autonomy_runtime}})
 
 
 class _QueuedInvoker:
@@ -466,9 +460,7 @@ class TestRunSinglePhase:
                         "status": "paused",
                         "pause_reason": "gate_failed",
                         "loop_signal": "paused_needs_attention",
-                        "recommended_actions": [
-                            {"action": "review_gate_findings", "priority": "high"}
-                        ],
+                        "recommended_actions": [{"action": "review_gate_findings", "priority": "high"}],
                     }
                 ),
                 "paused_needs_attention",
@@ -480,9 +472,7 @@ class TestRunSinglePhase:
                         "session_id": "sess-001",
                         "status": "failed",
                         "loop_signal": "failed",
-                        "recommended_actions": [
-                            {"action": "inspect_session_failure", "priority": "high"}
-                        ],
+                        "recommended_actions": [{"action": "inspect_session_failure", "priority": "high"}],
                     }
                 ),
                 "failed",
@@ -494,9 +484,7 @@ class TestRunSinglePhase:
                     "error": "denied",
                     "data": {
                         "error_code": "AUTHORIZATION",
-                        "recommended_actions": [
-                            {"action": "fix_role_assignment", "priority": "high"}
-                        ],
+                        "recommended_actions": [{"action": "fix_role_assignment", "priority": "high"}],
                     },
                     "meta": {"version": "response-v2"},
                 },

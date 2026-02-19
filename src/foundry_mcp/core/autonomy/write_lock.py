@@ -30,22 +30,20 @@ Usage:
         ...
 """
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, FrozenSet, Optional
 
-import logging
-
+from foundry_mcp.core.authorization import Role, get_server_role
+from foundry_mcp.core.observability import get_metrics
+from foundry_mcp.core.responses.builders import error_response
 from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
     ToolResponse,
 )
-from foundry_mcp.core.responses.builders import error_response
-from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.authorization import get_server_role, Role
-
 
 logger = logging.getLogger(__name__)
 
@@ -63,52 +61,60 @@ class WriteLockStatus(Enum):
 
 
 # Protected task actions that change execution/progress state
-PROTECTED_TASK_ACTIONS: FrozenSet[str] = frozenset({
-    # Task status mutations
-    "start",
-    "complete",
-    "update-status",
-    "block",
-    "unblock",
-    # Batch operations that mutate task state
-    "start-batch",
-    "complete-batch",
-    # Dependency mutations (affect task execution flow)
-    "add-dependency",
-    "remove-dependency",
-    # Task structure mutations during active session
-    "create",
-    "delete",
-    "move",
-    "update",
-})
+PROTECTED_TASK_ACTIONS: FrozenSet[str] = frozenset(
+    {
+        # Task status mutations
+        "start",
+        "complete",
+        "update-status",
+        "block",
+        "unblock",
+        # Batch operations that mutate task state
+        "start-batch",
+        "complete-batch",
+        # Dependency mutations (affect task execution flow)
+        "add-dependency",
+        "remove-dependency",
+        # Task structure mutations during active session
+        "create",
+        "delete",
+        "move",
+        "update",
+    }
+)
 
 # Protected lifecycle actions that can skip orchestration sequencing
-PROTECTED_LIFECYCLE_ACTIONS: FrozenSet[str] = frozenset({
-    "move",
-    "activate",
-    "complete",
-    "archive",
-})
+PROTECTED_LIFECYCLE_ACTIONS: FrozenSet[str] = frozenset(
+    {
+        "move",
+        "activate",
+        "complete",
+        "archive",
+    }
+)
 
 # Read-only task actions (not protected)
-READ_ONLY_TASK_ACTIONS: FrozenSet[str] = frozenset({
-    "info",
-    "query",
-    "progress",
-    "list",
-    "prepare",
-    "next",
-    "session-config",
-    "session",
-    "session-step",
-    "dependencies",
-    "history",
-})
+READ_ONLY_TASK_ACTIONS: FrozenSet[str] = frozenset(
+    {
+        "info",
+        "query",
+        "progress",
+        "list",
+        "prepare",
+        "next",
+        "session-config",
+        "session",
+        "session-step",
+        "dependencies",
+        "history",
+    }
+)
 
 # Import canonical terminal statuses from models
 from foundry_mcp.core.autonomy.models.enums import (
     TERMINAL_STATUSES as _TERMINAL_STATUSES_ENUM,
+)
+from foundry_mcp.core.autonomy.models.enums import (
     SessionStatus as _SessionStatus,
 )
 
@@ -136,6 +142,7 @@ class WriteLockResult:
         message: Human-readable status message
         metadata: Additional context for logging/debugging
     """
+
     status: WriteLockStatus
     lock_active: bool
     session_id: Optional[str] = None
@@ -225,10 +232,7 @@ def _find_active_session_for_spec(
 
         return None
     except Exception as e:
-        logger.debug(
-            "Failed to find active session for spec",
-            extra={"spec_id": spec_id, "error": str(e)}
-        )
+        logger.debug("Failed to find active session for spec", extra={"spec_id": spec_id, "error": str(e)})
         return None
 
 
@@ -258,7 +262,7 @@ def _log_bypass_warning(
             "action_name": action_name,
             "action_category": action_category,
             "event_type": "autonomy_write_lock_bypass",
-        }
+        },
     )
 
 
@@ -296,10 +300,7 @@ def _write_bypass_journal_entry(
 
         spec_data = load_spec(spec_id, specs_dir)
         if spec_data is None:
-            logger.debug(
-                "Spec not found for bypass journal entry",
-                extra={"spec_id": spec_id}
-            )
+            logger.debug("Spec not found for bypass journal entry", extra={"spec_id": spec_id})
             return False
 
         # Add journal entry
@@ -332,7 +333,7 @@ def _write_bypass_journal_entry(
                 "spec_id": spec_id,
                 "session_id": session_id,
                 "error": str(e),
-            }
+            },
         )
         return False
 

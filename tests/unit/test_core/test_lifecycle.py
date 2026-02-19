@@ -5,23 +5,25 @@ Tests lifecycle operations for spec status transitions.
 """
 
 import json
+
 import pytest
+
 from foundry_mcp.core.lifecycle import (
-    move_spec,
+    FOLDER_TRANSITIONS,
+    VALID_FOLDERS,
+    LifecycleState,
+    MoveResult,
     activate_spec,
-    complete_spec,
     archive_spec,
+    complete_spec,
+    get_folder_for_spec,
     get_lifecycle_state,
     list_specs_by_folder,
-    get_folder_for_spec,
-    MoveResult,
-    LifecycleState,
-    VALID_FOLDERS,
-    FOLDER_TRANSITIONS,
+    move_spec,
 )
 
-
 # Test fixtures
+
 
 @pytest.fixture
 def specs_dir(tmp_path):

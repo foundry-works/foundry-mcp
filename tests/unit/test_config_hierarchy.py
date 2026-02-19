@@ -76,9 +76,7 @@ specs_dir = "./legacy-specs"
                 finally:
                     os.chdir(original_cwd)
 
-    def test_project_config_overrides_home_config(
-        self, tmp_path, home_config_content, project_config_content
-    ):
+    def test_project_config_overrides_home_config(self, tmp_path, home_config_content, project_config_content):
         """Project config values override home config values."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
@@ -106,9 +104,7 @@ specs_dir = "./legacy-specs"
                 finally:
                     os.chdir(original_cwd)
 
-    def test_env_vars_override_both_toml_layers(
-        self, tmp_path, home_config_content, project_config_content
-    ):
+    def test_env_vars_override_both_toml_layers(self, tmp_path, home_config_content, project_config_content):
         """Environment variables override both home and project config."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
@@ -139,9 +135,7 @@ specs_dir = "./legacy-specs"
                 finally:
                     os.chdir(original_cwd)
 
-    def test_explicit_config_file_skips_layered_loading(
-        self, tmp_path, home_config_content, project_config_content
-    ):
+    def test_explicit_config_file_skips_layered_loading(self, tmp_path, home_config_content, project_config_content):
         """Explicit config_file parameter skips layered loading."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
@@ -173,9 +167,7 @@ level = "CRITICAL"
                 finally:
                     os.chdir(original_cwd)
 
-    def test_env_var_config_file_skips_layered_loading(
-        self, tmp_path, home_config_content, project_config_content
-    ):
+    def test_env_var_config_file_skips_layered_loading(self, tmp_path, home_config_content, project_config_content):
         """FOUNDRY_MCP_CONFIG_FILE env var skips layered loading."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
@@ -276,9 +268,7 @@ level = "CRITICAL"
                 finally:
                     os.chdir(original_cwd)
 
-    def test_legacy_config_loaded_as_fallback(
-        self, tmp_path, home_config_content, legacy_config_content
-    ):
+    def test_legacy_config_loaded_as_fallback(self, tmp_path, home_config_content, legacy_config_content):
         """Legacy .foundry-mcp.toml in project dir is loaded as fallback."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
@@ -402,9 +392,7 @@ level = "INFO"
                 finally:
                     os.chdir(original_cwd)
 
-    def test_home_config_overrides_xdg_config(
-        self, tmp_path, xdg_config_content, home_config_content
-    ):
+    def test_home_config_overrides_xdg_config(self, tmp_path, xdg_config_content, home_config_content):
         """Home config (~/.foundry-mcp.toml) overrides XDG config."""
         home_dir = tmp_path / "home"
         home_dir.mkdir()
@@ -664,8 +652,7 @@ stop_on_phase_completion = false
                     assert config.autonomy_session_defaults.gate_policy == "manual"
                     assert config.autonomy_session_defaults.stop_on_phase_completion is False
                     assert any(
-                        "UNSAFE unattended posture configuration" in warning
-                        for warning in config.startup_warnings
+                        "UNSAFE unattended posture configuration" in warning for warning in config.startup_warnings
                     )
                 finally:
                     os.chdir(original_cwd)
@@ -721,8 +708,7 @@ class TestConfigProvenanceLogging:
                         config = ServerConfig.from_env()
                     assert config.autonomy_security.role == "autonomy_runner"
                     assert any(
-                        "autonomy_security.role = autonomy_runner" in msg
-                        and "FOUNDRY_MCP_ROLE" in msg
+                        "autonomy_security.role = autonomy_runner" in msg and "FOUNDRY_MCP_ROLE" in msg
                         for msg in caplog.messages
                     ), f"Expected provenance log for role, got: {caplog.messages}"
                 finally:
@@ -747,10 +733,9 @@ class TestConfigProvenanceLogging:
                     with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
                         config = ServerConfig.from_env()
                     assert config.autonomy_security.allow_lock_bypass is True
-                    assert any(
-                        "allow_lock_bypass" in msg and "env var" in msg
-                        for msg in caplog.messages
-                    ), f"Expected provenance log for allow_lock_bypass, got: {caplog.messages}"
+                    assert any("allow_lock_bypass" in msg and "env var" in msg for msg in caplog.messages), (
+                        f"Expected provenance log for allow_lock_bypass, got: {caplog.messages}"
+                    )
                 finally:
                     os.chdir(original_cwd)
 
@@ -773,10 +758,9 @@ class TestConfigProvenanceLogging:
                     with caplog.at_level(logging.INFO, logger="foundry_mcp.config"):
                         config = ServerConfig.from_env()
                     assert config.autonomy_posture.profile == "unattended"
-                    assert any(
-                        "autonomy_posture.profile = unattended" in msg
-                        for msg in caplog.messages
-                    ), f"Expected posture profile provenance log, got: {caplog.messages}"
+                    assert any("autonomy_posture.profile = unattended" in msg for msg in caplog.messages), (
+                        f"Expected posture profile provenance log, got: {caplog.messages}"
+                    )
                 finally:
                     os.chdir(original_cwd)
 
@@ -805,8 +789,7 @@ class TestConfigProvenanceLogging:
                     assert config.autonomy_security.role == "maintainer"
                     # Both provenance logs should be present
                     assert any(
-                        "autonomy_security.role = maintainer" in msg
-                        and "FOUNDRY_MCP_ROLE" in msg
+                        "autonomy_security.role = maintainer" in msg and "FOUNDRY_MCP_ROLE" in msg
                         for msg in caplog.messages
                     ), f"Expected role env var provenance log, got: {caplog.messages}"
                 finally:
@@ -820,9 +803,7 @@ class TestConfigEnvVarOverridesToml:
         """FOUNDRY_MCP_ROLE env var overrides TOML role = 'maintainer'."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        (project_dir / "foundry-mcp.toml").write_text(
-            '[autonomy_security]\nrole = "maintainer"\n'
-        )
+        (project_dir / "foundry-mcp.toml").write_text('[autonomy_security]\nrole = "maintainer"\n')
         with patch.object(Path, "home", return_value=tmp_path):
             with patch.dict(
                 os.environ,
@@ -841,9 +822,7 @@ class TestConfigEnvVarOverridesToml:
         """FOUNDRY_MCP_AUTONOMY_SECURITY_ALLOW_LOCK_BYPASS env overrides TOML."""
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        (project_dir / "foundry-mcp.toml").write_text(
-            "[autonomy_security]\nallow_lock_bypass = true\n"
-        )
+        (project_dir / "foundry-mcp.toml").write_text("[autonomy_security]\nallow_lock_bypass = true\n")
         with patch.object(Path, "home", return_value=tmp_path):
             with patch.dict(
                 os.environ,
@@ -864,9 +843,7 @@ class TestConfigEnvVarOverridesToml:
 
         project_dir = tmp_path / "project"
         project_dir.mkdir()
-        (project_dir / "foundry-mcp.toml").write_text(
-            '[autonomy_security]\nrole = "maintainer"\n'
-        )
+        (project_dir / "foundry-mcp.toml").write_text('[autonomy_security]\nrole = "maintainer"\n')
         with patch.object(Path, "home", return_value=tmp_path):
             with patch.dict(
                 os.environ,
@@ -880,8 +857,7 @@ class TestConfigEnvVarOverridesToml:
                         config = ServerConfig.from_env()
                     assert config.autonomy_security.role == "observer"
                     assert any(
-                        "autonomy_security.role" in msg and "FOUNDRY_MCP_ROLE" in msg
-                        for msg in caplog.messages
+                        "autonomy_security.role" in msg and "FOUNDRY_MCP_ROLE" in msg for msg in caplog.messages
                     ), f"Expected provenance log for role override, got: {caplog.messages}"
                 finally:
                     os.chdir(original_cwd)

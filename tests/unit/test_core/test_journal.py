@@ -5,28 +5,29 @@ Tests journal entry management, blocker operations, and status updates.
 """
 
 import pytest
+
 from foundry_mcp.core.journal import (
+    VALID_BLOCKER_TYPES,
+    VALID_ENTRY_TYPES,
+    BlockerInfo,
+    JournalEntry,
+    ResolvedBlocker,
     add_journal_entry,
     bulk_journal,
+    find_unjournaled_tasks,
+    get_blocker_info,
     get_journal_entries,
     get_latest_journal_entry,
-    mark_blocked,
-    unblock,
-    get_blocker_info,
     get_resolved_blockers,
     list_blocked_tasks,
-    update_task_status,
+    mark_blocked,
     mark_task_journaled,
-    find_unjournaled_tasks,
-    JournalEntry,
-    BlockerInfo,
-    ResolvedBlocker,
-    VALID_ENTRY_TYPES,
-    VALID_BLOCKER_TYPES,
+    unblock,
+    update_task_status,
 )
 
-
 # Test fixtures
+
 
 @pytest.fixture
 def spec_with_task():
@@ -455,7 +456,8 @@ class TestUpdateTaskStatus:
         update_task_status(spec_with_task, "task-1", "in_progress")
 
         # Manually set started_at to 1.5 hours ago for predictable test
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
+
         started = datetime.now(timezone.utc) - timedelta(hours=1.5)
         spec_with_task["hierarchy"]["task-1"]["metadata"]["started_at"] = started.isoformat().replace("+00:00", "Z")
 

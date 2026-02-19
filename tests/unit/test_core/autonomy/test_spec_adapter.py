@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from foundry_mcp.core.autonomy.spec_adapter import ensure_phases_view
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

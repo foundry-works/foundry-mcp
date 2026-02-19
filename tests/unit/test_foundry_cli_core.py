@@ -9,7 +9,6 @@ Tests cover:
 
 import importlib
 import json
-from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
@@ -197,23 +196,17 @@ class TestTasksNextCommand:
 
     def test_tasks_next_finds_task(self, cli_runner, temp_specs_dir):
         """tasks next finds the next actionable task."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "tasks", "next", "test-spec-001"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "tasks", "next", "test-spec-001"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
         # Should find task-1-1 as it's pending and unblocked
         assert data["data"]["found"] is True or data["data"].get("task_id") is not None
 
-    def test_tasks_next_emits_error_when_spec_missing(
-        self, cli_runner, temp_specs_dir, monkeypatch
-    ):
+    def test_tasks_next_emits_error_when_spec_missing(self, cli_runner, temp_specs_dir, monkeypatch):
         """tasks next exits immediately when spec cannot be loaded."""
         monkeypatch.setattr(tasks_module, "load_spec", lambda *_: None)
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "tasks", "next", "missing-spec"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "tasks", "next", "missing-spec"])
         assert result.exit_code == 1
         data = json.loads(result.output)
         assert data["success"] is False
@@ -225,9 +218,7 @@ class TestSessionCommands:
 
     def test_session_start(self, cli_runner, temp_specs_dir):
         """session start creates a new session."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "start"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "start"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -238,27 +229,21 @@ class TestSessionCommands:
         # Start a session first
         cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "start"])
         # Then check status
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "status"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "status"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
 
     def test_session_limits(self, cli_runner, temp_specs_dir):
         """session limits returns limit configuration."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "limits"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "limits"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
 
     def test_session_work_mode_default(self, cli_runner, temp_specs_dir):
         """session work-mode returns default mode when env not set."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "work-mode"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "work-mode"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -270,9 +255,7 @@ class TestSessionCommands:
     def test_session_work_mode_with_env(self, cli_runner, temp_specs_dir, monkeypatch):
         """session work-mode respects FOUNDRY_MCP_WORK_MODE env var."""
         monkeypatch.setenv("FOUNDRY_MCP_WORK_MODE", "autonomous")
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "work-mode"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "work-mode"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -280,9 +263,7 @@ class TestSessionCommands:
 
     def test_session_capabilities(self, cli_runner, temp_specs_dir):
         """session capabilities returns CLI capability manifest."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "capabilities"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "capabilities"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -315,9 +296,7 @@ class TestSessionCommands:
         # Start a session first
         cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "start"])
         # Reset it
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "reset"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "reset"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -325,23 +304,17 @@ class TestSessionCommands:
 
     def test_session_token_usage_without_agent(self, cli_runner, temp_specs_dir):
         """session token-usage returns unavailable without claude-code agent."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "token-usage"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "token-usage"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
         assert data["data"]["available"] is False
         assert "claude-code" in data["data"]["reason"]
 
-    def test_session_token_usage_with_agent(
-        self, cli_runner, temp_specs_dir, monkeypatch
-    ):
+    def test_session_token_usage_with_agent(self, cli_runner, temp_specs_dir, monkeypatch):
         """session token-usage works with claude-code agent type."""
         monkeypatch.setenv("FOUNDRY_MCP_AGENT_TYPE", "claude-code")
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "token-usage"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "token-usage"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -350,23 +323,17 @@ class TestSessionCommands:
 
     def test_session_generate_marker_without_agent(self, cli_runner, temp_specs_dir):
         """session generate-marker returns unavailable without claude-code agent."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "generate-marker"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "generate-marker"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
         assert data["data"]["available"] is False
         assert "claude-code" in data["data"]["reason"]
 
-    def test_session_generate_marker_with_agent(
-        self, cli_runner, temp_specs_dir, monkeypatch
-    ):
+    def test_session_generate_marker_with_agent(self, cli_runner, temp_specs_dir, monkeypatch):
         """session generate-marker creates marker with claude-code agent."""
         monkeypatch.setenv("FOUNDRY_MCP_AGENT_TYPE", "claude-code")
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "session", "generate-marker"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "session", "generate-marker"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -379,9 +346,7 @@ class TestCacheCommands:
 
     def test_cache_info(self, cli_runner, temp_specs_dir):
         """cache info returns cache statistics."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "cache", "info"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "cache", "info"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -391,9 +356,7 @@ class TestCacheCommands:
     def test_cache_info_disabled(self, cli_runner, temp_specs_dir, monkeypatch):
         """cache info handles disabled cache."""
         monkeypatch.setenv("FOUNDRY_MCP_CACHE_DISABLED", "1")
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "cache", "info"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "cache", "info"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -401,9 +364,7 @@ class TestCacheCommands:
 
     def test_cache_clear(self, cli_runner, temp_specs_dir):
         """cache clear removes entries."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "cache", "clear"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "cache", "clear"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -446,9 +407,7 @@ class TestCacheCommands:
 
     def test_cache_cleanup(self, cli_runner, temp_specs_dir):
         """cache cleanup removes expired entries."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "cache", "cleanup"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "cache", "cleanup"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -461,9 +420,7 @@ class TestSchemaCommands:
 
     def test_specs_schema(self, cli_runner, temp_specs_dir):
         """specs schema returns valid JSON schema."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "specs", "schema"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "specs", "schema"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -475,9 +432,7 @@ class TestSchemaCommands:
 
     def test_specs_schema_has_required_properties(self, cli_runner, temp_specs_dir):
         """specs schema includes required spec properties."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "specs", "schema"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "specs", "schema"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -507,9 +462,7 @@ class TestReviewCommands:
 
     def test_review_tools_lists_tools(self, cli_runner, temp_specs_dir):
         """review tools returns tool list with availability."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "review", "tools"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "review", "tools"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -519,9 +472,7 @@ class TestReviewCommands:
 
     def test_review_plan_tools_lists_toolchains(self, cli_runner, temp_specs_dir):
         """review plan-tools returns plan toolchains with status."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "review", "plan-tools"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "review", "plan-tools"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -532,9 +483,7 @@ class TestReviewCommands:
             assert "status" in tool
             assert "name" in tool
 
-    def test_review_spec_quick_returns_structural_findings(
-        self, cli_runner, temp_specs_dir
-    ):
+    def test_review_spec_quick_returns_structural_findings(self, cli_runner, temp_specs_dir):
         """review spec quick returns native structural findings."""
         result = cli_runner.invoke(
             cli,
@@ -561,9 +510,7 @@ class TestModifyCommands:
 
     def test_modify_group_exists(self, cli_runner, temp_specs_dir):
         """modify group is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "modify", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "modify", "--help"])
         assert result.exit_code == 0
         assert "apply" in result.output
         assert "task" in result.output
@@ -574,18 +521,14 @@ class TestModifyCommands:
 
     def test_modify_task_subgroup_exists(self, cli_runner, temp_specs_dir):
         """modify task subgroup is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "modify", "task", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "modify", "task", "--help"])
         assert result.exit_code == 0
         assert "add" in result.output
         assert "remove" in result.output
 
     def test_modify_phase_subgroup_exists(self, cli_runner, temp_specs_dir):
         """modify phase subgroup is available."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "modify", "phase", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "modify", "phase", "--help"])
         assert result.exit_code == 0
         assert "add" in result.output
 
@@ -595,9 +538,7 @@ class TestDevCommands:
 
     def test_dev_group_exists(self, cli_runner, temp_specs_dir):
         """dev group is available with expected subcommands."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "dev", "--help"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "dev", "--help"])
         assert result.exit_code == 0
         assert "gendocs" in result.output
         assert "install" in result.output
@@ -606,9 +547,7 @@ class TestDevCommands:
 
     def test_dev_check_returns_tools(self, cli_runner, temp_specs_dir):
         """dev check returns development tool status."""
-        result = cli_runner.invoke(
-            cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"]
-        )
+        result = cli_runner.invoke(cli, ["--specs-dir", str(temp_specs_dir), "dev", "check"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["success"] is True
@@ -640,9 +579,7 @@ class TestCLIJsonOutput:
                 data = json.loads(result.output)
                 assert "success" in data
             except json.JSONDecodeError:
-                pytest.fail(
-                    f"Command {cmd} did not output valid JSON: {result.output[:200]}"
-                )
+                pytest.fail(f"Command {cmd} did not output valid JSON: {result.output[:200]}")
 
 
 class TestTasksCompleteCommand:

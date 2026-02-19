@@ -5,20 +5,16 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict
-from unittest.mock import patch
 
 import pytest
 
 from foundry_mcp.core.spec import (
-    DEFAULT_MAX_BACKUPS,
-    DEFAULT_BACKUP_PAGE_SIZE,
-    DEFAULT_DIFF_MAX_RESULTS,
+    _apply_backup_retention,
     backup_spec,
     diff_specs,
     list_spec_backups,
     load_spec,
     rollback_spec,
-    _apply_backup_retention,
 )
 
 
@@ -167,10 +163,7 @@ class TestBackupSpec:
 
         # Count backup files (excluding latest.json)
         backups_dir = temp_specs_dir / ".backups" / "test-spec-001"
-        backup_files = [
-            f for f in backups_dir.glob("*.json")
-            if f.name != "latest.json"
-        ]
+        backup_files = [f for f in backups_dir.glob("*.json") if f.name != "latest.json"]
 
         assert len(backup_files) == 3
 
@@ -184,10 +177,7 @@ class TestBackupSpec:
             time.sleep(0.001)
 
         backups_dir = temp_specs_dir / ".backups" / "test-spec-001"
-        backup_files = [
-            f for f in backups_dir.glob("*.json")
-            if f.name != "latest.json"
-        ]
+        backup_files = [f for f in backups_dir.glob("*.json") if f.name != "latest.json"]
 
         assert len(backup_files) == 5
 
@@ -315,9 +305,7 @@ class TestListSpecBackups:
         assert result1["pagination"]["cursor"] is not None
 
         # Second page using cursor
-        result2 = list_spec_backups(
-            spec_id, temp_specs_dir, cursor=result1["pagination"]["cursor"], limit=2
-        )
+        result2 = list_spec_backups(spec_id, temp_specs_dir, cursor=result1["pagination"]["cursor"], limit=2)
         assert result2["count"] == 2
         assert result2["pagination"]["has_more"] is True
 
@@ -427,9 +415,7 @@ class TestDiffSpecs:
         # Create a backup (older version)
         backup_spec_data = json.loads(json.dumps(sample_spec))
         timestamp = "2025-01-01T10-00-00.000001"
-        backup_file = _create_backup(
-            temp_specs_dir, "test-spec-001", timestamp, backup_spec_data
-        )
+        backup_file = _create_backup(temp_specs_dir, "test-spec-001", timestamp, backup_spec_data)
 
         # Current version with changes
         current = json.loads(json.dumps(sample_spec))
@@ -564,9 +550,7 @@ class TestRollbackSpec:
         timestamp = "2025-01-01T10-00-00.000001"
         _create_backup(temp_specs_dir, "test-spec-001", timestamp, sample_spec)
 
-        result = rollback_spec(
-            "test-spec-001", timestamp, temp_specs_dir, dry_run=True
-        )
+        result = rollback_spec("test-spec-001", timestamp, temp_specs_dir, dry_run=True)
 
         assert result["success"] is True
         assert result["dry_run"] is True
@@ -586,9 +570,7 @@ class TestRollbackSpec:
         backups_dir = temp_specs_dir / ".backups" / "test-spec-001"
         before_count = len(list(backups_dir.glob("*.json")))
 
-        result = rollback_spec(
-            "test-spec-001", timestamp, temp_specs_dir, create_backup=False
-        )
+        result = rollback_spec("test-spec-001", timestamp, temp_specs_dir, create_backup=False)
 
         assert result["success"] is True
         assert result["backup_created"] is None
@@ -649,9 +631,7 @@ class TestDiffWithBackups:
         old_spec = json.loads(json.dumps(sample_spec))
         old_spec["hierarchy"]["task-1-1"]["status"] = "pending"
         timestamp = "2025-01-01T10-00-00.000001"
-        backup_file = _create_backup(
-            temp_specs_dir, "test-spec-001", timestamp, old_spec
-        )
+        backup_file = _create_backup(temp_specs_dir, "test-spec-001", timestamp, old_spec)
 
         # Write current version
         current = json.loads(json.dumps(sample_spec))
@@ -682,9 +662,7 @@ class TestDiffWithBackups:
 class TestBackupRetentionIntegration:
     """Integration tests for backup retention across operations."""
 
-    def test_rollback_preserves_retention_after_safety_backup(
-        self, temp_specs_dir, sample_spec
-    ):
+    def test_rollback_preserves_retention_after_safety_backup(self, temp_specs_dir, sample_spec):
         """Safety backup during rollback should still respect retention."""
         _write_spec(temp_specs_dir, sample_spec)
 
@@ -693,16 +671,12 @@ class TestBackupRetentionIntegration:
         _create_backup(temp_specs_dir, "test-spec-001", timestamp, sample_spec)
 
         # Rollback with safety backup (default create_backup=True)
-        result = rollback_spec(
-            "test-spec-001", timestamp, temp_specs_dir, create_backup=True
-        )
+        result = rollback_spec("test-spec-001", timestamp, temp_specs_dir, create_backup=True)
 
         assert result["success"] is True
         # Both original and safety backup should exist
         backups_dir = temp_specs_dir / ".backups" / "test-spec-001"
-        backup_count = len([
-            f for f in backups_dir.glob("*.json") if f.name != "latest.json"
-        ])
+        backup_count = len([f for f in backups_dir.glob("*.json") if f.name != "latest.json"])
         assert backup_count >= 2
 
 
@@ -734,6 +708,7 @@ class TestEdgeCases:
 
         # Remove .backups dir to test auto-creation
         import shutil
+
         backups_root = temp_specs_dir / ".backups"
         if backups_root.exists():
             shutil.rmtree(backups_root)
@@ -764,9 +739,7 @@ class TestEdgeCases:
         assert metadata_change["old"] == {"priority": "low"}
         assert metadata_change["new"] == {"priority": "high"}
 
-    def test_rollback_with_special_characters_in_timestamp(
-        self, temp_specs_dir, sample_spec
-    ):
+    def test_rollback_with_special_characters_in_timestamp(self, temp_specs_dir, sample_spec):
         """Should handle timestamps with various formats."""
         _write_spec(temp_specs_dir, sample_spec)
 

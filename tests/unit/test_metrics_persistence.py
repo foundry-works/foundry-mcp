@@ -8,20 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from foundry_mcp.core.metrics.store import (
-    MetricDataPoint,
-    FileMetricsStore,
-    get_metrics_store,
-    reset_metrics_store,
-)
+from foundry_mcp.config.domains import MetricsPersistenceConfig
 from foundry_mcp.core.metrics.persistence import (
     MetricBucket,
     MetricsPersistenceCollector,
     get_metrics_collector,
     reset_metrics_collector,
 )
-from foundry_mcp.config.domains import MetricsPersistenceConfig
-
+from foundry_mcp.core.metrics.store import (
+    FileMetricsStore,
+    MetricDataPoint,
+    get_metrics_store,
+    reset_metrics_store,
+)
 
 # =============================================================================
 # Fixtures
@@ -195,21 +194,27 @@ class TestFileMetricsStore:
 
     def test_query_by_metric_name(self, metrics_store):
         """Test querying by metric name."""
-        metrics_store.append(MetricDataPoint(
-            metric_name="metric_a",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=1.0,
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="metric_b",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=2.0,
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="metric_a",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=3.0,
-        ))
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="metric_a",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=1.0,
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="metric_b",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=2.0,
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="metric_a",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=3.0,
+            )
+        )
 
         results = metrics_store.query(metric_name="metric_a")
         assert len(results) == 2
@@ -217,24 +222,30 @@ class TestFileMetricsStore:
 
     def test_query_by_labels(self, metrics_store):
         """Test querying by label filters."""
-        metrics_store.append(MetricDataPoint(
-            metric_name="labeled_metric",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=1.0,
-            labels={"env": "prod", "region": "us-east"},
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="labeled_metric",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=2.0,
-            labels={"env": "staging", "region": "us-east"},
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="labeled_metric",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=3.0,
-            labels={"env": "prod", "region": "eu-west"},
-        ))
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="labeled_metric",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=1.0,
+                labels={"env": "prod", "region": "us-east"},
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="labeled_metric",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=2.0,
+                labels={"env": "staging", "region": "us-east"},
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="labeled_metric",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=3.0,
+                labels={"env": "prod", "region": "eu-west"},
+            )
+        )
 
         # Query by single label
         results = metrics_store.query(labels={"env": "prod"})
@@ -252,21 +263,27 @@ class TestFileMetricsStore:
         recent_time = (now - timedelta(minutes=30)).isoformat()
         current_time = now.isoformat()
 
-        metrics_store.append(MetricDataPoint(
-            metric_name="time_metric",
-            timestamp=old_time,
-            value=1.0,
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="time_metric",
-            timestamp=recent_time,
-            value=2.0,
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="time_metric",
-            timestamp=current_time,
-            value=3.0,
-        ))
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="time_metric",
+                timestamp=old_time,
+                value=1.0,
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="time_metric",
+                timestamp=recent_time,
+                value=2.0,
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="time_metric",
+                timestamp=current_time,
+                value=3.0,
+            )
+        )
 
         # Query since 1 hour ago
         since = (now - timedelta(hours=1)).isoformat()
@@ -282,11 +299,13 @@ class TestFileMetricsStore:
     def test_query_with_pagination(self, metrics_store):
         """Test query pagination with limit and offset."""
         for i in range(10):
-            metrics_store.append(MetricDataPoint(
-                metric_name="paginated_metric",
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                value=float(i),
-            ))
+            metrics_store.append(
+                MetricDataPoint(
+                    metric_name="paginated_metric",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    value=float(i),
+                )
+            )
 
         # Get first 3
         results = metrics_store.query(limit=3)
@@ -302,25 +321,31 @@ class TestFileMetricsStore:
 
     def test_list_metrics(self, metrics_store):
         """Test listing all metrics with metadata."""
-        metrics_store.append(MetricDataPoint(
-            metric_name="metric_one",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=1.0,
-            metric_type="counter",
-            labels={"tool": "test"},
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="metric_two",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=2.0,
-            metric_type="gauge",
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="metric_one",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=3.0,
-            labels={"tool": "other"},
-        ))
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="metric_one",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=1.0,
+                metric_type="counter",
+                labels={"tool": "test"},
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="metric_two",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=2.0,
+                metric_type="gauge",
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="metric_one",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=3.0,
+                labels={"tool": "other"},
+            )
+        )
 
         metrics = metrics_store.list_metrics()
         assert len(metrics) == 2
@@ -337,12 +362,14 @@ class TestFileMetricsStore:
     def test_get_summary(self, metrics_store):
         """Test getting aggregated statistics for a metric."""
         for i in range(1, 6):  # Values 1, 2, 3, 4, 5
-            metrics_store.append(MetricDataPoint(
-                metric_name="summary_metric",
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                value=float(i),
-                sample_count=2,  # Each represents 2 samples
-            ))
+            metrics_store.append(
+                MetricDataPoint(
+                    metric_name="summary_metric",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    value=float(i),
+                    sample_count=2,  # Each represents 2 samples
+                )
+            )
 
         summary = metrics_store.get_summary("summary_metric")
         assert summary["metric_name"] == "summary_metric"
@@ -364,24 +391,30 @@ class TestFileMetricsStore:
         """Test summary with label and time filters."""
         now = datetime.now(timezone.utc)
 
-        metrics_store.append(MetricDataPoint(
-            metric_name="filtered_metric",
-            timestamp=(now - timedelta(hours=2)).isoformat(),
-            value=10.0,
-            labels={"env": "prod"},
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="filtered_metric",
-            timestamp=now.isoformat(),
-            value=20.0,
-            labels={"env": "prod"},
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="filtered_metric",
-            timestamp=now.isoformat(),
-            value=100.0,
-            labels={"env": "staging"},
-        ))
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="filtered_metric",
+                timestamp=(now - timedelta(hours=2)).isoformat(),
+                value=10.0,
+                labels={"env": "prod"},
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="filtered_metric",
+                timestamp=now.isoformat(),
+                value=20.0,
+                labels={"env": "prod"},
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="filtered_metric",
+                timestamp=now.isoformat(),
+                value=100.0,
+                labels={"env": "staging"},
+            )
+        )
 
         # Summary with label filter
         summary = metrics_store.get_summary(
@@ -406,16 +439,20 @@ class TestFileMetricsStore:
         recent_time = now.isoformat()
 
         # Add old and recent records
-        metrics_store.append(MetricDataPoint(
-            metric_name="cleanup_metric",
-            timestamp=old_time,
-            value=1.0,
-        ))
-        metrics_store.append(MetricDataPoint(
-            metric_name="cleanup_metric",
-            timestamp=recent_time,
-            value=2.0,
-        ))
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="cleanup_metric",
+                timestamp=old_time,
+                value=1.0,
+            )
+        )
+        metrics_store.append(
+            MetricDataPoint(
+                metric_name="cleanup_metric",
+                timestamp=recent_time,
+                value=2.0,
+            )
+        )
 
         assert metrics_store.count() == 2
 
@@ -427,11 +464,13 @@ class TestFileMetricsStore:
     def test_cleanup_by_max_records(self, metrics_store):
         """Test cleanup enforces max records limit."""
         for i in range(10):
-            metrics_store.append(MetricDataPoint(
-                metric_name="max_test",
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                value=float(i),
-            ))
+            metrics_store.append(
+                MetricDataPoint(
+                    metric_name="max_test",
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    value=float(i),
+                )
+            )
 
         assert metrics_store.count() == 10
 
@@ -444,11 +483,13 @@ class TestFileMetricsStore:
         """Test that data persists across store reloads."""
         # Create store and add data
         store1 = FileMetricsStore(temp_storage_dir)
-        store1.append(MetricDataPoint(
-            metric_name="persistent_metric",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=42.0,
-        ))
+        store1.append(
+            MetricDataPoint(
+                metric_name="persistent_metric",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=42.0,
+            )
+        )
         assert store1.count() == 1
 
         # Create new store instance with same path
@@ -463,11 +504,13 @@ class TestFileMetricsStore:
     def test_index_rebuild_on_corruption(self, temp_storage_dir):
         """Test index is rebuilt if corrupted."""
         store = FileMetricsStore(temp_storage_dir)
-        store.append(MetricDataPoint(
-            metric_name="rebuild_test",
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            value=1.0,
-        ))
+        store.append(
+            MetricDataPoint(
+                metric_name="rebuild_test",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                value=1.0,
+            )
+        )
 
         # Corrupt the index file
         index_file = temp_storage_dir / "index.json"
@@ -540,9 +583,7 @@ class TestMetricsPersistenceConfig:
 
     def test_should_persist_metric_whitelist(self):
         """Test metric persistence filtering with whitelist."""
-        config = MetricsPersistenceConfig(
-            persist_metrics=["allowed_metric_1", "allowed_metric_2"]
-        )
+        config = MetricsPersistenceConfig(persist_metrics=["allowed_metric_1", "allowed_metric_2"])
 
         assert config.should_persist_metric("allowed_metric_1") is True
         assert config.should_persist_metric("allowed_metric_2") is True

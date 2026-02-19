@@ -6,13 +6,13 @@ import logging
 from dataclasses import asdict
 from typing import Any, Optional
 
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.param_schema import List_, validate_payload
 
@@ -69,15 +69,15 @@ def _handle_extract(
     import os
     from concurrent.futures import ThreadPoolExecutor
 
+    from foundry_mcp.core.errors.search import (
+        AuthenticationError,
+        RateLimitError,
+        SearchProviderError,
+    )
     from foundry_mcp.core.research.providers.tavily_extract import (
         TavilyExtractProvider,
         UrlValidationError,
         validate_extract_url_async,
-    )
-    from foundry_mcp.core.errors.search import (
-        RateLimitError,
-        AuthenticationError,
-        SearchProviderError,
     )
 
     payload = {"urls": urls}
@@ -119,13 +119,16 @@ def _handle_extract(
                 valid.append(url)
             except UrlValidationError as e:
                 failed.append(url)
-                details.append({
-                    "url": url,
-                    "error": e.reason,
-                    "error_code": e.error_code,
-                })
+                details.append(
+                    {
+                        "url": url,
+                        "error": e.reason,
+                        "error_code": e.error_code,
+                    }
+                )
         return valid, failed, details
 
+    assert isinstance(urls, list)
     valid_urls, failed_urls, error_details = _run_async(_validate_urls_async(urls))
 
     # If all URLs failed validation, return total failure
@@ -165,11 +168,7 @@ def _handle_extract(
         source_dicts = []
         succeeded_urls = set()
         for src in sources:
-            metadata = (
-                src.public_metadata()
-                if hasattr(src, "public_metadata")
-                else src.metadata
-            )
+            metadata = src.public_metadata() if hasattr(src, "public_metadata") else src.metadata
             src_dict = {
                 "url": src.url,
                 "title": src.title,
@@ -186,11 +185,13 @@ def _handle_extract(
         for url in valid_urls:
             if url not in succeeded_urls:
                 failed_urls.append(url)
-                error_details.append({
-                    "url": url,
-                    "error": "Extraction returned no content",
-                    "error_code": "EXTRACT_FAILED",
-                })
+                error_details.append(
+                    {
+                        "url": url,
+                        "error": "Extraction returned no content",
+                        "error_code": "EXTRACT_FAILED",
+                    }
+                )
 
         # Build response based on success/failure pattern
         stats = {
@@ -216,9 +217,7 @@ def _handle_extract(
             )
         elif failed_urls:
             # Partial success: some URLs succeeded, some failed
-            warnings = [
-                f"{len(failed_urls)} of {len(urls)} URLs failed extraction"
-            ]
+            warnings = [f"{len(failed_urls)} of {len(urls)} URLs failed extraction"]
             return asdict(
                 success_response(
                     data={
@@ -252,11 +251,13 @@ def _handle_extract(
                 remediation="Check that TAVILY_API_KEY is valid",
                 details={
                     "failed_urls": urls,
-                    "error_details": [{
-                        "url": None,
-                        "error": str(e),
-                        "error_code": "AUTHENTICATION_ERROR",
-                    }],
+                    "error_details": [
+                        {
+                            "url": None,
+                            "error": str(e),
+                            "error_code": "AUTHENTICATION_ERROR",
+                        }
+                    ],
                 },
             )
         )
@@ -266,14 +267,18 @@ def _handle_extract(
                 f"Rate limit exceeded: {e}",
                 error_code="RATE_LIMIT_EXCEEDED",
                 error_type=ErrorType.RATE_LIMIT,
-                remediation=f"Wait {e.retry_after or 60} seconds before retrying" if hasattr(e, 'retry_after') else "Wait before retrying",
+                remediation=f"Wait {e.retry_after or 60} seconds before retrying"
+                if hasattr(e, "retry_after")
+                else "Wait before retrying",
                 details={
                     "failed_urls": urls,
-                    "error_details": [{
-                        "url": None,
-                        "error": str(e),
-                        "error_code": "RATE_LIMIT_EXCEEDED",
-                    }],
+                    "error_details": [
+                        {
+                            "url": None,
+                            "error": str(e),
+                            "error_code": "RATE_LIMIT_EXCEEDED",
+                        }
+                    ],
                 },
             )
         )
@@ -296,11 +301,13 @@ def _handle_extract(
                     remediation="Try with fewer URLs or increase timeout",
                     details={
                         "failed_urls": urls,
-                        "error_details": [{
-                            "url": None,
-                            "error": message,
-                            "error_code": "TIMEOUT",
-                        }],
+                        "error_details": [
+                            {
+                                "url": None,
+                                "error": message,
+                                "error_code": "TIMEOUT",
+                            }
+                        ],
                     },
                 )
             )
@@ -313,11 +320,13 @@ def _handle_extract(
                 remediation="Check logs for details or try with different URLs",
                 details={
                     "failed_urls": urls if urls else [],
-                    "error_details": [{
-                        "url": None,
-                        "error": message,
-                        "error_code": "EXTRACT_FAILED",
-                    }],
+                    "error_details": [
+                        {
+                            "url": None,
+                            "error": message,
+                            "error_code": "EXTRACT_FAILED",
+                        }
+                    ],
                 },
             )
         )
@@ -329,11 +338,13 @@ def _handle_extract(
                 error_type=ErrorType.VALIDATION,
                 details={
                     "failed_urls": [e.url],
-                    "error_details": [{
-                        "url": e.url,
-                        "error": e.reason,
-                        "error_code": e.error_code,
-                    }],
+                    "error_details": [
+                        {
+                            "url": e.url,
+                            "error": e.reason,
+                            "error_code": e.error_code,
+                        }
+                    ],
                 },
             )
         )
@@ -345,11 +356,13 @@ def _handle_extract(
                 error_type=ErrorType.VALIDATION,
                 details={
                     "failed_urls": urls if urls else [],
-                    "error_details": [{
-                        "url": None,
-                        "error": str(e),
-                        "error_code": ErrorCode.VALIDATION_ERROR,
-                    }],
+                    "error_details": [
+                        {
+                            "url": None,
+                            "error": str(e),
+                            "error_code": ErrorCode.VALIDATION_ERROR,
+                        }
+                    ],
                 },
             )
         )
@@ -362,11 +375,13 @@ def _handle_extract(
                 remediation="Try with fewer URLs or increase timeout",
                 details={
                     "failed_urls": urls,
-                    "error_details": [{
-                        "url": None,
-                        "error": "Request timed out",
-                        "error_code": "TIMEOUT",
-                    }],
+                    "error_details": [
+                        {
+                            "url": None,
+                            "error": "Request timed out",
+                            "error_code": "TIMEOUT",
+                        }
+                    ],
                 },
             )
         )
@@ -380,11 +395,13 @@ def _handle_extract(
                 remediation="Check logs for details or try with different URLs",
                 details={
                     "failed_urls": urls if urls else [],
-                    "error_details": [{
-                        "url": None,
-                        "error": str(e),
-                        "error_code": "EXTRACT_FAILED",
-                    }],
+                    "error_details": [
+                        {
+                            "url": None,
+                            "error": str(e),
+                            "error_code": "EXTRACT_FAILED",
+                        }
+                    ],
                 },
             )
         )

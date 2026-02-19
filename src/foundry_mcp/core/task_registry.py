@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 # Global registry instance
 _registry: Dict[str, "BackgroundTask"] = {}
 _registry_lock = threading.Lock()
+
+
 def get_task_registry() -> Dict[str, "BackgroundTask"]:
     """Get the global task registry.
 
@@ -190,9 +192,7 @@ def cleanup_stale_tasks(max_age_seconds: float = 300) -> int:
         stale_ids = [
             task_id
             for task_id, task in _registry.items()
-            if task.is_done
-            and task.completed_at
-            and (now - task.completed_at) > max_age_seconds
+            if task.is_done and task.completed_at and (now - task.completed_at) > max_age_seconds
         ]
         for task_id in stale_ids:
             del _registry[task_id]

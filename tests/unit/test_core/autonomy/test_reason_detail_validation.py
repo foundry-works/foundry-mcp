@@ -1,10 +1,8 @@
 """Tests for M3: reason_detail parameter length validation."""
 
-import pytest
-
 from foundry_mcp.tools.unified.task_handlers._helpers import (
-    _validate_reason_detail,
     _REASON_DETAIL_MAX_LENGTH,
+    _validate_reason_detail,
 )
 
 

@@ -31,12 +31,12 @@ from typing import Any, Optional
 
 import httpx
 
-from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
     SearchProviderError,
 )
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.research.providers.base import (
     SearchProvider,
     SearchResult,
@@ -160,8 +160,7 @@ class GoogleSearchProvider(SearchProvider):
         self._api_key = api_key or os.environ.get("GOOGLE_API_KEY")
         if not self._api_key:
             raise ValueError(
-                "Google API key required. Provide via api_key parameter "
-                "or GOOGLE_API_KEY environment variable."
+                "Google API key required. Provide via api_key parameter or GOOGLE_API_KEY environment variable."
             )
 
         self._cx = cx or os.environ.get("GOOGLE_CSE_ID")
@@ -311,7 +310,8 @@ class GoogleSearchProvider(SearchProvider):
                 # Handle forbidden (invalid CSE ID or API not enabled)
                 if response.status_code == 403:
                     error_data = extract_error_message(
-                        response, provider_format=_google_error_format,
+                        response,
+                        provider_format=_google_error_format,
                     )
                     # Check if it's a quota error (retryable) vs auth error (not retryable)
                     if "quota" in error_data.lower() or "limit" in error_data.lower():
@@ -338,7 +338,8 @@ class GoogleSearchProvider(SearchProvider):
                 # Handle other errors
                 if response.status_code >= 400:
                     error_msg = extract_error_message(
-                        response, provider_format=_google_error_format,
+                        response,
+                        provider_format=_google_error_format,
                     )
                     raise SearchProviderError(
                         provider="google",
@@ -349,7 +350,9 @@ class GoogleSearchProvider(SearchProvider):
                 return response.json()
 
         executor = create_resilience_executor(
-            "google", self.resilience_config, self.classify_error,
+            "google",
+            self.resilience_config,
+            self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
 
@@ -483,5 +486,7 @@ class GoogleSearchProvider(SearchProvider):
         for Google-specific 403 quota detection.
         """
         return classify_http_error(
-            error, "google", custom_classifier=_google_quota_classifier,
+            error,
+            "google",
+            custom_classifier=_google_quota_classifier,
         )

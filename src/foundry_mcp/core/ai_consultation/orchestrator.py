@@ -16,9 +16,22 @@ import json
 import logging
 import time
 from dataclasses import replace
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, List, Optional, Sequence
 
+if TYPE_CHECKING:
+    from foundry_mcp.core.llm_config.consultation import ConsultationConfig
+
+from foundry_mcp.core.ai_consultation.cache import ResultCache
+from foundry_mcp.core.ai_consultation.types import (
+    ConsensusResult,
+    ConsultationOutcome,
+    ConsultationRequest,
+    ConsultationResult,
+    ProviderResponse,
+    ResolvedProvider,
+)
 from foundry_mcp.core.errors.provider import ProviderUnavailableError
+from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 from foundry_mcp.core.providers import (
     ProviderHooks,
     ProviderRequest,
@@ -28,18 +41,6 @@ from foundry_mcp.core.providers import (
     check_provider_available,
     resolve_provider,
 )
-from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
-
-from foundry_mcp.core.ai_consultation.types import (
-    ConsensusResult,
-    ConsultationOutcome,
-    ConsultationRequest,
-    ConsultationResult,
-    ConsultationWorkflow,
-    ProviderResponse,
-    ResolvedProvider,
-)
-from foundry_mcp.core.ai_consultation.cache import ResultCache
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,7 @@ def _collect_provider_error(
         )
     except Exception as collect_error:
         # Never let error collection failures affect consultation execution
-        logger.debug(
-            f"Error collection failed for provider {provider_id}: {collect_error}"
-        )
+        logger.debug(f"Error collection failed for provider {provider_id}: {collect_error}")
 
 
 class ConsultationOrchestrator:
@@ -124,17 +123,12 @@ class ConsultationOrchestrator:
         """
         # Lazy import to avoid circular dependency
         from foundry_mcp.core.llm_config.consultation import (
-            ConsultationConfig,
             get_consultation_config,
         )
 
         self._config: ConsultationConfig = config or get_consultation_config()
         self.cache = cache or ResultCache(default_ttl=self._config.cache_ttl)
-        self.default_timeout = (
-            default_timeout
-            if default_timeout is not None
-            else self._config.default_timeout
-        )
+        self.default_timeout = default_timeout if default_timeout is not None else self._config.default_timeout
 
         # Parse priority list from config into ProviderSpec objects
         # Priority: 1) config.priority specs
@@ -144,9 +138,7 @@ class ConsultationOrchestrator:
                 try:
                     self._priority_specs.append(ProviderSpec.parse(spec_str))
                 except ValueError as e:
-                    logger.warning(
-                        f"Invalid provider spec in priority list: {spec_str}: {e}"
-                    )
+                    logger.warning(f"Invalid provider spec in priority list: {spec_str}: {e}")
 
     def is_available(self, provider_id: Optional[str] = None) -> bool:
         """
@@ -255,9 +247,7 @@ class ConsultationOrchestrator:
         builder = get_prompt_builder(request.workflow)
         return builder.build(request.prompt_id, request.context)
 
-    def _resolve_spec_to_provider(
-        self, spec: ProviderSpec
-    ) -> Optional[ResolvedProvider]:
+    def _resolve_spec_to_provider(self, spec: ProviderSpec) -> Optional[ResolvedProvider]:
         """
         Resolve a ProviderSpec to a ResolvedProvider if available.
 
@@ -274,8 +264,7 @@ class ConsultationOrchestrator:
             # API providers not yet integrated into registry
             # TODO: Register API providers (openai, anthropic, local) in registry
             logger.debug(
-                f"API provider spec '{spec}' skipped - API providers not yet "
-                "integrated into consultation registry"
+                f"API provider spec '{spec}' skipped - API providers not yet integrated into consultation registry"
             )
             return None
 
@@ -301,9 +290,7 @@ class ConsultationOrchestrator:
             spec_str=str(spec),
         )
 
-    def _get_providers_to_try(
-        self, request: ConsultationRequest
-    ) -> List[ResolvedProvider]:
+    def _get_providers_to_try(self, request: ConsultationRequest) -> List[ResolvedProvider]:
         """
         Get ordered list of providers to try for a request.
 
@@ -376,9 +363,7 @@ class ConsultationOrchestrator:
             return True
 
         # Connection errors may be transient
-        if "connection" in error_str and (
-            "reset" in error_str or "refused" in error_str
-        ):
+        if "connection" in error_str and ("reset" in error_str or "refused" in error_str):
             return True
 
         # Server errors (5xx) are potentially retryable
@@ -404,9 +389,7 @@ class ConsultationOrchestrator:
         error_str = str(error).lower()
 
         # Don't fallback for prompt-level errors (these will fail with any provider)
-        if "prompt" in error_str and (
-            "too long" in error_str or "invalid" in error_str
-        ):
+        if "prompt" in error_str and ("too long" in error_str or "invalid" in error_str):
             return False
 
         # Don't fallback for authentication errors specific to all providers
@@ -446,19 +429,13 @@ class ConsultationOrchestrator:
         effective_model = request.model or resolved.model
 
         # Apply overrides from config
-        effective_timeout = (
-            resolved.overrides.get("timeout", request.timeout) or self.default_timeout
-        )
-        effective_temperature = resolved.overrides.get(
-            "temperature", request.temperature
-        )
+        effective_timeout = resolved.overrides.get("timeout", request.timeout) or self.default_timeout
+        effective_temperature = resolved.overrides.get("temperature", request.temperature)
         effective_max_tokens = resolved.overrides.get("max_tokens", request.max_tokens)
 
         for attempt in range(max_attempts):
             try:
-                provider = resolve_provider(
-                    provider_id, hooks=hooks, model=effective_model
-                )
+                provider = resolve_provider(provider_id, hooks=hooks, model=effective_model)
                 provider_request = ProviderRequest(
                     prompt=prompt,
                     system_prompt=request.system_prompt_override,
@@ -476,15 +453,11 @@ class ConsultationOrchestrator:
                 # Success
                 if result.status == ProviderStatus.SUCCESS:
                     if attempt > 0:
-                        warnings.append(
-                            f"Provider {provider_id} succeeded on attempt {attempt + 1}"
-                        )
+                        warnings.append(f"Provider {provider_id} succeeded on attempt {attempt + 1}")
                     return result
 
                 # Non-success status from provider
-                error_msg = (
-                    f"Provider {provider_id} returned status: {result.status.value}"
-                )
+                error_msg = f"Provider {provider_id} returned status: {result.status.value}"
                 if result.stderr:
                     error_msg += f" - {result.stderr}"
                 last_error = Exception(error_msg)
@@ -513,9 +486,7 @@ class ConsultationOrchestrator:
 
         # All retries exhausted - collect error for introspection
         if last_error:
-            warnings.append(
-                f"Provider {provider_id} failed after {max_attempts} attempt(s): {last_error}"
-            )
+            warnings.append(f"Provider {provider_id} failed after {max_attempts} attempt(s): {last_error}")
             # Collect provider error for future introspection
             _collect_provider_error(
                 provider_id=provider_id,
@@ -562,19 +533,13 @@ class ConsultationOrchestrator:
         effective_model = request.model or resolved.model
 
         # Apply overrides from config
-        effective_timeout = (
-            resolved.overrides.get("timeout", request.timeout) or self.default_timeout
-        )
-        effective_temperature = resolved.overrides.get(
-            "temperature", request.temperature
-        )
+        effective_timeout = resolved.overrides.get("timeout", request.timeout) or self.default_timeout
+        effective_temperature = resolved.overrides.get("temperature", request.temperature)
         effective_max_tokens = resolved.overrides.get("max_tokens", request.max_tokens)
 
         for attempt in range(max_attempts):
             try:
-                provider = resolve_provider(
-                    provider_id, hooks=hooks, model=effective_model
-                )
+                provider = resolve_provider(provider_id, hooks=hooks, model=effective_model)
                 provider_request = ProviderRequest(
                     prompt=prompt,
                     system_prompt=request.system_prompt_override,
@@ -590,22 +555,16 @@ class ConsultationOrchestrator:
 
                 # Run sync provider.generate() in executor to avoid blocking
                 loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(
-                    None, provider.generate, provider_request
-                )
+                result = await loop.run_in_executor(None, provider.generate, provider_request)
 
                 # Success
                 if result.status == ProviderStatus.SUCCESS:
                     if attempt > 0:
-                        warnings.append(
-                            f"Provider {provider_id} succeeded on attempt {attempt + 1}"
-                        )
+                        warnings.append(f"Provider {provider_id} succeeded on attempt {attempt + 1}")
                     return result
 
                 # Non-success status from provider
-                error_msg = (
-                    f"Provider {provider_id} returned status: {result.status.value}"
-                )
+                error_msg = f"Provider {provider_id} returned status: {result.status.value}"
                 if result.stderr:
                     error_msg += f" - {result.stderr}"
                 last_error = Exception(error_msg)
@@ -634,9 +593,7 @@ class ConsultationOrchestrator:
 
         # All retries exhausted - collect error for introspection
         if last_error:
-            warnings.append(
-                f"Provider {provider_id} failed after {max_attempts} attempt(s): {last_error}"
-            )
+            warnings.append(f"Provider {provider_id} failed after {max_attempts} attempt(s): {last_error}")
             # Collect provider error for future introspection
             _collect_provider_error(
                 provider_id=provider_id,
@@ -673,17 +630,13 @@ class ConsultationOrchestrator:
         warnings: List[str] = []
         start_time = time.time()
 
-        result = await self._try_provider_with_retries_async(
-            request, prompt, resolved, warnings
-        )
+        result = await self._try_provider_with_retries_async(request, prompt, resolved, warnings)
 
         duration_ms = int((time.time() - start_time) * 1000)
 
         if result is None:
             # Provider failed after all retries
-            error_msg = (
-                warnings[-1] if warnings else f"Provider {resolved.provider_id} failed"
-            )
+            error_msg = warnings[-1] if warnings else f"Provider {resolved.provider_id} failed"
             return ProviderResponse(
                 provider_id=resolved.provider_id,
                 model_used=resolved.model or "unknown",
@@ -745,10 +698,7 @@ class ConsultationOrchestrator:
             )
 
         # Create tasks for all providers
-        tasks = [
-            self._execute_single_provider_async(request, prompt, resolved)
-            for resolved in providers
-        ]
+        tasks = [self._execute_single_provider_async(request, prompt, resolved) for resolved in providers]
 
         # Execute all providers in parallel
         responses: List[ProviderResponse] = await asyncio.gather(*tasks)
@@ -758,16 +708,12 @@ class ConsultationOrchestrator:
         # Check if we met the minimum model requirement
         successful_count = sum(1 for r in responses if r.success)
         if successful_count < min_models:
-            warnings.append(
-                f"Only {successful_count} of {min_models} required models succeeded"
-            )
+            warnings.append(f"Only {successful_count} of {min_models} required models succeeded")
 
         # Log failed providers
         for response in responses:
             if not response.success:
-                warnings.append(
-                    f"Provider {response.provider_id} failed: {response.error}"
-                )
+                warnings.append(f"Provider {response.provider_id} failed: {response.error}")
 
         return ConsensusResult(
             workflow=request.workflow,
@@ -814,31 +760,20 @@ class ConsultationOrchestrator:
 
         # Phase 1: Initial parallel execution of first min_models providers
         initial_providers = all_providers[:min_models]
-        logger.debug(
-            f"Phase 1: Executing {len(initial_providers)} providers in parallel"
-        )
+        logger.debug(f"Phase 1: Executing {len(initial_providers)} providers in parallel")
 
-        tasks = [
-            self._execute_single_provider_async(request, prompt, resolved)
-            for resolved in initial_providers
-        ]
+        tasks = [self._execute_single_provider_async(request, prompt, resolved) for resolved in initial_providers]
         initial_responses: List[ProviderResponse] = await asyncio.gather(*tasks)
         all_responses.extend(initial_responses)
 
         # Count successes and log failures
         # A response is only truly successful if it has non-empty content
-        successful_count = sum(
-            1 for r in initial_responses if r.success and r.content.strip()
-        )
+        successful_count = sum(1 for r in initial_responses if r.success and r.content.strip())
         for response in initial_responses:
             if not response.success:
-                warnings.append(
-                    f"Provider {response.provider_id} failed: {response.error}"
-                )
+                warnings.append(f"Provider {response.provider_id} failed: {response.error}")
             elif not response.content.strip():
-                warnings.append(
-                    f"Provider {response.provider_id} returned empty content"
-                )
+                warnings.append(f"Provider {response.provider_id} returned empty content")
 
         # Phase 2: Sequential fallback if needed and enabled
         if successful_count < min_models and self._config.fallback_enabled:
@@ -853,49 +788,29 @@ class ConsultationOrchestrator:
 
                 for fallback_provider in remaining_providers:
                     # Skip if already tried (shouldn't happen, but safety check)
-                    if any(
-                        r.provider_id == fallback_provider.provider_id
-                        for r in all_responses
-                    ):
+                    if any(r.provider_id == fallback_provider.provider_id for r in all_responses):
                         continue
 
                     # Check if provider is available
                     if not check_provider_available(fallback_provider.provider_id):
-                        warnings.append(
-                            f"Fallback provider {fallback_provider.provider_id} "
-                            "is not available, skipping"
-                        )
+                        warnings.append(f"Fallback provider {fallback_provider.provider_id} is not available, skipping")
                         continue
 
-                    logger.debug(
-                        f"Fallback attempt: trying provider {fallback_provider.provider_id}"
-                    )
+                    logger.debug(f"Fallback attempt: trying provider {fallback_provider.provider_id}")
 
-                    response = await self._execute_single_provider_async(
-                        request, prompt, fallback_provider
-                    )
+                    response = await self._execute_single_provider_async(request, prompt, fallback_provider)
                     all_responses.append(response)
 
                     if response.success and response.content.strip():
                         successful_count += 1
-                        warnings.append(
-                            f"Fallback provider {fallback_provider.provider_id} succeeded"
-                        )
+                        warnings.append(f"Fallback provider {fallback_provider.provider_id} succeeded")
                         if successful_count >= min_models:
-                            logger.debug(
-                                f"Reached {min_models} successful providers via fallback"
-                            )
+                            logger.debug(f"Reached {min_models} successful providers via fallback")
                             break
                     elif response.success and not response.content.strip():
-                        warnings.append(
-                            f"Fallback provider {fallback_provider.provider_id} "
-                            "returned empty content"
-                        )
+                        warnings.append(f"Fallback provider {fallback_provider.provider_id} returned empty content")
                     else:
-                        warnings.append(
-                            f"Fallback provider {fallback_provider.provider_id} "
-                            f"failed: {response.error}"
-                        )
+                        warnings.append(f"Fallback provider {fallback_provider.provider_id} failed: {response.error}")
 
         duration_ms = (time.time() - start_time) * 1000
 
@@ -947,13 +862,8 @@ class ConsultationOrchestrator:
                 warnings.append(f"Provider {provider_id} is not available, skipping")
                 continue
 
-            logger.debug(
-                f"Trying provider {provider_id} (spec: {resolved.spec_str}, "
-                f"model: {resolved.model})"
-            )
-            result = self._try_provider_with_retries(
-                request, prompt, resolved, warnings
-            )
+            logger.debug(f"Trying provider {provider_id} (spec: {resolved.spec_str}, model: {resolved.model})")
+            result = self._try_provider_with_retries(request, prompt, resolved, warnings)
 
             if result is not None:
                 return result, provider_id, None
@@ -967,9 +877,7 @@ class ConsultationOrchestrator:
                 if self._should_try_next_provider(pseudo_error):
                     warnings.append("Falling back to next provider...")
                 else:
-                    last_error = (
-                        f"Provider {provider_id} failed and fallback is not appropriate"
-                    )
+                    last_error = f"Provider {provider_id} failed and fallback is not appropriate"
                     break
             else:
                 last_error = f"All {len(providers)} provider(s) failed"
@@ -1052,7 +960,7 @@ class ConsultationOrchestrator:
         requests: Sequence[ConsultationRequest],
         *,
         use_cache: bool = True,
-    ) -> List[ConsultationResult]:
+    ) -> List[ConsultationOutcome]:
         """
         Execute multiple consultation requests sequentially.
 
@@ -1061,7 +969,7 @@ class ConsultationOrchestrator:
             use_cache: Whether to use cached results
 
         Returns:
-            List of ConsultationResult objects in the same order as requests
+            List of ConsultationOutcome objects in the same order as requests
         """
         return [self.consult(req, use_cache=use_cache) for req in requests]
 
@@ -1147,9 +1055,7 @@ class ConsultationOrchestrator:
         if min_models > 1:
             # Multi-model mode: execute providers in parallel with fallback support
             # Pass full provider list - fallback will try additional providers if needed
-            result = await self._execute_parallel_providers_with_fallback_async(
-                request, prompt, providers, min_models
-            )
+            result = await self._execute_parallel_providers_with_fallback_async(request, prompt, providers, min_models)
             return result
         else:
             # Single-model mode: execute with fallback (using first success)
@@ -1168,14 +1074,10 @@ class ConsultationOrchestrator:
             warnings: List[str] = []
             for resolved in providers:
                 if not check_provider_available(resolved.provider_id):
-                    warnings.append(
-                        f"Provider {resolved.provider_id} is not available, skipping"
-                    )
+                    warnings.append(f"Provider {resolved.provider_id} is not available, skipping")
                     continue
 
-                response = await self._execute_single_provider_async(
-                    request, prompt, resolved
-                )
+                response = await self._execute_single_provider_async(request, prompt, resolved)
 
                 if response.success:
                     duration_ms = (time.time() - start_time) * 1000
@@ -1184,9 +1086,7 @@ class ConsultationOrchestrator:
                         content=response.content,
                         provider_id=response.provider_id,
                         model_used=response.model_used,
-                        tokens={"total_tokens": response.tokens}
-                        if response.tokens
-                        else {},
+                        tokens={"total_tokens": response.tokens} if response.tokens else {},
                         duration_ms=duration_ms,
                         cache_hit=False,
                         warnings=warnings,
@@ -1195,16 +1095,12 @@ class ConsultationOrchestrator:
 
                     # Cache successful results
                     if use_cache:
-                        self.cache.set(
-                            request.workflow, cache_key, result, ttl=cache_ttl
-                        )
+                        self.cache.set(request.workflow, cache_key, result, ttl=cache_ttl)
 
                     return result
 
                 # Provider failed, try next
-                warnings.append(
-                    f"Provider {resolved.provider_id} failed: {response.error}"
-                )
+                warnings.append(f"Provider {resolved.provider_id} failed: {response.error}")
 
                 if not self._config.fallback_enabled:
                     break

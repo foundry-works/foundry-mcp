@@ -14,14 +14,13 @@ from typing import List
 import pytest
 
 from foundry_mcp.core.autonomy.memory import (
-    AutonomyStorage,
     GC_TTL_DAYS,
+    AutonomyStorage,
     SessionCorrupted,
 )
 from foundry_mcp.core.autonomy.models.enums import SessionStatus
 
 from .conftest import make_session
-
 
 # =============================================================================
 # JSON Persistence Round-Trip

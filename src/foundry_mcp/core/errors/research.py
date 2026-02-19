@@ -20,21 +20,25 @@ if TYPE_CHECKING:
 
 class PDFSecurityError(Exception):
     """Base exception for PDF security violations."""
+
     pass
 
 
 class SSRFError(PDFSecurityError):
     """Raised when SSRF protection blocks a request."""
+
     pass
 
 
 class InvalidPDFError(PDFSecurityError):
     """Raised when PDF validation fails (magic bytes, content-type)."""
+
     pass
 
 
 class PDFSizeError(PDFSecurityError):
     """Raised when PDF exceeds size limits."""
+
     pass
 
 
@@ -55,9 +59,7 @@ class ProviderExhaustedError(SummarizationError):
     def __init__(self, errors: list[tuple[str, Exception]]):
         self.errors = errors
         provider_msgs = [f"{p}: {e}" for p, e in errors]
-        super().__init__(
-            f"All summarization providers failed: {', '.join(provider_msgs)}"
-        )
+        super().__init__(f"All summarization providers failed: {', '.join(provider_msgs)}")
 
 
 class SummarizationValidationError(SummarizationError):

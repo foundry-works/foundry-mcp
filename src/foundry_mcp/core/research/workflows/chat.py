@@ -10,7 +10,6 @@ from typing import Any, Optional
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models.conversations import (
-    ConversationMessage,
     ConversationThread,
 )
 from foundry_mcp.core.research.models.enums import ThreadStatus
@@ -178,9 +177,7 @@ class ChatWorkflow(ResearchWorkflowBase):
             Formatted context string
         """
         # Get recent messages (respecting max_messages config)
-        messages = thread.get_context_messages(
-            max_messages=self.config.max_messages_per_thread
-        )
+        messages = thread.get_context_messages(max_messages=self.config.max_messages_per_thread)
 
         # Format messages for context
         parts = []

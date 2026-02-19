@@ -297,25 +297,29 @@ class DegradationPipeline:
                     )
 
                 # Still too large, record failure and continue
-                failures.append(ChunkFailure(
-                    item_id=item_id,
-                    chunk_id=chunk_id,
-                    original_level=current_level,
-                    retry_level=level,
-                    error=f"Still exceeds target: {truncated_tokens} > {target_tokens}",
-                    recovered=False,
-                ))
+                failures.append(
+                    ChunkFailure(
+                        item_id=item_id,
+                        chunk_id=chunk_id,
+                        original_level=current_level,
+                        retry_level=level,
+                        error=f"Still exceeds target: {truncated_tokens} > {target_tokens}",
+                        recovered=False,
+                    )
+                )
 
             except Exception as e:
                 # Record the failure and continue to next level
-                failures.append(ChunkFailure(
-                    item_id=item_id,
-                    chunk_id=chunk_id,
-                    original_level=current_level,
-                    retry_level=level,
-                    error=str(e),
-                    recovered=False,
-                ))
+                failures.append(
+                    ChunkFailure(
+                        item_id=item_id,
+                        chunk_id=chunk_id,
+                        original_level=current_level,
+                        retry_level=level,
+                        error=str(e),
+                        recovered=False,
+                    )
+                )
 
     def _process_chunk_with_retry(
         self,
@@ -377,9 +381,7 @@ class DegradationPipeline:
                 )
         except Exception as e:
             # Initial truncation failed - record and retry at tighter level
-            logger.warning(
-                f"Chunk truncation failed for {item_id}/{chunk_id}: {e}"
-            )
+            logger.warning(f"Chunk truncation failed for {item_id}/{chunk_id}: {e}")
 
         # Retry at tighter levels
         return self._retry_chunk_at_tighter_level(
@@ -495,9 +497,7 @@ class DegradationPipeline:
         # Pre-check: Verify protected content fits at headline level
         protected_items_list = [i for i in items if i.protected]
         if protected_items_list:
-            fits, headline_tokens, protected_ids = self._check_protected_content_budget(
-                protected_items_list, budget
-            )
+            fits, headline_tokens, protected_ids = self._check_protected_content_budget(protected_items_list, budget)
             if not fits:
                 raise ProtectedContentOverflowError(
                     protected_tokens=headline_tokens,
@@ -529,14 +529,16 @@ class DegradationPipeline:
             # Check if item fits at full fidelity
             if item_tokens <= remaining_budget:
                 # Full fidelity allocation
-                allocated.append(AllocatedItem(
-                    id=item.id,
-                    content=item.content,
-                    priority=item.priority,
-                    original_tokens=item_tokens,
-                    allocated_tokens=item_tokens,
-                    needs_summarization=False,
-                ))
+                allocated.append(
+                    AllocatedItem(
+                        id=item.id,
+                        content=item.content,
+                        priority=item.priority,
+                        original_tokens=item_tokens,
+                        allocated_tokens=item_tokens,
+                        needs_summarization=False,
+                    )
+                )
                 remaining_budget -= item_tokens
                 continue
 
@@ -564,24 +566,28 @@ class DegradationPipeline:
                 else:
                     to_level = DegradationLevel.TRUNCATE
 
-                steps.append(DegradationStep(
-                    item_id=item.id,
-                    from_level=DegradationLevel.FULL,
-                    to_level=to_level,
-                    original_tokens=item_tokens,
-                    result_tokens=truncated_tokens,
-                    success=True,
-                    warning=f"Content degraded from {item_tokens} to {truncated_tokens} tokens",
-                ))
+                steps.append(
+                    DegradationStep(
+                        item_id=item.id,
+                        from_level=DegradationLevel.FULL,
+                        to_level=to_level,
+                        original_tokens=item_tokens,
+                        result_tokens=truncated_tokens,
+                        success=True,
+                        warning=f"Content degraded from {item_tokens} to {truncated_tokens} tokens",
+                    )
+                )
 
-                allocated.append(AllocatedItem(
-                    id=item.id,
-                    content=truncated_content,
-                    priority=item.priority,
-                    original_tokens=item_tokens,
-                    allocated_tokens=truncated_tokens,
-                    needs_summarization=True,  # Mark as degraded
-                ))
+                allocated.append(
+                    AllocatedItem(
+                        id=item.id,
+                        content=truncated_content,
+                        priority=item.priority,
+                        original_tokens=item_tokens,
+                        allocated_tokens=truncated_tokens,
+                        needs_summarization=True,  # Mark as degraded
+                    )
+                )
                 remaining_budget -= truncated_tokens
 
                 # Emit appropriate warning based on priority status
@@ -593,8 +599,7 @@ class DegradationPipeline:
                     )
                 else:
                     warnings.append(
-                        f"CONTENT_TRUNCATED: Item {item.id} truncated from "
-                        f"{item_tokens} to {truncated_tokens} tokens"
+                        f"CONTENT_TRUNCATED: Item {item.id} truncated from {item_tokens} to {truncated_tokens} tokens"
                     )
                 continue
 
@@ -607,27 +612,31 @@ class DegradationPipeline:
                 headline_content = self._truncate_content(item.content, headline_allocation)
                 headline_tokens = self._estimate_tokens(headline_content)
 
-                steps.append(DegradationStep(
-                    item_id=item.id,
-                    from_level=DegradationLevel.FULL,
-                    to_level=DegradationLevel.HEADLINE,
-                    original_tokens=item_tokens,
-                    result_tokens=headline_tokens,
-                    success=True,
-                    warning="Protected item compressed to headline level",
-                ))
-                allocated.append(AllocatedItem(
-                    id=item.id,
-                    content=headline_content,
-                    priority=item.priority,
-                    original_tokens=item_tokens,
-                    allocated_tokens=headline_tokens,
-                    needs_summarization=True,
-                ))
+                steps.append(
+                    DegradationStep(
+                        item_id=item.id,
+                        from_level=DegradationLevel.FULL,
+                        to_level=DegradationLevel.HEADLINE,
+                        original_tokens=item_tokens,
+                        result_tokens=headline_tokens,
+                        success=True,
+                        warning="Protected item compressed to headline level",
+                    )
+                )
+                allocated.append(
+                    AllocatedItem(
+                        id=item.id,
+                        content=headline_content,
+                        priority=item.priority,
+                        original_tokens=item_tokens,
+                        allocated_tokens=headline_tokens,
+                        needs_summarization=True,
+                    )
+                )
                 warnings.append(
                     f"PROTECTED_OVERFLOW: Protected item {item.id} compressed to headline "
                     f"({headline_tokens}/{item_tokens} tokens, "
-                    f"fidelity={headline_tokens/item_tokens:.1%})"
+                    f"fidelity={headline_tokens / item_tokens:.1%})"
                 )
                 continue
 
@@ -636,23 +645,27 @@ class DegradationPipeline:
                 min_allocation = self._get_min_priority_allocation(item_tokens)
                 minimal_content = self._truncate_content(item.content, min_allocation)
                 minimal_tokens = self._estimate_tokens(minimal_content)
-                steps.append(DegradationStep(
-                    item_id=item.id,
-                    from_level=DegradationLevel.FULL,
-                    to_level=DegradationLevel.KEY_POINTS,
-                    original_tokens=item_tokens,
-                    result_tokens=minimal_tokens,
-                    success=False,
-                    warning="Priority item force-allocated at condensed fidelity",
-                ))
-                allocated.append(AllocatedItem(
-                    id=item.id,
-                    content=minimal_content,
-                    priority=item.priority,
-                    original_tokens=item_tokens,
-                    allocated_tokens=minimal_tokens,
-                    needs_summarization=True,
-                ))
+                steps.append(
+                    DegradationStep(
+                        item_id=item.id,
+                        from_level=DegradationLevel.FULL,
+                        to_level=DegradationLevel.KEY_POINTS,
+                        original_tokens=item_tokens,
+                        result_tokens=minimal_tokens,
+                        success=False,
+                        warning="Priority item force-allocated at condensed fidelity",
+                    )
+                )
+                allocated.append(
+                    AllocatedItem(
+                        id=item.id,
+                        content=minimal_content,
+                        priority=item.priority,
+                        original_tokens=item_tokens,
+                        allocated_tokens=minimal_tokens,
+                        needs_summarization=True,
+                    )
+                )
                 warnings.append(
                     f"PRIORITY_SUMMARIZED: Priority item {item.id} force-allocated "
                     f"at condensed fidelity ({minimal_tokens}/{item_tokens} tokens)"
@@ -662,52 +675,56 @@ class DegradationPipeline:
             # Check if we can drop this low-priority item
             if self._allow_content_dropping:
                 # Check min items guardrail
-                current_allocated_count = len(allocated) + len(protected_items) - len([
-                    a for a in allocated if any(p.id == a.id for p in protected_items)
-                ])
+                current_allocated_count = (
+                    len(allocated)
+                    + len(protected_items)
+                    - len([a for a in allocated if any(p.id == a.id for p in protected_items)])
+                )
                 # Count remaining items that could still be allocated
-                remaining_droppable = len([
-                    d for d in droppable_items
-                    if d.id not in dropped_ids and d.id != item.id
-                ])
+                remaining_droppable = len([d for d in droppable_items if d.id not in dropped_ids and d.id != item.id])
                 potential_total = current_allocated_count + remaining_droppable
 
                 if potential_total >= self._min_items:
                     # Safe to drop
-                    steps.append(DegradationStep(
-                        item_id=item.id,
-                        from_level=DegradationLevel.TRUNCATE,
-                        to_level=DegradationLevel.DROP,
-                        original_tokens=item_tokens,
-                        result_tokens=0,
-                        success=True,
-                    ))
+                    steps.append(
+                        DegradationStep(
+                            item_id=item.id,
+                            from_level=DegradationLevel.TRUNCATE,
+                            to_level=DegradationLevel.DROP,
+                            original_tokens=item_tokens,
+                            result_tokens=0,
+                            success=True,
+                        )
+                    )
                     dropped_ids.append(item.id)
                     warnings.append(
-                        f"CONTENT_DROPPED: Item {item.id} dropped "
-                        f"(priority={item.priority}, tokens={item_tokens})"
+                        f"CONTENT_DROPPED: Item {item.id} dropped (priority={item.priority}, tokens={item_tokens})"
                     )
                 else:
                     # Would violate min items - force allocate with truncation
                     min_items_enforced = True
                     minimal_content = self._truncate_content(item.content, 1)
-                    steps.append(DegradationStep(
-                        item_id=item.id,
-                        from_level=DegradationLevel.DROP,
-                        to_level=DegradationLevel.TRUNCATE,
-                        original_tokens=item_tokens,
-                        result_tokens=1,
-                        success=False,
-                        warning=f"Min items guardrail ({self._min_items}) prevented drop",
-                    ))
-                    allocated.append(AllocatedItem(
-                        id=item.id,
-                        content=minimal_content,
-                        priority=item.priority,
-                        original_tokens=item_tokens,
-                        allocated_tokens=1,
-                        needs_summarization=True,
-                    ))
+                    steps.append(
+                        DegradationStep(
+                            item_id=item.id,
+                            from_level=DegradationLevel.DROP,
+                            to_level=DegradationLevel.TRUNCATE,
+                            original_tokens=item_tokens,
+                            result_tokens=1,
+                            success=False,
+                            warning=f"Min items guardrail ({self._min_items}) prevented drop",
+                        )
+                    )
+                    allocated.append(
+                        AllocatedItem(
+                            id=item.id,
+                            content=minimal_content,
+                            priority=item.priority,
+                            original_tokens=item_tokens,
+                            allocated_tokens=1,
+                            needs_summarization=True,
+                        )
+                    )
                     warnings.append(
                         f"TOKEN_BUDGET_FLOORED: Item {item.id} preserved due to "
                         f"min items guardrail ({self._min_items} items)"
@@ -715,26 +732,29 @@ class DegradationPipeline:
             else:
                 # Dropping not allowed - force allocate with minimal truncation
                 minimal_content = self._truncate_content(item.content, 1)
-                steps.append(DegradationStep(
-                    item_id=item.id,
-                    from_level=DegradationLevel.TRUNCATE,
-                    to_level=DegradationLevel.TRUNCATE,
-                    original_tokens=item_tokens,
-                    result_tokens=1,
-                    success=False,
-                    warning="Content dropping disabled, forced minimal allocation",
-                ))
-                allocated.append(AllocatedItem(
-                    id=item.id,
-                    content=minimal_content,
-                    priority=item.priority,
-                    original_tokens=item_tokens,
-                    allocated_tokens=1,
-                    needs_summarization=True,
-                ))
+                steps.append(
+                    DegradationStep(
+                        item_id=item.id,
+                        from_level=DegradationLevel.TRUNCATE,
+                        to_level=DegradationLevel.TRUNCATE,
+                        original_tokens=item_tokens,
+                        result_tokens=1,
+                        success=False,
+                        warning="Content dropping disabled, forced minimal allocation",
+                    )
+                )
+                allocated.append(
+                    AllocatedItem(
+                        id=item.id,
+                        content=minimal_content,
+                        priority=item.priority,
+                        original_tokens=item_tokens,
+                        allocated_tokens=1,
+                        needs_summarization=True,
+                    )
+                )
                 warnings.append(
-                    f"CONTENT_TRUNCATED: Item {item.id} force-allocated with "
-                    f"minimal budget (content_dropping=False)"
+                    f"CONTENT_TRUNCATED: Item {item.id} force-allocated with minimal budget (content_dropping=False)"
                 )
 
         # Calculate fidelity

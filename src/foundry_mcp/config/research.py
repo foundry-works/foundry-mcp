@@ -4,13 +4,18 @@ Contains ResearchConfig — the configuration dataclass for all research
 workflows (CHAT, CONSENSUS, THINKDEEP, IDEATE, DEEP_RESEARCH).
 """
 
-import os
+from __future__ import annotations
+
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.config.parsing import _parse_bool, _parse_provider_spec
+
+if TYPE_CHECKING:
+    from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +82,9 @@ class ResearchConfig:
     ttl_hours: int = 24
     max_messages_per_thread: int = 100
     default_provider: str = "gemini"
-    consensus_providers: List[str] = field(
-        default_factory=lambda: ["gemini", "claude"]
-    )
+    consensus_providers: List[str] = field(default_factory=lambda: ["gemini", "claude"])
     thinkdeep_max_depth: int = 5
-    ideate_perspectives: List[str] = field(
-        default_factory=lambda: ["technical", "creative", "practical", "visionary"]
-    )
+    ideate_perspectives: List[str] = field(default_factory=lambda: ["technical", "creative", "practical", "visionary"])
     default_timeout: float = 360.0  # 360 seconds default for AI CLI providers
     # Deep research configuration
     deep_research_max_iterations: int = 3
@@ -111,9 +112,7 @@ class ResearchConfig:
     # Retry settings for deep research phases
     deep_research_max_retries: int = 2  # Retry attempts per provider
     deep_research_retry_delay: float = 5.0  # Seconds between retries
-    deep_research_providers: List[str] = field(
-        default_factory=lambda: ["tavily", "google", "semantic_scholar"]
-    )
+    deep_research_providers: List[str] = field(default_factory=lambda: ["tavily", "google", "semantic_scholar"])
     deep_research_audit_artifacts: bool = True
     # Research mode: "general" | "academic" | "technical"
     deep_research_mode: str = "general"
@@ -220,20 +219,14 @@ class ResearchConfig:
             consensus_providers = [p.strip() for p in consensus_providers.split(",")]
 
         # Parse ideate_perspectives - handle both string and list
-        ideate_perspectives = data.get(
-            "ideate_perspectives", ["technical", "creative", "practical", "visionary"]
-        )
+        ideate_perspectives = data.get("ideate_perspectives", ["technical", "creative", "practical", "visionary"])
         if isinstance(ideate_perspectives, str):
             ideate_perspectives = [p.strip() for p in ideate_perspectives.split(",")]
 
         # Parse deep_research_providers - handle both string and list
-        deep_research_providers = data.get(
-            "deep_research_providers", ["tavily", "google", "semantic_scholar"]
-        )
+        deep_research_providers = data.get("deep_research_providers", ["tavily", "google", "semantic_scholar"])
         if isinstance(deep_research_providers, str):
-            deep_research_providers = [
-                p.strip() for p in deep_research_providers.split(",") if p.strip()
-            ]
+            deep_research_providers = [p.strip() for p in deep_research_providers.split(",") if p.strip()]
 
         # Parse per-phase fallback provider lists
         def _parse_provider_list(key: str) -> List[str]:
@@ -248,17 +241,18 @@ class ResearchConfig:
         deep_research_refinement_providers = _parse_provider_list("deep_research_refinement_providers")
 
         # Parse per_provider_rate_limits - handle dict from TOML
-        per_provider_rate_limits = data.get("per_provider_rate_limits", {
-            "tavily": 60,
-            "perplexity": 60,
-            "google": 100,
-            "semantic_scholar": 100,
-        })
+        per_provider_rate_limits = data.get(
+            "per_provider_rate_limits",
+            {
+                "tavily": 60,
+                "perplexity": 60,
+                "google": 100,
+                "semantic_scholar": 100,
+            },
+        )
         if isinstance(per_provider_rate_limits, dict):
             # Convert values to int
-            per_provider_rate_limits = {
-                k: int(v) for k, v in per_provider_rate_limits.items()
-            }
+            per_provider_rate_limits = {k: int(v) for k, v in per_provider_rate_limits.items()}
 
         config = cls(
             enabled=_parse_bool(data.get("enabled", True)),
@@ -295,9 +289,7 @@ class ResearchConfig:
             deep_research_max_retries=int(data.get("deep_research_max_retries", 2)),
             deep_research_retry_delay=float(data.get("deep_research_retry_delay", 5.0)),
             deep_research_providers=deep_research_providers,
-            deep_research_audit_artifacts=_parse_bool(
-                data.get("deep_research_audit_artifacts", True)
-            ),
+            deep_research_audit_artifacts=_parse_bool(data.get("deep_research_audit_artifacts", True)),
             # Research mode
             deep_research_mode=str(data.get("deep_research_mode", "general")),
             # Search rate limiting configuration
@@ -334,13 +326,9 @@ class ResearchConfig:
             semantic_scholar_publication_types=data.get("semantic_scholar_publication_types"),  # None or list
             semantic_scholar_sort_by=data.get("semantic_scholar_sort_by"),  # None or str
             semantic_scholar_sort_order=str(data.get("semantic_scholar_sort_order", "desc")),
-            semantic_scholar_use_extended_fields=_parse_bool(
-                data.get("semantic_scholar_use_extended_fields", True)
-            ),
+            semantic_scholar_use_extended_fields=_parse_bool(data.get("semantic_scholar_use_extended_fields", True)),
             # Token management configuration
-            token_management_enabled=_parse_bool(
-                data.get("token_management_enabled", True)
-            ),
+            token_management_enabled=_parse_bool(data.get("token_management_enabled", True)),
             token_safety_margin=float(data.get("token_safety_margin", 0.15)),
             runtime_overhead=int(data.get("runtime_overhead", 60000)),
             model_context_overrides=data.get("model_context_overrides", {}),
@@ -348,22 +336,14 @@ class ResearchConfig:
             summarization_provider=data.get("summarization_provider"),
             summarization_providers=_parse_provider_list("summarization_providers"),
             summarization_timeout=float(data.get("summarization_timeout", 60.0)),
-            summarization_cache_enabled=_parse_bool(
-                data.get("summarization_cache_enabled", True)
-            ),
+            summarization_cache_enabled=_parse_bool(data.get("summarization_cache_enabled", True)),
             # Content dropping and archival configuration
-            allow_content_dropping=_parse_bool(
-                data.get("allow_content_dropping", False)
-            ),
-            content_archive_enabled=_parse_bool(
-                data.get("content_archive_enabled", False)
-            ),
+            allow_content_dropping=_parse_bool(data.get("allow_content_dropping", False)),
+            content_archive_enabled=_parse_bool(data.get("content_archive_enabled", False)),
             content_archive_ttl_hours=int(data.get("content_archive_ttl_hours", 168)),
             research_archive_dir=data.get("research_archive_dir"),
             # Status persistence throttling
-            status_persistence_throttle_seconds=int(
-                data.get("status_persistence_throttle_seconds", 5)
-            ),
+            status_persistence_throttle_seconds=int(data.get("status_persistence_throttle_seconds", 5)),
             # Audit verbosity
             audit_verbosity=str(data.get("audit_verbosity", "full")),
             # Document digest configuration
@@ -372,24 +352,12 @@ class ResearchConfig:
             deep_research_digest_max_sources=int(data.get("deep_research_digest_max_sources", 8)),
             deep_research_digest_timeout=float(data.get("deep_research_digest_timeout", 60.0)),
             deep_research_digest_max_concurrent=int(data.get("deep_research_digest_max_concurrent", 3)),
-            deep_research_digest_include_evidence=_parse_bool(
-                data.get("deep_research_digest_include_evidence", True)
-            ),
-            deep_research_digest_evidence_max_chars=int(
-                data.get("deep_research_digest_evidence_max_chars", 400)
-            ),
-            deep_research_digest_max_evidence_snippets=int(
-                data.get("deep_research_digest_max_evidence_snippets", 5)
-            ),
-            deep_research_digest_fetch_pdfs=_parse_bool(
-                data.get("deep_research_digest_fetch_pdfs", False)
-            ),
-            deep_research_archive_content=_parse_bool(
-                data.get("deep_research_archive_content", False)
-            ),
-            deep_research_archive_retention_days=int(
-                data.get("deep_research_archive_retention_days", 30)
-            ),
+            deep_research_digest_include_evidence=_parse_bool(data.get("deep_research_digest_include_evidence", True)),
+            deep_research_digest_evidence_max_chars=int(data.get("deep_research_digest_evidence_max_chars", 400)),
+            deep_research_digest_max_evidence_snippets=int(data.get("deep_research_digest_max_evidence_snippets", 5)),
+            deep_research_digest_fetch_pdfs=_parse_bool(data.get("deep_research_digest_fetch_pdfs", False)),
+            deep_research_archive_content=_parse_bool(data.get("deep_research_archive_content", False)),
+            deep_research_archive_retention_days=int(data.get("deep_research_archive_retention_days", 30)),
             deep_research_digest_provider=data.get("deep_research_digest_provider"),
             deep_research_digest_providers=_parse_provider_list("deep_research_digest_providers"),
         )
@@ -425,17 +393,13 @@ class ResearchConfig:
         # Validate topic
         valid_topics = {"general", "news"}
         if self.tavily_topic not in valid_topics:
-            raise ValueError(
-                f"Invalid tavily_topic: {self.tavily_topic!r}. "
-                f"Must be one of: {sorted(valid_topics)}"
-            )
+            raise ValueError(f"Invalid tavily_topic: {self.tavily_topic!r}. Must be one of: {sorted(valid_topics)}")
 
         # Validate news_days (1-365 or None)
         if self.tavily_news_days is not None:
             if not isinstance(self.tavily_news_days, int) or self.tavily_news_days < 1 or self.tavily_news_days > 365:
                 raise ValueError(
-                    f"Invalid tavily_news_days: {self.tavily_news_days!r}. "
-                    "Must be an integer between 1 and 365."
+                    f"Invalid tavily_news_days: {self.tavily_news_days!r}. Must be an integer between 1 and 365."
                 )
 
         # Validate country (ISO 3166-1 alpha-2 or None)
@@ -447,7 +411,11 @@ class ResearchConfig:
                 )
 
         # Validate chunks_per_source (1-5)
-        if not isinstance(self.tavily_chunks_per_source, int) or self.tavily_chunks_per_source < 1 or self.tavily_chunks_per_source > 5:
+        if (
+            not isinstance(self.tavily_chunks_per_source, int)
+            or self.tavily_chunks_per_source < 1
+            or self.tavily_chunks_per_source > 5
+        ):
             raise ValueError(
                 f"Invalid tavily_chunks_per_source: {self.tavily_chunks_per_source!r}. "
                 "Must be an integer between 1 and 5."
@@ -480,8 +448,7 @@ class ResearchConfig:
         # Validate max_tokens (positive integer)
         if not isinstance(self.perplexity_max_tokens, int) or self.perplexity_max_tokens < 1:
             raise ValueError(
-                f"Invalid perplexity_max_tokens: {self.perplexity_max_tokens!r}. "
-                "Must be a positive integer."
+                f"Invalid perplexity_max_tokens: {self.perplexity_max_tokens!r}. Must be a positive integer."
             )
 
         # Validate max_tokens_per_page (positive integer)
@@ -516,9 +483,19 @@ class ResearchConfig:
         """
         # Valid publication types from Semantic Scholar API
         valid_publication_types = {
-            "Review", "JournalArticle", "Conference", "CaseReport", "ClinicalTrial",
-            "Dataset", "Editorial", "LettersAndComments", "MetaAnalysis", "News",
-            "Study", "Book", "BookSection",
+            "Review",
+            "JournalArticle",
+            "Conference",
+            "CaseReport",
+            "ClinicalTrial",
+            "Dataset",
+            "Editorial",
+            "LettersAndComments",
+            "MetaAnalysis",
+            "News",
+            "Study",
+            "Book",
+            "BookSection",
         }
 
         # Validate publication_types (list of valid types or None)
@@ -577,8 +554,7 @@ class ResearchConfig:
         valid_verbosity_levels = {"full", "minimal"}
         if self.audit_verbosity not in valid_verbosity_levels:
             raise ValueError(
-                f"Invalid audit_verbosity: {self.audit_verbosity!r}. "
-                f"Must be one of: {sorted(valid_verbosity_levels)}"
+                f"Invalid audit_verbosity: {self.audit_verbosity!r}. Must be one of: {sorted(valid_verbosity_levels)}"
             )
 
     def _validate_digest_config(self) -> None:
@@ -598,22 +574,19 @@ class ResearchConfig:
         # Validate min_chars (must be positive)
         if self.deep_research_digest_min_chars < 0:
             raise ValueError(
-                f"Invalid deep_research_digest_min_chars: {self.deep_research_digest_min_chars!r}. "
-                "Must be >= 0."
+                f"Invalid deep_research_digest_min_chars: {self.deep_research_digest_min_chars!r}. Must be >= 0."
             )
 
         # Validate max_sources (must be positive)
         if self.deep_research_digest_max_sources < 1:
             raise ValueError(
-                f"Invalid deep_research_digest_max_sources: {self.deep_research_digest_max_sources!r}. "
-                "Must be >= 1."
+                f"Invalid deep_research_digest_max_sources: {self.deep_research_digest_max_sources!r}. Must be >= 1."
             )
 
         # Validate timeout (must be positive)
         if self.deep_research_digest_timeout <= 0:
             raise ValueError(
-                f"Invalid deep_research_digest_timeout: {self.deep_research_digest_timeout!r}. "
-                "Must be > 0."
+                f"Invalid deep_research_digest_timeout: {self.deep_research_digest_timeout!r}. Must be > 0."
             )
 
         # Validate max_concurrent (must be positive)
@@ -829,8 +802,7 @@ class ResearchConfig:
         provider_lower = provider.lower()
         if provider_lower not in provider_config:
             raise ValueError(
-                f"Unknown search provider: '{provider}'. "
-                f"Valid providers: {', '.join(provider_config.keys())}"
+                f"Unknown search provider: '{provider}'. Valid providers: {', '.join(provider_config.keys())}"
             )
 
         config_info = provider_config[provider_lower]
@@ -879,11 +851,13 @@ class ResearchConfig:
     def get_default_provider_spec(self) -> "ProviderSpec":
         """Parse default_provider into a ProviderSpec."""
         from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
+
         return ProviderSpec.parse_flexible(self.default_provider)
 
     def get_consensus_provider_specs(self) -> List["ProviderSpec"]:
         """Parse consensus_providers into ProviderSpec list."""
         from foundry_mcp.core.llm_config.provider_spec import ProviderSpec
+
         return [ProviderSpec.parse_flexible(p) for p in self.consensus_providers]
 
     def get_model_context_override(

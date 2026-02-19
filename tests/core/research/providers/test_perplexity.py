@@ -7,24 +7,22 @@ Tests cover:
 4. Kwargs mapping (recency_filter, domain_filter)
 """
 
-import os
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 from foundry_mcp.core.research.models.sources import SourceType
+from foundry_mcp.core.research.providers.base import (
+    AuthenticationError,
+    RateLimitError,
+    SearchProviderError,
+)
 from foundry_mcp.core.research.providers.perplexity import (
     DEFAULT_RATE_LIMIT,
     DEFAULT_TIMEOUT,
     PERPLEXITY_API_BASE_URL,
     PerplexitySearchProvider,
-)
-from foundry_mcp.core.research.providers.base import (
-    AuthenticationError,
-    RateLimitError,
-    SearchProviderError,
 )
 from foundry_mcp.core.research.providers.resilience import (
     reset_resilience_manager_for_testing,
@@ -132,9 +130,7 @@ class TestPerplexitySearchProviderSearch:
         mock_response.json.return_value = mock_response_data
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             sources = await provider.search("test query", max_results=10)
 
@@ -173,9 +169,7 @@ class TestPerplexitySearchProviderSearch:
             mock_post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
-            await provider.search(
-                "test query", domain_filter=["example.com", "test.org"]
-            )
+            await provider.search("test query", domain_filter=["example.com", "test.org"])
 
             # Check that domain_filter was included in payload
             call_args = mock_post.call_args
@@ -226,13 +220,9 @@ class TestPerplexitySearchProviderSearch:
         mock_response.json.return_value = mock_response_data
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
-            sources = await provider.search(
-                "test query", sub_query_id="sq-123"
-            )
+            sources = await provider.search("test query", sub_query_id="sq-123")
 
             assert all(s.sub_query_id == "sq-123" for s in sources)
 
@@ -252,9 +242,7 @@ class TestPerplexitySearchProviderErrorHandling:
         mock_response.status_code = 401
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             with pytest.raises(AuthenticationError) as exc_info:
                 await provider.search("test query")
@@ -270,9 +258,7 @@ class TestPerplexitySearchProviderErrorHandling:
         mock_response.headers = {"Retry-After": "30"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             with pytest.raises(RateLimitError) as exc_info:
                 await provider.search("test query")
@@ -289,9 +275,7 @@ class TestPerplexitySearchProviderErrorHandling:
         mock_response.json.side_effect = Exception("No JSON")
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             with pytest.raises(SearchProviderError) as exc_info:
                 await provider.search("test query")
@@ -308,9 +292,7 @@ class TestPerplexitySearchProviderErrorHandling:
         mock_response.json.return_value = {"error": "Invalid query"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             with pytest.raises(SearchProviderError) as exc_info:
                 await provider.search("test query")
@@ -479,9 +461,7 @@ class TestPerplexitySearchProviderHealthCheck:
         mock_response.json.return_value = {"results": [{"title": "Test", "url": "http://test.com", "snippet": "test"}]}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             result = await provider.health_check()
             assert result is True
@@ -493,9 +473,7 @@ class TestPerplexitySearchProviderHealthCheck:
         mock_response.status_code = 401
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
 
             result = await provider.health_check()
             assert result is False
@@ -781,31 +759,19 @@ class TestPerplexityDateFilters:
     async def test_date_range_validation(self, provider):
         """Test that after_date must be before before_date."""
         with pytest.raises(ValueError, match="must be before"):
-            await provider.search(
-                "test query",
-                search_after_date="12/31/2024",
-                search_before_date="01/01/2024"
-            )
+            await provider.search("test query", search_after_date="12/31/2024", search_before_date="01/01/2024")
 
     @pytest.mark.asyncio
     async def test_recency_filter_exclusivity_with_after_date(self, provider):
         """Test recency_filter cannot be combined with search_after_date."""
         with pytest.raises(ValueError, match="Cannot use recency_filter"):
-            await provider.search(
-                "test query",
-                recency_filter="week",
-                search_after_date="01/01/2024"
-            )
+            await provider.search("test query", recency_filter="week", search_after_date="01/01/2024")
 
     @pytest.mark.asyncio
     async def test_recency_filter_exclusivity_with_before_date(self, provider):
         """Test recency_filter cannot be combined with search_before_date."""
         with pytest.raises(ValueError, match="Cannot use recency_filter"):
-            await provider.search(
-                "test query",
-                recency_filter="month",
-                search_before_date="12/31/2024"
-            )
+            await provider.search("test query", recency_filter="month", search_before_date="12/31/2024")
 
     @pytest.mark.asyncio
     async def test_recency_filter_invalid_raises_error(self, provider):
@@ -824,11 +790,7 @@ class TestPerplexityDateFilters:
             mock_post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
-            await provider.search(
-                "test query",
-                search_after_date="01/01/2024",
-                search_before_date="12/31/2024"
-            )
+            await provider.search("test query", search_after_date="01/01/2024", search_before_date="12/31/2024")
 
             call_args = mock_post.call_args
             payload = call_args.kwargs.get("json", call_args.args[1] if len(call_args.args) > 1 else {})
@@ -908,9 +870,7 @@ class TestPerplexityLastUpdatedFilters:
         """Test that last_updated_after must be before last_updated_before."""
         with pytest.raises(ValueError, match="must be before"):
             await provider.search(
-                "test query",
-                last_updated_after_filter="12/31/2024",
-                last_updated_before_filter="01/01/2024"
+                "test query", last_updated_after_filter="12/31/2024", last_updated_before_filter="01/01/2024"
             )
 
     @pytest.mark.asyncio
@@ -925,9 +885,7 @@ class TestPerplexityLastUpdatedFilters:
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
             await provider.search(
-                "test query",
-                last_updated_after_filter="01/01/2024",
-                last_updated_before_filter="12/31/2024"
+                "test query", last_updated_after_filter="01/01/2024", last_updated_before_filter="12/31/2024"
             )
 
             call_args = mock_post.call_args
@@ -947,11 +905,7 @@ class TestPerplexityLastUpdatedFilters:
             mock_client.return_value.__aenter__.return_value.post = mock_post
 
             # This should NOT raise - last_updated filters have different semantics than date filters
-            await provider.search(
-                "test query",
-                recency_filter="week",
-                last_updated_after_filter="01/01/2024"
-            )
+            await provider.search("test query", recency_filter="week", last_updated_after_filter="01/01/2024")
 
             call_args = mock_post.call_args
             payload = call_args.kwargs.get("json", call_args.args[1] if len(call_args.args) > 1 else {})

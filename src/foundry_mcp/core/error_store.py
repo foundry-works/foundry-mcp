@@ -453,7 +453,7 @@ class FileErrorStore(ErrorStore):
                     }
                     for fp, data in self._index.items()
                 ],
-                key=lambda x: x["count"],
+                key=lambda x: x.get("count", 0),  # type: ignore[arg-type]
                 reverse=True,
             )[:20]
 

@@ -102,9 +102,7 @@ class TestDataAssembly:
 
     @patch("foundry_mcp.core.autonomy.audit.AuditLedger")
     @patch("foundry_mcp.core.autonomy.memory.AutonomyStorage")
-    def test_assembles_session_and_progress(
-        self, mock_storage_cls, mock_ledger_cls, temp_specs_dir
-    ):
+    def test_assembles_session_and_progress(self, mock_storage_cls, mock_ledger_cls, temp_specs_dir):
         """Data assembly resolves session ID, loads session, audit, progress."""
         from foundry_mcp.cli.commands.watch import _assemble_watch_data
 
@@ -137,9 +135,7 @@ class TestNoActiveSession:
 
     def test_error_when_no_active_session(self, cli_runner, temp_specs_dir):
         """watch returns error when no active session exists."""
-        with patch(
-            "foundry_mcp.core.autonomy.memory.AutonomyStorage"
-        ) as mock_storage_cls:
+        with patch("foundry_mcp.core.autonomy.memory.AutonomyStorage") as mock_storage_cls:
             mock_storage = MagicMock()
             mock_storage_cls.return_value = mock_storage
             mock_storage.get_active_session.return_value = None
@@ -147,8 +143,11 @@ class TestNoActiveSession:
             result = cli_runner.invoke(
                 cli,
                 [
-                    "--specs-dir", str(temp_specs_dir),
-                    "watch", "--simple", "test-spec-001",
+                    "--specs-dir",
+                    str(temp_specs_dir),
+                    "watch",
+                    "--simple",
+                    "test-spec-001",
                 ],
             )
             assert result.exit_code == 1
@@ -184,8 +183,11 @@ class TestSimpleModeOutput:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "watch", "--simple", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "watch",
+                "--simple",
+                "test-spec-001",
             ],
         )
         assert result.exit_code == 0, f"Output: {result.output}"
@@ -209,9 +211,7 @@ class TestTerminalStateExit:
 
     @patch("foundry_mcp.core.autonomy.audit.AuditLedger")
     @patch("foundry_mcp.core.autonomy.memory.AutonomyStorage")
-    def test_simple_mode_exits_on_completed(
-        self, mock_storage_cls, mock_ledger_cls, cli_runner, temp_specs_dir
-    ):
+    def test_simple_mode_exits_on_completed(self, mock_storage_cls, mock_ledger_cls, cli_runner, temp_specs_dir):
         """--simple exits immediately when session is already completed."""
         mock_storage = MagicMock()
         mock_storage_cls.return_value = mock_storage
@@ -227,8 +227,11 @@ class TestTerminalStateExit:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "watch", "--simple", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "watch",
+                "--simple",
+                "test-spec-001",
             ],
         )
         assert result.exit_code == 0
@@ -236,9 +239,7 @@ class TestTerminalStateExit:
 
     @patch("foundry_mcp.core.autonomy.audit.AuditLedger")
     @patch("foundry_mcp.core.autonomy.memory.AutonomyStorage")
-    def test_simple_mode_exits_on_failed(
-        self, mock_storage_cls, mock_ledger_cls, cli_runner, temp_specs_dir
-    ):
+    def test_simple_mode_exits_on_failed(self, mock_storage_cls, mock_ledger_cls, cli_runner, temp_specs_dir):
         """--simple exits immediately when session is failed."""
         mock_storage = MagicMock()
         mock_storage_cls.return_value = mock_storage
@@ -254,8 +255,11 @@ class TestTerminalStateExit:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "watch", "--simple", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "watch",
+                "--simple",
+                "test-spec-001",
             ],
         )
         assert result.exit_code == 0

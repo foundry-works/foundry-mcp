@@ -37,9 +37,7 @@ from foundry_mcp.core.autonomy.signals import TERMINAL_STATUSES as _TERMINAL_STA
 _PROGRESS_BAR_WIDTH = 20
 
 
-def _assemble_watch_data(
-    specs_dir: Path, spec_id: str, max_events: int
-) -> dict[str, Any]:
+def _assemble_watch_data(specs_dir: Path, spec_id: str, max_events: int) -> dict[str, Any]:
     """Assemble session state, audit events, and spec progress.
 
     Args:
@@ -319,9 +317,7 @@ def _write_stop_signal(specs_dir: Path, spec_id: str) -> Path:
     return write_stop_signal(specs_dir, spec_id, requested_by="foundry-watch")
 
 
-def _run_live_dashboard(
-    specs_dir: Path, spec_id: str, interval: float, max_events: int
-) -> None:
+def _run_live_dashboard(specs_dir: Path, spec_id: str, interval: float, max_events: int) -> None:
     """Run the Rich Live dashboard polling loop.
 
     Polls session data every `interval` seconds and updates the display.
@@ -372,9 +368,7 @@ def _run_live_dashboard(
             live.update(layout)
 
 
-def _run_simple_stream(
-    specs_dir: Path, spec_id: str, interval: float, max_events: int
-) -> None:
+def _run_simple_stream(specs_dir: Path, spec_id: str, interval: float, max_events: int) -> None:
     """Run simple streaming mode for pipe-friendly output.
 
     Prints a header line with session info, then tails the audit ledger
@@ -414,8 +408,7 @@ def _run_simple_stream(
 
     # Print header
     click.echo(
-        f"session={session.id} spec={spec_id} status={session.status.value} "
-        f"phase={session.active_phase_id or 'none'}"
+        f"session={session.id} spec={spec_id} status={session.status.value} phase={session.active_phase_id or 'none'}"
     )
 
     # Initial event fetch to set baseline sequence

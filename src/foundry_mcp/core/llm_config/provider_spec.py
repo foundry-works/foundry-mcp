@@ -1,9 +1,9 @@
 """Provider specification (unified priority notation) and LLM provider types."""
 
 import re
-from enum import Enum
-from typing import Optional, Dict, List, Literal
 from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Literal, Optional
 
 
 @dataclass
@@ -140,23 +140,14 @@ class ProviderSpec:
 
         if self.type == "api":
             if self.provider not in self.KNOWN_API_PROVIDERS:
-                errors.append(
-                    f"Unknown API provider '{self.provider}'. "
-                    f"Known: {sorted(self.KNOWN_API_PROVIDERS)}"
-                )
+                errors.append(f"Unknown API provider '{self.provider}'. Known: {sorted(self.KNOWN_API_PROVIDERS)}")
             if not self.model:
                 errors.append("API provider spec requires a model")
         else:  # cli
             if self.provider not in self.KNOWN_CLI_PROVIDERS:
-                errors.append(
-                    f"Unknown CLI provider '{self.provider}'. "
-                    f"Known: {sorted(self.KNOWN_CLI_PROVIDERS)}"
-                )
+                errors.append(f"Unknown CLI provider '{self.provider}'. Known: {sorted(self.KNOWN_CLI_PROVIDERS)}")
             if self.backend and self.backend not in self.KNOWN_BACKENDS:
-                errors.append(
-                    f"Unknown backend '{self.backend}'. "
-                    f"Known: {sorted(self.KNOWN_BACKENDS)}"
-                )
+                errors.append(f"Unknown backend '{self.backend}'. Known: {sorted(self.KNOWN_BACKENDS)}")
 
         return errors
 

@@ -34,12 +34,12 @@ from foundry_mcp.core.errors.research import (
 
 from .cache import SummaryCache
 from .constants import (
+    _SUMMARY_CACHE_MAX_SIZE,
     CHARS_PER_TOKEN,
     CHUNK_OVERLAP,
     DEFAULT_CHUNK_SIZE,
     MAX_RETRIES,
     RETRY_DELAY,
-    _SUMMARY_CACHE_MAX_SIZE,
 )
 from .models import (
     SummarizationConfig,

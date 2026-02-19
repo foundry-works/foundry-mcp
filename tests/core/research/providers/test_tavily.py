@@ -10,13 +10,17 @@ Tests cover:
 7. Error handling (401, 429, 5xx)
 """
 
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
+from foundry_mcp.core.research.providers.base import (
+    AuthenticationError,
+    RateLimitError,
+    SearchProviderError,
+)
 from foundry_mcp.core.research.providers.tavily import (
     DEFAULT_RATE_LIMIT,
     DEFAULT_TIMEOUT,
@@ -26,11 +30,6 @@ from foundry_mcp.core.research.providers.tavily import (
     TavilySearchProvider,
     _normalize_include_raw_content,
     _validate_search_params,
-)
-from foundry_mcp.core.research.providers.base import (
-    AuthenticationError,
-    RateLimitError,
-    SearchProviderError,
 )
 
 
@@ -521,9 +520,7 @@ class TestErrorHandling:
         mock_response.json.return_value = {"error": "Invalid API key"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
             with pytest.raises(AuthenticationError):
                 await provider.search("test query")
 
@@ -535,9 +532,7 @@ class TestErrorHandling:
         mock_response.headers = {"Retry-After": "60"}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
             with pytest.raises(SearchProviderError):
                 await provider.search("test query")
 
@@ -550,9 +545,7 @@ class TestErrorHandling:
         mock_response.json.side_effect = Exception("Not JSON")
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
             with pytest.raises(SearchProviderError):
                 await provider.search("test query")
 
@@ -800,6 +793,7 @@ class TestTavilyResilienceIntegration:
         from foundry_mcp.core.research.providers.resilience import (
             reset_resilience_manager_for_testing,
         )
+
         reset_resilience_manager_for_testing()
         yield
         reset_resilience_manager_for_testing()
@@ -815,6 +809,7 @@ class TestTavilyResilienceIntegration:
             ProviderResilienceConfig,
             get_provider_config,
         )
+
         config = provider.resilience_config
         assert isinstance(config, ProviderResilienceConfig)
         assert config == get_provider_config("tavily")
@@ -824,6 +819,7 @@ class TestTavilyResilienceIntegration:
         from foundry_mcp.core.research.providers.resilience import (
             ProviderResilienceConfig,
         )
+
         custom = ProviderResilienceConfig(
             requests_per_second=0.5,
             max_retries=5,
@@ -838,6 +834,7 @@ class TestTavilyResilienceIntegration:
     def test_classify_error_authentication(self, provider):
         """Test classify_error for authentication errors."""
         from foundry_mcp.core.research.providers.resilience import ErrorType
+
         error = AuthenticationError(provider="tavily", message="Invalid API key")
         classification = provider.classify_error(error)
         assert classification.retryable is False
@@ -847,6 +844,7 @@ class TestTavilyResilienceIntegration:
     def test_classify_error_rate_limit(self, provider):
         """Test classify_error for rate limit errors."""
         from foundry_mcp.core.research.providers.resilience import ErrorType
+
         error = RateLimitError(provider="tavily", retry_after=5.0)
         classification = provider.classify_error(error)
         assert classification.retryable is True
@@ -857,6 +855,7 @@ class TestTavilyResilienceIntegration:
     def test_classify_error_server_error(self, provider):
         """Test classify_error for 5xx server errors."""
         from foundry_mcp.core.research.providers.resilience import ErrorType
+
         error = SearchProviderError(
             provider="tavily",
             message="API error 503: Service Unavailable",
@@ -870,6 +869,7 @@ class TestTavilyResilienceIntegration:
     def test_classify_error_bad_request(self, provider):
         """Test classify_error for 400 bad request."""
         from foundry_mcp.core.research.providers.resilience import ErrorType
+
         error = SearchProviderError(
             provider="tavily",
             message="API error 400: Bad Request",
@@ -883,6 +883,7 @@ class TestTavilyResilienceIntegration:
     def test_classify_error_timeout(self, provider):
         """Test classify_error for timeout errors."""
         from foundry_mcp.core.research.providers.resilience import ErrorType
+
         error = httpx.TimeoutException("Request timed out")
         classification = provider.classify_error(error)
         assert classification.retryable is True
@@ -892,6 +893,7 @@ class TestTavilyResilienceIntegration:
     def test_classify_error_network(self, provider):
         """Test classify_error for network errors."""
         from foundry_mcp.core.research.providers.resilience import ErrorType
+
         error = httpx.ConnectError("Connection refused")
         classification = provider.classify_error(error)
         assert classification.retryable is True
@@ -908,6 +910,7 @@ class TestTavilyCircuitBreakerIntegration:
         from foundry_mcp.core.research.providers.resilience import (
             reset_resilience_manager_for_testing,
         )
+
         reset_resilience_manager_for_testing()
         yield
         reset_resilience_manager_for_testing()
@@ -958,9 +961,7 @@ class TestTavilyCircuitBreakerIntegration:
         mock_response.json.return_value = {"results": []}
 
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
             await provider.search("test query")
 
         # Success should reset failure count
@@ -976,6 +977,7 @@ class TestTavilyRateLimiterIntegration:
         from foundry_mcp.core.research.providers.resilience import (
             reset_resilience_manager_for_testing,
         )
+
         reset_resilience_manager_for_testing()
         yield
         reset_resilience_manager_for_testing()
@@ -994,9 +996,9 @@ class TestTavilyRateLimiterIntegration:
         to RateLimitError by _execute_with_retry.
         """
         from foundry_mcp.core.research.providers.resilience import (
-            get_resilience_manager,
             RateLimitWaitError,
             execute_with_resilience,
+            get_resilience_manager,
         )
 
         mgr = get_resilience_manager()
@@ -1023,8 +1025,8 @@ class TestTavilyRateLimiterIntegration:
     async def test_rate_limiter_uses_provider_config(self):
         """Test that rate limiter uses Tavily's provider config."""
         from foundry_mcp.core.research.providers.resilience import (
-            get_resilience_manager,
             get_provider_config,
+            get_resilience_manager,
         )
 
         mgr = get_resilience_manager()
@@ -1038,7 +1040,7 @@ class TestTavilyRateLimiterIntegration:
         # Should be able to make burst_limit requests
         for i in range(config.burst_limit):
             result = limiter.acquire()
-            assert result.allowed is True, f"Request {i+1} should be allowed"
+            assert result.allowed is True, f"Request {i + 1} should be allowed"
 
         # Next request should be throttled
         result = limiter.acquire()

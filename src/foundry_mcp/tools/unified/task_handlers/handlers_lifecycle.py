@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.journal import (
@@ -12,8 +12,10 @@ from foundry_mcp.core.journal import (
     get_blocker_info,
     list_blocked_tasks,
     mark_blocked,
-    unblock as unblock_task,
     update_task_status,
+)
+from foundry_mcp.core.journal import (
+    unblock as unblock_task,
 )
 from foundry_mcp.core.pagination import (
     CursorError,
@@ -27,23 +29,21 @@ from foundry_mcp.core.progress import (
     sync_computed_fields,
     update_parent_status,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import save_spec
 from foundry_mcp.core.task import check_dependencies
-
 from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
     _TASK_DEFAULT_PAGE_SIZE,
     _TASK_MAX_PAGE_SIZE,
-    _attach_meta,
     _check_autonomy_write_lock,
     _load_spec_data,
     _metric,
@@ -99,9 +99,7 @@ def _handle_update_status(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-status"
 
-    err = validate_payload(payload, _UPDATE_STATUS_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _UPDATE_STATUS_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -197,9 +195,7 @@ def _handle_start(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "start"
 
-    err = validate_payload(payload, _START_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _START_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -231,11 +227,7 @@ def _handle_start(*, config: ServerConfig, **payload: Any) -> dict:
     start = time.perf_counter()
     deps = check_dependencies(spec_data, task_id)
     if not deps.get("can_start", False):
-        blockers = [
-            b.get("title", b.get("id", ""))
-            for b in (deps.get("blocked_by") or [])
-            if isinstance(b, dict)
-        ]
+        blockers = [b.get("title", b.get("id", "")) for b in (deps.get("blocked_by") or []) if isinstance(b, dict)]
         return asdict(
             error_response(
                 "Task is blocked by: " + ", ".join([b for b in blockers if b]),
@@ -304,9 +296,7 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "complete"
 
-    err = validate_payload(payload, _COMPLETE_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _COMPLETE_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -372,15 +362,10 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
             if parent_id:
                 parent_data = hierarchy.get(parent_id, {})
                 # Only suggest commit if parent is a phase and is now completed
-                if (
-                    parent_data.get("type") == "phase"
-                    and parent_data.get("status") == "completed"
-                ):
+                if parent_data.get("type") == "phase" and parent_data.get("status") == "completed":
                     suggest_commit = True
                     commit_scope = "phase"
-                    commit_message_hint = (
-                        f"phase: {parent_data.get('title', parent_id)}"
-                    )
+                    commit_message_hint = f"phase: {parent_data.get('title', parent_id)}"
     add_journal_entry(
         spec_data,
         title=f"Task Completed: {task_data.get('title', task_id)}",
@@ -439,9 +424,7 @@ def _handle_block(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("blocker_type") is None:
         payload["blocker_type"] = "dependency"
 
-    err = validate_payload(payload, _BLOCK_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _BLOCK_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -494,8 +477,7 @@ def _handle_block(*, config: ServerConfig, **payload: Any) -> dict:
     add_journal_entry(
         spec_data,
         title=f"Task Blocked: {task_id}",
-        content=f"Blocker ({blocker_type}): {reason}"
-        + (f" [Ticket: {ticket}]" if ticket else ""),
+        content=f"Blocker ({blocker_type}): {reason}" + (f" [Ticket: {ticket}]" if ticket else ""),
         entry_type="blocker",
         task_id=task_id,
         author="foundry-mcp",
@@ -532,9 +514,7 @@ def _handle_unblock(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "unblock"
 
-    err = validate_payload(payload, _UNBLOCK_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _UNBLOCK_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -631,9 +611,7 @@ def _handle_list_blocked(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "list-blocked"
 
-    err = validate_payload(payload, _LIST_BLOCKED_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _LIST_BLOCKED_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -676,11 +654,7 @@ def _handle_list_blocked(*, config: ServerConfig, **payload: Any) -> dict:
 
     if start_after_id:
         try:
-            start_index = next(
-                i
-                for i, entry in enumerate(blocked_tasks)
-                if entry.get("task_id") == start_after_id
-            )
+            start_index = next(i for i, entry in enumerate(blocked_tasks) if entry.get("task_id") == start_after_id)
             blocked_tasks = blocked_tasks[start_index + 1 :]
         except StopIteration:
             pass

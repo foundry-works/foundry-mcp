@@ -13,8 +13,8 @@ import io
 import pytest
 
 from foundry_mcp.core.research.pdf_extractor import (
-    DEFAULT_MAX_PDF_SIZE,
     DEFAULT_MAX_PAGES,
+    DEFAULT_MAX_PDF_SIZE,
     InvalidPDFError,
     PDFExtractionResult,
     PDFExtractor,
@@ -26,7 +26,6 @@ from foundry_mcp.core.research.pdf_extractor import (
     validate_pdf_magic_bytes,
     validate_url_for_ssrf,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -348,9 +347,7 @@ startxref
 
         def handler(request):
             if str(request.url) == "https://example.com/doc.pdf":
-                return httpx.Response(
-                    302, headers={"Location": "http://127.0.0.1/internal.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": "http://127.0.0.1/internal.pdf"})
             return httpx.Response(
                 200,
                 content=b"%PDF-1.4\nx",
@@ -376,9 +373,7 @@ startxref
 
         def handler(request):
             if str(request.url) == "https://example.com/doc.pdf":
-                return httpx.Response(
-                    302, headers={"Location": "http://10.0.0.1/internal.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": "http://10.0.0.1/internal.pdf"})
             return httpx.Response(
                 200,
                 content=self.MINIMAL_PDF,
@@ -387,10 +382,7 @@ startxref
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx, "AsyncClient",
-            lambda **kwargs: real_async_client(transport=transport, **kwargs)
-        )
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_async_client(transport=transport, **kwargs))
 
         with pytest.raises(SSRFError) as exc_info:
             await extractor.extract_from_url("https://example.com/doc.pdf")
@@ -404,9 +396,7 @@ startxref
 
         def handler(request):
             if str(request.url) == "https://example.com/doc.pdf":
-                return httpx.Response(
-                    302, headers={"Location": "http://localhost/internal.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": "http://localhost/internal.pdf"})
             return httpx.Response(
                 200,
                 content=self.MINIMAL_PDF,
@@ -415,10 +405,7 @@ startxref
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx, "AsyncClient",
-            lambda **kwargs: real_async_client(transport=transport, **kwargs)
-        )
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_async_client(transport=transport, **kwargs))
 
         with pytest.raises(SSRFError) as exc_info:
             await extractor.extract_from_url("https://example.com/doc.pdf")
@@ -433,9 +420,7 @@ startxref
         def handler(request):
             url = str(request.url)
             if url == "https://example.com/doc.pdf":
-                return httpx.Response(
-                    302, headers={"Location": "https://cdn.example.com/actual.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": "https://cdn.example.com/actual.pdf"})
             if "cdn.example.com" in url:
                 return httpx.Response(
                     200,
@@ -446,10 +431,7 @@ startxref
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx, "AsyncClient",
-            lambda **kwargs: real_async_client(transport=transport, **kwargs)
-        )
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_async_client(transport=transport, **kwargs))
 
         result = await extractor.extract_from_url("https://example.com/doc.pdf")
         assert result.page_count == 1
@@ -463,23 +445,14 @@ startxref
         def handler(request):
             url = str(request.url)
             if "page1" in url:
-                return httpx.Response(
-                    302, headers={"Location": "https://example.com/page2.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": "https://example.com/page2.pdf"})
             if "page2" in url:
-                return httpx.Response(
-                    302, headers={"Location": "https://example.com/page1.pdf"}
-                )
-            return httpx.Response(
-                302, headers={"Location": "https://example.com/page1.pdf"}
-            )
+                return httpx.Response(302, headers={"Location": "https://example.com/page1.pdf"})
+            return httpx.Response(302, headers={"Location": "https://example.com/page1.pdf"})
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx, "AsyncClient",
-            lambda **kwargs: real_async_client(transport=transport, **kwargs)
-        )
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_async_client(transport=transport, **kwargs))
 
         with pytest.raises(SSRFError) as exc_info:
             await extractor.extract_from_url("https://example.com/doc.pdf")
@@ -496,10 +469,7 @@ startxref
         def handler(_request):
             redirect_count[0] += 1
             if redirect_count[0] <= 10:
-                return httpx.Response(
-                    302,
-                    headers={"Location": f"https://example.com/r{redirect_count[0]}.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": f"https://example.com/r{redirect_count[0]}.pdf"})
             return httpx.Response(
                 200,
                 content=self.MINIMAL_PDF,
@@ -508,10 +478,7 @@ startxref
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx, "AsyncClient",
-            lambda **kwargs: real_async_client(transport=transport, **kwargs)
-        )
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_async_client(transport=transport, **kwargs))
 
         with pytest.raises(InvalidPDFError) as exc_info:
             await extractor.extract_from_url("https://example.com/doc.pdf")
@@ -525,9 +492,7 @@ startxref
 
         def handler(request):
             if str(request.url) == "https://example.com/doc.pdf":
-                return httpx.Response(
-                    302, headers={"Location": "http://[::1]/internal.pdf"}
-                )
+                return httpx.Response(302, headers={"Location": "http://[::1]/internal.pdf"})
             return httpx.Response(
                 200,
                 content=self.MINIMAL_PDF,
@@ -536,10 +501,7 @@ startxref
 
         transport = httpx.MockTransport(handler)
         real_async_client = httpx.AsyncClient
-        monkeypatch.setattr(
-            httpx, "AsyncClient",
-            lambda **kwargs: real_async_client(transport=transport, **kwargs)
-        )
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: real_async_client(transport=transport, **kwargs))
 
         with pytest.raises(SSRFError) as exc_info:
             await extractor.extract_from_url("https://example.com/doc.pdf")

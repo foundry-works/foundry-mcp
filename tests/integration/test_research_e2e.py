@@ -16,7 +16,6 @@ import pytest
 from foundry_mcp.core.providers import ProviderResult, ProviderStatus, TokenUsage
 from foundry_mcp.core.research.workflows.base import WorkflowResult
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -102,15 +101,11 @@ def maintainer_role():
 class TestChatWorkflowE2E:
     """End-to-end tests for chat workflow through router."""
 
-    def test_chat_new_thread_full_flow(
-        self, mock_config, mock_memory
-    ):
+    def test_chat_new_thread_full_flow(self, mock_config, mock_memory):
         """Chat creates new thread and returns response envelope."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -138,15 +133,11 @@ class TestChatWorkflowE2E:
         assert result["data"]["provider_id"] == "gemini"
         assert result["meta"]["version"] == "response-v2"
 
-    def test_chat_continue_thread(
-        self, mock_config, mock_memory
-    ):
+    def test_chat_continue_thread(self, mock_config, mock_memory):
         """Chat continues existing thread with context."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -170,15 +161,11 @@ class TestChatWorkflowE2E:
         assert result["data"]["thread_id"] == "thread-existing"
         assert result["data"]["message_count"] == 5
 
-    def test_chat_provider_failure(
-        self, mock_config, mock_memory
-    ):
+    def test_chat_provider_failure(self, mock_config, mock_memory):
         """Chat handles provider failure gracefully."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=False,
@@ -204,15 +191,11 @@ class TestChatWorkflowE2E:
 class TestConsensusWorkflowE2E:
     """End-to-end tests for consensus workflow through router."""
 
-    def test_consensus_synthesize_strategy(
-        self, mock_config, mock_memory
-    ):
+    def test_consensus_synthesize_strategy(self, mock_config, mock_memory):
         """Consensus workflow synthesizes multiple provider responses."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -242,15 +225,11 @@ class TestConsensusWorkflowE2E:
         assert len(result["data"]["providers_consulted"]) == 2
         assert result["meta"]["version"] == "response-v2"
 
-    def test_consensus_all_responses_strategy(
-        self, mock_config, mock_memory
-    ):
+    def test_consensus_all_responses_strategy(self, mock_config, mock_memory):
         """Consensus workflow returns all individual responses."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ConsensusWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -283,15 +262,11 @@ class TestConsensusWorkflowE2E:
 class TestThinkDeepWorkflowE2E:
     """End-to-end tests for thinkdeep workflow through router."""
 
-    def test_thinkdeep_new_investigation(
-        self, mock_config, mock_memory
-    ):
+    def test_thinkdeep_new_investigation(self, mock_config, mock_memory):
         """ThinkDeep starts new investigation with topic."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -322,15 +297,11 @@ class TestThinkDeepWorkflowE2E:
         assert result["data"]["converged"] is False
         assert result["meta"]["version"] == "response-v2"
 
-    def test_thinkdeep_continue_investigation(
-        self, mock_config, mock_memory
-    ):
+    def test_thinkdeep_continue_investigation(self, mock_config, mock_memory):
         """ThinkDeep continues existing investigation."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -356,15 +327,11 @@ class TestThinkDeepWorkflowE2E:
         assert result["data"]["investigation_id"] == "inv-existing"
         assert result["data"]["current_depth"] == 2
 
-    def test_thinkdeep_converged(
-        self, mock_config, mock_memory
-    ):
+    def test_thinkdeep_converged(self, mock_config, mock_memory):
         """ThinkDeep indicates when investigation has converged."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ThinkDeepWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -397,15 +364,11 @@ class TestThinkDeepWorkflowE2E:
 class TestIdeateWorkflowE2E:
     """End-to-end tests for ideate workflow through router."""
 
-    def test_ideate_generate_ideas(
-        self, mock_config, mock_memory
-    ):
+    def test_ideate_generate_ideas(self, mock_config, mock_memory):
         """Ideate generates ideas for a topic."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -435,15 +398,11 @@ class TestIdeateWorkflowE2E:
         assert result["data"]["idea_count"] == 10
         assert result["meta"]["version"] == "response-v2"
 
-    def test_ideate_cluster_ideas(
-        self, mock_config, mock_memory
-    ):
+    def test_ideate_cluster_ideas(self, mock_config, mock_memory):
         """Ideate clusters existing ideas."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.IdeateWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -481,9 +440,7 @@ class TestThreadOperationsE2E:
         from foundry_mcp.core.research.models.enums import ThreadStatus
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.list_threads.return_value = [
                 {
@@ -512,9 +469,7 @@ class TestThreadOperationsE2E:
         from foundry_mcp.core.research.models.enums import ThreadStatus
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.get_thread.return_value = {
                 "id": "t-target",
@@ -540,9 +495,7 @@ class TestThreadOperationsE2E:
         """Thread-delete removes thread."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_threads.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.delete_thread.return_value = True
             MockWorkflow.return_value = mock_workflow
@@ -563,15 +516,11 @@ class TestThreadOperationsE2E:
 class TestResponseEnvelopeE2E:
     """End-to-end tests verifying response envelope structure."""
 
-    def test_success_envelope_structure(
-        self, mock_config, mock_memory
-    ):
+    def test_success_envelope_structure(self, mock_config, mock_memory):
         """Successful response has correct envelope structure."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.return_value = WorkflowResult(
                 success=True,
@@ -592,9 +541,7 @@ class TestResponseEnvelopeE2E:
         assert result["success"] is True
         assert result["meta"]["version"] == "response-v2"
 
-    def test_error_envelope_structure(
-        self, mock_config, mock_memory
-    ):
+    def test_error_envelope_structure(self, mock_config, mock_memory):
         """Error response has correct envelope structure."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -616,9 +563,7 @@ class TestResponseEnvelopeE2E:
 class TestErrorHandlingE2E:
     """End-to-end tests for error handling."""
 
-    def test_invalid_action_error(
-        self, mock_config, mock_memory
-    ):
+    def test_invalid_action_error(self, mock_config, mock_memory):
         """Invalid action returns appropriate error."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -629,9 +574,7 @@ class TestErrorHandlingE2E:
         assert "unsupported" in result["error"].lower() or "invalid" in result["error"].lower()
         assert result["data"]["error_code"] == "VALIDATION_ERROR"
 
-    def test_missing_required_param_error(
-        self, mock_config, mock_memory
-    ):
+    def test_missing_required_param_error(self, mock_config, mock_memory):
         """Missing required parameter returns validation error."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -642,15 +585,11 @@ class TestErrorHandlingE2E:
         assert "prompt" in result["error"].lower()
         assert result["data"]["error_type"] == "validation"
 
-    def test_workflow_exception_error(
-        self, mock_config, mock_memory
-    ):
+    def test_workflow_exception_error(self, mock_config, mock_memory):
         """Workflow exception is propagated when not handled."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
-        with patch(
-            "foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow"
-        ) as MockWorkflow:
+        with patch("foundry_mcp.tools.unified.research_handlers.handlers_workflows.ChatWorkflow") as MockWorkflow:
             mock_workflow = MagicMock()
             mock_workflow.execute.side_effect = RuntimeError("Unexpected error")
             MockWorkflow.return_value = mock_workflow

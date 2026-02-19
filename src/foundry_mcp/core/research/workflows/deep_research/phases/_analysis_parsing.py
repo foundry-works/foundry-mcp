@@ -8,16 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
 from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +24,7 @@ class AnalysisParsingMixin:
     """
 
     def _parse_analysis_response(
-        self: DeepResearchWorkflow,
+        self,
         content: str,
         state: DeepResearchState,
     ) -> dict[str, Any]:
@@ -87,12 +82,14 @@ class AnalysisParsingMixin:
                 }
                 confidence = confidence_map.get(confidence_str, ConfidenceLevel.MEDIUM)
 
-                result["findings"].append({
-                    "content": content_text,
-                    "confidence": confidence,
-                    "source_ids": f.get("source_ids", []),
-                    "category": f.get("category"),
-                })
+                result["findings"].append(
+                    {
+                        "content": content_text,
+                        "confidence": confidence,
+                        "source_ids": f.get("source_ids", []),
+                        "category": f.get("category"),
+                    }
+                )
 
         # Parse gaps
         raw_gaps = data.get("gaps", [])
@@ -104,11 +101,13 @@ class AnalysisParsingMixin:
                 if not description:
                     continue
 
-                result["gaps"].append({
-                    "description": description,
-                    "suggested_queries": g.get("suggested_queries", []),
-                    "priority": min(max(int(g.get("priority", 1)), 1), 10),
-                })
+                result["gaps"].append(
+                    {
+                        "description": description,
+                        "suggested_queries": g.get("suggested_queries", []),
+                        "priority": min(max(int(g.get("priority", 1)), 1), 10),
+                    }
+                )
 
         # Parse quality updates
         raw_quality = data.get("quality_updates", [])
@@ -119,10 +118,12 @@ class AnalysisParsingMixin:
                 source_id = q.get("source_id", "").strip()
                 quality = q.get("quality", "").lower()
                 if source_id and quality in ("low", "medium", "high", "unknown"):
-                    result["quality_updates"].append({
-                        "source_id": source_id,
-                        "quality": quality,
-                    })
+                    result["quality_updates"].append(
+                        {
+                            "source_id": source_id,
+                            "quality": quality,
+                        }
+                    )
 
         # Mark success if we got at least one finding
         result["success"] = len(result["findings"]) > 0

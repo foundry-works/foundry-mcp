@@ -9,8 +9,6 @@ import threading
 from typing import Optional
 
 from foundry_mcp.core.rate_limit import RateLimitConfig, TokenBucketLimiter
-from foundry_mcp.core.resilience import CircuitBreaker, CircuitState
-
 from foundry_mcp.core.research.providers.resilience.config import (
     PROVIDER_CONFIGS,
     get_provider_config,
@@ -19,6 +17,7 @@ from foundry_mcp.core.research.providers.resilience.models import (
     ProviderResilienceConfig,
     ProviderStatus,
 )
+from foundry_mcp.core.resilience import CircuitBreaker, CircuitState
 
 
 class ProviderResilienceManager:

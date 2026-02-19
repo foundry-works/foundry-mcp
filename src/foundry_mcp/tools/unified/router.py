@@ -6,7 +6,6 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Callable, Dict, cast
 
-
 # Error class (canonical definition in foundry_mcp.core.errors.execution)
 from foundry_mcp.core.errors.execution import ActionRouterError  # noqa: E402
 
@@ -34,8 +33,7 @@ class ActionRouter:
         if isinstance(actions, Mapping):
             mapping_actions = cast(Mapping[str, Callable[..., dict]], actions)
             normalized_actions = [
-                ActionDefinition(name=name, handler=handler)
-                for name, handler in mapping_actions.items()
+                ActionDefinition(name=name, handler=handler) for name, handler in mapping_actions.items()
             ]
         else:
             iterable_actions = cast(Iterable[ActionDefinition], actions)
@@ -61,9 +59,7 @@ class ActionRouter:
                     continue
                 key = name if case_sensitive else name.lower()
                 if key in self._handlers:
-                    raise ValueError(
-                        f"Duplicate action alias '{name}' for tool '{tool_name}'"
-                    )
+                    raise ValueError(f"Duplicate action alias '{name}' for tool '{tool_name}'")
                 self._handlers[key] = action_def.handler
                 self._canonical[key] = canonical_name
                 self._summaries[canonical_name] = action_def.summary

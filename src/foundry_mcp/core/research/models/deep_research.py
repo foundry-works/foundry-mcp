@@ -556,11 +556,7 @@ class DeepResearchState(BaseModel):
         Returns:
             List of item IDs at that fidelity level
         """
-        return [
-            item_id
-            for item_id, record in self.content_fidelity.items()
-            if record.current_level == level
-        ]
+        return [item_id for item_id, record in self.content_fidelity.items() if record.current_level == level]
 
     def get_overall_fidelity_score(self) -> float:
         """Calculate an overall fidelity score for the session.
@@ -583,10 +579,7 @@ class DeepResearchState(BaseModel):
             FidelityLevel.DROPPED: 0.0,
         }
 
-        total_score = sum(
-            level_scores.get(record.current_level, 0.5)
-            for record in self.content_fidelity.values()
-        )
+        total_score = sum(level_scores.get(record.current_level, 0.5) for record in self.content_fidelity.values())
         return total_score / len(self.content_fidelity)
 
     def has_degraded_content(self) -> bool:
@@ -595,10 +588,7 @@ class DeepResearchState(BaseModel):
         Returns:
             True if any content is below FULL fidelity
         """
-        return any(
-            record.current_level != FidelityLevel.FULL
-            for record in self.content_fidelity.values()
-        )
+        return any(record.current_level != FidelityLevel.FULL for record in self.content_fidelity.values())
 
     def record_chunk_fidelity(
         self,
@@ -644,9 +634,7 @@ class DeepResearchState(BaseModel):
             final_tokens=final_tokens,
         )
 
-    def get_chunk_fidelity(
-        self, base_id: str, chunk_index: int
-    ) -> Optional[ContentFidelityRecord]:
+    def get_chunk_fidelity(self, base_id: str, chunk_index: int) -> Optional[ContentFidelityRecord]:
         """Get fidelity record for a specific chunk.
 
         Args:
@@ -680,9 +668,7 @@ class DeepResearchState(BaseModel):
                     chunks[fragment_index] = record
         return chunks
 
-    def merge_fidelity_record(
-        self, item_id: str, other_record: ContentFidelityRecord
-    ) -> ContentFidelityRecord:
+    def merge_fidelity_record(self, item_id: str, other_record: ContentFidelityRecord) -> ContentFidelityRecord:
         """Merge another fidelity record into the state.
 
         Implements the fidelity merge rules:
@@ -708,10 +694,7 @@ class DeepResearchState(BaseModel):
 
         # Track dropped items
         record = self.content_fidelity[item_id]
-        if (
-            record.current_level == FidelityLevel.DROPPED
-            and item_id not in self.dropped_content_ids
-        ):
+        if record.current_level == FidelityLevel.DROPPED and item_id not in self.dropped_content_ids:
             self.dropped_content_ids.append(item_id)
 
         self.updated_at = datetime.utcnow()

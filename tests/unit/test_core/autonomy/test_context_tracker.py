@@ -12,13 +12,10 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from foundry_mcp.core.autonomy.context_tracker import (
     SIDECAR_REL_PATH,
@@ -26,10 +23,9 @@ from foundry_mcp.core.autonomy.context_tracker import (
     is_sandbox_mode,
 )
 from foundry_mcp.core.autonomy.models.enums import PauseReason, SessionStatus
-from foundry_mcp.core.autonomy.models.session_config import SessionContext, SessionLimits
+from foundry_mcp.core.autonomy.models.session_config import SessionLimits
 
 from .conftest import make_session, make_spec_data
-
 
 # =============================================================================
 # Helpers

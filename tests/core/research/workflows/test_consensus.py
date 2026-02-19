@@ -4,7 +4,7 @@ Tests that ConsensusWorkflow.execute() catches exceptions and returns error Work
 instead of crashing the MCP server.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

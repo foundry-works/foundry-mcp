@@ -6,8 +6,6 @@ instead of crashing the MCP server.
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestProviderDispatchExceptionHandling:
     """Tests for _dispatch_provider_action exception handling."""
@@ -16,9 +14,7 @@ class TestProviderDispatchExceptionHandling:
         """_dispatch_provider_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.provider import _dispatch_provider_action
 
-        with patch(
-            "foundry_mcp.tools.unified.provider._PROVIDER_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.provider._PROVIDER_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError("Provider registry failed")
 
@@ -39,9 +35,7 @@ class TestProviderDispatchExceptionHandling:
         """_dispatch_provider_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.provider import _dispatch_provider_action
 
-        with patch(
-            "foundry_mcp.tools.unified.provider._PROVIDER_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.provider._PROVIDER_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
 
@@ -62,9 +56,7 @@ class TestProviderDispatchExceptionHandling:
         from foundry_mcp.tools.unified.provider import _dispatch_provider_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.provider._PROVIDER_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.provider._PROVIDER_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["list"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 

@@ -9,29 +9,31 @@ Tests:
 
 import json
 import os
-import pytest
 import time
 from unittest.mock import Mock, patch
-from foundry_mcp.server import create_server
+
+import pytest
+
 from foundry_mcp.core.capabilities import (
+    CapabilitiesRegistry,
     Notification,
     NotificationManager,
+    SamplingManager,
     SamplingRequest,
     SamplingResponse,
-    SamplingManager,
-    CapabilitiesRegistry,
     get_capabilities_registry,
     get_notification_manager,
     get_sampling_manager,
 )
 from foundry_mcp.core.rate_limit import (
     RateLimitConfig,
+    RateLimitManager,
     RateLimitResult,
     TokenBucketLimiter,
-    RateLimitManager,
-    get_rate_limit_manager,
     check_rate_limit,
+    get_rate_limit_manager,
 )
+from foundry_mcp.server import create_server
 
 
 @pytest.fixture
@@ -121,8 +123,10 @@ class TestNotificationEmission:
     def test_notification_manager_emit(self, notification_manager):
         """Test that notifications are emitted to handlers."""
         received = []
+
         def handler(n):
             return received.append(n)
+
         notification_manager.register_handler(handler)
 
         notification = Notification(method="test/method")
@@ -146,8 +150,10 @@ class TestNotificationEmission:
     def test_notification_manager_unregister(self, notification_manager):
         """Test handler unregistration."""
         received = []
+
         def handler(n):
             return received.append(n)
+
         notification_manager.register_handler(handler)
         notification_manager.unregister_handler(handler)
 
@@ -161,9 +167,7 @@ class TestNotificationEmission:
         notification_manager.register_handler(lambda n: received.append(n))
 
         notification_manager.emit_resource_update(
-            uri="foundry://specs/test-spec-001",
-            update_type="updated",
-            metadata={"field": "status"}
+            uri="foundry://specs/test-spec-001", update_type="updated", metadata={"field": "status"}
         )
 
         assert len(received) == 1
@@ -179,7 +183,7 @@ class TestNotificationEmission:
         notification_manager.emit_spec_updated(
             spec_id="test-spec-001",
             update_type="status_changed",
-            changes={"old_status": "pending", "new_status": "in_progress"}
+            changes={"old_status": "pending", "new_status": "in_progress"},
         )
 
         assert len(received) == 1
@@ -196,7 +200,7 @@ class TestNotificationEmission:
             spec_id="test-spec-001",
             task_id="task-1-1",
             update_type="status_changed",
-            changes={"old_status": "pending", "new_status": "completed"}
+            changes={"old_status": "pending", "new_status": "completed"},
         )
 
         assert len(received) == 1
@@ -277,18 +281,11 @@ class TestSamplingRequests:
 
     def test_sampling_request_with_handler(self, sampling_manager):
         """Test successful sampling request."""
-        mock_response = SamplingResponse(
-            content="Test response",
-            model="claude-3",
-            usage={"total_tokens": 100}
-        )
+        mock_response = SamplingResponse(content="Test response", model="claude-3", usage={"total_tokens": 100})
         mock_handler = Mock(return_value=mock_response)
         sampling_manager.set_handler(mock_handler)
 
-        request = SamplingRequest(
-            messages=[{"role": "user", "content": "test"}],
-            max_tokens=500
-        )
+        request = SamplingRequest(messages=[{"role": "user", "content": "test"}], max_tokens=500)
         result = sampling_manager.request(request)
 
         assert result is not None
@@ -297,11 +294,7 @@ class TestSamplingRequests:
 
     def test_sampling_stats_tracking(self, sampling_manager):
         """Test that sampling tracks statistics."""
-        mock_response = SamplingResponse(
-            content="test",
-            model="claude-3",
-            usage={"total_tokens": 50}
-        )
+        mock_response = SamplingResponse(content="test", model="claude-3", usage={"total_tokens": 50})
         sampling_manager.set_handler(Mock(return_value=mock_response))
 
         request = SamplingRequest(messages=[{"role": "user", "content": "test"}])
@@ -323,19 +316,15 @@ class TestSamplingRequests:
             "direct_impacts": ["ClassA", "ClassB"],
             "indirect_impacts": ["ClassC"],
             "risk_level": "medium",
-            "recommendations": ["Review tests"]
+            "recommendations": ["Review tests"],
         }
         mock_response = SamplingResponse(
-            content=json.dumps(analysis_result),
-            model="claude-3",
-            usage={"total_tokens": 100}
+            content=json.dumps(analysis_result), model="claude-3", usage={"total_tokens": 100}
         )
         sampling_manager.set_handler(Mock(return_value=mock_response))
 
         result = sampling_manager.analyze_impact(
-            target="TestClass",
-            target_type="class",
-            context="Changing method signature"
+            target="TestClass", target_type="class", context="Changing method signature"
         )
 
         assert result is not None
@@ -344,10 +333,7 @@ class TestSamplingRequests:
 
     def test_analyze_impact_invalid_json_response(self, sampling_manager):
         """Test impact analysis with invalid JSON response."""
-        mock_response = SamplingResponse(
-            content="This is not JSON",
-            model="claude-3"
-        )
+        mock_response = SamplingResponse(content="This is not JSON", model="claude-3")
         sampling_manager.set_handler(Mock(return_value=mock_response))
 
         result = sampling_manager.analyze_impact("TestClass", "class")
@@ -357,6 +343,7 @@ class TestSamplingRequests:
 
     def test_sampling_handler_exception(self, sampling_manager):
         """Test handling of sampling handler exceptions."""
+
         def failing_handler(request):
             raise Exception("Handler error")
 
@@ -382,7 +369,7 @@ class TestTokenBucketLimiter:
 
         for i in range(5):
             result = limiter.acquire()
-            assert result.allowed, f"Request {i+1} should be allowed"
+            assert result.allowed, f"Request {i + 1} should be allowed"
 
     def test_limiter_blocks_over_burst(self):
         """Test that requests over burst limit are blocked."""
@@ -479,10 +466,7 @@ class TestRateLimitManager:
     def test_check_limit_enforces(self, rate_limit_manager):
         """Test that check_limit enforces rate limits."""
         # Configure a strict limit
-        rate_limit_manager._tool_configs["strict_tool"] = RateLimitConfig(
-            requests_per_minute=60,
-            burst_limit=2
-        )
+        rate_limit_manager._tool_configs["strict_tool"] = RateLimitConfig(requests_per_minute=60, burst_limit=2)
 
         # First two should pass
         assert rate_limit_manager.check_limit("strict_tool", log_on_throttle=False).allowed
@@ -522,10 +506,7 @@ class TestRateLimitManager:
 
     def test_load_from_env(self, rate_limit_manager):
         """Test loading config from environment variables."""
-        with patch.dict(os.environ, {
-            "FOUNDRY_RATE_LIMIT_DEFAULT": "30",
-            "FOUNDRY_RATE_LIMIT_BURST": "5"
-        }):
+        with patch.dict(os.environ, {"FOUNDRY_RATE_LIMIT_DEFAULT": "30", "FOUNDRY_RATE_LIMIT_BURST": "5"}):
             rate_limit_manager.load_from_env()
 
         assert rate_limit_manager._global_config.requests_per_minute == 30
@@ -538,9 +519,7 @@ class TestRateLimitThrottleEvents:
     def test_throttle_logs_audit(self, rate_limit_manager):
         """Test that throttle events are logged."""
         rate_limit_manager._tool_configs["throttle_test"] = RateLimitConfig(
-            requests_per_minute=60,
-            burst_limit=1,
-            reason="Test rate limit"
+            requests_per_minute=60, burst_limit=1, reason="Test rate limit"
         )
 
         # Exhaust limit
@@ -558,9 +537,7 @@ class TestRateLimitThrottleEvents:
         """Test authentication failure logging."""
         with patch("foundry_mcp.core.rate_limit.audit_log") as mock_audit:
             rate_limit_manager.log_auth_failure(
-                tool_name="test_tool",
-                tenant_id="test_tenant",
-                reason="Invalid API key"
+                tool_name="test_tool", tenant_id="test_tenant", reason="Invalid API key"
             )
 
             mock_audit.assert_called_once()

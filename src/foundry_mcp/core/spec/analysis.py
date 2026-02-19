@@ -108,11 +108,13 @@ def check_spec_completeness(
         if _nonempty_string(title):
             categories["titles"]["complete"] += 1
         else:
-            issues.append({
-                "node_id": node_id,
-                "category": "titles",
-                "message": "Empty or missing title",
-            })
+            issues.append(
+                {
+                    "node_id": node_id,
+                    "category": "titles",
+                    "message": "Empty or missing title",
+                }
+            )
 
         # Check description (tasks and verify nodes only)
         if node_type in ("task", "verify"):
@@ -120,11 +122,13 @@ def check_spec_completeness(
             if _has_description(metadata):
                 categories["descriptions"]["complete"] += 1
             else:
-                issues.append({
-                    "node_id": node_id,
-                    "category": "descriptions",
-                    "message": "Missing description",
-                })
+                issues.append(
+                    {
+                        "node_id": node_id,
+                        "category": "descriptions",
+                        "message": "Missing description",
+                    }
+                )
 
             # Check file_path (implementation/refactoring tasks only)
             task_category = metadata.get("task_category", "")
@@ -133,11 +137,13 @@ def check_spec_completeness(
                 if _nonempty_string(metadata.get("file_path")):
                     categories["file_paths"]["complete"] += 1
                 else:
-                    issues.append({
-                        "node_id": node_id,
-                        "category": "file_paths",
-                        "message": "Missing file_path for implementation task",
-                    })
+                    issues.append(
+                        {
+                            "node_id": node_id,
+                            "category": "file_paths",
+                            "message": "Missing file_path for implementation task",
+                        }
+                    )
 
             # Check estimated_hours (tasks only)
             if node_type == "task":
@@ -146,11 +152,13 @@ def check_spec_completeness(
                 if isinstance(est, (int, float)) and est > 0:
                     categories["estimates"]["complete"] += 1
                 else:
-                    issues.append({
-                        "node_id": node_id,
-                        "category": "estimates",
-                        "message": "Missing or invalid estimated_hours",
-                    })
+                    issues.append(
+                        {
+                            "node_id": node_id,
+                            "category": "estimates",
+                            "message": "Missing or invalid estimated_hours",
+                        }
+                    )
 
     # Calculate category scores
     for cat_data in categories.values():
@@ -281,11 +289,13 @@ def detect_duplicate_tasks(
             metadata = {}
         description = metadata.get("description", "") or ""
 
-        nodes.append({
-            "id": node_id,
-            "title": title.strip().lower(),
-            "description": description.strip().lower(),
-        })
+        nodes.append(
+            {
+                "id": node_id,
+                "title": title.strip().lower(),
+                "description": description.strip().lower(),
+            }
+        )
 
     # Compare pairs
     duplicates: List[Dict[str, Any]] = []
@@ -301,7 +311,7 @@ def detect_duplicate_tasks(
         if len(duplicates) >= max_pairs:
             truncated = True
             break
-        for node_b in nodes[i + 1:]:
+        for node_b in nodes[i + 1 :]:
             total_compared += 1
             if len(duplicates) >= max_pairs:
                 truncated = True
@@ -318,12 +328,14 @@ def detect_duplicate_tasks(
                 sim = max(title_sim, desc_sim)
 
             if sim >= threshold:
-                duplicates.append({
-                    "node_a": node_a["id"],
-                    "node_b": node_b["id"],
-                    "similarity": round(sim, 2),
-                    "scope": scope,
-                })
+                duplicates.append(
+                    {
+                        "node_a": node_a["id"],
+                        "node_b": node_b["id"],
+                        "similarity": round(sim, 2),
+                        "scope": scope,
+                    }
+                )
 
     result: Dict[str, Any] = {
         "spec_id": spec_id,

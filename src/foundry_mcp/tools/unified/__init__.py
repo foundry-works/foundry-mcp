@@ -5,22 +5,22 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .authoring_handlers import register_unified_authoring_tool
+from .environment import register_unified_environment_tool
 from .error import register_unified_error_tool
 from .health import register_unified_health_tool
 from .journal import register_unified_journal_tool
+from .lifecycle import register_unified_lifecycle_tool
 from .plan import register_unified_plan_tool
 from .provider import register_unified_provider_tool
-from .environment import register_unified_environment_tool
-from .lifecycle import register_unified_lifecycle_tool
-from .verification import register_unified_verification_tool
-from .review import register_unified_review_tool
-from .spec import register_unified_spec_tool
-from .server import register_unified_server_tool
 from .research import register_unified_research_tool
-
+from .review import register_unified_review_tool
+from .server import register_unified_server_tool
+from .spec import register_unified_spec_tool
+from .verification import register_unified_verification_tool
 
 if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from mcp.server.fastmcp import FastMCP
+
     from foundry_mcp.config.server import ServerConfig
 
 

@@ -72,9 +72,7 @@ def get_node(spec_data: Dict[str, Any], node_id: str) -> Optional[Dict[str, Any]
     return hierarchy.get(node_id)
 
 
-def update_node(
-    spec_data: Dict[str, Any], node_id: str, updates: Dict[str, Any]
-) -> bool:
+def update_node(spec_data: Dict[str, Any], node_id: str, updates: Dict[str, Any]) -> bool:
     """
     Update a node in the hierarchy.
 
@@ -111,9 +109,7 @@ def update_node(
 # =============================================================================
 
 
-def _add_phase_verification(
-    hierarchy: Dict[str, Any], phase_num: int, phase_id: str
-) -> None:
+def _add_phase_verification(hierarchy: Dict[str, Any], phase_num: int, phase_id: str) -> None:
     """
     Add verify nodes (auto + fidelity) to a phase.
 
@@ -414,13 +410,9 @@ def add_phase_bulk(
         if default_category is not None and not isinstance(default_category, str):
             return None, "metadata_defaults.task_category must be a string"
         default_acceptance = defaults.get("acceptance_criteria")
-        if default_acceptance is not None and not isinstance(
-            default_acceptance, (list, str)
-        ):
+        if default_acceptance is not None and not isinstance(default_acceptance, (list, str)):
             return None, "metadata_defaults.acceptance_criteria must be a list of strings"
-        if isinstance(default_acceptance, list) and any(
-            not isinstance(item, str) for item in default_acceptance
-        ):
+        if isinstance(default_acceptance, list) and any(not isinstance(item, str) for item in default_acceptance):
             return None, "metadata_defaults.acceptance_criteria must be a list of strings"
 
     # Validate each task definition
@@ -448,13 +440,9 @@ def add_phase_bulk(
             return None, f"Task at index {idx} has invalid task_category"
 
         acceptance_criteria = task_def.get("acceptance_criteria")
-        if acceptance_criteria is not None and not isinstance(
-            acceptance_criteria, (list, str)
-        ):
+        if acceptance_criteria is not None and not isinstance(acceptance_criteria, (list, str)):
             return None, f"Task at index {idx} has invalid acceptance_criteria"
-        if isinstance(acceptance_criteria, list) and any(
-            not isinstance(item, str) for item in acceptance_criteria
-        ):
+        if isinstance(acceptance_criteria, list) and any(not isinstance(item, str) for item in acceptance_criteria):
             return None, f"Task at index {idx} acceptance_criteria must be a list of strings"
 
     # Find specs directory
@@ -559,11 +547,7 @@ def add_phase_bulk(
         if _nonempty_string(details) and isinstance(details, str):
             return "details", details.strip()
         if isinstance(details, list):
-            cleaned = [
-                item.strip()
-                for item in details
-                if isinstance(item, str) and item.strip()
-            ]
+            cleaned = [item.strip() for item in details if isinstance(item, str) and item.strip()]
             if cleaned:
                 return "details", cleaned
         return None, None
@@ -674,11 +658,13 @@ def add_phase_bulk(
         phase_node["children"].append(task_id)
         phase_node["total_tasks"] += 1
 
-        tasks_created.append({
-            "task_id": task_id,
-            "title": task_title,
-            "type": task_type,
-        })
+        tasks_created.append(
+            {
+                "task_id": task_id,
+                "title": task_title,
+                "type": task_type,
+            }
+        )
 
     # Update spec-root total_tasks
     total_tasks = spec_root.get("total_tasks", 0)
@@ -714,7 +700,11 @@ def add_phase_bulk(
 # with callers that import from this module.
 from foundry_mcp.core.hierarchy_helpers import (  # noqa: F401
     collect_descendants as _collect_descendants,
+)
+from foundry_mcp.core.hierarchy_helpers import (
     count_tasks_in_subtree as _count_tasks_in_subtree,
+)
+from foundry_mcp.core.hierarchy_helpers import (
     remove_dependency_references as _remove_dependency_references,
 )
 
@@ -1074,9 +1064,7 @@ def move_phase(
 
     if link_previous:
         # Remove old dependency links
-        phase_deps = phase.setdefault(
-            "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-        )
+        phase_deps = phase.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
 
         # 1. Remove this phase from old_prev's blocks list
         if old_prev_id:
@@ -1086,23 +1074,27 @@ def move_phase(
                 old_prev_blocks = old_prev_deps.get("blocks", [])
                 if phase_id in old_prev_blocks:
                     old_prev_blocks.remove(phase_id)
-                    dependencies_updated.append({
-                        "action": "removed",
-                        "from": old_prev_id,
-                        "relationship": "blocks",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "removed",
+                            "from": old_prev_id,
+                            "relationship": "blocks",
+                            "target": phase_id,
+                        }
+                    )
 
         # 2. Remove old_prev from this phase's blocked_by
         phase_blocked_by = phase_deps.setdefault("blocked_by", [])
         if old_prev_id and old_prev_id in phase_blocked_by:
             phase_blocked_by.remove(old_prev_id)
-            dependencies_updated.append({
-                "action": "removed",
-                "from": phase_id,
-                "relationship": "blocked_by",
-                "target": old_prev_id,
-            })
+            dependencies_updated.append(
+                {
+                    "action": "removed",
+                    "from": phase_id,
+                    "relationship": "blocked_by",
+                    "target": old_prev_id,
+                }
+            )
 
         # 3. Remove this phase from old_next's blocked_by
         if old_next_id:
@@ -1112,82 +1104,88 @@ def move_phase(
                 old_next_blocked_by = old_next_deps.get("blocked_by", [])
                 if phase_id in old_next_blocked_by:
                     old_next_blocked_by.remove(phase_id)
-                    dependencies_updated.append({
-                        "action": "removed",
-                        "from": old_next_id,
-                        "relationship": "blocked_by",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "removed",
+                            "from": old_next_id,
+                            "relationship": "blocked_by",
+                            "target": phase_id,
+                        }
+                    )
 
         # 4. Remove old_next from this phase's blocks
         phase_blocks = phase_deps.setdefault("blocks", [])
         if old_next_id and old_next_id in phase_blocks:
             phase_blocks.remove(old_next_id)
-            dependencies_updated.append({
-                "action": "removed",
-                "from": phase_id,
-                "relationship": "blocks",
-                "target": old_next_id,
-            })
+            dependencies_updated.append(
+                {
+                    "action": "removed",
+                    "from": phase_id,
+                    "relationship": "blocks",
+                    "target": old_next_id,
+                }
+            )
 
         # 5. Link old neighbors to each other (if they were adjacent via this phase)
         if old_prev_id and old_next_id:
             old_prev = hierarchy.get(old_prev_id)
             old_next = hierarchy.get(old_next_id)
             if old_prev and old_next:
-                old_prev_deps = old_prev.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                old_prev_deps = old_prev.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 old_prev_blocks = old_prev_deps.setdefault("blocks", [])
                 if old_next_id not in old_prev_blocks:
                     old_prev_blocks.append(old_next_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": old_prev_id,
-                        "relationship": "blocks",
-                        "target": old_next_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": old_prev_id,
+                            "relationship": "blocks",
+                            "target": old_next_id,
+                        }
+                    )
 
-                old_next_deps = old_next.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                old_next_deps = old_next.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 old_next_blocked_by = old_next_deps.setdefault("blocked_by", [])
                 if old_prev_id not in old_next_blocked_by:
                     old_next_blocked_by.append(old_prev_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": old_next_id,
-                        "relationship": "blocked_by",
-                        "target": old_prev_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": old_next_id,
+                            "relationship": "blocked_by",
+                            "target": old_prev_id,
+                        }
+                    )
 
         # Add new dependency links
         # 6. New prev blocks this phase
         if new_prev_id:
             new_prev = hierarchy.get(new_prev_id)
             if new_prev:
-                new_prev_deps = new_prev.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                new_prev_deps = new_prev.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 new_prev_blocks = new_prev_deps.setdefault("blocks", [])
                 if phase_id not in new_prev_blocks:
                     new_prev_blocks.append(phase_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": new_prev_id,
-                        "relationship": "blocks",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": new_prev_id,
+                            "relationship": "blocks",
+                            "target": phase_id,
+                        }
+                    )
 
                 # This phase is blocked by new prev
                 if new_prev_id not in phase_blocked_by:
                     phase_blocked_by.append(new_prev_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": phase_id,
-                        "relationship": "blocked_by",
-                        "target": new_prev_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": phase_id,
+                            "relationship": "blocked_by",
+                            "target": new_prev_id,
+                        }
+                    )
 
         # 7. This phase blocks new next
         if new_next_id:
@@ -1195,25 +1193,27 @@ def move_phase(
             if new_next:
                 if new_next_id not in phase_blocks:
                     phase_blocks.append(new_next_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": phase_id,
-                        "relationship": "blocks",
-                        "target": new_next_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": phase_id,
+                            "relationship": "blocks",
+                            "target": new_next_id,
+                        }
+                    )
 
-                new_next_deps = new_next.setdefault(
-                    "dependencies", {"blocks": [], "blocked_by": [], "depends": []}
-                )
+                new_next_deps = new_next.setdefault("dependencies", {"blocks": [], "blocked_by": [], "depends": []})
                 new_next_blocked_by = new_next_deps.setdefault("blocked_by", [])
                 if phase_id not in new_next_blocked_by:
                     new_next_blocked_by.append(phase_id)
-                    dependencies_updated.append({
-                        "action": "added",
-                        "from": new_next_id,
-                        "relationship": "blocked_by",
-                        "target": phase_id,
-                    })
+                    dependencies_updated.append(
+                        {
+                            "action": "added",
+                            "from": new_next_id,
+                            "relationship": "blocked_by",
+                            "target": phase_id,
+                        }
+                    )
 
                 # Remove old link from new prev to new next (now goes through this phase)
                 if new_prev_id:
@@ -1223,21 +1223,25 @@ def move_phase(
                         new_prev_blocks = new_prev_deps.get("blocks", [])
                         if new_next_id in new_prev_blocks:
                             new_prev_blocks.remove(new_next_id)
-                            dependencies_updated.append({
-                                "action": "removed",
-                                "from": new_prev_id,
-                                "relationship": "blocks",
-                                "target": new_next_id,
-                            })
+                            dependencies_updated.append(
+                                {
+                                    "action": "removed",
+                                    "from": new_prev_id,
+                                    "relationship": "blocks",
+                                    "target": new_next_id,
+                                }
+                            )
 
                     if new_prev_id in new_next_blocked_by:
                         new_next_blocked_by.remove(new_prev_id)
-                        dependencies_updated.append({
-                            "action": "removed",
-                            "from": new_next_id,
-                            "relationship": "blocked_by",
-                            "target": new_prev_id,
-                        })
+                        dependencies_updated.append(
+                            {
+                                "action": "removed",
+                                "from": new_next_id,
+                                "relationship": "blocked_by",
+                                "target": new_prev_id,
+                            }
+                        )
 
     # Update spec-root children
     spec_root["children"] = children
@@ -1315,9 +1319,7 @@ def update_phase_metadata(
             return None, "estimated_hours must be >= 0"
 
     # Check that at least one field is being updated
-    has_update = any(
-        v is not None for v in [estimated_hours, description, purpose]
-    )
+    has_update = any(v is not None for v in [estimated_hours, description, purpose])
     if not has_update:
         return None, "At least one field (estimated_hours, description, purpose) must be provided"
 
@@ -1364,31 +1366,37 @@ def update_phase_metadata(
     if estimated_hours is not None:
         previous = phase_metadata.get("estimated_hours")
         phase_metadata["estimated_hours"] = estimated_hours
-        updates.append({
-            "field": "estimated_hours",
-            "previous_value": previous,
-            "new_value": estimated_hours,
-        })
+        updates.append(
+            {
+                "field": "estimated_hours",
+                "previous_value": previous,
+                "new_value": estimated_hours,
+            }
+        )
 
     if description is not None:
         description = description.strip() if description else description
         previous = phase_metadata.get("description")
         phase_metadata["description"] = description
-        updates.append({
-            "field": "description",
-            "previous_value": previous,
-            "new_value": description,
-        })
+        updates.append(
+            {
+                "field": "description",
+                "previous_value": previous,
+                "new_value": description,
+            }
+        )
 
     if purpose is not None:
         purpose = purpose.strip() if purpose else purpose
         previous = phase_metadata.get("purpose")
         phase_metadata["purpose"] = purpose
-        updates.append({
-            "field": "purpose",
-            "previous_value": previous,
-            "new_value": purpose,
-        })
+        updates.append(
+            {
+                "field": "purpose",
+                "previous_value": previous,
+                "new_value": purpose,
+            }
+        )
 
     # Build result
     result: Dict[str, Any] = {
@@ -1495,14 +1503,16 @@ def recalculate_estimated_hours(
         prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
         delta = calculated_hours - prev_value
 
-        phase_results.append({
-            "phase_id": phase_id,
-            "title": phase.get("title", ""),
-            "previous": previous_hours,
-            "calculated": calculated_hours,
-            "delta": delta,
-            "task_count": task_count,
-        })
+        phase_results.append(
+            {
+                "phase_id": phase_id,
+                "title": phase.get("title", ""),
+                "previous": previous_hours,
+                "calculated": calculated_hours,
+                "delta": delta,
+                "task_count": task_count,
+            }
+        )
 
         # Update phase metadata (will be saved if not dry_run)
         if "metadata" not in phase:
@@ -1636,14 +1646,16 @@ def recalculate_actual_hours(
         prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
         delta = calculated_hours - prev_value
 
-        phase_results.append({
-            "phase_id": phase_id,
-            "title": phase.get("title", ""),
-            "previous": previous_hours,
-            "calculated": calculated_hours,
-            "delta": delta,
-            "task_count": task_count,
-        })
+        phase_results.append(
+            {
+                "phase_id": phase_id,
+                "title": phase.get("title", ""),
+                "previous": previous_hours,
+                "calculated": calculated_hours,
+                "delta": delta,
+                "task_count": task_count,
+            }
+        )
 
         # Update phase metadata (will be saved if not dry_run)
         if "metadata" not in phase:

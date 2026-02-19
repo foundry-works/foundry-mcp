@@ -28,11 +28,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     finalize_phase,
 )
 
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
-
 logger = logging.getLogger(__name__)
 
 
@@ -45,8 +40,16 @@ class RefinementPhaseMixin:
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
     """
 
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     async def _execute_refinement_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout: float,
@@ -139,17 +142,13 @@ class RefinementPhaseMixin:
         )
 
         # Compute budget allocation to prevent unbounded context growth
-        _phase_budget, report_budget, remaining_budget = compute_refinement_budget(
-            provider_id, state
-        )
+        _phase_budget, report_budget, remaining_budget = compute_refinement_budget(provider_id, state)
 
         # Summarize report if needed to fit within budget
         report_summary = ""
         report_fidelity = "full"
         if state.report:
-            report_summary, report_fidelity = summarize_report_for_refinement(
-                state.report, report_budget
-            )
+            report_summary, report_fidelity = summarize_report_for_refinement(state.report, report_budget)
 
         # Update state fidelity tracking for refinement phase
         # Note: We update fidelity in metadata if we actually summarized
@@ -179,9 +178,7 @@ class RefinementPhaseMixin:
         )
 
         if not valid:
-            logger.warning(
-                "Refinement phase final-fit validation failed, proceeding with truncated prompts"
-            )
+            logger.warning("Refinement phase final-fit validation failed, proceeding with truncated prompts")
 
         # Check for cancellation before making provider call
         self._check_cancellation(state)
@@ -220,7 +217,7 @@ class RefinementPhaseMixin:
 
         # Convert follow-up queries to new sub-queries for next iteration
         new_sub_queries = 0
-        for query_data in follow_up_queries[:state.max_sub_queries]:
+        for query_data in follow_up_queries[: state.max_sub_queries]:
             # Add as new sub-query
             state.add_sub_query(
                 query=query_data["query"],
@@ -273,7 +270,7 @@ class RefinementPhaseMixin:
             },
         )
 
-    def _build_refinement_system_prompt(self: DeepResearchWorkflow, state: DeepResearchState) -> str:
+    def _build_refinement_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for gap analysis and refinement.
 
         Args:
@@ -322,7 +319,7 @@ Guidelines:
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
     def _build_refinement_user_prompt(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         report_summary: Optional[str] = None,
         remaining_budget: Optional[int] = None,
@@ -340,7 +337,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         prompt_parts = [
             f"# Research Query\n{state.original_query}",
             "",
-            f"## Research Status",
+            "## Research Status",
             f"- Iteration: {state.iteration}/{state.max_iterations}",
             f"- Sources examined: {len(state.sources)}",
             f"- Findings extracted: {len(state.findings)}",
@@ -396,8 +393,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         # Add high-confidence findings for context with budget awareness
         high_conf_findings = [
-            f for f in state.findings
-            if hasattr(f.confidence, 'value') and f.confidence.value in ('high', 'confirmed')
+            f for f in state.findings if hasattr(f.confidence, "value") and f.confidence.value in ("high", "confirmed")
         ]
         if high_conf_findings:
             prompt_parts.append("## High-Confidence Findings Already Established")
@@ -422,20 +418,22 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             prompt_parts.append("")
 
         # Add instructions
-        prompt_parts.extend([
-            "## Instructions",
-            "1. Analyze each gap for severity and addressability",
-            "2. Generate focused follow-up queries for addressable gaps",
-            "3. Mark any gaps that are actually addressed by existing findings",
-            "4. Recommend whether iteration is worthwhile given remaining gaps",
-            "",
-            "Return your analysis as JSON.",
-        ])
+        prompt_parts.extend(
+            [
+                "## Instructions",
+                "1. Analyze each gap for severity and addressability",
+                "2. Generate focused follow-up queries for addressable gaps",
+                "3. Mark any gaps that are actually addressed by existing findings",
+                "4. Recommend whether iteration is worthwhile given remaining gaps",
+                "",
+                "Return your analysis as JSON.",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
     def _parse_refinement_response(
-        self: DeepResearchWorkflow,
+        self,
         content: str,
         state: DeepResearchState,
     ) -> dict[str, Any]:
@@ -479,12 +477,14 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
             for ga in raw_analysis:
                 if not isinstance(ga, dict):
                     continue
-                result["gap_analysis"].append({
-                    "gap_id": ga.get("gap_id", ""),
-                    "severity": ga.get("severity", "moderate"),
-                    "addressable": ga.get("addressable", True),
-                    "rationale": ga.get("rationale", ""),
-                })
+                result["gap_analysis"].append(
+                    {
+                        "gap_id": ga.get("gap_id", ""),
+                        "severity": ga.get("severity", "moderate"),
+                        "addressable": ga.get("addressable", True),
+                        "rationale": ga.get("rationale", ""),
+                    }
+                )
 
         # Parse follow-up queries
         raw_queries = data.get("follow_up_queries", [])
@@ -495,19 +495,19 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                 query = fq.get("query", "").strip()
                 if not query:
                     continue
-                result["follow_up_queries"].append({
-                    "query": query,
-                    "target_gap_id": fq.get("target_gap_id", ""),
-                    "rationale": fq.get("rationale", ""),
-                    "priority": min(max(int(fq.get("priority", 1)), 1), 10),
-                })
+                result["follow_up_queries"].append(
+                    {
+                        "query": query,
+                        "target_gap_id": fq.get("target_gap_id", ""),
+                        "rationale": fq.get("rationale", ""),
+                        "priority": min(max(int(fq.get("priority", 1)), 1), 10),
+                    }
+                )
 
         # Parse addressed gaps
         raw_addressed = data.get("addressed_gap_ids", [])
         if isinstance(raw_addressed, list):
-            result["addressed_gap_ids"] = [
-                gid for gid in raw_addressed if isinstance(gid, str)
-            ]
+            result["addressed_gap_ids"] = [gid for gid in raw_addressed if isinstance(gid, str)]
 
         # Parse iteration recommendation
         iter_rec = data.get("iteration_recommendation", {})
@@ -519,7 +519,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         return result
 
-    def _extract_fallback_queries(self: DeepResearchWorkflow, state: DeepResearchState) -> list[dict[str, Any]]:
+    def _extract_fallback_queries(self, state: DeepResearchState) -> list[dict[str, Any]]:
         """Extract follow-up queries from existing gap suggestions as fallback.
 
         Used when LLM parsing fails but we still want to progress.
@@ -533,10 +533,12 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
         queries = []
         for gap in state.unresolved_gaps():
             for sq in gap.suggested_queries[:2]:  # Max 2 per gap
-                queries.append({
-                    "query": sq,
-                    "target_gap_id": gap.id,
-                    "rationale": f"Suggested query from gap: {gap.description[:50]}",
-                    "priority": gap.priority,
-                })
-        return queries[:state.max_sub_queries]  # Respect limit
+                queries.append(
+                    {
+                        "query": sq,
+                        "target_gap_id": gap.id,
+                        "rationale": f"Suggested query from gap: {gap.description[:50]}",
+                        "priority": gap.priority,
+                    }
+                )
+        return queries[: state.max_sub_queries]  # Respect limit

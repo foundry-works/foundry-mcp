@@ -12,27 +12,26 @@ Tests cover:
 import pytest
 
 from foundry_mcp.core.providers.base import (
+    # Metadata dataclasses
+    ModelDescriptor,
     # Enums
     ProviderCapability,
-    ProviderStatus,
+    # Errors
+    ProviderError,
+    ProviderExecutionError,
+    # Hooks
+    ProviderHooks,
+    ProviderMetadata,
     # Request/Response dataclasses
     ProviderRequest,
     ProviderResult,
-    TokenUsage,
-    StreamChunk,
-    # Metadata dataclasses
-    ModelDescriptor,
-    ProviderMetadata,
-    # Hooks
-    ProviderHooks,
-    # Errors
-    ProviderError,
-    ProviderUnavailableError,
-    ProviderExecutionError,
+    ProviderStatus,
     ProviderTimeoutError,
+    ProviderUnavailableError,
+    StreamChunk,
+    TokenUsage,
 )
 from foundry_mcp.core.responses.types import ErrorType
-
 
 # =============================================================================
 # ProviderStatus Tests

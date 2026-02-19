@@ -231,14 +231,16 @@ class ContentFidelityRecord(BaseModel):
             self.phases.items(),
             key=lambda kv: kv[1].timestamp,
         ):
-            history.append({
-                "phase": phase_name,
-                "level": record.level.value,
-                "reason": record.reason,
-                "timestamp": record.timestamp.isoformat(),
-                "original_tokens": record.original_tokens,
-                "final_tokens": record.final_tokens,
-            })
+            history.append(
+                {
+                    "phase": phase_name,
+                    "level": record.level.value,
+                    "reason": record.reason,
+                    "timestamp": record.timestamp.isoformat(),
+                    "original_tokens": record.original_tokens,
+                    "final_tokens": record.final_tokens,
+                }
+            )
         return history
 
 

@@ -8,10 +8,10 @@ Tests the multi-phase iterative research workflow including:
 - Refinement phase (gap identification)
 """
 
+import asyncio
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
-import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,7 +28,6 @@ from foundry_mcp.core.research.models.sources import (
     SubQuery,
 )
 from foundry_mcp.core.research.workflows.base import WorkflowResult
-
 
 # =============================================================================
 # Test Fixtures
@@ -99,8 +98,10 @@ def mock_memory(tmp_path: Path):
 @pytest.fixture
 def mock_provider_result():
     """Create a mock ProviderResult factory."""
+
     def _create(content: str, success: bool = True):
         from foundry_mcp.core.providers.base import ProviderResult, ProviderStatus, TokenUsage
+
         return ProviderResult(
             content=content,
             provider_id="test-provider",
@@ -109,6 +110,7 @@ def mock_provider_result():
             tokens=TokenUsage(input_tokens=10, output_tokens=20),
             duration_ms=100.0,
         )
+
     return _create
 
 
@@ -384,9 +386,7 @@ class TestDeepResearchWorkflow:
         assert payload["event_type"] == "test_event"
         assert payload["research_id"] == state.id
 
-    def test_workflow_complete_audit_enhanced_fields(
-        self, mock_config, mock_memory, tmp_path
-    ):
+    def test_workflow_complete_audit_enhanced_fields(self, mock_config, mock_memory, tmp_path):
         """Should include enhanced statistics in workflow_complete audit event."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
@@ -467,15 +467,9 @@ class TestDeepResearchWorkflow:
                 "report_length": len(state.report or ""),
                 "total_tokens_used": state.total_tokens_used,
                 "total_duration_ms": state.total_duration_ms,
-                "total_input_tokens": sum(
-                    m.input_tokens for m in state.phase_metrics
-                ),
-                "total_output_tokens": sum(
-                    m.output_tokens for m in state.phase_metrics
-                ),
-                "total_cached_tokens": sum(
-                    m.cached_tokens for m in state.phase_metrics
-                ),
+                "total_input_tokens": sum(m.input_tokens for m in state.phase_metrics),
+                "total_output_tokens": sum(m.output_tokens for m in state.phase_metrics),
+                "total_cached_tokens": sum(m.cached_tokens for m in state.phase_metrics),
                 "phase_metrics": [
                     {
                         "phase": m.phase,
@@ -527,9 +521,7 @@ class TestDeepResearchWorkflow:
         assert data["research_mode"] == "technical"
 
     @pytest.mark.asyncio
-    async def test_execute_gathering_multi_provider(
-        self, mock_config, mock_memory, sample_deep_research_state
-    ):
+    async def test_execute_gathering_multi_provider(self, mock_config, mock_memory, sample_deep_research_state):
         """Should gather sources from multiple providers with dedup."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
@@ -592,9 +584,7 @@ class TestDeepResearchWorkflow:
         assert result.metadata["providers_used"] == ["tavily", "semantic_scholar"]
 
     @pytest.mark.asyncio
-    async def test_execute_gathering_deduplicates_by_title(
-        self, mock_config, mock_memory, sample_deep_research_state
-    ):
+    async def test_execute_gathering_deduplicates_by_title(self, mock_config, mock_memory, sample_deep_research_state):
         """Should deduplicate sources with same title from different domains."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
@@ -663,8 +653,8 @@ class TestDeepResearchWorkflow:
 
     def test_background_task_timeout(self, mock_config, mock_memory):
         """Should mark background task as timed out."""
-        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
         from foundry_mcp.core.background_task import TaskStatus
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
         state = DeepResearchState(original_query="Timeout test")
@@ -673,9 +663,7 @@ class TestDeepResearchWorkflow:
             await asyncio.sleep(0.2)
             return WorkflowResult(success=True, content="done")
 
-        with patch.object(
-            workflow, "_execute_workflow_async", side_effect=slow_execute
-        ):
+        with patch.object(workflow, "_execute_workflow_async", side_effect=slow_execute):
             result = workflow._start_background_task(
                 state=state,
                 provider_id=None,
@@ -705,9 +693,7 @@ class TestDeepResearchWorkflow:
             await asyncio.sleep(0.1)
             return WorkflowResult(success=True, content="done")
 
-        with patch.object(
-            workflow, "_execute_workflow_async", side_effect=slow_execute
-        ):
+        with patch.object(workflow, "_execute_workflow_async", side_effect=slow_execute):
             _ = workflow._start_background_task(
                 state=state,
                 provider_id=None,
@@ -741,9 +727,7 @@ class TestDeepResearchWorkflow:
             await asyncio.sleep(0.2)
             return WorkflowResult(success=True, content="done")
 
-        with patch.object(
-            workflow, "_execute_workflow_async", side_effect=slow_execute
-        ):
+        with patch.object(workflow, "_execute_workflow_async", side_effect=slow_execute):
             # Start background task
             workflow._start_background_task(
                 state=state,
@@ -770,9 +754,7 @@ class TestDeepResearchWorkflow:
             assert bg_task.thread is not None
             bg_task.thread.join(timeout=5.0)
 
-    def test_continue_research_with_background(
-        self, mock_config, mock_memory, sample_deep_research_state
-    ):
+    def test_continue_research_with_background(self, mock_config, mock_memory, sample_deep_research_state):
         """Should continue research in background mode."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
@@ -787,9 +769,7 @@ class TestDeepResearchWorkflow:
             await asyncio.sleep(0.1)
             return WorkflowResult(success=True, content="Continued research")
 
-        with patch.object(
-            workflow, "_execute_workflow_async", side_effect=mock_execute
-        ):
+        with patch.object(workflow, "_execute_workflow_async", side_effect=mock_execute):
             # Continue with background=True
             result = workflow.execute(
                 action="continue",
@@ -861,15 +841,14 @@ class TestDeepResearchWorkflow:
 
     def test_execute_catches_exceptions(self, mock_config, mock_memory):
         """Exceptions during execute should be caught and return error result."""
-        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
         from unittest.mock import patch
+
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         workflow = DeepResearchWorkflow(mock_config, mock_memory)
 
         # Simulate an exception during _start_research
-        with patch.object(
-            workflow, "_start_research", side_effect=RuntimeError("Storage unavailable")
-        ):
+        with patch.object(workflow, "_start_research", side_effect=RuntimeError("Storage unavailable")):
             result = workflow.execute(query="test query", action="start")
 
         # Should return error result, not raise exception
@@ -994,9 +973,7 @@ class TestPhaseConfiguration:
         assert mock_config.get_phase_provider("analysis") == "openai"
         assert mock_config.get_phase_provider("planning") == "test-provider"
 
-    def test_state_initializes_with_phase_providers(
-        self, mock_config, mock_memory
-    ):
+    def test_state_initializes_with_phase_providers(self, mock_config, mock_memory):
         """Should initialize state with per-phase providers from config."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
@@ -1223,9 +1200,7 @@ class TestDeepResearchActionHandlers:
         yield memory
         _helpers._memory = old_memory
 
-    def test_dispatch_to_deep_research(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_dispatch_to_deep_research(self, mock_tool_config, mock_tool_memory):
         """Should dispatch 'deep-research' action to handler."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1261,9 +1236,7 @@ class TestDeepResearchActionHandlers:
             assert result["success"] is True
             assert result["data"]["research_id"] == "dr-1"
 
-    def test_dispatch_to_deep_research_status(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_dispatch_to_deep_research_status(self, mock_tool_config, mock_tool_memory):
         """Should dispatch 'deep-research-status' action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1289,9 +1262,7 @@ class TestDeepResearchActionHandlers:
 
             assert result["success"] is True
 
-    def test_dispatch_to_deep_research_list(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_dispatch_to_deep_research_list(self, mock_tool_config, mock_tool_memory):
         """Should dispatch 'deep-research-list' action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1312,9 +1283,7 @@ class TestDeepResearchActionHandlers:
             assert result["success"] is True
             assert result["data"]["count"] == 1
 
-    def test_dispatch_to_deep_research_delete(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_dispatch_to_deep_research_delete(self, mock_tool_config, mock_tool_memory):
         """Should dispatch 'deep-research-delete' action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1333,9 +1302,7 @@ class TestDeepResearchActionHandlers:
             assert result["success"] is True
             assert result["data"]["deleted"] is True
 
-    def test_deep_research_validation_error_no_query(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_deep_research_validation_error_no_query(self, mock_tool_config, mock_tool_memory):
         """Should return validation error when query missing for start."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1348,9 +1315,7 @@ class TestDeepResearchActionHandlers:
         assert result["success"] is False
         assert "query" in result["error"].lower()
 
-    def test_deep_research_validation_error_no_research_id(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_deep_research_validation_error_no_research_id(self, mock_tool_config, mock_tool_memory):
         """Should return validation error when research_id missing for status."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1362,9 +1327,7 @@ class TestDeepResearchActionHandlers:
         assert result["success"] is False
         assert "research_id" in result["error"].lower()
 
-    def test_dispatch_to_deep_research_resume(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_dispatch_to_deep_research_resume(self, mock_tool_config, mock_tool_memory):
         """Should dispatch 'deep-research' action with resume sub-action."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1396,9 +1359,7 @@ class TestDeepResearchActionHandlers:
             call_kwargs = mock_workflow.execute.call_args[1]
             assert call_kwargs["action"] == "continue"
 
-    def test_deep_research_list_pagination(
-        self, mock_tool_config, mock_tool_memory
-    ):
+    def test_deep_research_list_pagination(self, mock_tool_config, mock_tool_memory):
         """Should support cursor-based pagination for deep-research-list."""
         from foundry_mcp.tools.unified.research import _dispatch_research_action
 
@@ -1462,9 +1423,7 @@ class TestStatusPersistenceThrottle:
         workflow = DeepResearchWorkflow(config, mock_memory)
         return workflow
 
-    def test_throttle_zero_always_persists(
-        self, workflow_zero_throttle, sample_deep_research_state
-    ):
+    def test_throttle_zero_always_persists(self, workflow_zero_throttle, sample_deep_research_state):
         """Throttle=0 should always return True (always persist)."""
         from datetime import datetime, timezone
 
@@ -1479,9 +1438,7 @@ class TestStatusPersistenceThrottle:
         # Should still persist with zero throttle
         assert workflow._should_persist_status(state) is True
 
-    def test_throttle_first_call_always_persists(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_throttle_first_call_always_persists(self, workflow_with_throttle, sample_deep_research_state):
         """First call (no previous persistence) should always persist."""
         workflow = workflow_with_throttle
         state = sample_deep_research_state
@@ -1492,9 +1449,7 @@ class TestStatusPersistenceThrottle:
         # Should persist
         assert workflow._should_persist_status(state) is True
 
-    def test_throttle_blocks_immediate_second_call(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_throttle_blocks_immediate_second_call(self, workflow_with_throttle, sample_deep_research_state):
         """Immediate second call should be blocked by throttle."""
         from datetime import datetime, timezone
 
@@ -1509,9 +1464,7 @@ class TestStatusPersistenceThrottle:
         # Should NOT persist (throttle active)
         assert workflow._should_persist_status(state) is False
 
-    def test_throttle_uses_persisted_metadata_across_instances(
-        self, mock_memory, sample_deep_research_state
-    ):
+    def test_throttle_uses_persisted_metadata_across_instances(self, mock_memory, sample_deep_research_state):
         """Throttle should respect persisted tracking data across instances."""
         from foundry_mcp.config.research import ResearchConfig
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
@@ -1525,11 +1478,9 @@ class TestStatusPersistenceThrottle:
         workflow2 = DeepResearchWorkflow(config, mock_memory)
         assert workflow2._should_persist_status(state) is False
 
-    def test_throttle_allows_after_interval_elapsed(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_throttle_allows_after_interval_elapsed(self, workflow_with_throttle, sample_deep_research_state):
         """Should persist after throttle interval has elapsed."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
 
         workflow = workflow_with_throttle
         state = sample_deep_research_state
@@ -1562,9 +1513,7 @@ class TestStatusPersistenceThrottle:
         # Should persist (terminal state overrides throttle)
         assert workflow._should_persist_status(state) is True
 
-    def test_terminal_state_failed_persists_during_throttle(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_terminal_state_failed_persists_during_throttle(self, workflow_with_throttle, sample_deep_research_state):
         """Terminal state (failed) should persist even during throttle."""
         from datetime import datetime, timezone
 
@@ -1582,9 +1531,7 @@ class TestStatusPersistenceThrottle:
         # Should persist (terminal state overrides throttle)
         assert workflow._should_persist_status(state) is True
 
-    def test_phase_change_persists_during_throttle(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_phase_change_persists_during_throttle(self, workflow_with_throttle, sample_deep_research_state):
         """Phase change should persist even during throttle."""
         from datetime import datetime, timezone
 
@@ -1602,9 +1549,7 @@ class TestStatusPersistenceThrottle:
         # Should persist (phase change overrides throttle)
         assert workflow._should_persist_status(state) is True
 
-    def test_iteration_change_persists_during_throttle(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_iteration_change_persists_during_throttle(self, workflow_with_throttle, sample_deep_research_state):
         """Iteration change should persist even during throttle."""
         from datetime import datetime, timezone
 
@@ -1622,11 +1567,8 @@ class TestStatusPersistenceThrottle:
         # Should persist (iteration change overrides throttle)
         assert workflow._should_persist_status(state) is True
 
-    def test_persist_state_updates_tracking_fields(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_persist_state_updates_tracking_fields(self, workflow_with_throttle, sample_deep_research_state):
         """_persist_state should update all tracking fields."""
-        from datetime import datetime, timezone
 
         workflow = workflow_with_throttle
         state = sample_deep_research_state
@@ -1647,9 +1589,7 @@ class TestStatusPersistenceThrottle:
         # Verify memory.save_deep_research was called
         workflow.memory.save_deep_research.assert_called_once_with(state)
 
-    def test_persist_state_if_needed_returns_true_on_persist(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_persist_state_if_needed_returns_true_on_persist(self, workflow_with_throttle, sample_deep_research_state):
         """_persist_state_if_needed should return True when persisting."""
         workflow = workflow_with_throttle
         state = sample_deep_research_state
@@ -1658,9 +1598,7 @@ class TestStatusPersistenceThrottle:
         result = workflow._persist_state_if_needed(state)
         assert result is True
 
-    def test_persist_state_if_needed_returns_false_on_skip(
-        self, workflow_with_throttle, sample_deep_research_state
-    ):
+    def test_persist_state_if_needed_returns_false_on_skip(self, workflow_with_throttle, sample_deep_research_state):
         """_persist_state_if_needed should return False when skipping."""
         from datetime import datetime, timezone
 
@@ -1754,9 +1692,7 @@ class TestAuditVerbosity:
             ],
         }
 
-    def test_full_mode_returns_data_unchanged(
-        self, workflow_full_verbosity, sample_audit_data
-    ):
+    def test_full_mode_returns_data_unchanged(self, workflow_full_verbosity, sample_audit_data):
         """Full mode should return audit data unchanged."""
         result = workflow_full_verbosity._prepare_audit_payload(sample_audit_data)
 
@@ -1770,9 +1706,7 @@ class TestAuditVerbosity:
         assert result["error"] == "Some error message"
         assert result["traceback"] == "Traceback (most recent call last):\n  File..."
 
-    def test_minimal_mode_nulls_documented_fields(
-        self, workflow_minimal_verbosity, sample_audit_data
-    ):
+    def test_minimal_mode_nulls_documented_fields(self, workflow_minimal_verbosity, sample_audit_data):
         """Minimal mode should null documented text fields."""
         result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
 
@@ -1784,9 +1718,7 @@ class TestAuditVerbosity:
         assert result["error"] is None
         assert result["traceback"] is None
 
-    def test_minimal_mode_preserves_metrics(
-        self, workflow_minimal_verbosity, sample_audit_data
-    ):
+    def test_minimal_mode_preserves_metrics(self, workflow_minimal_verbosity, sample_audit_data):
         """Minimal mode should preserve metrics fields."""
         result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
 
@@ -1811,17 +1743,15 @@ class TestAuditVerbosity:
 
         # Findings keys should be identical
         assert len(full_result["findings"]) == len(minimal_result["findings"])
-        for full_f, min_f in zip(full_result["findings"], minimal_result["findings"]):
+        for full_f, min_f in zip(full_result["findings"], minimal_result["findings"], strict=False):
             assert set(full_f.keys()) == set(min_f.keys())
 
         # Gaps keys should be identical
         assert len(full_result["gaps"]) == len(minimal_result["gaps"])
-        for full_g, min_g in zip(full_result["gaps"], minimal_result["gaps"]):
+        for full_g, min_g in zip(full_result["gaps"], minimal_result["gaps"], strict=False):
             assert set(full_g.keys()) == set(min_g.keys())
 
-    def test_nested_findings_content_nulled_in_minimal(
-        self, workflow_minimal_verbosity, sample_audit_data
-    ):
+    def test_nested_findings_content_nulled_in_minimal(self, workflow_minimal_verbosity, sample_audit_data):
         """Minimal mode should null findings[*].content while preserving other fields."""
         result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
 
@@ -1838,9 +1768,7 @@ class TestAuditVerbosity:
         assert result["findings"][1]["id"] == "find-2"
         assert result["findings"][1]["confidence"] == "medium"
 
-    def test_nested_gaps_description_nulled_in_minimal(
-        self, workflow_minimal_verbosity, sample_audit_data
-    ):
+    def test_nested_gaps_description_nulled_in_minimal(self, workflow_minimal_verbosity, sample_audit_data):
         """Minimal mode should null gaps[*].description while preserving other fields."""
         result = workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
 
@@ -1857,9 +1785,7 @@ class TestAuditVerbosity:
         assert result["gaps"][1]["id"] == "gap-2"
         assert result["gaps"][1]["priority"] == 2
 
-    def test_handles_missing_optional_fields(
-        self, workflow_minimal_verbosity
-    ):
+    def test_handles_missing_optional_fields(self, workflow_minimal_verbosity):
         """Minimal mode should handle data without optional text fields."""
         minimal_data = {
             "provider_id": "test",
@@ -1875,9 +1801,7 @@ class TestAuditVerbosity:
         assert result["provider_id"] == "test"
         assert result["tokens_used"] == 100
 
-    def test_handles_empty_nested_arrays(
-        self, workflow_minimal_verbosity
-    ):
+    def test_handles_empty_nested_arrays(self, workflow_minimal_verbosity):
         """Minimal mode should handle empty findings and gaps arrays."""
         data_with_empty_arrays = {
             "provider_id": "test",
@@ -1891,9 +1815,7 @@ class TestAuditVerbosity:
         assert result["findings"] == []
         assert result["gaps"] == []
 
-    def test_handles_non_dict_items_in_nested_arrays(
-        self, workflow_minimal_verbosity
-    ):
+    def test_handles_non_dict_items_in_nested_arrays(self, workflow_minimal_verbosity):
         """Minimal mode should handle non-dict items in nested arrays gracefully."""
         data_with_mixed = {
             "provider_id": "test",
@@ -1921,11 +1843,10 @@ class TestAuditVerbosity:
         assert result["findings"][2] is None
         assert result["gaps"][1] == 123
 
-    def test_does_not_mutate_original_data(
-        self, workflow_minimal_verbosity, sample_audit_data
-    ):
+    def test_does_not_mutate_original_data(self, workflow_minimal_verbosity, sample_audit_data):
         """Minimal mode should not mutate the original data dictionary."""
         import copy
+
         original_copy = copy.deepcopy(sample_audit_data)
 
         workflow_minimal_verbosity._prepare_audit_payload(sample_audit_data)
@@ -1957,6 +1878,7 @@ class TestDeepResearchProviderFailover:
         from foundry_mcp.core.research.providers.resilience import (
             reset_resilience_manager_for_testing,
         )
+
         reset_resilience_manager_for_testing()
         yield
         reset_resilience_manager_for_testing()
@@ -1965,6 +1887,7 @@ class TestDeepResearchProviderFailover:
     def workflow_with_providers(self, mock_config, mock_memory):
         """Create workflow instance with configured providers."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
         mock_config.deep_research_providers = ["tavily", "google"]
         workflow = DeepResearchWorkflow(config=mock_config, memory=mock_memory)
         return workflow
@@ -2144,7 +2067,6 @@ class TestDeepResearchProviderFailover:
     ):
         """Provider tripping mid-gathering should skip remaining calls gracefully."""
         from foundry_mcp.core.research.providers.resilience import get_resilience_manager
-        from foundry_mcp.core.resilience import CircuitState
 
         mgr = get_resilience_manager()
         call_count = {"tavily": 0, "google": 0}
@@ -2290,6 +2212,7 @@ class TestDeepResearchProviderFailoverEdgeCases:
         from foundry_mcp.core.research.providers.resilience import (
             reset_resilience_manager_for_testing,
         )
+
         reset_resilience_manager_for_testing()
         yield
         reset_resilience_manager_for_testing()
@@ -2298,6 +2221,7 @@ class TestDeepResearchProviderFailoverEdgeCases:
     def workflow_three_providers(self, mock_config, mock_memory):
         """Workflow with three providers for more complex failover scenarios."""
         from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
         mock_config.deep_research_providers = ["tavily", "google", "semantic_scholar"]
         return DeepResearchWorkflow(config=mock_config, memory=mock_memory)
 
@@ -2376,14 +2300,13 @@ class TestDeepResearchProviderFailoverEdgeCases:
         assert "semantic_scholar" not in providers_used
 
     @pytest.mark.asyncio
-    async def test_no_configured_providers_returns_configuration_error(
-        self, mock_config, mock_memory
-    ):
+    async def test_no_configured_providers_returns_configuration_error(self, mock_config, mock_memory):
         """No configured providers should return configuration error, not circuit error."""
-        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
         from foundry_mcp.core.research.providers.resilience import (
             reset_resilience_manager_for_testing,
         )
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
+
         reset_resilience_manager_for_testing()
 
         # Configure with providers that won't be instantiated
@@ -2446,37 +2369,27 @@ class TestRunPhaseHelper:
     @pytest.mark.asyncio
     async def test_success_path(self, workflow, state):
         """_run_phase returns None on success and emits all lifecycle events."""
-        executor = AsyncMock(
-            return_value=WorkflowResult(success=True, content="ok")
-        )()
+        executor = AsyncMock(return_value=WorkflowResult(success=True, content="ok"))()
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
 
-        result = await workflow._run_phase(
-            state, DeepResearchPhase.PLANNING, executor
-        )
+        result = await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
 
         assert result is None
         workflow.hooks.emit_phase_start.assert_called_once_with(state)
         workflow.hooks.emit_phase_complete.assert_called_once_with(state)
-        workflow._safe_orchestrator_transition.assert_called_once_with(
-            state, DeepResearchPhase.PLANNING
-        )
+        workflow._safe_orchestrator_transition.assert_called_once_with(state, DeepResearchPhase.PLANNING)
 
     @pytest.mark.asyncio
     async def test_failure_path(self, workflow, state):
         """_run_phase returns WorkflowResult on failure and marks state failed."""
-        fail_result = WorkflowResult(
-            success=False, content="", error="planning failed"
-        )
+        fail_result = WorkflowResult(success=False, content="", error="planning failed")
         executor = AsyncMock(return_value=fail_result)()
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
         workflow._flush_state = MagicMock()
 
-        result = await workflow._run_phase(
-            state, DeepResearchPhase.PLANNING, executor
-        )
+        result = await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
 
         assert result is fail_result
         assert state.metadata.get("failed") is True
@@ -2489,9 +2402,7 @@ class TestRunPhaseHelper:
     @pytest.mark.asyncio
     async def test_skip_error_check(self, workflow, state):
         """skip_error_check=True ignores result.success and continues lifecycle."""
-        fail_result = WorkflowResult(
-            success=False, content="", error="ignored"
-        )
+        fail_result = WorkflowResult(success=False, content="", error="ignored")
         executor = AsyncMock(return_value=fail_result)()
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
@@ -2513,9 +2424,7 @@ class TestRunPhaseHelper:
     @pytest.mark.asyncio
     async def test_skip_transition(self, workflow, state):
         """skip_transition=True skips orchestrator transition."""
-        executor = AsyncMock(
-            return_value=WorkflowResult(success=True, content="ok")
-        )()
+        executor = AsyncMock(return_value=WorkflowResult(success=True, content="ok"))()
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
 
@@ -2534,37 +2443,23 @@ class TestRunPhaseHelper:
     @pytest.mark.asyncio
     async def test_cancellation_propagates(self, workflow, state):
         """_run_phase propagates CancelledError from _check_cancellation."""
-        workflow._check_cancellation = MagicMock(
-            side_effect=asyncio.CancelledError("cancelled")
-        )
-        executor = AsyncMock(
-            return_value=WorkflowResult(success=True, content="ok")
-        )()
+        workflow._check_cancellation = MagicMock(side_effect=asyncio.CancelledError("cancelled"))
+        executor = AsyncMock(return_value=WorkflowResult(success=True, content="ok"))()
 
         with pytest.raises(asyncio.CancelledError):
-            await workflow._run_phase(
-                state, DeepResearchPhase.PLANNING, executor
-            )
+            await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
 
     @pytest.mark.asyncio
     async def test_audit_events_written(self, workflow, state, mock_memory):
         """_run_phase writes phase_start and phase_complete audit events."""
-        executor = AsyncMock(
-            return_value=WorkflowResult(success=True, content="ok")
-        )()
+        executor = AsyncMock(return_value=WorkflowResult(success=True, content="ok"))()
         workflow.hooks = MagicMock()
         workflow._safe_orchestrator_transition = MagicMock()
 
-        await workflow._run_phase(
-            state, DeepResearchPhase.ANALYSIS, executor
-        )
+        await workflow._run_phase(state, DeepResearchPhase.ANALYSIS, executor)
 
         # Verify audit events were written
-        audit_path = (
-            mock_memory.base_path
-            / "deep_research"
-            / f"{state.id}.audit.jsonl"
-        )
+        audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
         assert audit_path.exists()
         lines = audit_path.read_text(encoding="utf-8").splitlines()
         events = [json.loads(line) for line in lines]
@@ -2573,26 +2468,16 @@ class TestRunPhaseHelper:
         assert "phase_complete" in event_types
 
     @pytest.mark.asyncio
-    async def test_failure_writes_phase_error_audit(
-        self, workflow, state, mock_memory
-    ):
+    async def test_failure_writes_phase_error_audit(self, workflow, state, mock_memory):
         """_run_phase writes phase_error audit event on failure."""
-        fail_result = WorkflowResult(
-            success=False, content="", error="boom"
-        )
+        fail_result = WorkflowResult(success=False, content="", error="boom")
         executor = AsyncMock(return_value=fail_result)()
         workflow.hooks = MagicMock()
         workflow._flush_state = MagicMock()
 
-        await workflow._run_phase(
-            state, DeepResearchPhase.PLANNING, executor
-        )
+        await workflow._run_phase(state, DeepResearchPhase.PLANNING, executor)
 
-        audit_path = (
-            mock_memory.base_path
-            / "deep_research"
-            / f"{state.id}.audit.jsonl"
-        )
+        audit_path = mock_memory.base_path / "deep_research" / f"{state.id}.audit.jsonl"
         assert audit_path.exists()
         lines = audit_path.read_text(encoding="utf-8").splitlines()
         events = [json.loads(line) for line in lines]

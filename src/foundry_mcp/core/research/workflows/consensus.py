@@ -107,7 +107,9 @@ class ConsensusWorkflow(ResearchWorkflowBase):
                 )
 
             # Use full spec strings for tracking, but we'll parse again when resolving
-            valid_providers = [spec.raw or f"{spec.provider}:{spec.model}" if spec.model else spec.provider for spec in valid_specs]
+            valid_providers = [
+                spec.raw or f"{spec.provider}:{spec.model}" if spec.model else spec.provider for spec in valid_specs
+            ]
 
             # Create consensus config and state
             consensus_config = ConsensusConfig(
@@ -151,10 +153,7 @@ class ConsensusWorkflow(ResearchWorkflowBase):
             # Check if we have enough responses
             successful = state.successful_responses()
             if len(successful) < min_responses:
-                failed_info = [
-                    f"{r.provider_id}: {r.error_message}"
-                    for r in state.failed_responses()
-                ]
+                failed_info = [f"{r.provider_id}: {r.error_message}" for r in state.failed_responses()]
                 return WorkflowResult(
                     success=False,
                     content="",
@@ -529,10 +528,7 @@ class ConsensusWorkflow(ResearchWorkflowBase):
             WorkflowResult with synthesized content
         """
         # Build synthesis prompt
-        response_text = "\n\n---\n\n".join(
-            f"Response from {r.provider_id}:\n{r.content}"
-            for r in responses
-        )
+        response_text = "\n\n---\n\n".join(f"Response from {r.provider_id}:\n{r.content}" for r in responses)
 
         synthesis_prompt = f"""You are synthesizing multiple AI responses to the same question.
 

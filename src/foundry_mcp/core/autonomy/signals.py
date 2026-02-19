@@ -27,9 +27,7 @@ def signal_path_for_spec(specs_dir: Path, spec_id: str) -> Path:
     return signal_dir_for_specs(specs_dir) / f"{spec_id}.stop"
 
 
-def write_stop_signal(
-    specs_dir: Path, spec_id: str, requested_by: str = "foundry-cli"
-) -> Path:
+def write_stop_signal(specs_dir: Path, spec_id: str, requested_by: str = "foundry-cli") -> Path:
     """Write a stop signal file for the given spec.
 
     Args:

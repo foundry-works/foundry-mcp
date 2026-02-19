@@ -8,8 +8,6 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from foundry_mcp.config.server import ServerConfig
 
 
@@ -20,9 +18,7 @@ class TestServerDispatchExceptionHandling:
         """_dispatch_server_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.server import _dispatch_server_action
 
-        with patch(
-            "foundry_mcp.tools.unified.server._SERVER_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.server._SERVER_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError("Server introspection failed")
 
@@ -43,9 +39,7 @@ class TestServerDispatchExceptionHandling:
         """_dispatch_server_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.server import _dispatch_server_action
 
-        with patch(
-            "foundry_mcp.tools.unified.server._SERVER_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.server._SERVER_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError()
 
@@ -66,9 +60,7 @@ class TestServerDispatchExceptionHandling:
         from foundry_mcp.tools.unified.server import _dispatch_server_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.server._SERVER_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.server._SERVER_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["info"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 
@@ -96,10 +88,7 @@ class TestCapabilitiesAction:
         assert result["data"]["capabilities"]["autonomy_sessions"] is True
         assert result["data"]["capabilities"]["autonomy_fidelity_gates"] is True
         assert result["data"]["runtime"]["autonomy"]["enabled_now"]["autonomy_sessions"] is True
-        assert (
-            result["data"]["runtime"]["autonomy"]["supported_by_binary"]["autonomy_fidelity_gates"]
-            is True
-        )
+        assert result["data"]["runtime"]["autonomy"]["supported_by_binary"]["autonomy_fidelity_gates"] is True
 
     def test_capabilities_include_role_preflight_convention(self):
         """Capabilities include role preflight guidance for consumers."""
@@ -144,9 +133,7 @@ class TestCapabilitiesAction:
 
         manifest_path = Path(__file__).resolve().parents[3] / "mcp" / "capabilities_manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        server_tool = next(
-            tool for tool in manifest["tools"]["unified"] if tool["name"] == "server"
-        )
+        server_tool = next(tool for tool in manifest["tools"]["unified"] if tool["name"] == "server")
         allowed_actions = set(_SERVER_ROUTER.allowed_actions())
 
         for example in server_tool.get("examples", []):

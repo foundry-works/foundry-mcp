@@ -91,7 +91,7 @@ def serialize_payload(payload: DigestPayload) -> str:
 
     Examples:
         >>> json_str = serialize_payload(payload)
-        >>> '\"version\": \"1.0\"' in json_str
+        >>> '"version": "1.0"' in json_str
         True
         >>> json.loads(json_str)  # Valid JSON
         {...}

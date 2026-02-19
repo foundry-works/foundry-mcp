@@ -13,16 +13,22 @@ import pytest
 
 # Core consultation module
 from foundry_mcp.core.ai_consultation import (
-    ConsultationWorkflow,
     ConsultationRequest,
     ConsultationResult,
+    ConsultationWorkflow,
 )
 
 # Prompts infrastructure
 from foundry_mcp.core.prompts import (
-    PromptTemplate,
     PromptRegistry,
+    PromptTemplate,
     get_prompt_builder,
+)
+from foundry_mcp.core.prompts.fidelity_review import (
+    FIDELITY_RESPONSE_SCHEMA,
+    FIDELITY_REVIEW_V1,
+    SEVERITY_KEYWORDS,
+    FidelityReviewPromptBuilder,
 )
 
 # Workflow-specific prompt builders
@@ -30,19 +36,6 @@ from foundry_mcp.core.prompts.plan_review import (
     PLAN_REVIEW_FULL_V1,
     PLAN_REVIEW_SECURITY_V1,
     PlanReviewPromptBuilder,
-)
-
-from foundry_mcp.core.prompts.fidelity_review import (
-    FIDELITY_REVIEW_V1,
-    FIDELITY_RESPONSE_SCHEMA,
-    SEVERITY_KEYWORDS,
-    FidelityReviewPromptBuilder,
-)
-
-# Response helpers
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
 )
 from foundry_mcp.core.responses.errors_ai import (
     ai_cache_stale_error,
@@ -53,6 +46,11 @@ from foundry_mcp.core.responses.errors_ai import (
     ai_provider_timeout_error,
 )
 
+# Response helpers
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 
 # =============================================================================
 # ConsultationWorkflow Tests
@@ -250,12 +248,8 @@ class TestPromptRegistry:
     def test_registry_list_templates(self):
         """Registry lists all registered template IDs."""
         registry = PromptRegistry()
-        registry.register(
-            PromptTemplate(id="a", version="1.0", system_prompt="S", user_template="U")
-        )
-        registry.register(
-            PromptTemplate(id="b", version="1.0", system_prompt="S", user_template="U")
-        )
+        registry.register(PromptTemplate(id="a", version="1.0", system_prompt="S", user_template="U"))
+        registry.register(PromptTemplate(id="b", version="1.0", system_prompt="S", user_template="U"))
 
         templates = registry.list_templates()
         assert "a" in templates
@@ -962,9 +956,9 @@ class TestResultCache:
 
     def test_init_default_path(self, tmp_path):
         """ResultCache initializes with default path if not provided."""
-        from foundry_mcp.core.ai_consultation import ResultCache
-
         import os
+
+        from foundry_mcp.core.ai_consultation import ResultCache
 
         original_cwd = os.getcwd()
         try:
@@ -1016,8 +1010,9 @@ class TestResultCache:
 
     def test_cache_expiration(self, tmp_path):
         """ResultCache.get returns None for expired entries."""
-        from foundry_mcp.core.ai_consultation import ResultCache
         import time
+
+        from foundry_mcp.core.ai_consultation import ResultCache
 
         cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=1)
         result = ConsultationResult(
@@ -1041,8 +1036,9 @@ class TestResultCache:
 
     def test_custom_ttl_override(self, tmp_path):
         """ResultCache.set can override default TTL."""
-        from foundry_mcp.core.ai_consultation import ResultCache
         import time
+
+        from foundry_mcp.core.ai_consultation import ResultCache
 
         cache = ResultCache(base_dir=tmp_path / "cache", default_ttl=3600)
         result = ConsultationResult(
@@ -1523,9 +1519,7 @@ class TestConsultationOrchestrator:
         assert outcome.cache_hit is True
         assert outcome.content == "Cached content"
 
-    def test_consult_success_single_provider(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_success_single_provider(self, orchestrator, mock_provider_result):
         """consult succeeds with single provider mode."""
         from unittest.mock import MagicMock, patch
 
@@ -1659,9 +1653,7 @@ class TestConsultationOrchestrator:
         assert outcome.error is not None
         assert "prompt" in outcome.error.lower() or "failed" in outcome.error.lower()
 
-    def test_consult_fallback_on_provider_failure(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_fallback_on_provider_failure(self, orchestrator, mock_provider_result):
         """consult falls back to next provider on failure."""
         from unittest.mock import MagicMock, patch
 
@@ -1745,9 +1737,7 @@ class TestConsultationOrchestrator:
         key = orchestrator._generate_cache_key(request)
         assert key == "explicit-key"
 
-    def test_consult_uses_timeout_from_request(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_uses_timeout_from_request(self, orchestrator, mock_provider_result):
         """consult uses timeout from request."""
         from unittest.mock import MagicMock, patch
 
@@ -1787,9 +1777,7 @@ class TestConsultationOrchestrator:
         provider_request = call_args[0][0]
         assert provider_request.timeout == 300.0
 
-    def test_consult_result_includes_duration(
-        self, orchestrator, mock_provider_result
-    ):
+    def test_consult_result_includes_duration(self, orchestrator, mock_provider_result):
         """consult result includes duration_ms."""
         from unittest.mock import MagicMock, patch
 
@@ -1876,9 +1864,7 @@ class TestConsultationOrchestratorMultiModel:
 
         return _create
 
-    def test_consult_multi_model_returns_consensus_result(
-        self, multi_model_orchestrator, mock_provider_result
-    ):
+    def test_consult_multi_model_returns_consensus_result(self, multi_model_orchestrator, mock_provider_result):
         """consult returns ConsensusResult when min_models > 1."""
         from unittest.mock import MagicMock, patch
 
@@ -1912,18 +1898,14 @@ class TestConsultationOrchestratorMultiModel:
                             "spec_content": "Spec content",
                         },
                     )
-                    outcome = multi_model_orchestrator.consult(
-                        request, use_cache=False
-                    )
+                    outcome = multi_model_orchestrator.consult(request, use_cache=False)
 
         # Should return ConsensusResult for multi-model workflow
         assert isinstance(outcome, ConsensusResult)
         assert len(outcome.responses) >= 1
         assert outcome.agreement is not None
 
-    def test_consult_multi_model_with_failures(
-        self, multi_model_orchestrator, mock_provider_result
-    ):
+    def test_consult_multi_model_with_failures(self, multi_model_orchestrator, mock_provider_result):
         """consult handles partial failures in multi-model mode."""
         from unittest.mock import MagicMock, patch
 
@@ -1975,9 +1957,7 @@ class TestConsultationOrchestratorMultiModel:
                             "spec_content": "Spec content",
                         },
                     )
-                    outcome = multi_model_orchestrator.consult(
-                        request, use_cache=False
-                    )
+                    outcome = multi_model_orchestrator.consult(request, use_cache=False)
 
         assert isinstance(outcome, ConsensusResult)
         # Should have tracked both successes and failures
@@ -2026,9 +2006,7 @@ class TestConsultationOrchestratorMultiModel:
                             "spec_content": "Spec content",
                         },
                     )
-                    outcome = multi_model_orchestrator.consult(
-                        request, use_cache=False
-                    )
+                    outcome = multi_model_orchestrator.consult(request, use_cache=False)
 
         assert isinstance(outcome, ConsensusResult)
         assert outcome.success is False

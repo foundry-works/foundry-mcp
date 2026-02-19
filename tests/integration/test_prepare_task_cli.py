@@ -28,9 +28,7 @@ def _check_spec_exists() -> bool:
         )
         if result.returncode == 0:
             specs_data = json.loads(result.stdout)
-            spec_ids = [
-                s.get("spec_id", s.get("id", "")) for s in specs_data.get("specs", [])
-            ]
+            spec_ids = [s.get("spec_id", s.get("id", "")) for s in specs_data.get("specs", [])]
             return REQUIRED_SPEC_ID in spec_ids
     except Exception:
         pass
@@ -40,8 +38,7 @@ def _check_spec_exists() -> bool:
 # Skip entire module if fixture is missing
 pytestmark = pytest.mark.skipif(
     not _check_spec_exists(),
-    reason=f"Test fixture spec '{REQUIRED_SPEC_ID}' not found. "
-    "These tests require the Foundry CLI test fixtures.",
+    reason=f"Test fixture spec '{REQUIRED_SPEC_ID}' not found. These tests require the Foundry CLI test fixtures.",
 )
 
 
@@ -56,11 +53,7 @@ def run_prepare_task_command(spec_id: str, *args) -> dict:
     )
 
     if result.returncode != 0:
-        raise RuntimeError(
-            f"Command failed: {' '.join(cmd)}\n"
-            f"stderr: {result.stderr}\n"
-            f"stdout: {result.stdout}"
-        )
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\nstderr: {result.stderr}\nstdout: {result.stdout}")
 
     try:
         return json.loads(result.stdout)
@@ -345,10 +338,7 @@ def test_task_info_redundant_with_prepare_task():
         assert "metadata" in prepare_task_data
         # File path should match if present
         if "file_path" in task_info_data["metadata"]:
-            assert (
-                prepare_task_data["metadata"]["file_path"]
-                == task_info_data["metadata"]["file_path"]
-            )
+            assert prepare_task_data["metadata"]["file_path"] == task_info_data["metadata"]["file_path"]
 
 
 def test_check_deps_redundant_with_prepare_task():

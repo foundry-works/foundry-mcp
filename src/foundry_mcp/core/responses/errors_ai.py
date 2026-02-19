@@ -88,10 +88,7 @@ def ai_provider_timeout_error(
             "timeout_seconds": timeout_seconds,
         },
         remediation=remediation
-        or (
-            "Try again with a smaller context, increase the timeout, "
-            "or use a different provider."
-        ),
+        or ("Try again with a smaller context, increase the timeout, or use a different provider."),
         request_id=request_id,
     )
 
@@ -131,10 +128,7 @@ def ai_provider_error(
         error_type=ErrorType.AI_PROVIDER,
         data=data,
         remediation=remediation
-        or (
-            "Check provider configuration and API key validity. "
-            "Consult provider documentation for error details."
-        ),
+        or ("Check provider configuration and API key validity. Consult provider documentation for error details."),
         request_id=request_id,
     )
 
@@ -228,8 +222,7 @@ def ai_prompt_not_found_error(
         data=data,
         remediation=remediation
         or (
-            "Use a valid prompt ID from the workflow's prompt builder. "
-            "Call list_prompts() to see available templates."
+            "Use a valid prompt ID from the workflow's prompt builder. Call list_prompts() to see available templates."
         ),
         request_id=request_id,
     )
@@ -271,9 +264,6 @@ def ai_cache_stale_error(
             "max_age_seconds": max_age_seconds,
         },
         remediation=remediation
-        or (
-            "Re-run the consultation to refresh cached results, "
-            "or use --no-cache to bypass the cache."
-        ),
+        or ("Re-run the consultation to refresh cached results, or use --no-cache to bypass the cache."),
         request_id=request_id,
     )

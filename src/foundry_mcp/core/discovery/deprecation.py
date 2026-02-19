@@ -56,16 +56,17 @@ def deprecated_tool(
                 if "meta" not in result:
                     result["meta"] = {"version": "response-v2"}
 
-                if "warnings" not in result["meta"]:
-                    result["meta"]["warnings"] = []
+                meta: Dict[str, Any] = result["meta"]
+                if "warnings" not in meta:
+                    meta["warnings"] = []
 
                 deprecation_warning = (
-                    f"DEPRECATED: '{func.__name__}' will be removed in {removal_version}. "
-                    f"Use '{replacement}' instead."
+                    f"DEPRECATED: '{func.__name__}' will be removed in {removal_version}. Use '{replacement}' instead."
                 )
 
-                if deprecation_warning not in result["meta"]["warnings"]:
-                    result["meta"]["warnings"].append(deprecation_warning)
+                warnings_list: list[str] = meta["warnings"]
+                if deprecation_warning not in warnings_list:
+                    warnings_list.append(deprecation_warning)
 
             return result
 

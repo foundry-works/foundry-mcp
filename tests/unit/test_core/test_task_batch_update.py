@@ -1,12 +1,11 @@
 """Tests for batch_update_tasks function."""
 
 import json
-from pathlib import Path
 
 import pytest
 
-from foundry_mcp.core.task import batch_update_tasks
 from foundry_mcp.core.spec import load_spec
+from foundry_mcp.core.task import batch_update_tasks
 
 
 @pytest.fixture

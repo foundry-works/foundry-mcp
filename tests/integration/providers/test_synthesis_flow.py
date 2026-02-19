@@ -15,28 +15,22 @@ Enable live tests: FOUNDRY_ENABLE_LIVE_PROVIDER_TESTS=1
 """
 
 import json
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from foundry_mcp.core.ai_consultation import (
+    ConsensusResult,
     ConsultationOrchestrator,
-    ConsultationRequest,
     ConsultationResult,
     ConsultationWorkflow,
-    ConsensusResult,
     ProviderResponse,
 )
 from foundry_mcp.core.prompts.fidelity_review import (
-    FIDELITY_SYNTHESIZED_RESPONSE_SCHEMA,
     FidelityReviewPromptBuilder,
 )
 from foundry_mcp.core.prompts.plan_review import (
     PlanReviewPromptBuilder,
-    SYNTHESIS_PROMPT_V1,
 )
-
 
 # =============================================================================
 # Test Fixtures - Mock Provider Responses
@@ -104,71 +98,48 @@ None identified
 @pytest.fixture
 def mock_fidelity_review_response_gemini() -> str:
     """Simulated fidelity review JSON response from gemini provider."""
-    return json.dumps({
-        "verdict": "pass",
-        "summary": "Implementation matches specification",
-        "requirement_alignment": {
-            "answer": "yes",
-            "details": "Function signature and return value match spec"
-        },
-        "success_criteria": {
-            "met": "yes",
-            "details": "All verification steps satisfied"
-        },
-        "deviations": [],
-        "test_coverage": {
-            "status": "sufficient",
-            "details": "Tests cover happy path"
-        },
-        "code_quality": {
+    return json.dumps(
+        {
+            "verdict": "pass",
+            "summary": "Implementation matches specification",
+            "requirement_alignment": {"answer": "yes", "details": "Function signature and return value match spec"},
+            "success_criteria": {"met": "yes", "details": "All verification steps satisfied"},
+            "deviations": [],
+            "test_coverage": {"status": "sufficient", "details": "Tests cover happy path"},
+            "code_quality": {"issues": [], "details": "Code is clean and readable"},
+            "documentation": {"status": "adequate", "details": "Docstring present"},
             "issues": [],
-            "details": "Code is clean and readable"
-        },
-        "documentation": {
-            "status": "adequate",
-            "details": "Docstring present"
-        },
-        "issues": [],
-        "recommendations": []
-    })
+            "recommendations": [],
+        }
+    )
 
 
 @pytest.fixture
 def mock_fidelity_review_response_codex() -> str:
     """Simulated fidelity review JSON response from codex provider."""
-    return json.dumps({
-        "verdict": "partial",
-        "summary": "Implementation mostly matches but missing edge case handling",
-        "requirement_alignment": {
-            "answer": "partial",
-            "details": "Core functionality matches, but missing None handling"
-        },
-        "success_criteria": {
-            "met": "partial",
-            "details": "Main verification passes, edge cases not covered"
-        },
-        "deviations": [
-            {
-                "description": "Missing None input handling",
-                "justification": "Spec implies robustness",
-                "severity": "medium"
-            }
-        ],
-        "test_coverage": {
-            "status": "insufficient",
-            "details": "Missing edge case tests"
-        },
-        "code_quality": {
-            "issues": ["No type hints"],
-            "details": "Could improve with type annotations"
-        },
-        "documentation": {
-            "status": "adequate",
-            "details": "Basic docstring present"
-        },
-        "issues": ["Missing None handling", "No type hints"],
-        "recommendations": ["Add input validation", "Add type hints"]
-    })
+    return json.dumps(
+        {
+            "verdict": "partial",
+            "summary": "Implementation mostly matches but missing edge case handling",
+            "requirement_alignment": {
+                "answer": "partial",
+                "details": "Core functionality matches, but missing None handling",
+            },
+            "success_criteria": {"met": "partial", "details": "Main verification passes, edge cases not covered"},
+            "deviations": [
+                {
+                    "description": "Missing None input handling",
+                    "justification": "Spec implies robustness",
+                    "severity": "medium",
+                }
+            ],
+            "test_coverage": {"status": "insufficient", "details": "Missing edge case tests"},
+            "code_quality": {"issues": ["No type hints"], "details": "Could improve with type annotations"},
+            "documentation": {"status": "adequate", "details": "Basic docstring present"},
+            "issues": ["Missing None handling", "No type hints"],
+            "recommendations": ["Add input validation", "Add type hints"],
+        }
+    )
 
 
 @pytest.fixture
@@ -211,65 +182,58 @@ None identified
 @pytest.fixture
 def mock_synthesis_response_fidelity() -> str:
     """Simulated synthesis response for fidelity review."""
-    return json.dumps({
-        "verdict": "partial",
-        "verdict_consensus": {
-            "votes": {
-                "pass": ["gemini"],
-                "fail": [],
-                "partial": ["codex"],
-                "unknown": []
+    return json.dumps(
+        {
+            "verdict": "partial",
+            "verdict_consensus": {
+                "votes": {"pass": ["gemini"], "fail": [], "partial": ["codex"], "unknown": []},
+                "agreement_level": "moderate",
+                "notes": "Models disagree on edge case handling importance",
             },
-            "agreement_level": "moderate",
-            "notes": "Models disagree on edge case handling importance"
-        },
-        "summary": "Implementation mostly correct, edge case handling debated",
-        "requirement_alignment": {
-            "answer": "partial",
-            "details": "Core functionality matches, edge cases contested",
-            "model_agreement": "split"
-        },
-        "success_criteria": {
-            "met": "partial",
-            "details": "Main verification passes",
-            "model_agreement": "split"
-        },
-        "deviations": [
-            {
-                "description": "Missing None input handling",
-                "justification": "Spec may imply robustness",
-                "severity": "medium",
-                "identified_by": ["codex"],
-                "agreement": "single"
-            }
-        ],
-        "test_coverage": {
-            "status": "insufficient",
-            "details": "Edge case coverage debated",
-            "model_agreement": "split"
-        },
-        "code_quality": {
-            "issues": ["No type hints - flagged by codex"],
-            "details": "Gemini finds code acceptable, codex wants improvements"
-        },
-        "documentation": {
-            "status": "adequate",
-            "details": "Both models agree documentation is adequate",
-            "model_agreement": "unanimous"
-        },
-        "issues": ["Edge case handling debated", "Type hints suggested by codex"],
-        "recommendations": [
-            "Consider adding input validation for None",
-            "Add type hints for better maintainability"
-        ],
-        "synthesis_metadata": {
-            "models_consulted": ["gemini", "codex"],
-            "models_succeeded": ["gemini", "codex"],
-            "models_failed": [],
-            "synthesis_provider": "gemini",
-            "agreement_level": "moderate"
+            "summary": "Implementation mostly correct, edge case handling debated",
+            "requirement_alignment": {
+                "answer": "partial",
+                "details": "Core functionality matches, edge cases contested",
+                "model_agreement": "split",
+            },
+            "success_criteria": {"met": "partial", "details": "Main verification passes", "model_agreement": "split"},
+            "deviations": [
+                {
+                    "description": "Missing None input handling",
+                    "justification": "Spec may imply robustness",
+                    "severity": "medium",
+                    "identified_by": ["codex"],
+                    "agreement": "single",
+                }
+            ],
+            "test_coverage": {
+                "status": "insufficient",
+                "details": "Edge case coverage debated",
+                "model_agreement": "split",
+            },
+            "code_quality": {
+                "issues": ["No type hints - flagged by codex"],
+                "details": "Gemini finds code acceptable, codex wants improvements",
+            },
+            "documentation": {
+                "status": "adequate",
+                "details": "Both models agree documentation is adequate",
+                "model_agreement": "unanimous",
+            },
+            "issues": ["Edge case handling debated", "Type hints suggested by codex"],
+            "recommendations": [
+                "Consider adding input validation for None",
+                "Add type hints for better maintainability",
+            ],
+            "synthesis_metadata": {
+                "models_consulted": ["gemini", "codex"],
+                "models_succeeded": ["gemini", "codex"],
+                "models_failed": [],
+                "synthesis_provider": "gemini",
+                "agreement_level": "moderate",
+            },
         }
-    })
+    )
 
 
 # =============================================================================
@@ -300,12 +264,15 @@ class TestSynthesisPromptRendering:
 
 {mock_plan_review_response_codex}
 """
-        prompt = builder.build("SYNTHESIS_PROMPT_V1", {
-            "spec_id": "test-spec",
-            "title": "Test Specification",
-            "num_models": 2,
-            "model_reviews": model_reviews,
-        })
+        prompt = builder.build(
+            "SYNTHESIS_PROMPT_V1",
+            {
+                "spec_id": "test-spec",
+                "title": "Test Specification",
+                "num_models": 2,
+                "model_reviews": model_reviews,
+            },
+        )
 
         assert "synthesizing 2 independent AI reviews" in prompt
         assert "test-spec" in prompt
@@ -336,13 +303,16 @@ class TestSynthesisPromptRendering:
 {mock_fidelity_review_response_codex}
 ```
 """
-        prompt = builder.build("FIDELITY_SYNTHESIS_PROMPT_V1", {
-            "spec_id": "test-spec",
-            "spec_title": "Test Specification",
-            "review_scope": "spec",
-            "num_models": 2,
-            "model_reviews": model_reviews,
-        })
+        prompt = builder.build(
+            "FIDELITY_SYNTHESIS_PROMPT_V1",
+            {
+                "spec_id": "test-spec",
+                "spec_title": "Test Specification",
+                "review_scope": "spec",
+                "num_models": 2,
+                "model_reviews": model_reviews,
+            },
+        )
 
         assert "synthesizing 2 independent AI fidelity reviews" in prompt
         assert "test-spec" in prompt
@@ -358,12 +328,15 @@ class TestSynthesisPromptSchema:
     def test_plan_synthesis_uses_standard_schema(self):
         """Plan synthesis prompt includes standard response schema."""
         builder = PlanReviewPromptBuilder()
-        prompt = builder.build("SYNTHESIS_PROMPT_V1", {
-            "spec_id": "test",
-            "title": "Test",
-            "num_models": 2,
-            "model_reviews": "test reviews",
-        })
+        prompt = builder.build(
+            "SYNTHESIS_PROMPT_V1",
+            {
+                "spec_id": "test",
+                "title": "Test",
+                "num_models": 2,
+                "model_reviews": "test reviews",
+            },
+        )
 
         # Should include synthesis-specific format
         assert "Consensus Level" in prompt
@@ -373,13 +346,16 @@ class TestSynthesisPromptSchema:
     def test_fidelity_synthesis_uses_synthesized_schema(self):
         """Fidelity synthesis prompt includes synthesized response schema."""
         builder = FidelityReviewPromptBuilder()
-        prompt = builder.build("FIDELITY_SYNTHESIS_PROMPT_V1", {
-            "spec_id": "test",
-            "spec_title": "Test",
-            "review_scope": "spec",
-            "num_models": 2,
-            "model_reviews": "test reviews",
-        })
+        prompt = builder.build(
+            "FIDELITY_SYNTHESIS_PROMPT_V1",
+            {
+                "spec_id": "test",
+                "spec_title": "Test",
+                "review_scope": "spec",
+                "num_models": 2,
+                "model_reviews": "test reviews",
+            },
+        )
 
         # Should include synthesis-specific fields
         assert "verdict_consensus" in prompt
@@ -569,9 +545,7 @@ class TestFidelityReviewSynthesisFlow:
             assert isinstance(votes[category], list)
 
         # Agreement level should be valid
-        assert verdict_consensus["agreement_level"] in [
-            "strong", "moderate", "weak", "conflicted"
-        ]
+        assert verdict_consensus["agreement_level"] in ["strong", "moderate", "weak", "conflicted"]
 
 
 # =============================================================================

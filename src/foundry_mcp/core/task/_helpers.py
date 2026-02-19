@@ -1,6 +1,6 @@
 """Shared constants and helpers used by both queries and mutations."""
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 # Valid task types for add_task
 TASK_TYPES = ("task", "subtask", "verify", "research")

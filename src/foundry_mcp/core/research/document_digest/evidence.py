@@ -10,15 +10,30 @@ import hashlib
 import logging
 import math
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from foundry_mcp.core.research.models.digest import EvidenceSnippet
+
+if TYPE_CHECKING:
+    from .config import DigestConfig
 
 logger = logging.getLogger(__name__)
 
 
 class EvidenceExtractionMixin:
     """Mixin providing evidence extraction and locator generation for DocumentDigestor."""
+
+    if TYPE_CHECKING:
+        config: DigestConfig
+
+        def _chunk_text(
+            self,
+            text: str,
+            *,
+            target_size: int = 400,
+            max_size: int = 500,
+            min_size: int = 50,
+        ) -> list[str]: ...
 
     def _extract_evidence(
         self,
@@ -60,13 +75,16 @@ class EvidenceExtractionMixin:
         Examples:
             >>> evidence = digestor._extract_evidence(
             ...     "Climate change affects coastal cities. Rising seas threaten infrastructure.",
-            ...     "climate coastal impact"
+            ...     "climate coastal impact",
             ... )
             >>> len(evidence) <= digestor.config.max_evidence_snippets
             True
         """
         if max_snippets is None:
             max_snippets = self.config.max_evidence_snippets
+
+        # Ensure max_snippets is a concrete int for downstream callers
+        effective_max: int = max_snippets if isinstance(max_snippets, int) else 10
 
         # Chunk the text using configured sizing constraints
         target_size = min(self.config.chunk_size, self.config.max_snippet_length)
@@ -81,12 +99,12 @@ class EvidenceExtractionMixin:
 
         # Handle empty/short query with positional fallback
         if not query or len(query.strip()) < 3:
-            return self._score_by_position(chunks, max_snippets)
+            return self._score_by_position(chunks, effective_max)
 
         # Extract and normalize query terms
         query_terms = self._extract_terms(query)
         if not query_terms:
-            return self._score_by_position(chunks, max_snippets)
+            return self._score_by_position(chunks, effective_max)
 
         # Calculate corpus term frequencies for IDF-like weighting
         corpus_text = text.lower()
@@ -105,7 +123,7 @@ class EvidenceExtractionMixin:
         scored_chunks.sort(key=lambda x: (-x[2], x[1], -x[3]))
 
         # Return top N as (text, position, score)
-        return [(chunk, pos, score) for chunk, pos, score, _ in scored_chunks[:max_snippets]]
+        return [(chunk, pos, score) for chunk, pos, score, _ in scored_chunks[:effective_max]]
 
     def _extract_terms(self, query: str) -> list[str]:
         """Extract normalized terms from query for matching.
@@ -121,22 +139,64 @@ class EvidenceExtractionMixin:
         """
         # Common English stopwords to filter out
         stopwords = {
-            "a", "an", "the", "and", "or", "but", "in", "on", "at", "to",
-            "for", "of", "with", "by", "from", "is", "are", "was", "were",
-            "be", "been", "being", "have", "has", "had", "do", "does", "did",
-            "will", "would", "could", "should", "may", "might", "must",
-            "that", "which", "who", "whom", "this", "these", "those",
-            "it", "its", "as", "if", "when", "where", "how", "what", "why",
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "from",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "that",
+            "which",
+            "who",
+            "whom",
+            "this",
+            "these",
+            "those",
+            "it",
+            "its",
+            "as",
+            "if",
+            "when",
+            "where",
+            "how",
+            "what",
+            "why",
         }
 
         # Split on non-alphanumeric characters
         raw_terms = re.split(r"[^a-zA-Z0-9]+", query.lower())
 
         # Filter: remove stopwords and terms < 2 chars
-        terms = [
-            term for term in raw_terms
-            if term and len(term) >= 2 and term not in stopwords
-        ]
+        terms = [term for term in raw_terms if term and len(term) >= 2 and term not in stopwords]
 
         return terms
 
@@ -251,9 +311,7 @@ class EvidenceExtractionMixin:
             page_boundaries=page_boundaries,
         )
 
-        locators_by_index: list[tuple[str, int, int]] = [("char:0-0", 0, 0)] * len(
-            evidence_tuples
-        )
+        locators_by_index: list[tuple[str, int, int]] = [("char:0-0", 0, 0)] * len(evidence_tuples)
         for ordered_idx, (original_idx, _) in enumerate(indexed_tuples):
             locators_by_index[original_idx] = ordered_locators[ordered_idx]
 
@@ -376,8 +434,7 @@ class EvidenceExtractionMixin:
 
         Examples:
             >>> locators = digestor._generate_locators_batch(
-            ...     "First chunk. Second chunk. Third chunk.",
-            ...     ["First chunk", "Second chunk", "Third chunk"]
+            ...     "First chunk. Second chunk. Third chunk.", ["First chunk", "Second chunk", "Third chunk"]
             ... )
             >>> len(locators) == 3
             True

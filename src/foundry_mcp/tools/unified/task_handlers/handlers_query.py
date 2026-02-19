@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from foundry_mcp.cli.context import get_context_tracker
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.pagination import (
     CursorError,
@@ -18,21 +20,21 @@ from foundry_mcp.core.progress import (
     get_progress_summary,
     list_phases,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.task import (
     check_dependencies,
     get_next_task,
+)
+from foundry_mcp.core.task import (
     prepare_task as core_prepare_task,
 )
-from foundry_mcp.cli.context import get_context_tracker
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +100,7 @@ def _handle_prepare(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "prepare"
 
-    err = validate_payload(payload, _PREPARE_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PREPARE_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -110,11 +110,10 @@ def _handle_prepare(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     start = time.perf_counter()
-    result = core_prepare_task(
-        spec_id=spec_id, specs_dir=specs_dir, task_id=task_id
-    )
+    result = core_prepare_task(spec_id=spec_id, specs_dir=specs_dir, task_id=task_id)
     elapsed_ms = (time.perf_counter() - start) * 1000
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
@@ -125,9 +124,7 @@ def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "next"
 
-    err = validate_payload(payload, _SPEC_ONLY_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_ONLY_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -159,11 +156,7 @@ def _handle_next(*, config: ServerConfig, **payload: Any) -> dict:
         )
     else:
         hierarchy = spec_data.get("hierarchy", {})
-        all_tasks = [
-            node
-            for node in hierarchy.values()
-            if node.get("type") in {"task", "subtask", "verify"}
-        ]
+        all_tasks = [node for node in hierarchy.values() if node.get("type") in {"task", "subtask", "verify"}]
         completed = sum(1 for node in all_tasks if node.get("status") == "completed")
         pending = sum(1 for node in all_tasks if node.get("status") == "pending")
         response = success_response(
@@ -185,9 +178,7 @@ def _handle_info(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "info"
 
-    err = validate_payload(payload, _SPEC_TASK_REQUIRED_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_TASK_REQUIRED_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -226,9 +217,7 @@ def _handle_check_deps(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "check-deps"
 
-    err = validate_payload(payload, _SPEC_TASK_REQUIRED_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_TASK_REQUIRED_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -263,9 +252,7 @@ def _handle_progress(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("node_id") is None:
         payload["node_id"] = "spec-root"
 
-    err = validate_payload(payload, _PROGRESS_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PROGRESS_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -296,9 +283,7 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "list"
 
-    err = validate_payload(payload, _LIST_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _LIST_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -364,9 +349,7 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:
 
     if start_after_id:
         try:
-            start_index = next(
-                i for i, task in enumerate(tasks) if task.get("id") == start_after_id
-            )
+            start_index = next(i for i, task in enumerate(tasks) if task.get("id") == start_after_id)
             tasks = tasks[start_index + 1 :]
         except StopIteration:
             pass
@@ -403,9 +386,7 @@ def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "query"
 
-    err = validate_payload(payload, _QUERY_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _QUERY_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -466,11 +447,7 @@ def _handle_query(*, config: ServerConfig, **payload: Any) -> dict:
 
     if start_after_id:
         try:
-            start_index = next(
-                i
-                for i, task in enumerate(tasks)
-                if task.get("task_id") == start_after_id
-            )
+            start_index = next(i for i, task in enumerate(tasks) if task.get("task_id") == start_after_id)
             tasks = tasks[start_index + 1 :]
         except StopIteration:
             pass
@@ -512,9 +489,7 @@ def _handle_hierarchy(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("max_depth") is None:
         payload["max_depth"] = 2
 
-    err = validate_payload(payload, _HIERARCHY_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _HIERARCHY_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -626,8 +601,8 @@ def _handle_session_config(*, config: ServerConfig, **payload: Any) -> dict:
     # Handle auto_mode parameter - delegate to session handlers during deprecation window
     if auto_mode is not None:
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
+            _handle_session_start,
         )
 
         deprecation_meta = {

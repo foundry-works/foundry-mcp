@@ -11,18 +11,17 @@ Tests cover:
 import pytest
 
 from foundry_mcp.core.research.summarization import (
-    SummaryCache,
-    SummarizationLevel,
-    SummarizationResult,
+    CHARS_PER_TOKEN,
+    DEFAULT_CHUNK_SIZE,
+    ContentSummarizer,
+    ProviderExhaustedError,
     SummarizationConfig,
     SummarizationError,
+    SummarizationLevel,
+    SummarizationResult,
     SummarizationValidationError,
-    ProviderExhaustedError,
-    ContentSummarizer,
-    DEFAULT_CHUNK_SIZE,
-    CHARS_PER_TOKEN,
+    SummaryCache,
 )
-
 
 # =============================================================================
 # Test: SummaryCache
@@ -289,34 +288,26 @@ class TestSummarizationResultKeyPointExtraction:
     def test_extract_bullet_points_with_dash(self):
         """Test extraction of dash bullet points."""
         raw = "- Point one\n- Point two\n- Point three"
-        result = SummarizationResult.from_raw_output(
-            raw, SummarizationLevel.KEY_POINTS
-        )
+        result = SummarizationResult.from_raw_output(raw, SummarizationLevel.KEY_POINTS)
         assert len(result.key_points) == 3
         assert "Point one" in result.key_points
 
     def test_extract_bullet_points_with_asterisk(self):
         """Test extraction of asterisk bullet points."""
         raw = "* First\n* Second"
-        result = SummarizationResult.from_raw_output(
-            raw, SummarizationLevel.KEY_POINTS
-        )
+        result = SummarizationResult.from_raw_output(raw, SummarizationLevel.KEY_POINTS)
         assert len(result.key_points) == 2
 
     def test_extract_numbered_list(self):
         """Test extraction of numbered list items."""
         raw = "1. First point\n2. Second point\n3. Third point"
-        result = SummarizationResult.from_raw_output(
-            raw, SummarizationLevel.KEY_POINTS
-        )
+        result = SummarizationResult.from_raw_output(raw, SummarizationLevel.KEY_POINTS)
         assert len(result.key_points) == 3
 
     def test_non_key_points_level_no_extraction(self):
         """Test non-KEY_POINTS levels don't extract key_points."""
         raw = "- Point one\n- Point two"
-        result = SummarizationResult.from_raw_output(
-            raw, SummarizationLevel.CONDENSED
-        )
+        result = SummarizationResult.from_raw_output(raw, SummarizationLevel.CONDENSED)
         assert len(result.key_points) == 0
 
     def test_source_ids_passed_through(self):
@@ -587,14 +578,16 @@ class TestContentSummarizerAsyncWithMock:
     @pytest.fixture
     def mock_provider_func(self):
         """Create a mock provider function."""
+
         def provider(content: str, level: SummarizationLevel, provider_id: str) -> str:
             if level == SummarizationLevel.KEY_POINTS:
                 return "- Key point 1\n- Key point 2\n- Key point 3"
             elif level == SummarizationLevel.HEADLINE:
                 return "Brief headline summary"
             elif level == SummarizationLevel.CONDENSED:
-                return content[:len(content) // 2]
+                return content[: len(content) // 2]
             return content
+
         return provider
 
     @pytest.mark.asyncio
@@ -666,8 +659,10 @@ class TestContentSummarizerProviderFailure:
     @pytest.fixture
     def failing_provider_func(self):
         """Create a provider that always fails."""
+
         def provider(content: str, level: SummarizationLevel, provider_id: str) -> str:
             raise Exception(f"Provider {provider_id} failed")
+
         return provider
 
     @pytest.mark.asyncio
@@ -695,6 +690,7 @@ class TestContentSummarizerBudgetEnforcement:
     @pytest.fixture
     def verbose_provider_func(self):
         """Create a provider that returns verbose output."""
+
         def provider(content: str, level: SummarizationLevel, provider_id: str) -> str:
             # Return progressively shorter content for tighter levels
             if level == SummarizationLevel.HEADLINE:
@@ -704,6 +700,7 @@ class TestContentSummarizerBudgetEnforcement:
             elif level == SummarizationLevel.CONDENSED:
                 return "x" * 2000  # ~500 tokens
             return content
+
         return provider
 
     @pytest.mark.asyncio

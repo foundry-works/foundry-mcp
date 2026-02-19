@@ -8,9 +8,6 @@ Covers:
 """
 
 import json
-from pathlib import Path
-
-import pytest
 
 from foundry_mcp.core.autonomy.spec_hash import (
     SpecFileMetadata,
@@ -19,7 +16,6 @@ from foundry_mcp.core.autonomy.spec_hash import (
     compute_structural_diff,
     get_spec_file_metadata,
 )
-
 
 # =============================================================================
 # Structural Hash Stability

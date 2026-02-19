@@ -77,9 +77,7 @@ client_id_var: ContextVar[str] = ContextVar("client_id", default="anonymous")
 start_time_var: ContextVar[float] = ContextVar("start_time", default=0.0)
 """Request start time as Unix timestamp."""
 
-trace_context_var: ContextVar[Optional["W3CTraceContext"]] = ContextVar(
-    "trace_context", default=None
-)
+trace_context_var: ContextVar[Optional["W3CTraceContext"]] = ContextVar("trace_context", default=None)
 """W3C Trace Context for distributed tracing integration."""
 
 
@@ -425,18 +423,18 @@ class _AsyncContextManager:
         self._ctx: Optional[RequestContext] = None
 
     async def __aenter__(self) -> RequestContext:
-        self._sync_cm = sync_request_context(
+        self._sync_cm = sync_request_context(  # type: ignore[assignment]
             correlation_id=self.correlation_id,
             client_id=self.client_id,
             traceparent=self.traceparent,
             tracestate=self.tracestate,
         )
-        self._ctx = self._sync_cm.__enter__()
-        return self._ctx
+        self._ctx = self._sync_cm.__enter__()  # type: ignore[union-attr]
+        return self._ctx  # type: ignore[return-value]
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self._sync_cm:
-            self._sync_cm.__exit__(exc_type, exc_val, exc_tb)
+            self._sync_cm.__exit__(exc_type, exc_val, exc_tb)  # type: ignore[union-attr]
         return False
 
 

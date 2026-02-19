@@ -13,33 +13,32 @@ from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.ai_consultation import (
+    ConsensusResult,
     ConsultationOrchestrator,
     ConsultationRequest,
     ConsultationResult,
     ConsultationWorkflow,
-    ConsensusResult,
 )
 from foundry_mcp.core.llm_config.consultation import load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import get_metrics, mcp_tool
 from foundry_mcp.core.providers import available_providers
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.errors_ai import ai_no_provider_error
-from foundry_mcp.core.llm_config.consultation import load_consultation_config
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.security import is_prompt_injection
 from foundry_mcp.core.spec import find_specs_directory
+from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
 )
-from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
@@ -324,9 +323,7 @@ def perform_plan_review(
                     "llm_status": llm_status,
                     "message": "Dry run - review skipped",
                 },
-                telemetry={
-                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)
-                },
+                telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
             )
         )
 
@@ -390,21 +387,15 @@ def perform_plan_review(
 
             # Extract failed provider details for visibility
             failed_providers = [
-                {"provider_id": r.provider_id, "error": r.error}
-                for r in result.responses
-                if not r.success
+                {"provider_id": r.provider_id, "error": r.error} for r in result.responses if not r.success
             ]
             # Filter for truly successful responses (success=True AND non-empty content)
-            successful_responses = [
-                r for r in result.responses if r.success and r.content.strip()
-            ]
+            successful_responses = [r for r in result.responses if r.success and r.content.strip()]
             successful_providers = [r.provider_id for r in successful_responses]
 
             consensus_info = {
                 "providers_consulted": providers_consulted,
-                "successful": result.agreement.successful_providers
-                if result.agreement
-                else 0,
+                "successful": result.agreement.successful_providers if result.agreement else 0,
                 "failed": result.agreement.failed_providers if result.agreement else 0,
                 "successful_providers": successful_providers,
                 "failed_providers": failed_providers,
@@ -430,18 +421,10 @@ def perform_plan_review(
                 # Save each provider's review to a separate file
                 model_reviews_text = ""
                 for response in successful_responses:
-                    provider_file = (
-                        plan_reviews_dir
-                        / f"{plan_name}-{review_type}-{response.provider_id}.md"
-                    )
+                    provider_file = plan_reviews_dir / f"{plan_name}-{review_type}-{response.provider_id}.md"
                     provider_file.write_text(response.content, encoding="utf-8")
-                    provider_reviews.append(
-                        {"provider_id": response.provider_id, "path": str(provider_file)}
-                    )
-                    model_reviews_text += (
-                        f"\n---\n## Review by {response.provider_id}\n\n"
-                        f"{response.content}\n"
-                    )
+                    provider_reviews.append({"provider_id": response.provider_id, "path": str(provider_file)})
+                    model_reviews_text += f"\n---\n## Review by {response.provider_id}\n\n{response.content}\n"
 
                 # Run synthesis call using first provider
                 logger.info(
@@ -462,9 +445,7 @@ def perform_plan_review(
                     timeout=ai_timeout,
                 )
                 try:
-                    synthesis_result = orchestrator.consult(
-                        synthesis_request, use_cache=consultation_cache
-                    )
+                    synthesis_result = orchestrator.consult(synthesis_request, use_cache=consultation_cache)
                 except Exception as e:
                     logger.error("Synthesis call crashed: %s", e, exc_info=True)
                     synthesis_result = None
@@ -479,7 +460,9 @@ def perform_plan_review(
                         synthesis_success = bool(synthesis_content and synthesis_content.strip())
                     elif isinstance(synthesis_result, ConsensusResult) and synthesis_result.success:
                         synthesis_content = synthesis_result.primary_content
-                        consensus_info["synthesis_provider"] = synthesis_result.responses[0].provider_id if synthesis_result.responses else "unknown"
+                        consensus_info["synthesis_provider"] = (
+                            synthesis_result.responses[0].provider_id if synthesis_result.responses else "unknown"
+                        )
                         synthesis_success = bool(synthesis_content and synthesis_content.strip())
 
                 if synthesis_success and synthesis_content:
@@ -712,9 +695,7 @@ def perform_plan_list() -> dict:
         return asdict(
             success_response(
                 data={"plans": [], "count": 0, "plans_dir": str(plans_dir)},
-                telemetry={
-                    "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)
-                },
+                telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
             )
         )
 
@@ -806,9 +787,7 @@ _PLAN_ROUTER = ActionRouter(
             handler=_handle_plan_create,
             summary=_ACTION_SUMMARY["create"],
         ),
-        ActionDefinition(
-            name="list", handler=_handle_plan_list, summary=_ACTION_SUMMARY["list"]
-        ),
+        ActionDefinition(name="list", handler=_handle_plan_list, summary=_ACTION_SUMMARY["list"]),
         ActionDefinition(
             name="review",
             handler=_handle_plan_review,
@@ -825,9 +804,7 @@ def _dispatch_plan_action(
     *,
     config: Optional[ServerConfig] = None,
 ) -> dict:
-    return dispatch_with_standard_errors(
-        _PLAN_ROUTER, "plan", action, config=config, **payload
-    )
+    return dispatch_with_standard_errors(_PLAN_ROUTER, "plan", action, config=config, **payload)
 
 
 def register_unified_plan_tool(mcp: FastMCP, config: ServerConfig) -> None:

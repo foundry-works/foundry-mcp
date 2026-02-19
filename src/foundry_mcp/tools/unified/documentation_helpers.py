@@ -1,12 +1,10 @@
 """Helpers for building review context sections (implementation artifacts, requirements, etc)."""
 
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
-def _build_spec_requirements(
-    spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]
-) -> str:
+def _build_spec_requirements(spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]) -> str:
     lines: list[str] = []
     if task_id:
         task = _find_task(spec_data, task_id)
@@ -28,9 +26,7 @@ def _build_spec_requirements(
             if child_nodes:
                 lines.append("- **Tasks:**")
                 for child in child_nodes:
-                    lines.append(
-                        f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}"
-                    )
+                    lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
     else:
         lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
         if spec_data.get("description"):
@@ -139,25 +135,15 @@ def _build_implementation_artifacts(
                 timeout=10,
             )
             if result.returncode == 0:
-                changed_files = (
-                    result.stdout.strip().split("\n") if result.stdout else []
-                )
+                changed_files = result.stdout.strip().split("\n") if result.stdout else []
                 if file_paths:
-                    changed_set = {
-                        _normalize_for_comparison(path, workspace_root)
-                        for path in changed_files
-                        if path
-                    }
+                    changed_set = {_normalize_for_comparison(path, workspace_root) for path in changed_files if path}
                     file_paths = [
-                        path
-                        for path in file_paths
-                        if _normalize_for_comparison(path, workspace_root) in changed_set
+                        path for path in file_paths if _normalize_for_comparison(path, workspace_root) in changed_set
                     ]
                 else:
                     file_paths = [path for path in changed_files if path]
-                lines.append(
-                    f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n"
-                )
+                lines.append(f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n")
         except Exception:
             lines.append(f"*Warning: Could not get git diff from {base_branch}*\n")
     for file_path in file_paths[:5]:
@@ -183,9 +169,7 @@ def _build_implementation_artifacts(
     return "\n".join(lines)
 
 
-def _build_test_results(
-    spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]
-) -> str:
+def _build_test_results(spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]) -> str:
     journal = spec_data.get("journal", [])
     test_entries = [
         entry
@@ -197,9 +181,7 @@ def _build_test_results(
     if test_entries:
         lines = ["*Recent test-related journal entries:*"]
         for entry in test_entries[-3:]:
-            lines.append(
-                f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})"
-            )
+            lines.append(f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})")
             if entry.get("content"):
                 content = entry["content"][:500]
                 if len(entry["content"]) > 500:
@@ -209,9 +191,7 @@ def _build_test_results(
     return "*No test results available*"
 
 
-def _build_journal_entries(
-    spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]
-) -> str:
+def _build_journal_entries(spec_data: Dict[str, Any], task_id: Optional[str], phase_id: Optional[str]) -> str:
     journal = spec_data.get("journal", [])
     if task_id:
         journal = [entry for entry in journal if entry.get("task_id") == task_id]
@@ -219,11 +199,7 @@ def _build_journal_entries(
         # Filter to entries from tasks belonging to this phase
         phase = _find_phase(spec_data, phase_id)
         if phase:
-            phase_task_ids = {
-                child["id"]
-                for child in _get_child_nodes(spec_data, phase)
-                if "id" in child
-            }
+            phase_task_ids = {child["id"] for child in _get_child_nodes(spec_data, phase) if "id" in child}
             # Include entries that belong to phase tasks or have no task_id (phase-level)
             journal = [
                 entry
@@ -235,14 +211,8 @@ def _build_journal_entries(
         lines = [f"*{len(journal)} journal entries found:*"]
         for entry in journal[-5:]:
             entry_type = entry.get("entry_type", "note")
-            timestamp = (
-                entry.get("timestamp", "unknown")[:10]
-                if entry.get("timestamp")
-                else "unknown"
-            )
-            lines.append(
-                f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({timestamp})"
-            )
+            timestamp = entry.get("timestamp", "unknown")[:10] if entry.get("timestamp") else "unknown"
+            lines.append(f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({timestamp})")
             if entry.get("content"):
                 content = entry["content"][:500]
                 if len(entry["content"]) > 500:
@@ -278,13 +248,7 @@ def _get_hierarchy_nodes(spec_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]
     return nodes
 
 
-def _get_child_nodes(
-    spec_data: Dict[str, Any], node: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+def _get_child_nodes(spec_data: Dict[str, Any], node: Dict[str, Any]) -> List[Dict[str, Any]]:
     hierarchy_nodes = _get_hierarchy_nodes(spec_data)
     children = node.get("children", [])
-    return [
-        hierarchy_nodes[child_id]
-        for child_id in children
-        if child_id in hierarchy_nodes
-    ]
+    return [hierarchy_nodes[child_id] for child_id in children if child_id in hierarchy_nodes]

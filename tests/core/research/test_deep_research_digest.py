@@ -16,18 +16,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from foundry_mcp.config.research import ResearchConfig
+from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.document_digest import (
     deserialize_payload,
     serialize_payload,
 )
-from foundry_mcp.core.research.context_budget import AllocationResult
-from foundry_mcp.core.research.pdf_extractor import PDFExtractionResult
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnippet
 from foundry_mcp.core.research.models.fidelity import FidelityLevel
 from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
+from foundry_mcp.core.research.pdf_extractor import PDFExtractionResult
 from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
-
 
 # =============================================================================
 # Helpers
@@ -151,12 +150,8 @@ class TestEndToEndDigestFlow:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -191,9 +186,7 @@ class TestEndToEndDigestFlow:
     @pytest.mark.asyncio
     async def test_source_without_content_not_digested(self):
         """Source with no content is not selected for digest."""
-        source = _make_source(
-            "src-1", content=None, snippet="A snippet", quality=SourceQuality.HIGH
-        )
+        source = _make_source("src-1", content=None, snippet="A snippet", quality=SourceQuality.HIGH)
         state = _make_state(sources=[source])
         workflow = _make_workflow()
 
@@ -263,18 +256,12 @@ class TestRankingUsesRawContent:
     @pytest.mark.asyncio
     async def test_longer_content_ranks_higher(self):
         """Source with more content ranks higher than one with less."""
-        short_source = _make_source(
-            "src-short", content="B" * 600, quality=SourceQuality.HIGH
-        )
-        long_source = _make_source(
-            "src-long", content="A" * 5000, quality=SourceQuality.HIGH
-        )
+        short_source = _make_source("src-short", content="B" * 600, quality=SourceQuality.HIGH)
+        long_source = _make_source("src-long", content="A" * 5000, quality=SourceQuality.HIGH)
         state = _make_state(sources=[short_source, long_source])
 
         # Limit to 1 source to verify ranking order
-        workflow = _make_workflow(
-            _make_config(deep_research_digest_max_sources=1)
-        )
+        workflow = _make_workflow(_make_config(deep_research_digest_max_sources=1))
 
         from foundry_mcp.core.research.document_digest import DigestResult
 
@@ -285,12 +272,8 @@ class TestRankingUsesRawContent:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -312,9 +295,7 @@ class TestRankingUsesRawContent:
             snippet="A brief snippet",
             quality=SourceQuality.HIGH,
         )
-        content_source = _make_source(
-            "src-content", content="A" * 600, quality=SourceQuality.MEDIUM
-        )
+        content_source = _make_source("src-content", content="A" * 600, quality=SourceQuality.MEDIUM)
         state = _make_state(sources=[snippet_source, content_source])
         workflow = _make_workflow()
 
@@ -327,12 +308,8 @@ class TestRankingUsesRawContent:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -346,17 +323,11 @@ class TestRankingUsesRawContent:
     @pytest.mark.asyncio
     async def test_quality_contributes_to_ranking(self):
         """Higher quality sources rank above lower quality with same content."""
-        low_q = _make_source(
-            "src-low", content="A" * 600, quality=SourceQuality.LOW
-        )
-        high_q = _make_source(
-            "src-high", content="A" * 600, quality=SourceQuality.HIGH
-        )
+        low_q = _make_source("src-low", content="A" * 600, quality=SourceQuality.LOW)
+        high_q = _make_source("src-high", content="A" * 600, quality=SourceQuality.HIGH)
         state = _make_state(sources=[low_q, high_q])
 
-        workflow = _make_workflow(
-            _make_config(deep_research_digest_max_sources=1)
-        )
+        workflow = _make_workflow(_make_config(deep_research_digest_max_sources=1))
 
         from foundry_mcp.core.research.document_digest import DigestResult
 
@@ -367,12 +338,8 @@ class TestRankingUsesRawContent:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -410,12 +377,8 @@ class TestBudgetUsesCompressedSize:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -452,12 +415,8 @@ class TestBudgetUsesCompressedSize:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -511,7 +470,7 @@ class TestBudgetUsesCompressedSize:
         assert "Budget summary" in captured["content"]
         assert "Point A" in captured["content"]
         assert "Evidence snippet text." in captured["content"]
-        assert "\"content_type\"" not in captured["content"]
+        assert '"content_type"' not in captured["content"]
 
 
 # =============================================================================
@@ -642,20 +601,14 @@ class TestMultiIterationNoReDigest:
         from foundry_mcp.core.research.document_digest import DigestResult
 
         new_payload = _make_digest_payload(original_chars=1000, digest_chars=200)
-        mock_result = DigestResult(
-            payload=new_payload, cache_hit=False, duration_ms=10.0
-        )
+        mock_result = DigestResult(payload=new_payload, cache_hit=False, duration_ms=10.0)
 
         with (
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -685,12 +638,8 @@ class TestMultiIterationNoReDigest:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -711,12 +660,8 @@ class TestMultiIterationNoReDigest:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(side_effect=RuntimeError("LLM failed"))
@@ -743,12 +688,8 @@ class TestMultiIterationNoReDigest:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = slow_digest
@@ -776,9 +717,7 @@ class TestTimeoutBudgeting:
             _make_source("src-2", content="B" * 1000, quality=SourceQuality.HIGH),
         ]
         state = _make_state(sources=sources)
-        workflow = _make_workflow(
-            _make_config(deep_research_digest_timeout=0.3, deep_research_digest_max_concurrent=2)
-        )
+        workflow = _make_workflow(_make_config(deep_research_digest_timeout=0.3, deep_research_digest_max_concurrent=2))
 
         from foundry_mcp.core.research.document_digest import DigestResult
 
@@ -791,12 +730,8 @@ class TestTimeoutBudgeting:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = delayed_digest
@@ -821,14 +756,9 @@ class TestMaxSourcesLimit:
     @pytest.mark.asyncio
     async def test_respects_max_sources(self):
         """Only max_sources number of sources are selected for digest."""
-        sources = [
-            _make_source(f"src-{i}", content="A" * 1000, quality=SourceQuality.HIGH)
-            for i in range(5)
-        ]
+        sources = [_make_source(f"src-{i}", content="A" * 1000, quality=SourceQuality.HIGH) for i in range(5)]
         state = _make_state(sources=sources)
-        workflow = _make_workflow(
-            _make_config(deep_research_digest_max_sources=2)
-        )
+        workflow = _make_workflow(_make_config(deep_research_digest_max_sources=2))
 
         from foundry_mcp.core.research.document_digest import DigestResult
 
@@ -839,12 +769,8 @@ class TestMaxSourcesLimit:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -881,12 +807,8 @@ class TestFidelityTrackingOnErrors:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = slow_digest
@@ -910,17 +832,11 @@ class TestFidelityTrackingOnErrors:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
-            mock_instance.digest = AsyncMock(
-                side_effect=ValueError("Summarization failed")
-            )
+            mock_instance.digest = AsyncMock(side_effect=ValueError("Summarization failed"))
 
             await workflow._execute_digest_step_async(state, "test query")
 
@@ -961,12 +877,8 @@ class TestDigestArchiveSafety:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -1003,12 +915,8 @@ class TestDigestArchiveSafety:
             patch(
                 "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.DocumentDigestor"
             ) as MockDigestor,
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"
-            ),
-            patch(
-                "foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"
-            ),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.ContentSummarizer"),
+            patch("foundry_mcp.core.research.workflows.deep_research.phases._analysis_digest.PDFExtractor"),
         ):
             mock_instance = MockDigestor.return_value
             mock_instance.digest = AsyncMock(return_value=mock_result)
@@ -1020,12 +928,6 @@ class TestDigestArchiveSafety:
 
         assert stats["sources_digested"] == 1
         assert source.metadata.get("_digest_archive_hash") == payload.source_text_hash
-        archive_path = (
-            tmp_path
-            / ".foundry-mcp"
-            / "research_archives"
-            / source.id
-            / f"{payload.source_text_hash}.txt"
-        )
+        archive_path = tmp_path / ".foundry-mcp" / "research_archives" / source.id / f"{payload.source_text_hash}.txt"
         assert archive_path.exists()
         assert archive_path.read_text(encoding="utf-8") == "canonical text"

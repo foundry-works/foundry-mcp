@@ -28,18 +28,17 @@ from foundry_mcp.core.providers.base import (
 )
 from foundry_mcp.core.providers.registry import (
     ProviderRegistration,
-    register_provider,
-    register_lazy_provider,
     available_providers,
     check_provider_available,
-    resolve_provider,
-    get_provider_metadata,
     describe_providers,
-    reset_registry,
+    get_provider_metadata,
     get_registration,
+    register_lazy_provider,
+    register_provider,
+    reset_registry,
+    resolve_provider,
     set_dependency_resolver,
 )
-
 
 # =============================================================================
 # Test Fixtures
@@ -142,6 +141,7 @@ class TestProviderRegistration:
         """load_factory without factory should raise."""
         reg = ProviderRegistration(provider_id="test")
         from foundry_mcp.core.providers.base import ProviderUnavailableError
+
         with pytest.raises(ProviderUnavailableError):
             reg.load_factory()
 
@@ -318,6 +318,7 @@ class TestResolveProvider:
     def test_resolve_unregistered_raises(self):
         """Should raise ProviderUnavailableError for unregistered provider."""
         from foundry_mcp.core.providers.base import ProviderUnavailableError
+
         hooks = ProviderHooks()
         with pytest.raises(ProviderUnavailableError, match="not registered"):
             resolve_provider("nonexistent-provider-xyz", hooks=hooks)

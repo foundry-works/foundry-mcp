@@ -7,23 +7,23 @@ Tests validation functions, auto-fix capabilities, and statistics calculation.
 import copy
 
 import pytest
+
+from foundry_mcp.core.validation.application import apply_fixes
 from foundry_mcp.core.validation.constants import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_VERIFICATION_TYPES,
     VERIFICATION_RESULTS,
 )
+from foundry_mcp.core.validation.fixes import get_fix_actions
 from foundry_mcp.core.validation.models import Diagnostic
 from foundry_mcp.core.validation.rules import validate_spec
-from foundry_mcp.core.validation.fixes import get_fix_actions
-from foundry_mcp.core.validation.application import apply_fixes
 from foundry_mcp.core.validation.stats import calculate_stats
 from foundry_mcp.core.validation.verification import (
     add_verification,
     execute_verification,
     format_verification_summary,
 )
-
 
 # Test fixtures
 
@@ -564,9 +564,7 @@ class TestAddVerification:
         )
         assert success is True
 
-        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"][
-            "verification_history"
-        ]
+        history = spec_with_verify_node["hierarchy"]["verify-1"]["metadata"]["verification_history"]
         entry = history[0]
         assert entry["result"] == "PARTIAL"
         assert entry["command"] == "pytest tests/"
@@ -655,9 +653,7 @@ class TestExecuteVerification:
     def test_execute_verification_failing_command(self, spec_with_failing_command):
         """Test execution of a failing command."""
         result = execute_verification(spec_with_failing_command, "verify-1")
-        assert (
-            result["success"] is True
-        )  # Execution completed, even if result is FAILED
+        assert result["success"] is True  # Execution completed, even if result is FAILED
         assert result["result"] == "FAILED"
         assert result["exit_code"] == 1
 
@@ -706,9 +702,7 @@ class TestExecuteVerification:
     def test_execute_verification_timeout(self, spec_with_echo_command):
         """Test command timeout handling."""
         # Change command to sleep longer than timeout
-        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = (
-            "sleep 5"
-        )
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "sleep 5"
         result = execute_verification(spec_with_echo_command, "verify-1", timeout=1)
         assert "timed out" in result["error"]
         assert result["result"] == "FAILED"
@@ -727,9 +721,7 @@ class TestExecuteVerification:
 
     def test_execute_verification_captures_stderr(self, spec_with_echo_command):
         """Test that stderr is captured."""
-        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = (
-            "echo error >&2"
-        )
+        spec_with_echo_command["hierarchy"]["verify-1"]["metadata"]["command"] = "echo error >&2"
         result = execute_verification(spec_with_echo_command, "verify-1")
         assert result["success"] is True
         assert "[stderr]" in result["output"]

@@ -3,8 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
-
 from foundry_mcp.core.spec import (
     load_spec,
     update_phase_metadata,

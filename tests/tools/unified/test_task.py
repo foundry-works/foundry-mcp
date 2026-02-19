@@ -6,8 +6,6 @@ instead of crashing the MCP server.
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestTaskDispatchExceptionHandling:
     """Tests for _dispatch_task_action exception handling."""
@@ -16,9 +14,7 @@ class TestTaskDispatchExceptionHandling:
         """_dispatch_task_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.task_handlers._TASK_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError("Task storage failed")
 
@@ -39,9 +35,7 @@ class TestTaskDispatchExceptionHandling:
         """_dispatch_task_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.task_handlers._TASK_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
 
@@ -62,9 +56,7 @@ class TestTaskDispatchExceptionHandling:
         from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.task_handlers._TASK_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.task_handlers._TASK_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["list"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 

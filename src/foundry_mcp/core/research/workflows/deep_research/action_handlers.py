@@ -9,11 +9,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core import task_registry
 from foundry_mcp.core.research.models.deep_research import (
-    DeepResearchPhase,
     DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode
@@ -40,6 +39,19 @@ class ActionHandlersMixin:
     - self._cleanup_completed_task(): from BackgroundTaskMixin
     - self._execute_workflow_async(): from WorkflowExecutionMixin
     """
+
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _persist_state_if_needed(self, *args: Any, **kwargs: Any) -> None: ...
+        def _flush_state(self, *args: Any, **kwargs: Any) -> None: ...
+        def get_background_task(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _start_background_task(self, *args: Any, **kwargs: Any) -> Any: ...
+        def _cleanup_completed_task(self, *args: Any, **kwargs: Any) -> None: ...
+        async def _execute_workflow_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def _start_research(
         self,
@@ -127,6 +139,7 @@ class ActionHandlersMixin:
             if loop.is_running():
                 # Already in async context, run directly
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(
                         asyncio.run,
@@ -222,6 +235,7 @@ class ActionHandlersMixin:
             if loop.is_running():
                 # Already in async context, run in thread pool
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(
                         asyncio.run,
@@ -303,22 +317,24 @@ class ActionHandlersMixin:
                 if not is_active:
                     self._persist_state_if_needed(state)
 
-                metadata.update({
-                    "original_query": state.original_query,
-                    "phase": state.phase.value,
-                    "iteration": state.iteration,
-                    "max_iterations": state.max_iterations,
-                    "sub_queries_total": len(state.sub_queries),
-                    "sub_queries_completed": len(state.completed_sub_queries()),
-                    "source_count": len(state.sources),
-                    "finding_count": len(state.findings),
-                    "gap_count": len(state.unresolved_gaps()),
-                    "total_tokens_used": state.total_tokens_used,
-                    "is_failed": bool(state.metadata.get("failed")),
-                    "failure_error": state.metadata.get("failure_error"),
-                    "status_check_count": state.status_check_count,
-                    "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
-                })
+                metadata.update(
+                    {
+                        "original_query": state.original_query,
+                        "phase": state.phase.value,
+                        "iteration": state.iteration,
+                        "max_iterations": state.max_iterations,
+                        "sub_queries_total": len(state.sub_queries),
+                        "sub_queries_completed": len(state.completed_sub_queries()),
+                        "source_count": len(state.sources),
+                        "finding_count": len(state.findings),
+                        "gap_count": len(state.unresolved_gaps()),
+                        "total_tokens_used": state.total_tokens_used,
+                        "is_failed": bool(state.metadata.get("failed")),
+                        "failure_error": state.metadata.get("failure_error"),
+                        "status_check_count": state.status_check_count,
+                        "last_heartbeat_at": state.last_heartbeat_at.isoformat() if state.last_heartbeat_at else None,
+                    }
+                )
                 # Build detailed status content when state is available
                 status_lines = [
                     f"Research ID: {state.id}",
@@ -454,16 +470,12 @@ class ActionHandlersMixin:
 
         # Add warning if content was dropped
         if state.dropped_content_ids:
-            warnings.append(
-                f"Content truncated: {len(state.dropped_content_ids)} source(s) dropped for context limits"
-            )
+            warnings.append(f"Content truncated: {len(state.dropped_content_ids)} source(s) dropped for context limits")
 
         # Add warning if fidelity is degraded
         fidelity_level = allocation_meta.get("overall_fidelity_level") or ""
         if fidelity_level not in ("full", ""):
-            warnings.append(
-                f"Content fidelity: {fidelity_level} (some sources may be summarized)"
-            )
+            warnings.append(f"Content fidelity: {fidelity_level} (some sources may be summarized)")
 
         # Add any warnings from allocation metadata
         if allocation_meta.get("warnings"):

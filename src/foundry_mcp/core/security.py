@@ -67,21 +67,17 @@ INJECTION_PATTERNS: Final[list[str]] = [
     r"disregard\s+(all\s+)?(previous|prior|above)",
     r"forget\s+(everything|all)\s+(above|before)",
     r"new\s+instructions?\s*:",
-
     # System prompt injection
     r"system\s*:\s*",
     r"<\s*system\s*>",
-
     # Special tokens (model-specific)
-    r"<\|.*?\|>",              # OpenAI-style special tokens
-    r"\[INST\]|\[/INST\]",     # Llama instruction markers
+    r"<\|.*?\|>",  # OpenAI-style special tokens
+    r"\[INST\]|\[/INST\]",  # Llama instruction markers
     r"<\|im_start\|>|<\|im_end\|>",  # ChatML markers
-    r"<<SYS>>|<</SYS>>",       # Llama system markers
-
+    r"<<SYS>>|<</SYS>>",  # Llama system markers
     # Code block injection attempts
     r"```system",
     r"```\s*<\s*system",
-
     # Role injection
     r"^(assistant|user|system)\s*:",
 ]
@@ -102,6 +98,7 @@ Use with detect_prompt_injection() for comprehensive checking.
 # Detection Results
 # =============================================================================
 
+
 @dataclass
 class InjectionDetectionResult:
     """Result of prompt injection detection.
@@ -111,6 +108,7 @@ class InjectionDetectionResult:
         matched_pattern: The regex pattern that matched (if any)
         matched_text: The actual text that matched the pattern (if any)
     """
+
     is_suspicious: bool
     matched_pattern: Optional[str] = None
     matched_text: Optional[str] = None
@@ -119,6 +117,7 @@ class InjectionDetectionResult:
 # =============================================================================
 # Detection Functions
 # =============================================================================
+
 
 def detect_prompt_injection(
     text: str,
@@ -164,7 +163,7 @@ def detect_prompt_injection(
                         "pattern": pattern,
                         "matched_text": result.matched_text,
                         "text_preview": preview,
-                    }
+                    },
                 )
 
             return result
@@ -194,6 +193,7 @@ def is_prompt_injection(text: str) -> bool:
 # Size Validation Functions
 # =============================================================================
 
+
 @dataclass
 class SizeValidationResult:
     """Result of input size validation.
@@ -202,6 +202,7 @@ class SizeValidationResult:
         is_valid: Whether all size checks passed
         violations: List of (field_name, violation_message) tuples
     """
+
     is_valid: bool
     violations: list[Tuple[str, str]]
 
@@ -234,11 +235,8 @@ def validate_size(
     effective_max_size = max_size if max_size is not None else MAX_INPUT_SIZE
     try:
         serialized = json.dumps(value) if not isinstance(value, str) else value
-        if len(serialized.encode('utf-8')) > effective_max_size:
-            violations.append((
-                field_name,
-                f"Exceeds maximum size ({effective_max_size} bytes)"
-            ))
+        if len(serialized.encode("utf-8")) > effective_max_size:
+            violations.append((field_name, f"Exceeds maximum size ({effective_max_size} bytes)"))
     except (TypeError, ValueError):
         pass  # Can't serialize, skip size check
 
@@ -246,19 +244,13 @@ def validate_size(
     effective_max_length = max_length if max_length is not None else MAX_ARRAY_LENGTH
     if isinstance(value, (list, tuple)):
         if len(value) > effective_max_length:
-            violations.append((
-                field_name,
-                f"Array exceeds maximum length ({effective_max_length} items)"
-            ))
+            violations.append((field_name, f"Array exceeds maximum length ({effective_max_length} items)"))
 
     # Check string length
     effective_max_string = max_string_length if max_string_length is not None else MAX_STRING_LENGTH
     if isinstance(value, str):
         if len(value) > effective_max_string:
-            violations.append((
-                field_name,
-                f"String exceeds maximum length ({effective_max_string} characters)"
-            ))
+            violations.append((field_name, f"String exceeds maximum length ({effective_max_string} characters)"))
 
     return SizeValidationResult(
         is_valid=len(violations) == 0,
@@ -269,6 +261,7 @@ def validate_size(
 # =============================================================================
 # Validation Decorators
 # =============================================================================
+
 
 def validate_input_size(
     *,
@@ -325,36 +318,30 @@ def validate_input_size(
                 if check_injection and isinstance(value, str):
                     injection_result = detect_prompt_injection(value)
                     if injection_result.is_suspicious:
-                        all_violations.append((
-                            name,
-                            f"Contains disallowed patterns: {injection_result.matched_text}"
-                        ))
+                        all_violations.append((name, f"Contains disallowed patterns: {injection_result.matched_text}"))
 
             if all_violations:
                 # Import here to avoid circular dependency
                 try:
                     from foundry_mcp.core.responses.builders import error_response
-                    return asdict(error_response(
-                        "Input validation failed",
-                        error_code="VALIDATION_ERROR",
-                        details={
-                            "validation_errors": [
-                                {"field": field, "message": msg}
-                                for field, msg in all_violations
-                            ]
-                        }
-                    ))
+
+                    return asdict(
+                        error_response(
+                            "Input validation failed",
+                            error_code="VALIDATION_ERROR",
+                            details={
+                                "validation_errors": [{"field": field, "message": msg} for field, msg in all_violations]
+                            },
+                        )
+                    )
                 except ImportError:
                     # Fallback if responses module not available
                     return {
                         "success": False,
                         "error": "Input validation failed",
                         "data": {
-                            "validation_errors": [
-                                {"field": field, "message": msg}
-                                for field, msg in all_violations
-                            ]
-                        }
+                            "validation_errors": [{"field": field, "message": msg} for field, msg in all_violations]
+                        },
                     }
 
             return func(*args, **kwargs)
@@ -377,39 +364,34 @@ def validate_input_size(
                 if check_injection and isinstance(value, str):
                     injection_result = detect_prompt_injection(value)
                     if injection_result.is_suspicious:
-                        all_violations.append((
-                            name,
-                            f"Contains disallowed patterns: {injection_result.matched_text}"
-                        ))
+                        all_violations.append((name, f"Contains disallowed patterns: {injection_result.matched_text}"))
 
             if all_violations:
                 try:
                     from foundry_mcp.core.responses.builders import error_response
-                    return asdict(error_response(
-                        "Input validation failed",
-                        error_code="VALIDATION_ERROR",
-                        details={
-                            "validation_errors": [
-                                {"field": field, "message": msg}
-                                for field, msg in all_violations
-                            ]
-                        }
-                    ))
+
+                    return asdict(
+                        error_response(
+                            "Input validation failed",
+                            error_code="VALIDATION_ERROR",
+                            details={
+                                "validation_errors": [{"field": field, "message": msg} for field, msg in all_violations]
+                            },
+                        )
+                    )
                 except ImportError:
                     return {
                         "success": False,
                         "error": "Input validation failed",
                         "data": {
-                            "validation_errors": [
-                                {"field": field, "message": msg}
-                                for field, msg in all_violations
-                            ]
-                        }
+                            "validation_errors": [{"field": field, "message": msg} for field, msg in all_violations]
+                        },
                     }
 
             return await func(*args, **kwargs)
 
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return wrapper

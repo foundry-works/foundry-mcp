@@ -26,53 +26,49 @@ from pydantic import ValidationError
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.models.enums import (
     PhaseGateStatus,
-    SessionStatus,
     StepOutcome,
     StepType,
 )
 from foundry_mcp.core.autonomy.models.responses import (
-    NextStep,
     SessionStepResponseData,
 )
 from foundry_mcp.core.autonomy.models.steps import LastStepResult
 from foundry_mcp.core.autonomy.orchestrator import (
-    OrchestrationResult,
-    StepOrchestrator,
-    ERROR_STEP_RESULT_REQUIRED,
+    ERROR_ALL_TASKS_BLOCKED,
+    ERROR_GATE_AUDIT_FAILURE,
+    ERROR_GATE_BLOCKED,
+    ERROR_GATE_INTEGRITY_CHECKSUM,
+    ERROR_HEARTBEAT_STALE,
+    ERROR_INVALID_GATE_EVIDENCE,
+    ERROR_REQUIRED_GATE_UNSATISFIED,
+    ERROR_SESSION_UNRECOVERABLE,
+    ERROR_SPEC_REBASE_REQUIRED,
     ERROR_STEP_MISMATCH,
-    ERROR_STEP_PROOF_MISSING,
-    ERROR_STEP_PROOF_MISMATCH,
     ERROR_STEP_PROOF_CONFLICT,
     ERROR_STEP_PROOF_EXPIRED,
-    ERROR_SPEC_REBASE_REQUIRED,
-    ERROR_HEARTBEAT_STALE,
+    ERROR_STEP_PROOF_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
+    ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
-    ERROR_ALL_TASKS_BLOCKED,
-    ERROR_SESSION_UNRECOVERABLE,
-    ERROR_INVALID_GATE_EVIDENCE,
-    ERROR_GATE_BLOCKED,
-    ERROR_REQUIRED_GATE_UNSATISFIED,
-    ERROR_VERIFICATION_RECEIPT_MISSING,
     ERROR_VERIFICATION_RECEIPT_INVALID,
-    ERROR_GATE_INTEGRITY_CHECKSUM,
-    ERROR_GATE_AUDIT_FAILURE,
-)
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
+    ERROR_VERIFICATION_RECEIPT_MISSING,
+    OrchestrationResult,
+    StepOrchestrator,
 )
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import load_spec
-
 from foundry_mcp.tools.unified.param_schema import AtLeastOne, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
     _request_id,
     _resolve_session,
-    _session_not_found_response,
     _validate_context_usage_pct,
     attach_loop_metadata,
 )
@@ -251,8 +247,7 @@ def _map_orchestrator_error_to_response(
         details["remediation"] = "Provide valid gate evidence via fidelity-gate action"
     elif error_code == ERROR_VERIFICATION_RECEIPT_MISSING:
         details["remediation"] = (
-            "Include verification_receipt in last_step_result when execute_verification "
-            "reports outcome='success'."
+            "Include verification_receipt in last_step_result when execute_verification reports outcome='success'."
         )
     elif error_code == ERROR_VERIFICATION_RECEIPT_INVALID:
         details["remediation"] = (
@@ -260,9 +255,7 @@ def _map_orchestrator_error_to_response(
             "resubmit with matching step_id and command hash."
         )
     elif error_code == ERROR_GATE_INTEGRITY_CHECKSUM:
-        details["remediation"] = (
-            "Re-run the gate step to obtain fresh evidence before reporting success."
-        )
+        details["remediation"] = "Re-run the gate step to obtain fresh evidence before reporting success."
     elif error_code == ERROR_GATE_AUDIT_FAILURE:
         details["remediation"] = (
             "Gate audit failed due to evidence inconsistency. Re-run required gate "
@@ -272,7 +265,9 @@ def _map_orchestrator_error_to_response(
         details["blocked_by_gate"] = True
         if missing_required_gates:
             details["missing_required_gates"] = missing_required_gates
-        details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
+        details["remediation"] = (
+            "Complete required phase gates before proceeding or request gate waiver from maintainer"
+        )
     elif error_code == ERROR_REQUIRED_GATE_UNSATISFIED:
         details["blocked_by_gate"] = True
         # Include gate_block details if available
@@ -285,9 +280,13 @@ def _map_orchestrator_error_to_response(
                 details["recovery_action"] = recovery_action
                 details["remediation"] = recovery_action.get("description", "Use gate-waiver to unblock")
             else:
-                details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
+                details["remediation"] = (
+                    "Complete required phase gates before proceeding or request gate waiver from maintainer"
+                )
         else:
-            details["remediation"] = "Complete required phase gates before proceeding or request gate waiver from maintainer"
+            details["remediation"] = (
+                "Complete required phase gates before proceeding or request gate waiver from maintainer"
+            )
 
     return _attach_loop_fields(
         asdict(
@@ -428,6 +427,7 @@ def _handle_session_step_next(
     session, err = _resolve_session(storage, "session-step-next", request_id, session_id, spec_id)
     if err:
         return _attach_loop_fields(err)
+    assert session is not None
 
     # Parse last_step_result if provided
     parsed_last_step_result: Optional[LastStepResult] = None
@@ -443,9 +443,7 @@ def _handle_session_step_next(
         try:
             outcome = StepOutcome(outcome_str)
         except ValueError:
-            _parse_errors.append(
-                f"outcome '{outcome_str}' is invalid; must be one of: success, failure, skipped"
-            )
+            _parse_errors.append(f"outcome '{outcome_str}' is invalid; must be one of: success, failure, skipped")
 
         # --- step_type ---
         step_type: Optional[StepType] = None
@@ -457,16 +455,12 @@ def _handle_session_step_next(
                 step_type = StepType(step_type_str)
             except ValueError:
                 valid = ", ".join(t.value for t in StepType)
-                _parse_errors.append(
-                    f"step_type '{step_type_str}' is invalid; must be one of: {valid}"
-                )
+                _parse_errors.append(f"step_type '{step_type_str}' is invalid; must be one of: {valid}")
 
         # --- step_id ---
         step_id_val = last_step_result.get("step_id")
         if not step_id_val:
-            _parse_errors.append(
-                "step_id is required inside last_step_result (not as a top-level parameter)"
-            )
+            _parse_errors.append("step_id is required inside last_step_result (not as a top-level parameter)")
 
         # Return aggregated errors before attempting Pydantic construction
         if _parse_errors:
@@ -494,6 +488,7 @@ def _handle_session_step_next(
             )
 
         # All pre-checks passed — construct the Pydantic model
+        assert isinstance(step_id_val, str), "step_id_val validated as truthy str above"
         try:
             parsed_last_step_result = LastStepResult(
                 step_id=step_id_val,
@@ -530,11 +525,7 @@ def _handle_session_step_next(
             )
 
     if parsed_last_step_result is not None:
-        expected_step_proof = (
-            session.last_step_issued.step_proof
-            if session.last_step_issued is not None
-            else None
-        )
+        expected_step_proof = session.last_step_issued.step_proof if session.last_step_issued is not None else None
         provided_step_proof = parsed_last_step_result.step_proof
         payload_hash = _hash_last_step_result_payload(parsed_last_step_result)
 
@@ -550,9 +541,7 @@ def _handle_session_step_next(
                 if replay_record.payload_hash != payload_hash:
                     return _map_orchestrator_error_to_response(
                         error_code=ERROR_STEP_PROOF_CONFLICT,
-                        error_message=(
-                            "step_proof was already consumed with a different payload for this session."
-                        ),
+                        error_message=("step_proof was already consumed with a different payload for this session."),
                         request_id=request_id,
                         session_id=session.id,
                         state_version=session.state_version,
@@ -560,9 +549,7 @@ def _handle_session_step_next(
                 if replay_record.grace_expires_at <= datetime.now(timezone.utc):
                     return _map_orchestrator_error_to_response(
                         error_code=ERROR_STEP_PROOF_EXPIRED,
-                        error_message=(
-                            "step_proof replay window has expired; request a fresh step."
-                        ),
+                        error_message=("step_proof replay window has expired; request a fresh step."),
                         request_id=request_id,
                         session_id=session.id,
                         state_version=session.state_version,
@@ -576,9 +563,7 @@ def _handle_session_step_next(
                     )
                 return _map_orchestrator_error_to_response(
                     error_code=ERROR_STEP_PROOF_EXPIRED,
-                    error_message=(
-                        "step_proof was consumed but cached response is unavailable; request a fresh step."
-                    ),
+                    error_message=("step_proof was consumed but cached response is unavailable; request a fresh step."),
                     request_id=request_id,
                     session_id=session.id,
                     state_version=session.state_version,
@@ -612,13 +597,10 @@ def _handle_session_step_next(
                 _last = session.last_step_issued
                 _identity_errors: list[str] = []
                 if not parsed_last_step_result.step_id:
-                    _identity_errors.append(
-                        f"step_id is empty; expected {_last.step_id}"
-                    )
+                    _identity_errors.append(f"step_id is empty; expected {_last.step_id}")
                 elif parsed_last_step_result.step_id != _last.step_id:
                     _identity_errors.append(
-                        f"step_id mismatch: expected {_last.step_id}, "
-                        f"got {parsed_last_step_result.step_id}"
+                        f"step_id mismatch: expected {_last.step_id}, got {parsed_last_step_result.step_id}"
                     )
                 if parsed_last_step_result.step_type != _last.type:
                     _identity_errors.append(
@@ -629,8 +611,7 @@ def _handle_session_step_next(
                     return _map_orchestrator_error_to_response(
                         error_code=ERROR_STEP_MISMATCH,
                         error_message=(
-                            "Step identity pre-check failed (proof NOT consumed): "
-                            + "; ".join(_identity_errors)
+                            "Step identity pre-check failed (proof NOT consumed): " + "; ".join(_identity_errors)
                         ),
                         request_id=request_id,
                         session_id=session.id,
@@ -644,11 +625,7 @@ def _handle_session_step_next(
                 step_id=parsed_last_step_result.step_id,
             )
             if not consumed:
-                mapped_code = (
-                    ERROR_STEP_PROOF_EXPIRED
-                    if proof_error == "PROOF_EXPIRED"
-                    else ERROR_STEP_PROOF_CONFLICT
-                )
+                mapped_code = ERROR_STEP_PROOF_EXPIRED if proof_error == "PROOF_EXPIRED" else ERROR_STEP_PROOF_CONFLICT
                 return _map_orchestrator_error_to_response(
                     error_code=mapped_code,
                     error_message=(
@@ -816,12 +793,21 @@ def _handle_session_step_report(
     """
     request_id = _request_id()
 
-    params = {"spec_id": spec_id, "session_id": session_id,
-              "step_id": step_id, "step_type": step_type, "outcome": outcome}
-    err = validate_payload(params, _STEP_REPORT_SCHEMA,
-                           tool_name="task", action="session-step-report",
-                           request_id=request_id,
-                           cross_field_rules=[AtLeastOne(fields=("spec_id", "session_id"))])
+    params = {
+        "spec_id": spec_id,
+        "session_id": session_id,
+        "step_id": step_id,
+        "step_type": step_type,
+        "outcome": outcome,
+    }
+    err = validate_payload(
+        params,
+        _STEP_REPORT_SCHEMA,
+        tool_name="task",
+        action="session-step-report",
+        request_id=request_id,
+        cross_field_rules=[AtLeastOne(fields=("spec_id", "session_id"))],
+    )
     if err:
         return _attach_loop_fields(err)
 
@@ -837,8 +823,17 @@ def _handle_session_step_report(
         last_step_result["files_touched"] = files_touched
 
     # Strip keys already consumed or built into last_step_result
-    _CONSUMED_REPORT_KEYS = {"step_id", "step_type", "outcome", "note", "files_touched",
-                              "spec_id", "session_id", "workspace", "last_step_result"}
+    _CONSUMED_REPORT_KEYS = {
+        "step_id",
+        "step_type",
+        "outcome",
+        "note",
+        "files_touched",
+        "spec_id",
+        "session_id",
+        "workspace",
+        "last_step_result",
+    }
     filtered = {k: v for k, v in payload.items() if k not in _CONSUMED_REPORT_KEYS}
 
     # Delegate to session-step-next
@@ -886,6 +881,7 @@ def _handle_session_step_replay(
     session, err = _resolve_session(storage, "session-step-replay", request_id, session_id, spec_id)
     if err:
         return _attach_loop_fields(err)
+    assert session is not None
 
     # Check for cached response
     if not session.last_issued_response:

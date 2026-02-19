@@ -6,7 +6,7 @@ invalid parents, self-references, missing dependencies, position errors,
 regex/pattern errors, and backup/rollback/comparison failures.
 """
 
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from foundry_mcp.core.responses.builders import error_response
 from foundry_mcp.core.responses.types import ErrorCode, ErrorType, ToolResponse
@@ -46,8 +46,7 @@ def circular_dependency_error(
         error_code=ErrorCode.CIRCULAR_DEPENDENCY,
         error_type=ErrorType.CONFLICT,
         data=data,
-        remediation=remediation
-        or "Remove an existing dependency to break the cycle before adding this one.",
+        remediation=remediation or "Remove an existing dependency to break the cycle before adding this one.",
         request_id=request_id,
     )
 
@@ -149,8 +148,7 @@ def dependency_not_found_error(
         error_code=ErrorCode.DEPENDENCY_NOT_FOUND,
         error_type=ErrorType.NOT_FOUND,
         data={"task_id": task_id, "dependency_id": dependency_id},
-        remediation=remediation
-        or "Check existing dependencies using task info before removing.",
+        remediation=remediation or "Check existing dependencies using task info before removing.",
         request_id=request_id,
     )
 
@@ -217,8 +215,7 @@ def invalid_regex_error(
         error_code=ErrorCode.INVALID_REGEX_PATTERN,
         error_type=ErrorType.VALIDATION,
         data={"pattern": pattern, "error_detail": error_detail},
-        remediation=remediation
-        or "Check regex syntax. Use raw strings and escape special characters.",
+        remediation=remediation or "Check regex syntax. Use raw strings and escape special characters.",
         request_id=request_id,
     )
 
@@ -254,8 +251,7 @@ def pattern_too_broad_error(
             "match_count": match_count,
             "max_matches": max_matches,
         },
-        remediation=remediation
-        or "Use a more specific pattern or apply to a narrower scope.",
+        remediation=remediation or "Use a more specific pattern or apply to a narrower scope.",
         request_id=request_id,
     )
 
@@ -285,8 +281,7 @@ def no_matches_error(
         error_code=ErrorCode.NO_MATCHES_FOUND,
         error_type=ErrorType.NOT_FOUND,
         data={"pattern": pattern, "scope": scope},
-        remediation=remediation
-        or "Verify the pattern and scope. Use dry-run to preview matches.",
+        remediation=remediation or "Verify the pattern and scope. Use dry-run to preview matches.",
         request_id=request_id,
     )
 
@@ -364,8 +359,7 @@ def backup_corrupted_error(
             "backup_id": backup_id,
             "error_detail": error_detail,
         },
-        remediation=remediation
-        or "Try an earlier backup or restore from version control.",
+        remediation=remediation or "Try an earlier backup or restore from version control.",
         request_id=request_id,
     )
 
@@ -401,8 +395,7 @@ def rollback_failed_error(
             "backup_id": backup_id,
             "error_detail": error_detail,
         },
-        remediation=remediation
-        or "Check file permissions. A safety backup was created before rollback attempt.",
+        remediation=remediation or "Check file permissions. A safety backup was created before rollback attempt.",
         request_id=request_id,
     )
 
@@ -438,7 +431,6 @@ def comparison_failed_error(
             "target": target,
             "error_detail": error_detail,
         },
-        remediation=remediation
-        or "Ensure both specs are valid and use compatible schema versions.",
+        remediation=remediation or "Ensure both specs are valid and use compatible schema versions.",
         request_id=request_id,
     )

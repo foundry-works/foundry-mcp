@@ -8,31 +8,20 @@ Tests cover:
 5. Backward compatibility
 """
 
-import os
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
-from foundry_mcp.core.research.models.sources import SourceType
 from foundry_mcp.core.research.providers.semantic_scholar import (
     DEFAULT_FIELDS,
     DEFAULT_RATE_LIMIT,
-    DEFAULT_TIMEOUT,
     DEFAULT_SORT_BY,
+    DEFAULT_TIMEOUT,
     EXTENDED_FIELDS,
     PAPER_SEARCH_ENDPOINT,
     SEMANTIC_SCHOLAR_BASE_URL,
-    VALID_PUBLICATION_TYPES,
-    VALID_SORT_FIELDS,
     SemanticScholarProvider,
     _validate_search_params,
-)
-from foundry_mcp.core.research.providers.base import (
-    AuthenticationError,
-    RateLimitError,
-    SearchProviderError,
 )
 
 

@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from foundry_mcp.core.spec import load_spec, find_specs_directory
+from foundry_mcp.core.spec import find_specs_directory, load_spec
 from foundry_mcp.core.task import is_unblocked
 from foundry_mcp.core.task._helpers import check_all_blocked
 
@@ -571,10 +571,7 @@ def prepare_batch_context(
 
     # Check for spec completion
     hierarchy = spec_data.get("hierarchy", {})
-    all_tasks = [
-        node for node in hierarchy.values()
-        if node.get("type") in ("task", "subtask", "verify")
-    ]
+    all_tasks = [node for node in hierarchy.values() if node.get("type") in ("task", "subtask", "verify")]
     completed_count = sum(1 for t in all_tasks if t.get("status") == "completed")
     pending_count = sum(1 for t in all_tasks if t.get("status") == "pending")
     spec_complete = pending_count == 0 and completed_count > 0
@@ -633,13 +630,13 @@ def prepare_batch_context(
 
         # Estimate tokens for this task context
         import json
+
         context_json = json.dumps(task_context)
         context_tokens = _estimate_tokens(context_json)
 
         if used_tokens + context_tokens > token_budget:
             warnings.append(
-                f"Token budget exceeded at task {len(task_contexts) + 1}. "
-                f"Returning {len(task_contexts)} tasks."
+                f"Token budget exceeded at task {len(task_contexts) + 1}. Returning {len(task_contexts)} tasks."
             )
             break
 
@@ -648,23 +645,16 @@ def prepare_batch_context(
 
     # Check for stale in_progress tasks
     stale_tasks = _get_stale_in_progress_tasks(spec_data)
-    stale_info = [
-        {"task_id": t[0], "title": t[1].get("title", "")}
-        for t in stale_tasks
-    ]
+    stale_info = [{"task_id": t[0], "title": t[1].get("title", "")} for t in stale_tasks]
     if stale_info:
-        warnings.append(
-            f"Found {len(stale_info)} stale in_progress task(s) (>1hr). "
-            "Consider resetting them."
-        )
+        warnings.append(f"Found {len(stale_info)} stale in_progress task(s) (>1hr). Consider resetting them.")
 
     # Build dependency graph
-    dep_graph = _build_dependency_graph(spec_data, task_ids[:len(task_contexts)])
+    dep_graph = _build_dependency_graph(spec_data, task_ids[: len(task_contexts)])
 
     # Add logical coupling warning
     warnings.append(
-        "Note: Tasks are file-independent but may have logical coupling "
-        "that cannot be detected automatically."
+        "Note: Tasks are file-independent but may have logical coupling that cannot be detected automatically."
     )
 
     return {
@@ -701,6 +691,7 @@ def start_batch(
         - Error message string if operation failed, None on success
     """
     from datetime import datetime, timezone
+
     from foundry_mcp.core.spec import load_spec, save_spec
     from foundry_mcp.core.task import is_unblocked
 
@@ -749,21 +740,17 @@ def start_batch(
 
     # Re-validate independence between selected tasks
     for i, (task_id_a, task_data_a) in enumerate(tasks_to_start):
-        for task_id_b, task_data_b in tasks_to_start[i + 1:]:
+        for task_id_b, task_data_b in tasks_to_start[i + 1 :]:
             # Check for direct dependency
             if _has_direct_dependency(hierarchy, task_id_a, task_data_a, task_id_b, task_data_b):
-                validation_errors.append(
-                    f"Tasks '{task_id_a}' and '{task_id_b}' have dependencies between them"
-                )
+                validation_errors.append(f"Tasks '{task_id_a}' and '{task_id_b}' have dependencies between them")
                 continue
 
             # Check for file path conflict
             path_a = _get_task_file_path(task_data_a)
             path_b = _get_task_file_path(task_data_b)
             if _paths_conflict(path_a, path_b):
-                validation_errors.append(
-                    f"Tasks '{task_id_a}' and '{task_id_b}' target conflicting paths"
-                )
+                validation_errors.append(f"Tasks '{task_id_a}' and '{task_id_b}' target conflicting paths")
 
     # Fail if any validation errors (all-or-nothing)
     if validation_errors:
@@ -823,9 +810,10 @@ def complete_batch(
         - Error message string if entire operation failed, None on success
     """
     from datetime import datetime, timezone
-    from foundry_mcp.core.spec import load_spec, save_spec
+
     from foundry_mcp.core.journal import add_journal_entry
     from foundry_mcp.core.progress import sync_computed_fields, update_parent_status
+    from foundry_mcp.core.spec import load_spec, save_spec
 
     if not completions:
         return {}, "No completions provided"
@@ -1012,9 +1000,7 @@ def reset_batch(
 
             status = task_data.get("status")
             if status != "in_progress":
-                validation_errors.append(
-                    f"Task '{task_id}' is not in_progress (status: {status})"
-                )
+                validation_errors.append(f"Task '{task_id}' is not in_progress (status: {status})")
                 continue
 
             tasks_to_reset.append((task_id, task_data))

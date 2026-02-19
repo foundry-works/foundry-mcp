@@ -30,12 +30,22 @@ from foundry_mcp.core.background_task import BackgroundTask
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
-    DeepResearchState,
 )
 from foundry_mcp.core.research.providers import SearchProvider
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research.action_handlers import (
+    ActionHandlersMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.audit import (
+    AuditMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.background_tasks import (
+    BackgroundTaskMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.error_handling import (
+    ErrorHandlingMixin,
+)
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
-    _active_research_memory,
     install_crash_handler,
 )
 from foundry_mcp.core.research.workflows.deep_research.orchestration import (
@@ -47,40 +57,28 @@ from foundry_mcp.core.research.workflows.deep_research.orchestration import (
 from foundry_mcp.core.research.workflows.deep_research.persistence import (
     PersistenceMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.audit import (
-    AuditMixin,
+from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
+    AnalysisPhaseMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.error_handling import (
-    ErrorHandlingMixin,
-)
-from foundry_mcp.core.research.workflows.deep_research.action_handlers import (
-    ActionHandlersMixin,
-)
-from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
-    WorkflowExecutionMixin,
+from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
+    GatheringPhaseMixin,
 )
 
 # Phase mixins
 from foundry_mcp.core.research.workflows.deep_research.phases.planning import (
     PlanningPhaseMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.gathering import (
-    GatheringPhaseMixin,
-)
-from foundry_mcp.core.research.workflows.deep_research.phases.analysis import (
-    AnalysisPhaseMixin,
+from foundry_mcp.core.research.workflows.deep_research.phases.refinement import (
+    RefinementPhaseMixin,
 )
 from foundry_mcp.core.research.workflows.deep_research.phases.synthesis import (
     SynthesisPhaseMixin,
 )
-from foundry_mcp.core.research.workflows.deep_research.phases.refinement import (
-    RefinementPhaseMixin,
-)
-from foundry_mcp.core.research.workflows.deep_research.background_tasks import (
-    BackgroundTaskMixin,
-)
 from foundry_mcp.core.research.workflows.deep_research.session_management import (
     SessionManagementMixin,
+)
+from foundry_mcp.core.research.workflows.deep_research.workflow_execution import (
+    WorkflowExecutionMixin,
 )
 
 logger = logging.getLogger(__name__)

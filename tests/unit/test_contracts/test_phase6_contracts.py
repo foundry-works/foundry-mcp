@@ -15,15 +15,14 @@ from typing import Any, Dict
 
 import pytest
 
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
-
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 
 # ---------------------------------------------------------------------------
 # Response-v2 Schema Validation Helpers
@@ -57,9 +56,7 @@ def validate_response_v2_envelope(response: Dict[str, Any]) -> list[str]:
         if "version" not in response["meta"]:
             errors.append("Missing required field: meta.version")
         elif response["meta"]["version"] != "response-v2":
-            errors.append(
-                f"meta.version must be 'response-v2', got '{response['meta']['version']}'"
-            )
+            errors.append(f"meta.version must be 'response-v2', got '{response['meta']['version']}'")
 
     # error field rules
     if response.get("success") is True:
@@ -76,9 +73,7 @@ def validate_response_v2_envelope(response: Dict[str, Any]) -> list[str]:
     return errors
 
 
-def validate_error_response_fields(
-    response: Dict[str, Any], strict_remediation: bool = True
-) -> list[str]:
+def validate_error_response_fields(response: Dict[str, Any], strict_remediation: bool = True) -> list[str]:
     """Validate error response has structured error fields in data.
 
     Per mcp_response_schema.md, error responses SHOULD include:
@@ -97,26 +92,20 @@ def validate_error_response_fields(
     if "error_code" not in data:
         errors.append("Error response missing recommended field: data.error_code")
     elif not isinstance(data["error_code"], str):
-        errors.append(
-            f"data.error_code must be string, got {type(data['error_code']).__name__}"
-        )
+        errors.append(f"data.error_code must be string, got {type(data['error_code']).__name__}")
 
     # error_type SHOULD be present
     if "error_type" not in data:
         errors.append("Error response missing recommended field: data.error_type")
     elif not isinstance(data["error_type"], str):
-        errors.append(
-            f"data.error_type must be string, got {type(data['error_type']).__name__}"
-        )
+        errors.append(f"data.error_type must be string, got {type(data['error_type']).__name__}")
 
     # remediation SHOULD be present (optional in lenient mode)
     if strict_remediation:
         if "remediation" not in data:
             errors.append("Error response missing recommended field: data.remediation")
         elif not isinstance(data["remediation"], str):
-            errors.append(
-                f"data.remediation must be string, got {type(data['remediation']).__name__}"
-            )
+            errors.append(f"data.remediation must be string, got {type(data['remediation']).__name__}")
 
     return errors
 
@@ -145,24 +134,18 @@ def validate_pagination_fields(response: Dict[str, Any]) -> list[str]:
     if "has_more" not in pagination:
         errors.append("Missing required field: pagination.has_more")
     elif not isinstance(pagination["has_more"], bool):
-        errors.append(
-            f"pagination.has_more must be boolean, got {type(pagination['has_more']).__name__}"
-        )
+        errors.append(f"pagination.has_more must be boolean, got {type(pagination['has_more']).__name__}")
 
     # page_size is required
     if "page_size" not in pagination:
         errors.append("Missing required field: pagination.page_size")
     elif not isinstance(pagination["page_size"], int):
-        errors.append(
-            f"pagination.page_size must be integer, got {type(pagination['page_size']).__name__}"
-        )
+        errors.append(f"pagination.page_size must be integer, got {type(pagination['page_size']).__name__}")
 
     # cursor is optional but if present must be string or null
     if "cursor" in pagination and pagination["cursor"] is not None:
         if not isinstance(pagination["cursor"], str):
-            errors.append(
-                f"pagination.cursor must be string or null, got {type(pagination['cursor']).__name__}"
-            )
+            errors.append(f"pagination.cursor must be string or null, got {type(pagination['cursor']).__name__}")
 
     return errors
 
@@ -171,16 +154,14 @@ def assert_valid_response_v2(response: Dict[str, Any], context: str = ""):
     """Assert response is valid response-v2 format."""
     errors = validate_response_v2_envelope(response)
     if errors:
-        error_msg = f"Response-v2 validation errors"
+        error_msg = "Response-v2 validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
         pytest.fail(error_msg)
 
 
-def assert_valid_error_response(
-    response: Dict[str, Any], context: str = "", strict_remediation: bool = False
-):
+def assert_valid_error_response(response: Dict[str, Any], context: str = "", strict_remediation: bool = False):
     """Assert error response has required error fields.
 
     By default uses lenient mode (strict_remediation=False) since remediation
@@ -190,7 +171,7 @@ def assert_valid_error_response(
 
     errors = validate_error_response_fields(response, strict_remediation=strict_remediation)
     if errors:
-        error_msg = f"Error response field validation errors"
+        error_msg = "Error response field validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
@@ -203,7 +184,7 @@ def assert_valid_pagination(response: Dict[str, Any], context: str = ""):
 
     errors = validate_pagination_fields(response)
     if errors:
-        error_msg = f"Pagination validation errors"
+        error_msg = "Pagination validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
@@ -333,8 +314,8 @@ def call_spec_handler(
     config=None,
 ) -> Dict[str, Any]:
     """Call the spec router handler and return response dict."""
-    from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
     from foundry_mcp.config.server import ServerConfig
+    from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)
@@ -349,8 +330,8 @@ def call_authoring_handler(
     config=None,
 ) -> Dict[str, Any]:
     """Call the authoring router handler and return response dict."""
-    from foundry_mcp.tools.unified.authoring_handlers import _AUTHORING_ROUTER
     from foundry_mcp.config.server import ServerConfig
+    from foundry_mcp.tools.unified.authoring_handlers import _AUTHORING_ROUTER
 
     if config is None:
         config = ServerConfig(specs_dir=specs_dir)

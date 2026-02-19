@@ -16,21 +16,20 @@ from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.autonomy.memory import (
     ListSessionsResult,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
-from foundry_mcp.core.responses.builders import (
-    error_response,
-    success_response,
-)
 from foundry_mcp.core.pagination import (
     CursorError,
     decode_cursor,
     encode_cursor,
     normalize_page_size,
 )
-
+from foundry_mcp.core.responses.builders import (
+    error_response,
+    success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
     _request_id,
@@ -38,8 +37,8 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _validate_context_usage_pct,
 )
 from foundry_mcp.tools.unified.task_handlers._session_common import (
-    _load_spec_for_session,
     _build_session_response,
+    _load_spec_for_session,
     _save_with_version_check,
 )
 
@@ -217,6 +216,7 @@ def _handle_session_status(
     session, err = _resolve_session(storage, "session-status", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     return _build_session_response(session, request_id, workspace=workspace)
 
@@ -261,6 +261,7 @@ def _handle_session_events(
     )
     if err:
         return err
+    assert session is not None
 
     spec_data = _load_spec_for_session(session, workspace)
     if spec_data is None:
@@ -314,7 +315,8 @@ def _handle_session_events(
             if (
                 event["_cursor_timestamp"],
                 event["_cursor_index"],
-            ) < (
+            )
+            < (
                 cursor_timestamp,
                 cursor_index,
             )
@@ -336,11 +338,7 @@ def _handle_session_events(
     serialized_events: List[Dict[str, Any]] = []
     for event in page_events:
         serialized_events.append(
-            {
-                key: value
-                for key, value in event.items()
-                if not key.startswith("_") and value is not None
-            }
+            {key: value for key, value in event.items() if not key.startswith("_") and value is not None}
         )
 
     duration_ms = (time.perf_counter() - started) * 1000
@@ -361,9 +359,7 @@ def _handle_session_events(
             telemetry={
                 "duration_ms": round(duration_ms, 2),
                 "journal_entries_scanned": (
-                    len(spec_data.get("journal", []))
-                    if isinstance(spec_data.get("journal"), list)
-                    else 0
+                    len(spec_data.get("journal", [])) if isinstance(spec_data.get("journal"), list) else 0
                 ),
                 "session_events_returned": len(serialized_events),
             },
@@ -422,12 +418,14 @@ def _handle_session_list(
         )
     except ValueError as e:
         # Invalid cursor
-        return asdict(error_response(
-            f"Invalid cursor: {e}",
-            error_code=ErrorCode.INVALID_CURSOR,
-            error_type=ErrorType.VALIDATION,
-            request_id=request_id,
-        ))
+        return asdict(
+            error_response(
+                f"Invalid cursor: {e}",
+                error_code=ErrorCode.INVALID_CURSOR,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+            )
+        )
 
     # Build response
     sessions_data = []
@@ -452,10 +450,12 @@ def _handle_session_list(
         "has_more": result.has_more,
     }
 
-    return asdict(success_response(
-        data=response_data,
-        request_id=request_id,
-    ))
+    return asdict(
+        success_response(
+            data=response_data,
+            request_id=request_id,
+        )
+    )
 
 
 # =============================================================================
@@ -503,6 +503,7 @@ def _handle_session_heartbeat(
     session, err = _resolve_session(storage, "session-heartbeat", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     # Update heartbeat
     now = datetime.now(timezone.utc)
@@ -517,9 +518,7 @@ def _handle_session_heartbeat(
 
         ws_path = Path(workspace) if workspace else Path.cwd()
         tracker = ContextTracker(ws_path)
-        effective_pct, source = tracker.get_effective_context_pct(
-            session, context_usage_pct, now
-        )
+        effective_pct, source = tracker.get_effective_context_pct(session, context_usage_pct, now)
         session.context.context_usage_pct = effective_pct
         session.context.context_source = source
 
@@ -542,8 +541,10 @@ def _handle_session_heartbeat(
         "context_source": session.context.context_source,
     }
 
-    return asdict(success_response(
-        data=response_data,
-        request_id=request_id,
-        meta={"warnings": warnings} if warnings else None,
-    ))
+    return asdict(
+        success_response(
+            data=response_data,
+            request_id=request_id,
+            meta={"warnings": warnings} if warnings else None,
+        )
+    )

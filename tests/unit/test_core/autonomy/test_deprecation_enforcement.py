@@ -9,8 +9,6 @@ Covers:
 import os
 from unittest.mock import patch
 
-import pytest
-
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _check_deprecation_expired,
 )

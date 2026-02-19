@@ -40,13 +40,17 @@ logger = logging.getLogger(__name__)
 # Cache for provider availability: {provider_id: (is_available, timestamp)}
 _AVAILABILITY_CACHE: Dict[str, Tuple[bool, float]] = {}
 
+
 def _get_cache_ttl() -> float:
     """Get cache TTL from config or default to 3600s."""
     try:
         from foundry_mcp.config.server import get_config
-        return float(get_config().providers.get("availability_cache_ttl", 3600))
+
+        providers_cfg = getattr(get_config(), "providers", None) or {}
+        return float(providers_cfg.get("availability_cache_ttl", 3600))
     except Exception:
         return 3600.0
+
 
 # Environment variable for test mode (bypasses real CLI probes)
 _TEST_MODE_ENV = "FOUNDRY_PROVIDER_TEST_MODE"
@@ -438,15 +442,10 @@ def get_provider_statuses(*, use_probe: bool = True) -> Dict[str, bool]:
         >>> get_provider_statuses()
         {'gemini': True, 'codex': False, 'cursor-agent': True, 'claude': True, 'opencode': False}
     """
-    return {
-        provider_id: detector.is_available(use_probe=use_probe)
-        for provider_id, detector in _DETECTORS.items()
-    }
+    return {provider_id: detector.is_available(use_probe=use_probe) for provider_id, detector in _DETECTORS.items()}
 
 
-def get_provider_unavailability_reasons(
-    *, use_probe: bool = True
-) -> Dict[str, Optional[str]]:
+def get_provider_unavailability_reasons(*, use_probe: bool = True) -> Dict[str, Optional[str]]:
     """
     Return unavailability reasons for all registered detectors.
 

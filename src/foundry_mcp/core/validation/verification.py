@@ -177,9 +177,7 @@ def execute_verification(
     # Validate node type
     node_type = node.get("type")
     if node_type != "verify":
-        response["error"] = (
-            f"Node '{verify_id}' is type '{node_type}', expected 'verify'"
-        )
+        response["error"] = f"Node '{verify_id}' is type '{node_type}', expected 'verify'"
         return response
 
     # Get command from metadata, falling back to caller-provided override
@@ -188,8 +186,7 @@ def execute_verification(
 
     if not command:
         response["error"] = (
-            f"No command defined in verify node '{verify_id}' metadata "
-            f"and no command parameter provided as fallback"
+            f"No command defined in verify node '{verify_id}' metadata and no command parameter provided as fallback"
         )
         return response
 

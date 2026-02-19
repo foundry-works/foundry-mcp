@@ -9,7 +9,7 @@ import logging
 from typing import Any, Optional
 
 from .models import BudgetingMode, ModelContextLimits
-from .registry import DEFAULT_MODEL_LIMITS, _DEFAULT_FALLBACK
+from .registry import _DEFAULT_FALLBACK, DEFAULT_MODEL_LIMITS
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +65,7 @@ def get_model_limits(
         elif "_default" in provider_limits:
             base_limits = provider_limits["_default"]
         else:
-            logger.debug(
-                f"No limits found for {provider}:{model}, using global fallback"
-            )
+            logger.debug(f"No limits found for {provider}:{model}, using global fallback")
     else:
         logger.debug(f"Unknown provider '{provider}', using global fallback")
 

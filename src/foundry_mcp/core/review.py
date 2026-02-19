@@ -9,12 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from foundry_mcp.core.spec import load_spec, find_specs_directory
-from foundry_mcp.core.validation.models import ValidationResult, SpecStats
+from foundry_mcp.core.progress import get_progress_summary, list_phases
+from foundry_mcp.core.spec import find_specs_directory, load_spec
+from foundry_mcp.core.validation.models import SpecStats, ValidationResult
 from foundry_mcp.core.validation.rules import validate_spec
 from foundry_mcp.core.validation.stats import calculate_stats
-from foundry_mcp.core.progress import get_progress_summary, list_phases
-
 
 # Review types that don't require LLM
 QUICK_REVIEW_TYPES = ["quick"]
@@ -28,6 +27,7 @@ class ReviewFinding:
     """
     A single review finding from structural analysis.
     """
+
     code: str  # Finding code (e.g., "EMPTY_PHASE", "MISSING_ESTIMATES")
     message: str  # Human-readable description
     severity: str  # "error", "warning", "info"
@@ -41,6 +41,7 @@ class QuickReviewResult:
     """
     Result of a quick (non-LLM) structural review.
     """
+
     spec_id: str
     title: str
     review_type: str = "quick"
@@ -62,6 +63,7 @@ class ReviewContext:
 
     Provides spec data, progress, and other context needed for reviews.
     """
+
     spec_id: str
     spec_data: Dict[str, Any]
     title: str
@@ -172,12 +174,14 @@ def prepare_review_context(
         for node_id, node in hierarchy.items():
             if node.get("type") in ("task", "subtask", "verify"):
                 if node.get("status") == "completed":
-                    completed_tasks.append({
-                        "id": node_id,
-                        "title": node.get("title", "Untitled"),
-                        "type": node.get("type"),
-                        "parent": node.get("parent"),
-                    })
+                    completed_tasks.append(
+                        {
+                            "id": node_id,
+                            "title": node.get("title", "Untitled"),
+                            "type": node.get("type"),
+                            "parent": node.get("parent"),
+                        }
+                    )
 
     # Get journal entries
     journal_entries = []
@@ -278,7 +282,7 @@ def quick_review(
 
     # Check for missing estimates
     tasks_without_estimates = 0
-    for node_id, node in hierarchy.items():
+    for _node_id, node in hierarchy.items():
         if node.get("type") in ("task", "subtask"):
             metadata = node.get("metadata", {})
             if metadata.get("estimated_hours") is None:
@@ -297,7 +301,7 @@ def quick_review(
 
     # Check for tasks without file paths
     tasks_without_files = 0
-    for node_id, node in hierarchy.items():
+    for _node_id, node in hierarchy.items():
         if node.get("type") in ("task", "subtask"):
             metadata = node.get("metadata", {})
             if not metadata.get("file_path"):
@@ -316,7 +320,7 @@ def quick_review(
 
     # Check for blocked tasks
     blocked_count = 0
-    for node_id, node in hierarchy.items():
+    for _node_id, node in hierarchy.items():
         if node.get("status") == "blocked":
             blocked_count += 1
 

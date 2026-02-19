@@ -41,6 +41,8 @@ from urllib.parse import urlparse
 if TYPE_CHECKING:
     import httpx
 
+    from foundry_mcp.core.research.providers.resilience.models import ErrorClassification
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -278,9 +280,7 @@ def extract_domain(url: str) -> Optional[str]:
 def classify_http_error(
     error: Exception,
     provider_name: str,
-    custom_classifier: Optional[
-        Callable[[Exception], Optional["ErrorClassification"]]
-    ] = None,
+    custom_classifier: Optional[Callable[[Exception], Optional["ErrorClassification"]]] = None,
 ) -> "ErrorClassification":
     """Classify an exception for resilience decisions.
 
@@ -414,6 +414,7 @@ def create_resilience_executor(
     Returns:
         An async executor function.
     """
+
     async def executor(func: Callable[..., Any], *, timeout: float = 30.0) -> Any:
         """Execute *func* with the full resilience stack.
 
@@ -429,6 +430,7 @@ def create_resilience_executor(
             RateLimitError: When rate limit exceeded.
         """
         # Lazy imports inside the coroutine so that patches are visible
+        from foundry_mcp.core.errors.resilience import CircuitBreakerError
         from foundry_mcp.core.research.providers.base import (
             RateLimitError,
             SearchProviderError,
@@ -439,7 +441,6 @@ def create_resilience_executor(
             execute_with_resilience,
             get_resilience_manager,
         )
-        from foundry_mcp.core.errors.resilience import CircuitBreakerError
 
         time_budget = timeout * (config.max_retries + 1)
         try:
@@ -456,18 +457,18 @@ def create_resilience_executor(
                 provider=provider_name,
                 message=f"Circuit breaker open: {e}",
                 retryable=False,
-            )
+            ) from e
         except RateLimitWaitError as e:
             raise RateLimitError(
                 provider=provider_name,
                 retry_after=e.wait_needed,
-            )
+            ) from e
         except TimeBudgetExceededError as e:
             raise SearchProviderError(
                 provider=provider_name,
                 message=f"Request timed out: {e}",
                 retryable=True,
-            )
+            ) from e
         except SearchProviderError:
             raise
         except Exception as e:
@@ -477,7 +478,7 @@ def create_resilience_executor(
                 message=redact_secrets(f"Request failed after retries: {e}"),
                 retryable=classification.retryable,
                 original_error=e,
-            )
+            ) from e
 
     return executor
 
@@ -602,8 +603,7 @@ def resolve_provider_settings(
 
     if required and not resolved_key:
         raise ValueError(
-            f"{provider_name} API key required. Provide via api_key parameter "
-            f"or {env_key} environment variable."
+            f"{provider_name} API key required. Provide via api_key parameter or {env_key} environment variable."
         )
 
     # Resolve base URL

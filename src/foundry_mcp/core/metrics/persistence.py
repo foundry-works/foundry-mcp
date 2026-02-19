@@ -16,8 +16,8 @@ from typing import Any, Optional
 
 from foundry_mcp.config.domains import MetricsPersistenceConfig
 from foundry_mcp.core.metrics.store import (
-    MetricDataPoint,
     FileMetricsStore,
+    MetricDataPoint,
     MetricsStore,
 )
 
@@ -228,11 +228,7 @@ class MetricsPersistenceCollector:
 
         with self._buffer_lock:
             # Collect all buckets with data
-            buckets_to_flush = [
-                bucket.to_data_point()
-                for bucket in self._buffer.values()
-                if bucket.sample_count > 0
-            ]
+            buckets_to_flush = [bucket.to_data_point() for bucket in self._buffer.values() if bucket.sample_count > 0]
 
             # Clear buffer
             self._buffer.clear()
@@ -368,9 +364,7 @@ class PersistenceAwareExporter:
     ) -> None:
         """Record a tool invocation."""
         # Forward to Prometheus
-        self._exporter.record_tool_invocation(
-            tool_name, success=success, duration_ms=duration_ms
-        )
+        self._exporter.record_tool_invocation(tool_name, success=success, duration_ms=duration_ms)
 
         # Persist
         status = "success" if success else "error"
@@ -456,9 +450,7 @@ class PersistenceAwareExporter:
         duration_seconds: Optional[float] = None,
     ) -> None:
         """Record a complete health check with all dependencies."""
-        self._exporter.record_health_check_batch(
-            check_type, status, dependencies, duration_seconds
-        )
+        self._exporter.record_health_check_batch(check_type, status, dependencies, duration_seconds)
 
         self._collector.record(
             "health_status",

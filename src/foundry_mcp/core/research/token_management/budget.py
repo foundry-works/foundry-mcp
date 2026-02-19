@@ -48,13 +48,10 @@ class TokenBudget:
             raise ValueError(f"reserved_output must be non-negative, got {self.reserved_output}")
         if self.reserved_output >= self.total_budget:
             raise ValueError(
-                f"reserved_output ({self.reserved_output}) must be less than "
-                f"total_budget ({self.total_budget})"
+                f"reserved_output ({self.reserved_output}) must be less than total_budget ({self.total_budget})"
             )
         if not 0.0 <= self.safety_margin < 1.0:
-            raise ValueError(
-                f"safety_margin must be in [0.0, 1.0), got {self.safety_margin}"
-            )
+            raise ValueError(f"safety_margin must be in [0.0, 1.0), got {self.safety_margin}")
         if self.used_tokens < 0:
             raise ValueError(f"used_tokens must be non-negative, got {self.used_tokens}")
 
@@ -110,10 +107,7 @@ class TokenBudget:
         if tokens < 0:
             raise ValueError(f"tokens must be non-negative, got {tokens}")
         if not self.can_fit(tokens):
-            logger.debug(
-                f"Token allocation failed: requested {tokens}, "
-                f"remaining {self.remaining()}"
-            )
+            logger.debug(f"Token allocation failed: requested {tokens}, remaining {self.remaining()}")
             return False
         self.used_tokens += tokens
         return True

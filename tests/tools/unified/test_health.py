@@ -18,9 +18,7 @@ class TestHealthDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["check"]
                 mock_router.dispatch.side_effect = RuntimeError("Health check failed")
 
@@ -41,9 +39,7 @@ class TestHealthDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["check"]
                 mock_router.dispatch.side_effect = RuntimeError()
 
@@ -64,9 +60,7 @@ class TestHealthDispatchExceptionHandling:
                 "foundry_mcp.tools.unified.common.get_server_role",
                 return_value="maintainer",
             ):
-                with patch(
-                    "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-                ) as mock_router:
+                with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
                     mock_router.allowed_actions.return_value = ["check"]
                     mock_router.dispatch.side_effect = ValueError("test error")
 
@@ -83,9 +77,7 @@ class TestHealthDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.health._HEALTH_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.health._HEALTH_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["check"]
                 mock_router.dispatch.return_value = {"success": True}
 

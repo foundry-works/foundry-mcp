@@ -23,9 +23,7 @@ class SessionLimits(BaseModel):
 
     max_tasks_per_session: int = Field(default=100, gt=0, description="Max tasks per session")
     max_consecutive_errors: int = Field(default=3, gt=0, description="Max consecutive errors")
-    context_threshold_pct: int = Field(
-        default=85, ge=0, le=100, description="Context usage threshold percentage"
-    )
+    context_threshold_pct: int = Field(default=85, ge=0, le=100, description="Context usage threshold percentage")
     heartbeat_stale_minutes: int = Field(default=10, gt=0, description="Heartbeat staleness threshold")
     heartbeat_grace_minutes: int = Field(default=5, gt=0, description="Initial heartbeat grace window")
     step_stale_minutes: int = Field(default=60, gt=0, description="Step staleness threshold")
@@ -62,9 +60,7 @@ class SessionLimits(BaseModel):
 class StopConditions(BaseModel):
     """Configurable stop conditions for the session."""
 
-    stop_on_phase_completion: bool = Field(
-        default=False, description="Pause after phase gate passes"
-    )
+    stop_on_phase_completion: bool = Field(default=False, description="Pause after phase gate passes")
     auto_retry_fidelity_gate: bool = Field(
         default=True, description="Auto-retry failed gates for strict/lenient policies"
     )
@@ -73,23 +69,17 @@ class StopConditions(BaseModel):
 class SessionContext(BaseModel):
     """Session runtime context (caller-reported)."""
 
-    context_usage_pct: int = Field(
-        default=0, ge=0, le=100, description="Caller-reported context usage percentage"
-    )
-    estimated_tokens_used: Optional[int] = Field(None, ge=0, description="Estimated tokens used")
-    last_heartbeat_at: Optional[datetime] = Field(None, description="Last heartbeat timestamp")
+    context_usage_pct: int = Field(default=0, ge=0, le=100, description="Caller-reported context usage percentage")
+    estimated_tokens_used: Optional[int] = Field(default=None, ge=0, description="Estimated tokens used")
+    last_heartbeat_at: Optional[datetime] = Field(default=None, description="Last heartbeat timestamp")
     context_source: Optional[str] = Field(
-        None, description="Source of context usage: sidecar, caller, or estimated"
+        default=None, description="Source of context usage: sidecar, caller, or estimated"
     )
-    last_context_report_at: Optional[datetime] = Field(
-        None, description="When context usage was last reported"
-    )
+    last_context_report_at: Optional[datetime] = Field(default=None, description="When context usage was last reported")
     last_context_report_pct: Optional[int] = Field(
-        None, ge=0, le=100, description="Previous context usage value for monotonicity check"
+        default=None, ge=0, le=100, description="Previous context usage value for monotonicity check"
     )
     consecutive_same_reports: int = Field(
         default=0, ge=0, description="Counter for consecutive identical context reports"
     )
-    steps_since_last_report: int = Field(
-        default=0, ge=0, description="Steps since last context usage report"
-    )
+    steps_since_last_report: int = Field(default=0, ge=0, description="Steps since last context usage report")

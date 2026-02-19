@@ -7,13 +7,6 @@ This package consolidates the metrics infrastructure:
 - registry: MetricCategory, MetricDefinition, METRICS_CATALOG
 """
 
-from foundry_mcp.core.metrics.store import (
-    FileMetricsStore,
-    MetricDataPoint,
-    MetricsStore,
-    get_metrics_store,
-    reset_metrics_store,
-)
 from foundry_mcp.core.metrics.persistence import (
     MetricBucket,
     MetricsPersistenceCollector,
@@ -32,6 +25,13 @@ from foundry_mcp.core.metrics.registry import (
     get_metric,
     get_metrics_by_category,
     get_metrics_catalog,
+)
+from foundry_mcp.core.metrics.store import (
+    FileMetricsStore,
+    MetricDataPoint,
+    MetricsStore,
+    get_metrics_store,
+    reset_metrics_store,
 )
 
 __all__ = [

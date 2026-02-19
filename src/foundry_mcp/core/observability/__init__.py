@@ -29,17 +29,6 @@ FastMCP Middleware Integration:
             return spec_data
 """
 
-from foundry_mcp.core.observability.manager import (
-    ObservabilityManager,
-    get_observability_manager,
-    get_observability_status,
-)
-from foundry_mcp.core.observability.metrics import (
-    Metric,
-    MetricType,
-    MetricsCollector,
-    get_metrics,
-)
 from foundry_mcp.core.observability.audit import (
     AuditEvent,
     AuditEventType,
@@ -47,14 +36,25 @@ from foundry_mcp.core.observability.audit import (
     audit_log,
     get_audit_logger,
 )
+from foundry_mcp.core.observability.decorators import (
+    mcp_resource,
+    mcp_tool,
+)
+from foundry_mcp.core.observability.manager import (
+    ObservabilityManager,
+    get_observability_manager,
+    get_observability_status,
+)
+from foundry_mcp.core.observability.metrics import (
+    Metric,
+    MetricsCollector,
+    MetricType,
+    get_metrics,
+)
 from foundry_mcp.core.observability.redaction import (
     SENSITIVE_PATTERNS,
     redact_for_logging,
     redact_sensitive_data,
-)
-from foundry_mcp.core.observability.decorators import (
-    mcp_resource,
-    mcp_tool,
 )
 
 __all__ = [

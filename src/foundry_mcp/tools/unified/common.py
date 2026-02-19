@@ -19,20 +19,20 @@ from foundry_mcp.core.authorization import (
     get_rate_limit_tracker,
     get_server_role,
 )
-from foundry_mcp.core.errors.authorization import PathValidationError
 from foundry_mcp.core.context import (
     generate_correlation_id,
     get_client_id,
     get_correlation_id,
 )
+from foundry_mcp.core.errors.authorization import PathValidationError
+from foundry_mcp.core.errors.execution import ActionRouterError
 from foundry_mcp.core.observability import MetricsCollector
+from foundry_mcp.core.responses.builders import error_response
 from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
 )
-from foundry_mcp.core.responses.builders import error_response
 from foundry_mcp.core.spec import find_specs_directory
-from foundry_mcp.core.errors.execution import ActionRouterError
 from foundry_mcp.tools.unified.router import ActionRouter
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Authorization policy
 # ---------------------------------------------------------------------------
+
 
 def _normalize_principal(value: Any) -> Optional[str]:
     """Return a sanitized principal value or ``None`` when unavailable."""
@@ -84,6 +85,7 @@ def _build_rate_limit_key(
 # 1. Request ID
 # ---------------------------------------------------------------------------
 
+
 def build_request_id(tool_name: str) -> str:
     """Return an existing correlation ID or generate one with *tool_name* prefix."""
     return get_correlation_id() or generate_correlation_id(prefix=tool_name)
@@ -92,6 +94,7 @@ def build_request_id(tool_name: str) -> str:
 # ---------------------------------------------------------------------------
 # 2. Metric name
 # ---------------------------------------------------------------------------
+
 
 def make_metric_name(prefix: str, action: str) -> str:
     """Build a dot-separated metric key, normalising hyphens to underscores.
@@ -107,6 +110,7 @@ def make_metric_name(prefix: str, action: str) -> str:
 # ---------------------------------------------------------------------------
 # 3. Specs-dir resolution
 # ---------------------------------------------------------------------------
+
 
 def resolve_specs_dir(
     config: Any,
@@ -159,6 +163,7 @@ def resolve_specs_dir(
 # 4. Dispatch with standard errors
 # ---------------------------------------------------------------------------
 
+
 def dispatch_with_standard_errors(
     router: ActionRouter,
     tool_name: str,
@@ -185,9 +190,7 @@ def dispatch_with_standard_errors(
     action_lower = action.lower() if action else ""
 
     # Check if action (case-insensitive) is in allowed actions
-    action_exists = any(
-        a.lower() == action_lower for a in allowed
-    )
+    action_exists = any(a.lower() == action_lower for a in allowed)
 
     if not action_exists:
         rid = request_id or build_request_id(tool_name)
@@ -197,8 +200,7 @@ def dispatch_with_standard_errors(
             details = {"action": action, "allowed_actions": list(allowed)}
         return asdict(
             error_response(
-                f"Unsupported {tool_name} action '{action}'. "
-                f"Allowed actions: {allowed_str}",
+                f"Unsupported {tool_name} action '{action}'. Allowed actions: {allowed_str}",
                 error_code=ErrorCode.VALIDATION_ERROR,
                 error_type=ErrorType.VALIDATION,
                 remediation=f"Use one of: {allowed_str}",
@@ -291,10 +293,7 @@ def dispatch_with_standard_errors(
                 f"Set FOUNDRY_MCP_ROLE environment variable or configure role in settings."
             )
         else:
-            recovery = (
-                f"Role '{current_role}' is not authorized for this action. "
-                f"Contact administrator for access."
-            )
+            recovery = f"Role '{current_role}' is not authorized for this action. Contact administrator for access."
 
         return asdict(
             error_response(
@@ -325,8 +324,7 @@ def dispatch_with_standard_errors(
             details = {"action": action, "allowed_actions": list(exc.allowed_actions)}
         return asdict(
             error_response(
-                f"Unsupported {tool_name} action '{action}'. "
-                f"Allowed actions: {allowed}",
+                f"Unsupported {tool_name} action '{action}'. Allowed actions: {allowed}",
                 error_code=ErrorCode.VALIDATION_ERROR,
                 error_type=ErrorType.VALIDATION,
                 remediation=f"Use one of: {allowed}",
@@ -378,6 +376,7 @@ def dispatch_with_standard_errors(
 # ---------------------------------------------------------------------------
 # 5. Validation error factory
 # ---------------------------------------------------------------------------
+
 
 def make_validation_error_fn(
     tool_name: str,

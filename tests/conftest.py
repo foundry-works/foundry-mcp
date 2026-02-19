@@ -42,9 +42,7 @@ def extract_response_dict(result: Union[Dict[str, Any], TextContent]) -> Dict[st
         return result
     if isinstance(result, TextContent):
         return json.loads(result.text)
-    raise TypeError(
-        f"Expected dict or TextContent, got {type(result).__name__}"
-    )
+    raise TypeError(f"Expected dict or TextContent, got {type(result).__name__}")
 
 
 def get_fixture_version(fixture_path: Path) -> Optional[str]:
@@ -115,10 +113,7 @@ def validate_fixture_freshness(
         return True
 
     if version != expected_version:
-        msg = (
-            f"Fixture {fixture_path.name} has version {version}, "
-            f"expected {expected_version}. Fixture may be stale."
-        )
+        msg = f"Fixture {fixture_path.name} has version {version}, expected {expected_version}. Fixture may be stale."
         if strict:
             raise ValueError(msg)
         else:
@@ -252,6 +247,7 @@ def assert_response_contract():
             validated = assert_response_contract(response)
             assert validated["data"]["count"] == 5
     """
+
     def _assert(response: Dict[str, Any]) -> Dict[str, Any]:
         validate_response_envelope(response)
         return response
@@ -262,6 +258,7 @@ def assert_response_contract():
 # Check if pytest-asyncio is available
 try:
     import pytest_asyncio
+
     HAS_PYTEST_ASYNCIO = True
 except ImportError:
     HAS_PYTEST_ASYNCIO = False

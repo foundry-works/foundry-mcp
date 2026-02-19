@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import traceback
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from foundry_mcp.core.error_collection import ErrorRecord
@@ -29,6 +30,13 @@ class ErrorHandlingMixin:
     - self.hooks: SupervisorHooks
     - self._write_audit_event(): from AuditMixin
     """
+
+    orchestrator: Any
+    hooks: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
 
     def _record_workflow_error(
         self,

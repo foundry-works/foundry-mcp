@@ -21,7 +21,6 @@ from foundry_mcp.core.ai_consultation import (
 from foundry_mcp.core.llm_config.consultation import ConsultationConfig, WorkflowConsultationConfig
 from foundry_mcp.core.providers import ProviderResult, ProviderStatus, TokenUsage
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -109,13 +108,9 @@ def mock_provider(mock_provider_result):
 class TestPlanReviewE2E:
     """End-to-end tests for plan review workflow."""
 
-    def test_plan_review_full_flow(
-        self, result_cache, single_model_config, mock_provider
-    ):
+    def test_plan_review_full_flow(self, result_cache, single_model_config, mock_provider):
         """Full plan review flow from request to response."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -147,13 +142,9 @@ class TestPlanReviewE2E:
         assert result.workflow == ConsultationWorkflow.PLAN_REVIEW
         assert result.duration_ms > 0
 
-    def test_plan_review_cached_response(
-        self, result_cache, single_model_config, mock_provider
-    ):
+    def test_plan_review_cached_response(self, result_cache, single_model_config, mock_provider):
         """Plan review returns cached response on second call."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -190,13 +181,9 @@ class TestPlanReviewE2E:
         # Verify provider was only called once
         assert mock_provider.generate.call_count == 1
 
-    def test_plan_review_bypass_cache(
-        self, result_cache, single_model_config, mock_provider
-    ):
+    def test_plan_review_bypass_cache(self, result_cache, single_model_config, mock_provider):
         """Plan review can bypass cache when use_cache=False."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -240,18 +227,14 @@ class TestPlanReviewE2E:
 class TestFidelityReviewE2E:
     """End-to-end tests for fidelity review workflow."""
 
-    def test_fidelity_review_full_flow(
-        self, result_cache, single_model_config, mock_provider_result
-    ):
+    def test_fidelity_review_full_flow(self, result_cache, single_model_config, mock_provider_result):
         """Full fidelity review flow from request to response."""
         mock_provider = MagicMock()
         mock_provider.generate.return_value = mock_provider_result(
             content='{"verdict": "compliant", "deviations": [], "confidence": 0.95}'
         )
 
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -291,16 +274,12 @@ class TestFidelityReviewE2E:
 class TestMultiModelConsensusE2E:
     """End-to-end tests for multi-model consensus mode."""
 
-    def test_multi_model_plan_review(
-        self, result_cache, multi_model_config, mock_provider_result
-    ):
+    def test_multi_model_plan_review(self, result_cache, multi_model_config, mock_provider_result):
         """Multi-model plan review returns ConsensusResult."""
         mock_provider = MagicMock()
         mock_provider.generate.return_value = mock_provider_result()
 
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=multi_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=multi_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -332,9 +311,7 @@ class TestMultiModelConsensusE2E:
         assert result.agreement is not None
         assert result.success is True
 
-    def test_multi_model_partial_failure_with_fallback(
-        self, result_cache, multi_model_config, mock_provider_result
-    ):
+    def test_multi_model_partial_failure_with_fallback(self, result_cache, multi_model_config, mock_provider_result):
         """Multi-model mode handles partial failures with fallback."""
         call_count = [0]
 
@@ -356,9 +333,7 @@ class TestMultiModelConsensusE2E:
         mock_provider = MagicMock()
         mock_provider.generate.side_effect = mock_generate
 
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=multi_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=multi_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -390,9 +365,7 @@ class TestMultiModelConsensusE2E:
         # Should have at least 2 successful providers (min_models=2)
         assert result.agreement.successful_providers >= 2
 
-    def test_multi_model_all_providers_fail(
-        self, result_cache, multi_model_config
-    ):
+    def test_multi_model_all_providers_fail(self, result_cache, multi_model_config):
         """Multi-model mode handles complete failure gracefully."""
         mock_provider = MagicMock()
         mock_provider.generate.return_value = ProviderResult(
@@ -403,9 +376,7 @@ class TestMultiModelConsensusE2E:
             stderr="Service unavailable",
         )
 
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=multi_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=multi_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -444,9 +415,7 @@ class TestMultiModelConsensusE2E:
 class TestProviderFallbackE2E:
     """End-to-end tests for provider fallback behavior."""
 
-    def test_fallback_to_second_provider(
-        self, result_cache, single_model_config, mock_provider_result
-    ):
+    def test_fallback_to_second_provider(self, result_cache, single_model_config, mock_provider_result):
         """System falls back to second provider when first fails."""
         call_count = [0]
 
@@ -469,9 +438,7 @@ class TestProviderFallbackE2E:
         mock_provider = MagicMock()
         mock_provider.generate.side_effect = mock_generate
 
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -501,9 +468,7 @@ class TestProviderFallbackE2E:
         assert result.content == "Fallback response"
         assert result.error is None
 
-    def test_no_fallback_when_disabled(
-        self, result_cache, mock_provider_result
-    ):
+    def test_no_fallback_when_disabled(self, result_cache, mock_provider_result):
         """System does not fallback when fallback_enabled=False."""
         config = ConsultationConfig(
             priority=["gemini", "claude"],
@@ -519,9 +484,7 @@ class TestProviderFallbackE2E:
             stderr="First provider failed",
         )
 
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -563,9 +526,7 @@ class TestErrorHandlingE2E:
 
     def test_no_providers_available_error(self, result_cache, single_model_config):
         """Appropriate error when no providers are available."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -590,13 +551,9 @@ class TestErrorHandlingE2E:
         assert result.error is not None
         assert "provider" in result.error.lower()
 
-    def test_invalid_prompt_id_error(
-        self, result_cache, single_model_config, mock_provider
-    ):
+    def test_invalid_prompt_id_error(self, result_cache, single_model_config, mock_provider):
         """Appropriate error when prompt ID is invalid."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -626,13 +583,9 @@ class TestErrorHandlingE2E:
 class TestResponseStructureE2E:
     """End-to-end tests verifying response structure."""
 
-    def test_single_model_response_structure(
-        self, result_cache, single_model_config, mock_provider
-    ):
+    def test_single_model_response_structure(self, result_cache, single_model_config, mock_provider):
         """Single-model response has expected structure."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=single_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=single_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
@@ -669,13 +622,9 @@ class TestResponseStructureE2E:
         assert hasattr(result, "cache_hit")
         assert hasattr(result, "error")
 
-    def test_multi_model_response_structure(
-        self, result_cache, multi_model_config, mock_provider
-    ):
+    def test_multi_model_response_structure(self, result_cache, multi_model_config, mock_provider):
         """Multi-model response has expected structure."""
-        orchestrator = ConsultationOrchestrator(
-            cache=result_cache, config=multi_model_config
-        )
+        orchestrator = ConsultationOrchestrator(cache=result_cache, config=multi_model_config)
 
         with patch(
             "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",

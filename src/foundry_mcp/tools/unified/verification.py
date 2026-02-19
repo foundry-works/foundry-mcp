@@ -12,15 +12,15 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import find_specs_directory, load_spec, save_spec
 from foundry_mcp.core.validation.verification import add_verification, execute_verification
 from foundry_mcp.tools.unified.common import (
@@ -58,8 +58,11 @@ def _request_id() -> str:
 _ADD_SCHEMA = {
     "spec_id": Str(required=True, remediation='Use spec(action="list") to discover valid specification IDs'),
     "verify_id": Str(required=True, remediation="Provide the verification node identifier (e.g., verify-1-1)"),
-    "result": Str(required=True, choices=frozenset({"PASSED", "FAILED", "PARTIAL"}),
-                  remediation="Use one of: PASSED, FAILED, PARTIAL"),
+    "result": Str(
+        required=True,
+        choices=frozenset({"PASSED", "FAILED", "PARTIAL"}),
+        remediation="Use one of: PASSED, FAILED, PARTIAL",
+    ),
     "path": Str(),
     "dry_run": Bool(default=False),
 }
@@ -67,7 +70,9 @@ _ADD_SCHEMA = {
 _EXECUTE_SCHEMA = {
     "spec_id": Str(required=True, remediation='Use spec(action="list") to discover valid specification IDs'),
     "verify_id": Str(required=True, remediation="Provide the verification identifier"),
-    "command": Str(remediation="Provide a verification command to run (used as fallback if verify node has no embedded command)"),
+    "command": Str(
+        remediation="Provide a verification command to run (used as fallback if verify node has no embedded command)"
+    ),
     "record": Bool(default=False),
     "path": Str(),
 }
@@ -77,9 +82,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG00
     request_id = _request_id()
     action = "add"
 
-    err = validate_payload(payload, _ADD_SCHEMA,
-                           tool_name="verification", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _ADD_SCHEMA, tool_name="verification", action=action, request_id=request_id)
     if err:
         return err
 
@@ -239,9 +242,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
     request_id = _request_id()
     action = "execute"
 
-    err = validate_payload(payload, _EXECUTE_SCHEMA,
-                           tool_name="verification", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _EXECUTE_SCHEMA, tool_name="verification", action=action, request_id=request_id)
     if err:
         return err
 
@@ -312,9 +313,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
     if record and result_data.get("recorded"):
         if not save_spec(spec_id, spec_data, specs_dir):
             result_data["recorded"] = False
-            result_data["error"] = (
-                result_data.get("error") or ""
-            ) + "; Failed to save spec"
+            result_data["error"] = (result_data.get("error") or "") + "; Failed to save spec"
 
     if result_data.get("error") and not result_data.get("success"):
         error_msg = result_data["error"]
@@ -382,12 +381,8 @@ _VERIFICATION_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_verification_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _VERIFICATION_ROUTER, "verification", action, config=config, **payload
-    )
+def _dispatch_verification_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_VERIFICATION_ROUTER, "verification", action, config=config, **payload)
 
 
 def register_unified_verification_tool(mcp: FastMCP, config: ServerConfig) -> None:
@@ -420,9 +415,7 @@ def register_unified_verification_tool(mcp: FastMCP, config: ServerConfig) -> No
             "record": record,
             "path": path,
         }
-        return _dispatch_verification_action(
-            action=action, payload=payload, config=config
-        )
+        return _dispatch_verification_action(action=action, payload=payload, config=config)
 
     logger.debug("Registered unified verification tool")
 

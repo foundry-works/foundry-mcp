@@ -286,9 +286,7 @@ class DocumentDigestor(
             except Exception as summarization_error:
                 # Summarization failed - skip digest gracefully, preserve original content
                 duration_ms = self._elapsed_ms(start_time)
-                logger.warning(
-                    "Summarization failed, skipping digest: %s", summarization_error
-                )
+                logger.warning("Summarization failed, skipping digest: %s", summarization_error)
 
                 # Record failure for circuit breaker tracking
                 self._record_failure()
@@ -315,14 +313,10 @@ class DocumentDigestor(
                 )
 
             # Extract summary and key points from result
-            summary = summary_result.content[:self.config.max_summary_length]
-            raw_key_points = summary_result.key_points[:self.config.max_key_points]
+            summary = summary_result.content[: self.config.max_summary_length]
+            raw_key_points = summary_result.key_points[: self.config.max_key_points]
             # Enforce per-item max length (500 chars) to avoid payload validation failures
-            key_points = [
-                kp[:500]
-                for kp in raw_key_points
-                if kp and kp.strip()
-            ]
+            key_points = [kp[:500] for kp in raw_key_points if kp and kp.strip()]
 
             # Collect warnings from summarization
             warnings.extend(summary_result.warnings)
@@ -522,10 +516,7 @@ class DocumentDigestor(
 
         # AUTO policy - determine specific reason
         if len(content) < self.config.min_content_length:
-            return (
-                f"Content length ({len(content)}) below minimum "
-                f"({self.config.min_content_length})"
-            )
+            return f"Content length ({len(content)}) below minimum ({self.config.min_content_length})"
 
         # Check quality - None is treated as missing/unknown
         quality_order = {
@@ -543,10 +534,7 @@ class DocumentDigestor(
                     f"Source quality not provided (required for AUTO policy, "
                     f"minimum: {self.config.quality_threshold.value})"
                 )
-            return (
-                f"Source quality ({quality.value}) below threshold "
-                f"({self.config.quality_threshold.value})"
-            )
+            return f"Source quality ({quality.value}) below threshold ({self.config.quality_threshold.value})"
 
         return "Content not eligible for digest"
 
@@ -713,10 +701,7 @@ class DocumentDigestor(
         summarizer behavior changes.
         """
         summarizer = self.summarizer
-        summarizer_id = (
-            f"{summarizer.__class__.__module__}."
-            f"{summarizer.__class__.__qualname__}"
-        )
+        summarizer_id = f"{summarizer.__class__.__module__}.{summarizer.__class__.__qualname__}"
         provider_func = getattr(summarizer, "_provider_func", None)
         provider_func_name = None
         if provider_func is not None and provider_func.__class__.__module__ != "unittest.mock":

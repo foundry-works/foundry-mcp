@@ -225,17 +225,14 @@ class ContentSummarizer:
 
         if not chain:
             raise SummarizationError(
-                "No summarization providers configured. Set summarization_provider "
-                "or summarization_providers."
+                "No summarization providers configured. Set summarization_provider or summarization_providers."
             )
 
         # Try each provider in chain
         errors: list[tuple[str, Exception]] = []
 
         for pid in chain:
-            success, result, error = await self._try_provider_with_retries(
-                pid, content, level
-            )
+            success, result, error = await self._try_provider_with_retries(pid, content, level)
 
             if success:
                 return result
@@ -310,8 +307,7 @@ class ContentSummarizer:
             return content
 
         logger.warning(
-            f"Truncating summary from ~{self._estimate_tokens(content)} tokens "
-            f"to {max_tokens} tokens (last resort)"
+            f"Truncating summary from ~{self._estimate_tokens(content)} tokens to {max_tokens} tokens (last resort)"
         )
 
         # Truncate and add ellipsis
@@ -345,9 +341,7 @@ class ContentSummarizer:
         """
         if self._provider_func:
             # Use custom provider function (for testing)
-            return await asyncio.to_thread(
-                self._provider_func, content, level, provider_id
-            )
+            return await asyncio.to_thread(self._provider_func, content, level, provider_id)
 
         # Use real provider system
         from foundry_mcp.core.providers import (
@@ -437,16 +431,13 @@ class ContentSummarizer:
             try:
                 result = await self._call_provider(provider_id, content, level)
                 logger.debug(
-                    f"Summarization succeeded with {provider_id} "
-                    f"(attempt {attempt + 1}/{self.config.max_retries + 1})"
+                    f"Summarization succeeded with {provider_id} (attempt {attempt + 1}/{self.config.max_retries + 1})"
                 )
                 return True, result, None
 
             except Exception as e:
                 last_error = e
-                logger.warning(
-                    f"Summarization attempt {attempt + 1} failed with {provider_id}: {e}"
-                )
+                logger.warning(f"Summarization attempt {attempt + 1} failed with {provider_id}: {e}")
 
                 # Don't retry on the last attempt
                 if attempt < self.config.max_retries:
@@ -502,9 +493,7 @@ class ContentSummarizer:
 
         # Post-check: enforce budget if specified
         if budget is not None:
-            result = await self._enforce_budget(
-                result, level, budget, provider_id
-            )
+            result = await self._enforce_budget(result, level, budget, provider_id)
 
         return result
 
@@ -535,10 +524,7 @@ class ContentSummarizer:
         if estimated <= target_budget:
             return content
 
-        logger.debug(
-            f"Summary exceeds budget ({estimated} > {target_budget} tokens), "
-            f"trying tighter level"
-        )
+        logger.debug(f"Summary exceeds budget ({estimated} > {target_budget} tokens), trying tighter level")
 
         # Try stepping down to tighter levels
         level = current_level
@@ -642,9 +628,7 @@ class ContentSummarizer:
         truncated = False
 
         # Perform summarization
-        summary = await self.summarize(
-            content, level, provider_id=provider_id, target_budget=target_budget
-        )
+        summary = await self.summarize(content, level, provider_id=provider_id, target_budget=target_budget)
 
         # Check if truncation occurred
         if "[... truncated]" in summary:
@@ -725,10 +709,7 @@ class ContentSummarizer:
             else:
                 item_budget = None
 
-            logger.debug(
-                f"Batch item {i + 1}/{len(items)}: "
-                f"budget={item_budget}, remaining_total={remaining_budget}"
-            )
+            logger.debug(f"Batch item {i + 1}/{len(items)}: budget={item_budget}, remaining_total={remaining_budget}")
 
             try:
                 result = await self.summarize_with_result(

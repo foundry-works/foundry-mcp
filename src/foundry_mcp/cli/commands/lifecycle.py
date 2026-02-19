@@ -3,17 +3,16 @@
 Provides commands for spec lifecycle transitions: activate, complete, archive.
 """
 
-
 import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
+from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
-    handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
+    handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.cli.registry import get_context
 
 logger = get_cli_logger()
 from foundry_mcp.core.lifecycle import (
@@ -78,9 +77,7 @@ def activate_spec_cmd(ctx: click.Context, spec_id: str) -> None:
 
 @lifecycle.command("complete")
 @click.argument("spec_id")
-@click.option(
-    "--force", "-f", is_flag=True, help="Force completion even with incomplete tasks."
-)
+@click.option("--force", "-f", is_flag=True, help="Force completion even with incomplete tasks.")
 @click.pass_context
 @cli_command("complete")
 @handle_keyboard_interrupt()
@@ -179,9 +176,7 @@ def archive_spec_cmd(ctx: click.Context, spec_id: str) -> None:
 
 @lifecycle.command("move")
 @click.argument("spec_id")
-@click.argument(
-    "to_folder", type=click.Choice(["pending", "active", "completed", "archived"])
-)
+@click.argument("to_folder", type=click.Choice(["pending", "active", "completed", "archived"]))
 @click.pass_context
 @cli_command("move")
 @handle_keyboard_interrupt()

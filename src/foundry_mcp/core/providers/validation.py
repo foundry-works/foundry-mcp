@@ -806,10 +806,12 @@ def create_context_window_guidance(
     elif max_tokens:
         parts.append(f"Maximum context window is {max_tokens:,} tokens.")
 
-    parts.append("To resolve: (1) Reduce input size by excluding large content, "
-                 "(2) Summarize or truncate long sections, "
-                 "(3) Use a model with larger context window, "
-                 "(4) Process content in smaller batches.")
+    parts.append(
+        "To resolve: (1) Reduce input size by excluding large content, "
+        "(2) Summarize or truncate long sections, "
+        "(3) Use a model with larger context window, "
+        "(4) Process content in smaller batches."
+    )
 
     return " ".join(parts)
 

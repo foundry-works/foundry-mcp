@@ -102,7 +102,7 @@ class DigestCache:
         # Evict if at capacity (half-flush strategy)
         if len(self._cache) >= self._max_size:
             keys = list(self._cache.keys())
-            for key in keys[:len(keys) // 2]:
+            for key in keys[: len(keys) // 2]:
                 del self._cache[key]
             logger.debug(f"Digest cache eviction: removed {len(keys) // 2} entries")
 

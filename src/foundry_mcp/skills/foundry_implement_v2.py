@@ -302,9 +302,7 @@ def run_startup_preflight(
             raise FoundryImplementV2Error(
                 error_code,
                 "Role preflight rejected autonomous session operations.",
-                remediation=(
-                    "Use a role allowed for session operations (for example autonomy_runner)."
-                ),
+                remediation=("Use a role allowed for session operations (for example autonomy_runner)."),
                 details={"recommended_call": action_shape.session_payload("list", limit=1)},
                 response=role_probe,
             )
@@ -741,9 +739,7 @@ def _start_session_with_compatibility(
             details={
                 "session_id": candidate_id,
                 "pause_reason": pause_reason,
-                "fidelity_review_cycles": status_data.get("counters", {}).get(
-                    "fidelity_review_cycles_in_active_phase"
-                ),
+                "fidelity_review_cycles": status_data.get("counters", {}).get("fidelity_review_cycles_in_active_phase"),
             },
             response=status_response,
         )

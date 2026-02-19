@@ -130,8 +130,6 @@ def cache_cleanup_cmd(ctx: click.Context) -> None:
     emit_success(
         {
             "entries_removed": removed,
-            "message": f"Removed {removed} expired entries"
-            if removed
-            else "No expired entries found",
+            "message": f"Removed {removed} expired entries" if removed else "No expired entries found",
         }
     )

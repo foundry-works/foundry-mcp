@@ -6,7 +6,7 @@ Provides commands for session tracking, context limits, and consultation monitor
 import os
 import secrets
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import click
 
@@ -45,9 +45,7 @@ def session() -> None:
 
 @session.command("start")
 @click.option("--id", "session_id", help="Custom session ID.")
-@click.option(
-    "--max-consultations", type=int, help="Maximum LLM consultations allowed."
-)
+@click.option("--max-consultations", type=int, help="Maximum LLM consultations allowed.")
 @click.option("--max-tokens", type=int, help="Maximum context tokens allowed.")
 @click.pass_context
 @cli_command("start")
@@ -166,9 +164,7 @@ def show_limits_cmd(ctx: click.Context) -> None:
                     "tokens_remaining": session.tokens_remaining,
                 },
                 "status": {
-                    "consultation_percentage": round(
-                        session.consultation_usage_percentage, 1
-                    ),
+                    "consultation_percentage": round(session.consultation_usage_percentage, 1),
                     "token_percentage": round(session.token_usage_percentage, 1),
                     "should_warn": session.should_warn,
                     "at_limit": session.at_limit,
@@ -194,11 +190,11 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
 
     # Get registered command groups
     command_groups = {}
-    for name, cmd in cli.commands.items():
+    for name, cmd in cli.commands.items():  # type: ignore[union-attr]
         if hasattr(cmd, "commands"):  # It's a group
             command_groups[name] = {
                 "type": "group",
-                "subcommands": list(cmd.commands.keys()),
+                "subcommands": list(cmd.commands.keys()),  # type: ignore[union-attr]
             }
         else:
             command_groups[name] = {"type": "command"}
@@ -395,18 +391,14 @@ def context_cmd(
             return
         transcript_dirs = [resolved_dir]
 
-    allow_home_search = allow_home_transcripts or bool(
-        os.environ.get(TRANSCRIPT_OPT_IN_ENV, "").strip()
-    )
+    allow_home_search = allow_home_transcripts or bool(os.environ.get(TRANSCRIPT_OPT_IN_ENV, "").strip())
 
     if transcript_dirs is None and not allow_home_search:
         emit_error(
             "Transcript access disabled",
             code="TRANSCRIPTS_DISABLED",
             error_type="forbidden",
-            remediation=(
-                "Pass --transcript-dir, use --allow-home-transcripts, or set FOUNDRY_MCP_ALLOW_TRANSCRIPTS=1"
-            ),
+            remediation=("Pass --transcript-dir, use --allow-home-transcripts, or set FOUNDRY_MCP_ALLOW_TRANSCRIPTS=1"),
             details={"session_marker": session_marker},
         )
         return
@@ -453,13 +445,11 @@ def context_cmd(
 
     if check_limits:
         if context_percentage >= 85:
-            recommendations.append(
-                "Context at or above 85%. Consider '/clear' and '/foundry-begin'."
-            )
+            recommendations.append("Context at or above 85%. Consider '/clear' and '/foundry-begin'.")
         elif context_percentage >= 70:
             recommendations.append("Context above 70%. Monitor usage closely.")
 
-    result = {"context_percentage_used": int(context_percentage)}
+    result: dict[str, Any] = {"context_percentage_used": int(context_percentage)}
 
     if check_limits:
         result["session_marker"] = session_marker

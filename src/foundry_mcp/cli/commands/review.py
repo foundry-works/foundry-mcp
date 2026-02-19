@@ -30,6 +30,7 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
+from foundry_mcp.core.llm_config.consultation import get_consultation_config
 from foundry_mcp.tools.unified.documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
@@ -43,7 +44,6 @@ from foundry_mcp.tools.unified.review_helpers import (
     _run_ai_review,
     _run_quick_review,
 )
-from foundry_mcp.core.llm_config.consultation import get_consultation_config
 
 logger = get_cli_logger()
 
@@ -506,7 +506,7 @@ def _run_fidelity_review(
 
     # Load spec
     try:
-        from foundry_mcp.core.spec import load_spec, find_spec_file
+        from foundry_mcp.core.spec import find_spec_file, load_spec
 
         spec_file = find_spec_file(spec_id, specs_dir)
         if not spec_file:
@@ -517,11 +517,20 @@ def _run_fidelity_review(
                 remediation="Verify the spec ID exists using 'foundry list'",
                 details={"spec_id": spec_id},
             )
-        spec_data = load_spec(spec_file)
+        spec_data = load_spec(str(spec_file))
     except Exception:
-        logger.exception(f"Failed to load spec {spec_id}")
+        logger.error(f"Failed to load spec {spec_id}")
         emit_error(
             "Failed to load spec",
+            code="SPEC_LOAD_ERROR",
+            error_type="error",
+            remediation="Check that the spec file is valid JSON",
+            details={"spec_id": spec_id},
+        )
+
+    if spec_data is None:
+        emit_error(
+            f"Spec data is empty for: {spec_id}",
             code="SPEC_LOAD_ERROR",
             error_type="error",
             remediation="Check that the spec file is valid JSON",
@@ -590,9 +599,7 @@ def _run_fidelity_review(
         context={
             "spec_id": spec_id,
             "spec_title": spec_title,
-            "spec_description": f"**Description:** {spec_description}"
-            if spec_description
-            else "",
+            "spec_description": f"**Description:** {spec_description}" if spec_description else "",
             "review_scope": review_scope,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
@@ -607,7 +614,7 @@ def _run_fidelity_review(
     try:
         result = orchestrator.consult(request, use_cache=consultation_cache)
     except Exception:
-        logger.exception(f"AI fidelity consultation failed for {spec_id}")
+        logger.error(f"AI fidelity consultation failed for {spec_id}")
         emit_error(
             "AI consultation failed",
             code="AI_CONSULTATION_ERROR",
@@ -619,12 +626,27 @@ def _run_fidelity_review(
             },
         )
 
+    # Extract attributes in a type-safe way for both ConsultationResult and ConsensusResult
+    from foundry_mcp.core.ai_consultation import ConsensusResult
+
+    if isinstance(result, ConsensusResult):
+        primary = result.successful_responses[0] if result.successful_responses else None
+        result_content: str = result.primary_content
+        result_provider_id: Optional[str] = primary.provider_id if primary else ai_provider
+        result_model_used: Optional[str] = primary.model_used if primary else None
+        result_cache_hit: bool = primary.cache_hit if primary else False
+    else:
+        result_content = result.content
+        result_provider_id = result.provider_id
+        result_model_used = result.model_used
+        result_cache_hit = result.cache_hit
+
     # Parse JSON response if possible
     parsed_response = None
-    if result and result.content:
+    if result_content:
         try:
             # Try to extract JSON from markdown code blocks if present
-            content = result.content
+            content = result_content
             if "```json" in content:
                 start = content.find("```json") + 7
                 end = content.find("```", start)
@@ -648,20 +670,14 @@ def _run_fidelity_review(
         "task_id": task_id,
         "phase_id": phase_id,
         "files": files,
-        "verdict": parsed_response.get("verdict", "unknown")
-        if parsed_response
-        else "unknown",
+        "verdict": parsed_response.get("verdict", "unknown") if parsed_response else "unknown",
         "llm_status": llm_status,
-        "ai_provider": result.provider_id if result else ai_provider,
+        "ai_provider": result_provider_id,
         "consultation_cache": consultation_cache,
-        "response": parsed_response
-        if parsed_response
-        else result.content
-        if result
-        else None,
-        "raw_response": result.content if result and not parsed_response else None,
-        "model": result.model_used if result else None,
-        "cached": result.cache_hit if result else False,
+        "response": parsed_response if parsed_response else result_content or None,
+        "raw_response": result_content if not parsed_response else None,
+        "model": result_model_used,
+        "cached": result_cache_hit,
         "incremental": incremental,
         "base_branch": base_branch,
     }

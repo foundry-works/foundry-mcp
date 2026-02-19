@@ -187,12 +187,14 @@ class MetricsPersistenceConfig:
     max_records: int = 100000
     bucket_interval_seconds: int = 60
     flush_interval_seconds: int = 30
-    persist_metrics: List[str] = field(default_factory=lambda: [
-        "tool_invocations_total",
-        "tool_duration_seconds",
-        "tool_errors_total",
-        "health_status",
-    ])
+    persist_metrics: List[str] = field(
+        default_factory=lambda: [
+            "tool_invocations_total",
+            "tool_duration_seconds",
+            "tool_errors_total",
+            "health_status",
+        ]
+    )
 
     @classmethod
     def from_toml_dict(cls, data: Dict[str, Any]) -> "MetricsPersistenceConfig":
@@ -204,12 +206,15 @@ class MetricsPersistenceConfig:
         Returns:
             MetricsPersistenceConfig instance
         """
-        persist_metrics = data.get("persist_metrics", [
-            "tool_invocations_total",
-            "tool_duration_seconds",
-            "tool_errors_total",
-            "health_status",
-        ])
+        persist_metrics = data.get(
+            "persist_metrics",
+            [
+                "tool_invocations_total",
+                "tool_duration_seconds",
+                "tool_errors_total",
+                "health_status",
+            ],
+        )
         # Handle both list and comma-separated string
         if isinstance(persist_metrics, str):
             persist_metrics = [m.strip() for m in persist_metrics.split(",") if m.strip()]

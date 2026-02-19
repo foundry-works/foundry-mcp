@@ -7,8 +7,7 @@
 import warnings as _warnings
 
 _warnings.warn(
-    "foundry_mcp.core.metrics_persistence is deprecated, "
-    "use foundry_mcp.core.metrics.persistence instead",
+    "foundry_mcp.core.metrics_persistence is deprecated, use foundry_mcp.core.metrics.persistence instead",
     DeprecationWarning,
     stacklevel=2,
 )

@@ -20,11 +20,13 @@ SCHEMA_VERSION = "1.0.0"
 
 # Notification Types
 
+
 @dataclass
 class Notification:
     """
     MCP notification to be sent to clients.
     """
+
     method: str
     params: Dict[str, Any] = field(default_factory=dict)
     timestamp: str = ""
@@ -39,12 +41,14 @@ class ResourceUpdate:
     """
     Notification for resource updates.
     """
+
     uri: str
     update_type: str  # created, updated, deleted
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 # Notification Manager
+
 
 class NotificationManager:
     """
@@ -98,12 +102,7 @@ class NotificationManager:
             except Exception as e:
                 logger.error(f"Error in notification handler: {e}")
 
-    def emit_resource_update(
-        self,
-        uri: str,
-        update_type: str,
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> None:
+    def emit_resource_update(self, uri: str, update_type: str, metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         Emit a resource update notification.
 
@@ -118,15 +117,12 @@ class NotificationManager:
                 "uri": uri,
                 "type": update_type,
                 "metadata": metadata or {},
-            }
+            },
         )
         self.emit(notification)
 
     def emit_spec_updated(
-        self,
-        spec_id: str,
-        update_type: str = "updated",
-        changes: Optional[Dict[str, Any]] = None
+        self, spec_id: str, update_type: str = "updated", changes: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Emit a spec update notification.
@@ -142,16 +138,12 @@ class NotificationManager:
                 "spec_id": spec_id,
                 "type": update_type,
                 "changes": changes or {},
-            }
+            },
         )
         self.emit(notification)
 
     def emit_task_updated(
-        self,
-        spec_id: str,
-        task_id: str,
-        update_type: str = "updated",
-        changes: Optional[Dict[str, Any]] = None
+        self, spec_id: str, task_id: str, update_type: str = "updated", changes: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Emit a task update notification.
@@ -169,7 +161,7 @@ class NotificationManager:
                 "task_id": task_id,
                 "type": update_type,
                 "changes": changes or {},
-            }
+            },
         )
         self.emit(notification)
 
@@ -192,11 +184,13 @@ class NotificationManager:
 
 # Sampling Support
 
+
 @dataclass
 class SamplingRequest:
     """
     Request for server-side AI sampling.
     """
+
     messages: List[Dict[str, Any]]
     model_preferences: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
@@ -210,6 +204,7 @@ class SamplingResponse:
     """
     Response from server-side AI sampling.
     """
+
     content: str
     model: str
     usage: Dict[str, int] = field(default_factory=dict)
@@ -261,6 +256,7 @@ class SamplingManager:
             return None
 
         try:
+            assert self._handler is not None
             response = self._handler(request)
             self._request_count += 1
             self._total_tokens += response.usage.get("total_tokens", 0)
@@ -269,12 +265,7 @@ class SamplingManager:
             logger.error(f"Sampling request failed: {e}")
             return None
 
-    def analyze_impact(
-        self,
-        target: str,
-        target_type: str,
-        context: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+    def analyze_impact(self, target: str, target_type: str, context: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Use sampling to analyze impact of a change.
 
@@ -302,7 +293,7 @@ Respond in JSON format with keys: direct_impacts, indirect_impacts, risk_level, 
             {
                 "role": "user",
                 "content": f"Analyze the impact of changing {target_type} '{target}'."
-                + (f"\n\nAdditional context: {context}" if context else "")
+                + (f"\n\nAdditional context: {context}" if context else ""),
             }
         ]
 
@@ -311,7 +302,7 @@ Respond in JSON format with keys: direct_impacts, indirect_impacts, risk_level, 
             system_prompt=system_prompt,
             max_tokens=500,
             temperature=0.3,
-            metadata={"operation": "impact_analysis", "target": target}
+            metadata={"operation": "impact_analysis", "target": target},
         )
 
         response = self.request(request)
@@ -334,6 +325,7 @@ Respond in JSON format with keys: direct_impacts, indirect_impacts, risk_level, 
 
 
 # Capabilities Registry
+
 
 class CapabilitiesRegistry:
     """
@@ -387,7 +379,7 @@ class CapabilitiesRegistry:
                     "notifications/resources/updated",
                     "foundry/specs/updated",
                     "foundry/tasks/updated",
-                ]
+                ],
             },
             "sampling": self.sampling.get_stats(),
             "metadata": self._metadata,

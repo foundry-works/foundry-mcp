@@ -13,11 +13,11 @@ import json
 from pathlib import Path
 
 import pytest
+from tests.conftest import extract_response_dict
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.authorization import get_server_role, set_server_role
 from foundry_mcp.server import create_server
-from tests.conftest import extract_response_dict
 
 
 @pytest.fixture
@@ -176,10 +176,7 @@ class TestResourceAccess:
     def test_specs_list_resource_returns_json(self, mcp_server):
         resources = mcp_server._resource_manager._resources
         for uri, resource in resources.items():
-            if (
-                "foundry://specs/" in str(uri)
-                and resource.fn.__name__ == "resource_specs_list"
-            ):
+            if "foundry://specs/" in str(uri) and resource.fn.__name__ == "resource_specs_list":
                 payload = json.loads(resource.fn())
                 assert "success" in payload
                 assert "schema_version" in payload

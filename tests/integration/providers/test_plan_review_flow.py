@@ -20,7 +20,6 @@ from foundry_mcp.core.providers import (
     resolve_provider,
 )
 
-
 # =============================================================================
 # Per-Provider Plan Review Tests (Structure Validation Only)
 # =============================================================================
@@ -243,15 +242,17 @@ class TestCrossProviderPlanReview:
                 failures[provider_id] = str(e)
 
         # Report results
-        print(f"\nPlan Review Structure Results:")
+        print("\nPlan Review Structure Results:")
         for provider_id, data in results.items():
             feasibility_type = type(data["feasibility"]).__name__
             recommendation_type = type(data["recommendation"]).__name__
             issues_count = len(data.get("issues", []))
-            print(f"  {provider_id}: feasibility={feasibility_type}, recommendation={recommendation_type}, issues={issues_count}")
+            print(
+                f"  {provider_id}: feasibility={feasibility_type}, recommendation={recommendation_type}, issues={issues_count}"
+            )
 
         if failures:
-            print(f"\nProvider Failures:")
+            print("\nProvider Failures:")
             for provider_id, error in failures.items():
                 print(f"  {provider_id}: {error}")
 

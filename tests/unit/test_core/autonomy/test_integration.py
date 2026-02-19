@@ -13,7 +13,7 @@ Covers ADR-002 testing strategy requirements:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
@@ -35,23 +35,18 @@ from foundry_mcp.core.autonomy.models.gates import (
     PhaseGateRecord,
 )
 from foundry_mcp.core.autonomy.models.session_config import (
-    SessionContext,
     SessionCounters,
     SessionLimits,
     StopConditions,
 )
-from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
-from foundry_mcp.core.autonomy.models.steps import LastStepIssued, LastStepResult
+from foundry_mcp.core.autonomy.models.steps import LastStepResult
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_SPEC_REBASE_REQUIRED,
-    OrchestrationResult,
     StepOrchestrator,
 )
-from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
 
 from .conftest import make_session, make_spec_data
-
 
 # =============================================================================
 # Helpers
@@ -121,11 +116,11 @@ class TestFullLifecycle:
     def test_start_heartbeat_pause_resume(self, tmp_path):
         """Full lifecycle through start, heartbeat, context pause, and resume."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
+            _handle_session_end,
             _handle_session_heartbeat,
             _handle_session_pause,
             _handle_session_resume,
-            _handle_session_end,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -133,7 +128,9 @@ class TestFullLifecycle:
 
         # Start session
         resp = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         session_id = data["session_id"]
@@ -141,7 +138,9 @@ class TestFullLifecycle:
 
         # Heartbeat with context
         resp = _handle_session_heartbeat(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
             context_usage_pct=42,
         )
         hb_data = _assert_success(resp)
@@ -149,14 +148,18 @@ class TestFullLifecycle:
 
         # Pause
         resp = _handle_session_pause(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "paused"
 
         # Resume
         resp = _handle_session_resume(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "running"
@@ -199,9 +202,12 @@ class TestPhaseBoundary:
             pending_gate_evidence=evidence,
             active_phase_id="phase-1",
             completed_task_ids=["task-1", "task-2", "verify-1"],
-            phase_gates={"phase-1": PhaseGateRecord(
-                required=True, status=PhaseGateStatus.PASSED,
-            )},
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PASSED,
+                )
+            },
         )
 
         result = orch._handle_gate_evidence(session, spec_data, now)
@@ -301,18 +307,20 @@ class TestSpecDrift:
 
     def test_rebase_recovery(self, tmp_path):
         """Rebase after spec change recovers the session."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_rebase,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         # Start session
         resp = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp)["session_id"]
 
@@ -325,7 +333,9 @@ class TestSpecDrift:
 
         # Rebase should recover (no actual spec change, so it's a no-change rebase)
         resp = _handle_session_rebase(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "running"
@@ -349,32 +359,40 @@ class TestDuplicateStart:
         config = _make_config(workspace)
 
         resp1 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _assert_success(resp1)
 
         resp2 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp2["success"] is False
 
     def test_duplicate_start_force_replaces(self, tmp_path):
         """Duplicate start with force=true ends existing and creates new."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp1 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         old_session_id = _assert_success(resp1)["session_id"]
 
         resp2 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
             force=True,
         )
         new_data = _assert_success(resp2)
@@ -397,13 +415,17 @@ class TestDuplicateStart:
         config = _make_config(workspace)
 
         resp1 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
             idempotency_key="key-123",
         )
         data1 = _assert_success(resp1)
 
         resp2 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
             idempotency_key="key-123",
         )
         data2 = _assert_success(resp2)
@@ -419,13 +441,17 @@ class TestDuplicateStart:
         config = _make_config(workspace)
 
         resp1 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
             idempotency_key="key-123",
         )
         _assert_success(resp1)
 
         resp2 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
             idempotency_key="key-different",
         )
         assert resp2["success"] is False
@@ -446,13 +472,12 @@ class TestResumeContext:
         )
 
         # Create spec with 15 tasks
-        tasks = [
-            {"id": f"task-{i}", "title": f"Task {i}", "type": "task", "status": "completed"}
-            for i in range(15)
-        ]
-        spec_data = make_spec_data(phases=[
-            {"id": "phase-1", "title": "Phase 1", "tasks": tasks},
-        ])
+        tasks = [{"id": f"task-{i}", "title": f"Task {i}", "type": "task", "status": "completed"} for i in range(15)]
+        spec_data = make_spec_data(
+            phases=[
+                {"id": "phase-1", "title": "Phase 1", "tasks": tasks},
+            ]
+        )
 
         workspace = _make_workspace(tmp_path, spec_data)
 
@@ -476,13 +501,12 @@ class TestResumeContext:
             _build_resume_context,
         )
 
-        tasks = [
-            {"id": f"task-{i}", "title": f"Task {i}", "type": "task"}
-            for i in range(20)
-        ]
-        spec_data = make_spec_data(phases=[
-            {"id": "phase-1", "title": "Phase 1", "tasks": tasks},
-        ])
+        tasks = [{"id": f"task-{i}", "title": f"Task {i}", "type": "task"} for i in range(20)]
+        spec_data = make_spec_data(
+            phases=[
+                {"id": "phase-1", "title": "Phase 1", "tasks": tasks},
+            ]
+        )
         workspace = _make_workspace(tmp_path, spec_data)
 
         session = make_session(
@@ -558,7 +582,6 @@ class TestResumeContext:
 
 
 class TestStateVersionIncrements:
-
     @pytest.fixture(autouse=True)
     def _set_maintainer_role(self):
         """Rebase requires maintainer role."""
@@ -567,21 +590,24 @@ class TestStateVersionIncrements:
             return_value="maintainer",
         ):
             yield
+
     """Verify state_version is incremented on all state mutations."""
 
     def test_heartbeat_increments_state_version(self, tmp_path):
         """Heartbeat handler increments state_version."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_heartbeat,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_heartbeat,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp)["session_id"]
 
@@ -590,7 +616,9 @@ class TestStateVersionIncrements:
         version_before = session_before.state_version
 
         _handle_session_heartbeat(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
             context_usage_pct=50,
         )
 
@@ -599,16 +627,18 @@ class TestStateVersionIncrements:
 
     def test_force_end_increments_old_session_state_version(self, tmp_path):
         """Force-ending an existing session increments its state_version."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp1 = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         old_id = _assert_success(resp1)["session_id"]
 
@@ -618,7 +648,9 @@ class TestStateVersionIncrements:
 
         # Force-start new session
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
             force=True,
         )
 
@@ -628,17 +660,19 @@ class TestStateVersionIncrements:
 
     def test_rebase_increments_state_version(self, tmp_path):
         """Rebase handler increments state_version."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_rebase,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp)["session_id"]
 
@@ -651,7 +685,9 @@ class TestStateVersionIncrements:
         storage.save(session)
 
         resp = _handle_session_rebase(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
         )
         _assert_success(resp)
 
@@ -862,10 +898,6 @@ class TestGateInvariantEnforcement:
 
     def test_required_gate_blocks_spec_completion(self, tmp_path):
         """Spec completion is blocked when required phase gate is unsatisfied."""
-        from foundry_mcp.core.autonomy.orchestrator import (
-            ERROR_REQUIRED_GATE_UNSATISFIED,
-            StepOrchestrator,
-        )
 
         workspace = _make_workspace(tmp_path)
         orch = _make_orchestrator(workspace)
@@ -895,7 +927,6 @@ class TestGateInvariantEnforcement:
 
     def test_required_gate_blocks_phase_progression(self, tmp_path):
         """Phase progression is blocked when required gate is unsatisfied."""
-        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
 
         workspace = _make_workspace(tmp_path)
         orch = _make_orchestrator(workspace)
@@ -923,7 +954,6 @@ class TestGateInvariantEnforcement:
 
     def test_gate_pass_allows_phase_progression(self, tmp_path):
         """Passed gate allows phase progression."""
-        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
 
         workspace = _make_workspace(tmp_path)
         orch = _make_orchestrator(workspace)
@@ -950,7 +980,6 @@ class TestGateInvariantEnforcement:
 
     def test_gate_waiver_allows_spec_completion(self, tmp_path):
         """Waived gate allows spec completion (privileged path)."""
-        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
 
         workspace = _make_workspace(tmp_path)
         orch = _make_orchestrator(workspace)
@@ -977,7 +1006,6 @@ class TestGateInvariantEnforcement:
 
     def test_no_required_gate_allows_unrestricted_progression(self, tmp_path):
         """No required gates means unrestricted phase progression."""
-        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
 
         workspace = _make_workspace(tmp_path)
         orch = _make_orchestrator(workspace)
@@ -1004,7 +1032,6 @@ class TestGateInvariantEnforcement:
 
     def test_phase_gate_status_overrides_satisfied_gates(self, tmp_path):
         """PhaseGateStatus.PASSED/WAIVED overrides missing satisfied_gates entry."""
-        from foundry_mcp.core.autonomy.orchestrator import StepOrchestrator
 
         workspace = _make_workspace(tmp_path)
         orch = _make_orchestrator(workspace)

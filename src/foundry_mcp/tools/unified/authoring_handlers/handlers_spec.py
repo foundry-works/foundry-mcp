@@ -4,23 +4,23 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import audit_log
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import (
     CATEGORIES,
-    TEMPLATES,
     PHASE_TEMPLATES,
+    TEMPLATES,
     create_spec,
     find_replace_in_spec,
     generate_spec_data,
@@ -28,7 +28,6 @@ from foundry_mcp.core.spec import (
     update_frontmatter,
 )
 from foundry_mcp.core.validation.rules import validate_spec
-
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _metric_name,
     _metrics,
@@ -51,13 +50,18 @@ _SPEC_UPDATE_FRONTMATTER_SCHEMA = {
 }
 
 _SPEC_FIND_REPLACE_SCHEMA = {
-    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                   remediation="Pass the spec identifier to authoring"),
-    "find": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                remediation="Specify the text or regex pattern to find"),
+    "spec_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the spec identifier to authoring"
+    ),
+    "find": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Specify the text or regex pattern to find"
+    ),
     # replace validated imperatively — needs MISSING_REQUIRED vs INVALID_FORMAT
-    "scope": Str(choices=frozenset(_FIND_REPLACE_SCOPES), error_code=ErrorCode.INVALID_FORMAT,
-                 remediation=f"Use one of: {sorted(_FIND_REPLACE_SCOPES)}"),
+    "scope": Str(
+        choices=frozenset(_FIND_REPLACE_SCOPES),
+        error_code=ErrorCode.INVALID_FORMAT,
+        remediation=f"Use one of: {sorted(_FIND_REPLACE_SCOPES)}",
+    ),
     "use_regex": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
     "case_sensitive": Bool(default=True, error_code=ErrorCode.INVALID_FORMAT),
     "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
@@ -73,10 +77,11 @@ _SPEC_ROLLBACK_SCHEMA = {
 
 _SPEC_CREATE_SCHEMA = {
     "name": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED),
-    "template": Str(choices=frozenset(TEMPLATES),
-                    remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply"),
-    "category": Str(choices=frozenset(CATEGORIES),
-                    remediation=f"Use one of: {', '.join(CATEGORIES)}"),
+    "template": Str(
+        choices=frozenset(TEMPLATES),
+        remediation="Use template='empty' and add phases via phase-add-bulk or phase-template apply",
+    ),
+    "category": Str(choices=frozenset(CATEGORIES), remediation=f"Use one of: {', '.join(CATEGORIES)}"),
     "mission": Str(),
     "dry_run": Bool(default=False),
     "path": Str(),
@@ -88,12 +93,10 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
     action = "spec-create"
 
     # Apply defaults for template and category before validation
-    payload["template"] = (payload.get("template") or "empty")
-    payload["category"] = (payload.get("category") or "implementation")
+    payload["template"] = payload.get("template") or "empty"
+    payload["category"] = payload.get("category") or "implementation"
 
-    err = validate_payload(payload, _SPEC_CREATE_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_CREATE_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -107,6 +110,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     if dry_run:
         # Generate spec data for preflight validation
@@ -125,6 +129,7 @@ def _handle_spec_create(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.VALIDATION_ERROR,
             )
 
+        assert spec_data is not None
         # Run full validation on generated spec
         validation_result = validate_spec(spec_data)
         diagnostics = [
@@ -276,10 +281,7 @@ def _handle_spec_template(*, config: ServerConfig, **payload: Any) -> dict:
                 "description": "Blank spec with no phases - use phase templates to add structure",
             },
         ]
-        data["phase_templates"] = [
-            {"name": t, "description": f"Add {t} phase structure"}
-            for t in PHASE_TEMPLATES
-        ]
+        data["phase_templates"] = [{"name": t, "description": f"Add {t} phase structure"} for t in PHASE_TEMPLATES]
         data["total_count"] = 1
         data["message"] = "Use 'empty' template, then add phases via phase-add-bulk or phase-template apply"
     elif template_action == "show":
@@ -309,9 +311,9 @@ def _handle_spec_update_frontmatter(*, config: ServerConfig, **payload: Any) -> 
     request_id = _request_id()
     action = "spec-update-frontmatter"
 
-    err = validate_payload(payload, _SPEC_UPDATE_FRONTMATTER_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(
+        payload, _SPEC_UPDATE_FRONTMATTER_SCHEMA, tool_name="authoring", action=action, request_id=request_id
+    )
     if err:
         return err
 
@@ -418,9 +420,9 @@ def _handle_spec_find_replace(*, config: ServerConfig, **payload: Any) -> dict:
     # Pre-apply scope default before schema validation
     payload["scope"] = payload.get("scope") or "all"
 
-    err = validate_payload(payload, _SPEC_FIND_REPLACE_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(
+        payload, _SPEC_FIND_REPLACE_SCHEMA, tool_name="authoring", action=action, request_id=request_id
+    )
     if err:
         return err
 
@@ -548,9 +550,7 @@ def _handle_spec_rollback(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "spec-rollback"
 
-    err = validate_payload(payload, _SPEC_ROLLBACK_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_ROLLBACK_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 

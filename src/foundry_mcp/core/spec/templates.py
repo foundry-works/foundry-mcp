@@ -10,15 +10,12 @@ and ``_constants`` only.
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from foundry_mcp.core.spec._constants import (
     CATEGORIES,
-    FRONTMATTER_KEYS,
     PHASE_TEMPLATES,
     TEMPLATES,
-    TEMPLATE_DESCRIPTIONS,
 )
 from foundry_mcp.core.spec.hierarchy import add_phase_bulk
 from foundry_mcp.core.spec.io import (
@@ -74,9 +71,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     }
 
 
-def get_phase_template_structure(
-    template: str, category: str = "implementation"
-) -> Dict[str, Any]:
+def get_phase_template_structure(template: str, category: str = "implementation") -> Dict[str, Any]:
     """
     Get the structure definition for a phase template.
 
@@ -230,9 +225,7 @@ def get_phase_template_structure(
     }
 
     if template not in templates:
-        raise ValueError(
-            f"Invalid phase template '{template}'. Must be one of: {', '.join(PHASE_TEMPLATES)}"
-        )
+        raise ValueError(f"Invalid phase template '{template}'. Must be one of: {', '.join(PHASE_TEMPLATES)}")
 
     result = templates[template].copy()
     result["includes_verification"] = True
@@ -280,26 +273,32 @@ def apply_phase_template(
     # Build tasks list for add_phase_bulk
     tasks = []
     for task_def in template_struct["tasks"]:
-        tasks.append({
-            "type": "task",
-            "title": task_def["title"],
-            "description": task_def.get("description", ""),
-            "task_category": task_def.get("task_category", task_def.get("category", category)),
-            "acceptance_criteria": task_def.get("acceptance_criteria"),
-            "estimated_hours": task_def.get("estimated_hours", 1),
-        })
+        tasks.append(
+            {
+                "type": "task",
+                "title": task_def["title"],
+                "description": task_def.get("description", ""),
+                "task_category": task_def.get("task_category", task_def.get("category", category)),
+                "acceptance_criteria": task_def.get("acceptance_criteria"),
+                "estimated_hours": task_def.get("estimated_hours", 1),
+            }
+        )
 
     # Append verification scaffolding (run-tests + fidelity-review)
-    tasks.append({
-        "type": "verify",
-        "title": "Run tests",
-        "verification_type": "run-tests",
-    })
-    tasks.append({
-        "type": "verify",
-        "title": "Fidelity review",
-        "verification_type": "fidelity",
-    })
+    tasks.append(
+        {
+            "type": "verify",
+            "title": "Run tests",
+            "verification_type": "run-tests",
+        }
+    )
+    tasks.append(
+        {
+            "type": "verify",
+            "title": "Fidelity review",
+            "verification_type": "fidelity",
+        }
+    )
 
     # Use add_phase_bulk to create the phase atomically
     result, error = add_phase_bulk(
@@ -351,8 +350,7 @@ def generate_spec_data(
     if template not in TEMPLATES:
         return (
             None,
-            f"Invalid template '{template}'. Only 'empty' template is supported. "
-            f"Use phase templates to add structure.",
+            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase templates to add structure.",
         )
 
     # Validate category
@@ -374,9 +372,7 @@ def generate_spec_data(
 
     # Calculate estimated hours from hierarchy
     estimated_hours = sum(
-        node.get("metadata", {}).get("estimated_hours", 0)
-        for node in hierarchy.values()
-        if isinstance(node, dict)
+        node.get("metadata", {}).get("estimated_hours", 0) for node in hierarchy.values() if isinstance(node, dict)
     )
 
     spec_data = {
@@ -467,15 +463,9 @@ def create_spec(
     # Count tasks and phases
     hierarchy = spec_data["hierarchy"]
     task_count = sum(
-        1
-        for node in hierarchy.values()
-        if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
+        1 for node in hierarchy.values() if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
     )
-    phase_count = sum(
-        1
-        for node in hierarchy.values()
-        if isinstance(node, dict) and node.get("type") == "phase"
-    )
+    phase_count = sum(1 for node in hierarchy.values() if isinstance(node, dict) and node.get("type") == "phase")
 
     return {
         "spec_id": spec_id,

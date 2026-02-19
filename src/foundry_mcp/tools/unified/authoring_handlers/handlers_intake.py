@@ -5,22 +5,21 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.errors.storage import LockAcquisitionError
-from foundry_mcp.core.intake import IntakeStore, INTAKE_ID_PATTERN
+from foundry_mcp.core.intake import INTAKE_ID_PATTERN, IntakeStore
 from foundry_mcp.core.observability import audit_log
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
-
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _metric_name,
     _metrics,
@@ -29,7 +28,7 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _validation_error,
     logger,
 )
-from foundry_mcp.tools.unified.param_schema import Bool, Num, Str, validate_payload
+from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
 
 # Validation constants for intake
 _INTAKE_TITLE_MAX_LEN = 140
@@ -60,8 +59,7 @@ _INTAKE_LIST_MAX_LIMIT = 200
 _INTAKE_DISMISS_REASON_MAX_LEN = 200
 
 _INTAKE_ADD_SCHEMA = {
-    "title": Str(required=True, max_length=_INTAKE_TITLE_MAX_LEN,
-                 error_code=ErrorCode.MISSING_REQUIRED),
+    "title": Str(required=True, max_length=_INTAKE_TITLE_MAX_LEN, error_code=ErrorCode.MISSING_REQUIRED),
     # description, source, requester, idempotency_key: imperative (strip-or-None + dual error codes)
     # priority: imperative (alias normalization)
     # tags: imperative (per-element regex validation)
@@ -77,8 +75,7 @@ _INTAKE_LIST_SCHEMA = {
 
 _INTAKE_DISMISS_SCHEMA = {
     # intake_id: imperative (regex pattern + MISSING_REQUIRED vs INVALID_FORMAT)
-    "reason": Str(max_length=_INTAKE_DISMISS_REASON_MAX_LEN,
-                  error_code=ErrorCode.INVALID_FORMAT),
+    "reason": Str(max_length=_INTAKE_DISMISS_REASON_MAX_LEN, error_code=ErrorCode.INVALID_FORMAT),
     "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
     "path": Str(error_code=ErrorCode.INVALID_FORMAT),
 }
@@ -89,9 +86,7 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "intake-add"
 
-    err = validate_payload(payload, _INTAKE_ADD_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _INTAKE_ADD_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -149,7 +144,7 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
             message=f"Priority must be one of: {', '.join(_INTAKE_PRIORITY_VALUES)}",
             request_id=request_id,
             code=ErrorCode.VALIDATION_ERROR,
-            remediation=f"Use p0-p4 or aliases like 'high', 'medium', 'low'. Default is p2 (medium).",
+            remediation="Use p0-p4 or aliases like 'high', 'medium', 'low'. Default is p2 (medium).",
         )
 
     # Validate tags (optional, max 20 items, each 1-32 chars, lowercase pattern)
@@ -271,6 +266,7 @@ def _handle_intake_add(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     # Audit log
     audit_log(
@@ -355,9 +351,7 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "intake-list"
 
-    err = validate_payload(payload, _INTAKE_LIST_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _INTAKE_LIST_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -393,6 +387,7 @@ def _handle_intake_list(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     # Audit log
     audit_log(
@@ -479,9 +474,7 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "intake-dismiss"
 
-    err = validate_payload(payload, _INTAKE_DISMISS_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _INTAKE_DISMISS_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -518,6 +511,7 @@ def _handle_intake_dismiss(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     # Audit log
     audit_log(

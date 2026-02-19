@@ -13,7 +13,6 @@ from typing import Any, Dict
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Response-v2 Schema Validation Helpers
 # ---------------------------------------------------------------------------
@@ -41,9 +40,7 @@ def validate_response_v2_envelope(response: Dict[str, Any]) -> list[str]:
         if "version" not in response["meta"]:
             errors.append("Missing required field: meta.version")
         elif response["meta"]["version"] != "response-v2":
-            errors.append(
-                f"meta.version must be 'response-v2', got '{response['meta']['version']}'"
-            )
+            errors.append(f"meta.version must be 'response-v2', got '{response['meta']['version']}'")
 
     if response.get("success") is True:
         if response.get("error") is not None:
@@ -79,7 +76,7 @@ def assert_valid_response_v2(response: Dict[str, Any], context: str = ""):
     """Assert response is valid response-v2 format."""
     errors = validate_response_v2_envelope(response)
     if errors:
-        error_msg = f"Response-v2 validation errors"
+        error_msg = "Response-v2 validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
@@ -92,7 +89,7 @@ def assert_valid_error_response(response: Dict[str, Any], context: str = ""):
 
     errors = validate_error_response_fields(response)
     if errors:
-        error_msg = f"Error response field validation errors"
+        error_msg = "Error response field validation errors"
         if context:
             error_msg += f" ({context})"
         error_msg += ":\n  - " + "\n  - ".join(errors)
@@ -210,8 +207,8 @@ def call_spec_handler(
     specs_dir: Path,
 ) -> Dict[str, Any]:
     """Call the spec router handler and return response dict."""
-    from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
     from foundry_mcp.config.server import ServerConfig
+    from foundry_mcp.tools.unified.spec import _SPEC_ROUTER
 
     config = ServerConfig(specs_dir=specs_dir)
     return _SPEC_ROUTER.dispatch(action=action, config=config, payload=payload)

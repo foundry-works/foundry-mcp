@@ -69,6 +69,7 @@ class TestTimeoutWatchdogPollingInterval:
 
         async def mock_check():
             import time
+
             check_times.append(time.time())
             if len(check_times) >= 3:
                 watchdog._stop_event.set()
@@ -192,12 +193,11 @@ class TestTimeoutWatchdogTimeoutDetection:
 
         # Mock TaskStatus enum
         from foundry_mcp.core.background_task import TaskStatus
+
         mock_task.status = TaskStatus.RUNNING
 
         # Mock the registry to return our task (patch at task_registry module)
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"test-timeout-1": mock_task}
 
             await watchdog._check_tasks()
@@ -223,11 +223,10 @@ class TestTimeoutWatchdogTimeoutDetection:
         mock_task.mark_timeout = MagicMock()
 
         from foundry_mcp.core.background_task import TaskStatus
+
         mock_task.status = TaskStatus.RUNNING
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"test-timeout-2": mock_task}
 
             await watchdog._check_tasks()
@@ -246,9 +245,7 @@ class TestTimeoutWatchdogStalenessDetection:
         def on_stale(task):
             stale_tasks.append(task)
 
-        watchdog = TimeoutWatchdog(
-            poll_interval=0.01, stale_threshold=0.05, on_stale=on_stale
-        )
+        watchdog = TimeoutWatchdog(poll_interval=0.01, stale_threshold=0.05, on_stale=on_stale)
 
         mock_task = MagicMock()
         mock_task.research_id = "test-stale-1"
@@ -258,11 +255,10 @@ class TestTimeoutWatchdogStalenessDetection:
         mock_task.elapsed_ms = 10000
 
         from foundry_mcp.core.background_task import TaskStatus
+
         mock_task.status = TaskStatus.RUNNING
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"test-stale-1": mock_task}
 
             await watchdog._check_tasks()
@@ -306,9 +302,7 @@ class TestTimeoutWatchdogTaskFiltering:
         completed_task.is_timed_out = True  # Would trigger if checked
         completed_task.is_stale = MagicMock(return_value=True)
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {
                 "running-1": running_task,
                 "completed-1": completed_task,
@@ -351,9 +345,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
             t.mark_timeout = MagicMock()
             tasks[f"concurrent-{i}"] = t
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = tasks
 
             await watchdog._check_tasks()
@@ -375,9 +367,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         def on_stale(task):
             stale_ids.append(task.research_id)
 
-        watchdog = TimeoutWatchdog(
-            poll_interval=0.01, on_timeout=on_timeout, on_stale=on_stale
-        )
+        watchdog = TimeoutWatchdog(poll_interval=0.01, on_timeout=on_timeout, on_stale=on_stale)
 
         from foundry_mcp.core.background_task import TaskStatus
 
@@ -405,9 +395,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         healthy_task.is_timed_out = False
         healthy_task.is_stale = MagicMock(return_value=False)
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {
                 "timeout-1": timed_out_task,
                 "stale-1": stale_task,
@@ -431,9 +419,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         def on_stale(task):
             stale_ids.append(task.research_id)
 
-        watchdog = TimeoutWatchdog(
-            poll_interval=0.01, on_timeout=on_timeout, on_stale=on_stale
-        )
+        watchdog = TimeoutWatchdog(poll_interval=0.01, on_timeout=on_timeout, on_stale=on_stale)
 
         from foundry_mcp.core.background_task import TaskStatus
 
@@ -449,9 +435,7 @@ class TestTimeoutWatchdogConcurrentTimeouts:
         task.force_cancel = MagicMock()
         task.mark_timeout = MagicMock()
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"both-1": task}
 
             await watchdog._check_tasks()
@@ -503,9 +487,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         task.force_cancel = MagicMock(side_effect=RuntimeError("cancel failed"))
         task.mark_timeout = MagicMock()
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"cancel-error-1": task}
 
             # Should not raise despite force_cancel error
@@ -545,9 +527,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         task2.force_cancel = MagicMock()
         task2.mark_timeout = MagicMock()
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"cb-err-1": task1, "cb-err-2": task2}
 
             # Should not raise despite callback error
@@ -566,9 +546,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         def bad_stale_callback(task):
             raise ValueError("stale callback boom")
 
-        watchdog = TimeoutWatchdog(
-            poll_interval=0.01, on_stale=bad_stale_callback
-        )
+        watchdog = TimeoutWatchdog(poll_interval=0.01, on_stale=bad_stale_callback)
 
         from foundry_mcp.core.background_task import TaskStatus
 
@@ -580,9 +558,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         task.last_activity = 0
         task.elapsed_ms = 50000
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {"stale-cb-err": task}
 
             # Should not raise
@@ -593,9 +569,7 @@ class TestTimeoutWatchdogPollLoopResilience:
         """Check tasks with empty registry completes without error."""
         watchdog = TimeoutWatchdog(poll_interval=0.01)
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = {}
 
             await watchdog._check_tasks()  # Should not raise
@@ -670,9 +644,7 @@ class TestTimeoutWatchdogTaskStatusFiltering:
             t.is_stale = MagicMock(return_value=True)
             tasks[f"terminal-{i}"] = t
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry:
+        with patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry:
             mock_registry.return_value = tasks
 
             await watchdog._check_tasks()
@@ -832,11 +804,10 @@ class TestTimeoutWatchdogAuditEvents:
         task.force_cancel = MagicMock()
         task.mark_timeout = MagicMock()
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry, patch(
-            "foundry_mcp.core.timeout_watchdog.TimeoutWatchdog._emit_timeout_audit_event"
-        ) as mock_audit:
+        with (
+            patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry,
+            patch("foundry_mcp.core.timeout_watchdog.TimeoutWatchdog._emit_timeout_audit_event") as mock_audit,
+        ):
             mock_registry.return_value = {"audit-timeout-1": task}
 
             await watchdog._check_tasks()
@@ -861,11 +832,10 @@ class TestTimeoutWatchdogAuditEvents:
         task.last_activity = 0
         task.elapsed_ms = 50000
 
-        with patch(
-            "foundry_mcp.core.task_registry.get_task_registry_async"
-        ) as mock_registry, patch(
-            "foundry_mcp.core.timeout_watchdog.TimeoutWatchdog._emit_stale_audit_event"
-        ) as mock_audit:
+        with (
+            patch("foundry_mcp.core.task_registry.get_task_registry_async") as mock_registry,
+            patch("foundry_mcp.core.timeout_watchdog.TimeoutWatchdog._emit_stale_audit_event") as mock_audit,
+        ):
             mock_registry.return_value = {"audit-stale-1": task}
 
             await watchdog._check_tasks()

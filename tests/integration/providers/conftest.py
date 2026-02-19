@@ -29,10 +29,8 @@ import pytest
 
 from foundry_mcp.core.providers import (
     ProviderRequest,
-    check_provider_available,
     detect_provider_availability,
 )
-
 
 # =============================================================================
 # Marker Registration
@@ -80,7 +78,9 @@ def pytest_collection_modifyitems(config, items):
         # Skip all live_providers tests unless explicitly enabled
         if "live_providers" in item_markers and not live_tests_enabled:
             item.add_marker(
-                pytest.mark.skip(reason="Live provider tests disabled (set FOUNDRY_ENABLE_LIVE_PROVIDER_TESTS=1 to enable)")
+                pytest.mark.skip(
+                    reason="Live provider tests disabled (set FOUNDRY_ENABLE_LIVE_PROVIDER_TESTS=1 to enable)"
+                )
             )
             continue
 
@@ -89,9 +89,7 @@ def pytest_collection_modifyitems(config, items):
             if provider in item_markers:
                 provider_id = provider.replace("_", "-")  # cursor_agent -> cursor-agent
                 if not detect_provider_availability(provider_id):
-                    item.add_marker(
-                        pytest.mark.skip(reason=f"Provider '{provider_id}' not available")
-                    )
+                    item.add_marker(pytest.mark.skip(reason=f"Provider '{provider_id}' not available"))
 
 
 # =============================================================================
@@ -239,11 +237,12 @@ def validate_json_response():
         except json.JSONDecodeError as e:
             # Try to extract JSON from markdown code blocks
             import re
+
             match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
             if match:
                 data = json.loads(match.group(1))
             else:
-                raise AssertionError(f"Response is not valid JSON: {e}\nContent: {content[:500]}")
+                raise AssertionError(f"Response is not valid JSON: {e}\nContent: {content[:500]}") from e
 
         if required_keys:
             missing = set(required_keys) - set(data.keys())

@@ -8,7 +8,6 @@ optional dependencies to be installed. All operations are silently ignored.
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional, Sequence
 
-
 # =============================================================================
 # Tracing Stubs
 # =============================================================================
@@ -173,15 +172,11 @@ class NoOpHistogram:
     def __init__(self, name: str = "") -> None:
         self._name = name
 
-    def record(
-        self, value: float, attributes: Optional[dict[str, Any]] = None
-    ) -> None:
+    def record(self, value: float, attributes: Optional[dict[str, Any]] = None) -> None:
         """No-op: ignores value recording."""
         pass
 
-    def observe(
-        self, value: float, attributes: Optional[dict[str, Any]] = None
-    ) -> None:
+    def observe(self, value: float, attributes: Optional[dict[str, Any]] = None) -> None:
         """No-op: ignores value observation (alias for record)."""
         pass
 

@@ -128,6 +128,7 @@ class TestBackgroundTaskStateTransitions:
 
     def test_force_cancel_after_timeout(self):
         """Task is marked cancelled even if thread doesn't stop cooperatively."""
+
         # Create a worker that ignores cancellation
         def stubborn_worker(task: BackgroundTask):
             # Deliberately ignores cancellation event

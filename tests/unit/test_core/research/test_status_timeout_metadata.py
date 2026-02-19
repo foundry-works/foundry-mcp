@@ -7,9 +7,7 @@ metadata when a task is timed out or stale.
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.background_task import BackgroundTask, TaskStatus
@@ -157,7 +155,8 @@ class TestStatusResponseHeartbeat:
     def test_status_includes_last_heartbeat_at_when_state_available(self):
         """Status response includes last_heartbeat_at when state has heartbeat."""
         from datetime import datetime, timezone
-        from foundry_mcp.core.research.models.deep_research import DeepResearchState, DeepResearchPhase
+
+        from foundry_mcp.core.research.models.deep_research import DeepResearchPhase, DeepResearchState
 
         config = ResearchConfig()
         workflow = DeepResearchWorkflow(config)
@@ -184,7 +183,7 @@ class TestStatusResponseHeartbeat:
 
     def test_status_includes_null_heartbeat_when_not_set(self):
         """Status response includes last_heartbeat_at as None when not set."""
-        from foundry_mcp.core.research.models.deep_research import DeepResearchState, DeepResearchPhase
+        from foundry_mcp.core.research.models.deep_research import DeepResearchPhase, DeepResearchState
 
         config = ResearchConfig()
         workflow = DeepResearchWorkflow(config)
@@ -211,7 +210,8 @@ class TestStatusResponseHeartbeat:
     def test_persisted_status_includes_last_heartbeat_at(self):
         """Persisted state status response includes last_heartbeat_at."""
         from datetime import datetime, timezone
-        from foundry_mcp.core.research.models.deep_research import DeepResearchState, DeepResearchPhase
+
+        from foundry_mcp.core.research.models.deep_research import DeepResearchPhase, DeepResearchState
 
         config = ResearchConfig()
         workflow = DeepResearchWorkflow(config)

@@ -39,9 +39,7 @@ class AutonomousSessionState(BaseModel):
     # Core identifiers
     id: str = Field(..., description="ULID-format session identifier")
     spec_id: str = Field(..., description="Spec ID this session is for")
-    idempotency_key: Optional[str] = Field(
-        None, max_length=128, description="Client-provided idempotency key"
-    )
+    idempotency_key: Optional[str] = Field(None, max_length=128, description="Client-provided idempotency key")
 
     # Spec integrity tracking
     spec_structure_hash: str = Field(..., description="SHA-256 hash of spec structure")
@@ -78,21 +76,17 @@ class AutonomousSessionState(BaseModel):
     # Counters and limits
     counters: SessionCounters = Field(default_factory=SessionCounters, description="Session counters")
     limits: SessionLimits = Field(default_factory=SessionLimits, description="Session limits")
-    stop_conditions: StopConditions = Field(
-        default_factory=StopConditions, description="Stop conditions"
-    )
+    stop_conditions: StopConditions = Field(default_factory=StopConditions, description="Stop conditions")
 
     # Configuration
     write_lock_enforced: bool = Field(default=True, description="Whether write lock is enforced")
     gate_policy: GatePolicy = Field(default=GatePolicy.STRICT, description="Gate evaluation policy")
 
     # Runtime context
-    context: SessionContext = Field(default_factory=SessionContext, description="Runtime context")
+    context: SessionContext = Field(default_factory=lambda: SessionContext(), description="Runtime context")
 
     # Phase gates (phase_id -> PhaseGateRecord)
-    phase_gates: Dict[str, PhaseGateRecord] = Field(
-        default_factory=dict, description="Phase gate records"
-    )
+    phase_gates: Dict[str, PhaseGateRecord] = Field(default_factory=dict, description="Phase gate records")
 
     # Required gate obligations and satisfaction tracking (v3 schema)
     # Maps phase_id -> list of required gate types (e.g., ["fidelity"])
@@ -107,9 +101,7 @@ class AutonomousSessionState(BaseModel):
     )
 
     # Completed tasks
-    completed_task_ids: List[str] = Field(
-        default_factory=list, description="IDs of completed tasks"
-    )
+    completed_task_ids: List[str] = Field(default_factory=list, description="IDs of completed tasks")
 
     # State version for observability
     state_version: int = Field(default=1, ge=1, description="Monotonic state version")
@@ -123,9 +115,7 @@ class AutonomousSessionState(BaseModel):
         import re
 
         if not re.match(r"^[a-zA-Z0-9_-]+$", v):
-            raise ValueError(
-                "idempotency_key must contain only alphanumeric characters, hyphens, and underscores"
-            )
+            raise ValueError("idempotency_key must contain only alphanumeric characters, hyphens, and underscores")
         return v
 
     @model_validator(mode="after")
@@ -133,10 +123,7 @@ class AutonomousSessionState(BaseModel):
         """Verify satisfied_gates is a subset of required_phase_gates per phase."""
         for phase_id, satisfied in self.satisfied_gates.items():
             if phase_id not in self.required_phase_gates:
-                raise ValueError(
-                    f"satisfied_gates references unknown phase '{phase_id}' "
-                    f"not in required_phase_gates"
-                )
+                raise ValueError(f"satisfied_gates references unknown phase '{phase_id}' not in required_phase_gates")
             required = set(self.required_phase_gates[phase_id])
             satisfied_set = set(satisfied)
             extra = satisfied_set - required

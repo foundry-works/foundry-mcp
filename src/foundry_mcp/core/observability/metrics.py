@@ -4,8 +4,8 @@ Provides structured metric emission to loggers and Prometheus exporters.
 """
 
 import logging
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional, Union
 
@@ -31,9 +31,7 @@ class Metric:
     value: Union[int, float]
     metric_type: MetricType
     labels: Dict[str, str] = field(default_factory=dict)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -67,9 +65,7 @@ class MetricsCollector:
             metric: The Metric to emit
         """
         # Always emit to structured logger
-        self._logger.info(
-            f"METRIC: {self.prefix}.{metric.name}", extra={"metric": metric.to_dict()}
-        )
+        self._logger.info(f"METRIC: {self.prefix}.{metric.name}", extra={"metric": metric.to_dict()})
 
         # Emit to Prometheus if enabled
         manager = get_observability_manager()
@@ -93,9 +89,7 @@ class MetricsCollector:
                         duration_ms=metric.value,
                     )
 
-    def counter(
-        self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def counter(self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None) -> None:
         """Emit a counter metric."""
         self.emit(
             Metric(
@@ -122,9 +116,7 @@ class MetricsCollector:
             )
         )
 
-    def timer(
-        self, name: str, duration_ms: float, labels: Optional[Dict[str, str]] = None
-    ) -> None:
+    def timer(self, name: str, duration_ms: float, labels: Optional[Dict[str, str]] = None) -> None:
         """Emit a timer metric (duration in milliseconds)."""
         self.emit(
             Metric(

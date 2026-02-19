@@ -6,8 +6,6 @@ instead of crashing the MCP server.
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestEnvironmentDispatchExceptionHandling:
     """Tests for _dispatch_environment_action exception handling."""
@@ -16,9 +14,7 @@ class TestEnvironmentDispatchExceptionHandling:
         """_dispatch_environment_action should catch exceptions and return error response."""
         from foundry_mcp.tools.unified.environment import _dispatch_environment_action
 
-        with patch(
-            "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError("File system error")
 
@@ -39,9 +35,7 @@ class TestEnvironmentDispatchExceptionHandling:
         """_dispatch_environment_action should handle exceptions with empty messages."""
         from foundry_mcp.tools.unified.environment import _dispatch_environment_action
 
-        with patch(
-            "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["info"]
             mock_router.dispatch.side_effect = RuntimeError()
 
@@ -62,9 +56,7 @@ class TestEnvironmentDispatchExceptionHandling:
         from foundry_mcp.tools.unified.environment import _dispatch_environment_action
 
         with caplog.at_level(logging.ERROR):
-            with patch(
-                "foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.environment._ENVIRONMENT_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["info"]
                 mock_router.dispatch.side_effect = ValueError("test error")
 

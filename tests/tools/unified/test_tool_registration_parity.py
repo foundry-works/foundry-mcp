@@ -11,10 +11,10 @@ import pytest
 
 from foundry_mcp.tools.unified.server import _build_unified_manifest_tools
 
-
 # ---------------------------------------------------------------------------
 # Fixture: manifest tools (computed once per session)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="session")
 def manifest_tools():
@@ -31,6 +31,7 @@ def manifest_by_name(manifest_tools):
 # ---------------------------------------------------------------------------
 # Import the same routers the manifest builder uses
 # ---------------------------------------------------------------------------
+
 
 def _live_routers():
     """Return {name: router} matching the manifest builder's router set."""
@@ -81,6 +82,7 @@ TOOL_NAMES = sorted(LIVE_ROUTERS.keys())
 # Tool count and names
 # ---------------------------------------------------------------------------
 
+
 class TestToolCountAndNames:
     """Manifest tool count and name set match live routers."""
 
@@ -93,9 +95,7 @@ class TestToolCountAndNames:
     def test_router_tool_name_matches_manifest_key(self):
         """Each router's .tool_name matches the key used in the manifest."""
         for name, router in LIVE_ROUTERS.items():
-            assert router.tool_name == name, (
-                f"Router keyed as '{name}' reports tool_name='{router.tool_name}'"
-            )
+            assert router.tool_name == name, f"Router keyed as '{name}' reports tool_name='{router.tool_name}'"
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +145,7 @@ class TestPerToolMetadata:
 # Action parity (manifest actions vs router actions)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("tool_name", TOOL_NAMES)
 class TestActionParity:
     """Manifest action lists match the live router's allowed actions."""
@@ -153,8 +154,7 @@ class TestActionParity:
         manifest_actions = {a["name"] for a in manifest_by_name[tool_name]["actions"]}
         router_actions = set(LIVE_ROUTERS[tool_name].allowed_actions())
         assert manifest_actions == router_actions, (
-            f"{tool_name}: manifest actions {manifest_actions} != "
-            f"router actions {router_actions}"
+            f"{tool_name}: manifest actions {manifest_actions} != router actions {router_actions}"
         )
 
     def test_action_summaries_match(self, manifest_by_name, tool_name):
@@ -164,8 +164,7 @@ class TestActionParity:
             name = action_entry["name"]
             expected = router_summaries.get(name)
             assert action_entry["summary"] == expected, (
-                f"{tool_name}.{name}: manifest summary "
-                f"{action_entry['summary']!r} != router summary {expected!r}"
+                f"{tool_name}.{name}: manifest summary {action_entry['summary']!r} != router summary {expected!r}"
             )
 
     def test_action_count_matches(self, manifest_by_name, tool_name):
@@ -177,6 +176,7 @@ class TestActionParity:
 # ---------------------------------------------------------------------------
 # Alias resolution (routers accept aliases defined in ActionDefinitions)
 # ---------------------------------------------------------------------------
+
 
 class TestAliasResolution:
     """Routers that define aliases can dispatch using them."""
@@ -191,14 +191,14 @@ class TestAliasResolution:
             if underscore_form != action:
                 # The router should recognize the alias without raising
                 assert underscore_form not in canonical, (
-                    f"Alias '{underscore_form}' should not appear as a "
-                    "canonical action name"
+                    f"Alias '{underscore_form}' should not appear as a canonical action name"
                 )
 
 
 # ---------------------------------------------------------------------------
 # Cross-check: parity set vs dispatch baselines
 # ---------------------------------------------------------------------------
+
 
 class TestRouterSetCompleteness:
     """Parity test router set accounts for all dispatch-baseline routers."""
@@ -211,6 +211,5 @@ class TestRouterSetCompleteness:
         parity_names = set(LIVE_ROUTERS.keys())
         uncovered = baseline_names - parity_names - MANIFEST_EXCLUDED_ROUTERS
         assert uncovered == set(), (
-            f"Dispatch-baseline routers not covered by parity test or "
-            f"MANIFEST_EXCLUDED_ROUTERS: {uncovered}"
+            f"Dispatch-baseline routers not covered by parity test or MANIFEST_EXCLUDED_ROUTERS: {uncovered}"
         )

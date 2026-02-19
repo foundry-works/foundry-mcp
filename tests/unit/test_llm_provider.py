@@ -10,58 +10,59 @@ Tests cover:
 """
 
 import os
-import pytest
 from unittest.mock import patch
 
-# LLM Provider imports
-from foundry_mcp.core.llm_provider import (
-    # Enums
-    ChatRole,
-    FinishReason,
-    # Data Classes
-    ToolCall,
-    ChatMessage,
-    CompletionRequest,
-    ChatRequest,
-    EmbeddingRequest,
-    TokenUsage,
-    CompletionResponse,
-    ChatResponse,
-    EmbeddingResponse,
-    # Exceptions
-    LLMError,
-    RateLimitError,
-    AuthenticationError,
-    InvalidRequestError,
-    ModelNotFoundError,
-    ContentFilterError,
-    # Providers
-    LLMProvider,
-    OpenAIProvider,
-    AnthropicProvider,
-    LocalProvider,
+import pytest
+
+from foundry_mcp.core.llm_config.llm import (
+    LLMConfig,
+    get_llm_config,
+    reset_llm_config,
+    set_llm_config,
 )
 
 # LLM Config imports
 from foundry_mcp.core.llm_config.provider_spec import (
-    LLMProviderType,
-    DEFAULT_MODELS,
     API_KEY_ENV_VARS,
-)
-from foundry_mcp.core.llm_config.llm import (
-    LLMConfig,
-    get_llm_config,
-    set_llm_config,
-    reset_llm_config,
+    DEFAULT_MODELS,
+    LLMProviderType,
 )
 from foundry_mcp.core.llm_config.workflow import (
-    WorkflowMode,
     WorkflowConfig,
+    WorkflowMode,
     get_workflow_config,
-    set_workflow_config,
     reset_workflow_config,
+    set_workflow_config,
 )
 
+# LLM Provider imports
+from foundry_mcp.core.llm_provider import (
+    AnthropicProvider,
+    AuthenticationError,
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    # Enums
+    ChatRole,
+    CompletionRequest,
+    CompletionResponse,
+    ContentFilterError,
+    EmbeddingRequest,
+    EmbeddingResponse,
+    FinishReason,
+    InvalidRequestError,
+    # Exceptions
+    LLMError,
+    # Providers
+    LLMProvider,
+    LocalProvider,
+    ModelNotFoundError,
+    OpenAIProvider,
+    RateLimitError,
+    TokenUsage,
+    # Data Classes
+    ToolCall,
+)
 
 # =============================================================================
 # Enum Tests
@@ -137,7 +138,7 @@ class TestChatMessage:
 
     def test_to_dict_with_tool_calls(self):
         """Test to_dict with tool calls."""
-        tc = ToolCall(id="call_1", name="func", arguments='{}')
+        tc = ToolCall(id="call_1", name="func", arguments="{}")
         msg = ChatMessage(role=ChatRole.ASSISTANT, content=None, tool_calls=[tc])
         result = msg.to_dict()
         assert result["role"] == "assistant"
@@ -148,9 +149,7 @@ class TestChatMessage:
 
     def test_to_dict_with_tool_call_id(self):
         """Test to_dict with tool_call_id."""
-        msg = ChatMessage(
-            role=ChatRole.TOOL, content="Result", tool_call_id="call_1"
-        )
+        msg = ChatMessage(role=ChatRole.TOOL, content="Result", tool_call_id="call_1")
         result = msg.to_dict()
         assert result == {"role": "tool", "content": "Result", "tool_call_id": "call_1"}
 
@@ -356,9 +355,7 @@ class TestLLMProviderBase:
             return CompletionResponse(text="completed")
 
         async def chat(self, request):
-            return ChatResponse(
-                message=ChatMessage(role=ChatRole.ASSISTANT, content="chatted")
-            )
+            return ChatResponse(message=ChatMessage(role=ChatRole.ASSISTANT, content="chatted"))
 
         async def embed(self, request):
             return EmbeddingResponse(embeddings=[[0.1]])
@@ -443,6 +440,7 @@ class TestLLMProviderBase:
 # Check if openai package is available
 try:
     import openai
+
     HAS_OPENAI = True
 except ImportError:
     HAS_OPENAI = False
@@ -527,6 +525,7 @@ class TestAnthropicProvider:
                     await provider.embed(EmbeddingRequest(texts=["test"]))
 
             import asyncio
+
             asyncio.run(test())
 
     def test_convert_messages_system(self):

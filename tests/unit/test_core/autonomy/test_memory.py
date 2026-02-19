@@ -13,19 +13,17 @@ import json
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from threading import Thread
 from typing import List
 
 import pytest
 
 from foundry_mcp.core.autonomy.memory import (
-    ActiveSessionLookupResult,
-    AutonomyStorage,
     GC_TTL_DAYS,
-    ListSessionsResult,
     MAX_PROOF_RECORDS,
     PROOF_TTL_SECONDS,
+    ActiveSessionLookupResult,
+    AutonomyStorage,
     VersionConflictError,
     compute_filters_hash,
     decode_cursor,
@@ -36,7 +34,6 @@ from foundry_mcp.core.autonomy.models.enums import SessionStatus
 from foundry_mcp.core.autonomy.models.steps import StepProofRecord
 
 from .conftest import make_session
-
 
 # =============================================================================
 # sanitize_id (Path Traversal Prevention)
@@ -238,9 +235,7 @@ class TestActiveSessionPointers:
 
     def test_pointer_to_terminal_session_cleaned_up(self, storage):
         """Pointer to a completed session is cleaned up."""
-        session = make_session(
-            session_id="sess-1", spec_id="spec-1", status=SessionStatus.COMPLETED
-        )
+        session = make_session(session_id="sess-1", spec_id="spec-1", status=SessionStatus.COMPLETED)
         storage.save(session)
         storage.set_active_session("spec-1", "sess-1")
 
@@ -282,9 +277,7 @@ class TestLookupActiveSession:
 
     def test_multiple_active_returns_ambiguous(self, storage):
         for i in range(2):
-            session = make_session(
-                session_id=f"sess-{i}", spec_id=f"spec-{i}"
-            )
+            session = make_session(session_id=f"sess-{i}", spec_id=f"spec-{i}")
             storage.save(session)
             storage.set_active_session(f"spec-{i}", f"sess-{i}")
 
@@ -293,9 +286,7 @@ class TestLookupActiveSession:
         assert session_id is None
 
     def test_terminal_sessions_ignored(self, storage):
-        session = make_session(
-            session_id="sess-1", spec_id="spec-1", status=SessionStatus.COMPLETED
-        )
+        session = make_session(session_id="sess-1", spec_id="spec-1", status=SessionStatus.COMPLETED)
         storage.save(session)
         storage.set_active_session("spec-1", "sess-1")
 
@@ -796,18 +787,14 @@ class TestStepProofExpiration:
         """Proof at t0, replay at t0+15s (within 30s grace) — idempotent replay."""
         from unittest.mock import MagicMock, patch
 
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         # Consume at t0
         mock_dt = MagicMock(wraps=datetime)
         mock_dt.now.return_value = t0
         with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
-            ok, rec, err = storage.consume_proof_with_lock(
-                "sess-1", "proof-1", "hash-a", grace_window_seconds=30
-            )
+            ok, rec, err = storage.consume_proof_with_lock("sess-1", "proof-1", "hash-a", grace_window_seconds=30)
         assert ok is True
         assert rec is None
         assert err == ""
@@ -815,9 +802,7 @@ class TestStepProofExpiration:
         # Replay at t0+15s (within grace)
         mock_dt.now.return_value = t0 + timedelta(seconds=15)
         with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
-            ok, rec, err = storage.consume_proof_with_lock(
-                "sess-1", "proof-1", "hash-a"
-            )
+            ok, rec, err = storage.consume_proof_with_lock("sess-1", "proof-1", "hash-a")
         assert ok is True
         assert rec is not None  # Returns cached record
         assert err == ""
@@ -826,26 +811,20 @@ class TestStepProofExpiration:
         """Proof at t0, replay at t0+31s (past 30s grace) — PROOF_EXPIRED."""
         from unittest.mock import MagicMock, patch
 
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         # Consume at t0
         mock_dt = MagicMock(wraps=datetime)
         mock_dt.now.return_value = t0
         with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
-            ok, rec, err = storage.consume_proof_with_lock(
-                "sess-1", "proof-1", "hash-a", grace_window_seconds=30
-            )
+            ok, rec, err = storage.consume_proof_with_lock("sess-1", "proof-1", "hash-a", grace_window_seconds=30)
         assert ok is True
 
         # Replay at t0+31s (past grace)
         mock_dt.now.return_value = t0 + timedelta(seconds=31)
         with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
-            ok, rec, err = storage.consume_proof_with_lock(
-                "sess-1", "proof-1", "hash-a"
-            )
+            ok, rec, err = storage.consume_proof_with_lock("sess-1", "proof-1", "hash-a")
         assert ok is False
         assert err == "PROOF_EXPIRED"
 
@@ -853,26 +832,20 @@ class TestStepProofExpiration:
         """Proof at t0, replay at exactly t0+30s — grace_expires_at == now is expired."""
         from unittest.mock import MagicMock, patch
 
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         t0 = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         # Consume at t0
         mock_dt = MagicMock(wraps=datetime)
         mock_dt.now.return_value = t0
         with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
-            ok, rec, err = storage.consume_proof_with_lock(
-                "sess-1", "proof-1", "hash-a", grace_window_seconds=30
-            )
+            ok, rec, err = storage.consume_proof_with_lock("sess-1", "proof-1", "hash-a", grace_window_seconds=30)
         assert ok is True
 
         # Replay at exactly t0+30s (grace_expires_at == now, NOT greater-than)
         mock_dt.now.return_value = t0 + timedelta(seconds=30)
         with patch("foundry_mcp.core.autonomy.memory.datetime", mock_dt):
-            ok, rec, err = storage.consume_proof_with_lock(
-                "sess-1", "proof-1", "hash-a"
-            )
+            ok, rec, err = storage.consume_proof_with_lock("sess-1", "proof-1", "hash-a")
         # grace_expires_at > now check: 12:00:30 > 12:00:30 is False → PROOF_EXPIRED
         assert ok is False
         assert err == "PROOF_EXPIRED"
@@ -896,9 +869,7 @@ class TestGarbageCollectionByTTL:
     )
     def test_session_within_ttl_survives(self, tmp_path, status, ttl_days):
         """Session at TTL-1d is not expired."""
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         session = make_session(session_id="sess-ttl", status=status)
         storage.save(session)
         session_path = storage._get_session_path("sess-ttl")
@@ -917,9 +888,7 @@ class TestGarbageCollectionByTTL:
     )
     def test_session_past_ttl_is_expired(self, tmp_path, status, ttl_days):
         """Session at TTL+1d is expired."""
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         session = make_session(session_id="sess-ttl", status=status)
         storage.save(session)
         session_path = storage._get_session_path("sess-ttl")
@@ -931,9 +900,7 @@ class TestGarbageCollectionByTTL:
     @pytest.mark.parametrize("status", [SessionStatus.RUNNING, SessionStatus.PAUSED])
     def test_non_terminal_never_expires(self, tmp_path, status):
         """Non-terminal sessions are never GC-expired regardless of age."""
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         session = make_session(session_id="sess-alive", status=status)
         storage.save(session)
         session_path = storage._get_session_path("sess-alive")
@@ -943,9 +910,7 @@ class TestGarbageCollectionByTTL:
 
     def test_cleanup_expired_removes_all_terminal(self, tmp_path):
         """Bulk cleanup: all terminal sessions past TTL are removed."""
-        storage = AutonomyStorage(
-            storage_path=tmp_path / "sessions", workspace_path=tmp_path
-        )
+        storage = AutonomyStorage(storage_path=tmp_path / "sessions", workspace_path=tmp_path)
         statuses = [
             (SessionStatus.COMPLETED, 7),
             (SessionStatus.ENDED, 7),

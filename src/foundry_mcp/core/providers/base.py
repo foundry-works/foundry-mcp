@@ -264,7 +264,6 @@ from foundry_mcp.core.errors.provider import (  # noqa: E402
     ProviderUnavailableError,
 )
 
-
 # =============================================================================
 # Lifecycle Hooks
 # =============================================================================
@@ -390,17 +389,11 @@ class ProviderContext(ABC):
         except ProviderError:
             raise
         except FileNotFoundError as exc:
-            raise ProviderUnavailableError(
-                str(exc), provider=self._metadata.provider_id
-            ) from exc
+            raise ProviderUnavailableError(str(exc), provider=self._metadata.provider_id) from exc
         except TimeoutError as exc:
-            raise ProviderTimeoutError(
-                str(exc), provider=self._metadata.provider_id
-            ) from exc
+            raise ProviderTimeoutError(str(exc), provider=self._metadata.provider_id) from exc
         except Exception as exc:  # noqa: BLE001 - intentionally wrap all provider exceptions
-            raise ProviderExecutionError(
-                str(exc), provider=self._metadata.provider_id
-            ) from exc
+            raise ProviderExecutionError(str(exc), provider=self._metadata.provider_id) from exc
 
         self._hooks.emit_after(result, self._metadata)
         return result

@@ -301,9 +301,7 @@ class CodexProvider(ProviderContext):
             unsupported.append("max_tokens")
         if unsupported:
             # Log warning but continue - ignore unsupported parameters
-            logger.warning(
-                f"Codex CLI ignoring unsupported parameters: {', '.join(unsupported)}"
-            )
+            logger.warning(f"Codex CLI ignoring unsupported parameters: {', '.join(unsupported)}")
 
     def _build_prompt(self, request: ProviderRequest) -> str:
         """
@@ -448,11 +446,7 @@ class CodexProvider(ProviderContext):
             event_type = str(event.get("type") or event.get("event") or "").lower()
 
             if event_type == "thread.started":
-                thread_id = (
-                    event.get("thread_id")
-                    or (event.get("thread") or {}).get("id")
-                    or event.get("id")
-                )
+                thread_id = event.get("thread_id") or (event.get("thread") or {}).get("id") or event.get("id")
             elif event_type in {"item.delta", "response.delta"}:
                 delta_text = self._extract_agent_text(event)
                 if delta_text:

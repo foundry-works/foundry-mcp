@@ -13,6 +13,11 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
+from ._claude_base import (
+    ALLOWED_TOOLS,
+    ClaudeCLIProviderBase,
+    RunnerProtocol,
+)
 from .base import (
     ProviderCapability,
     ProviderHooks,
@@ -20,11 +25,6 @@ from .base import (
 )
 from .detectors import detect_provider_availability
 from .registry import register_provider
-from ._claude_base import (
-    ALLOWED_TOOLS,
-    ClaudeCLIProviderBase,
-    RunnerProtocol,
-)
 
 DEFAULT_BINARY = "claude-zai"
 CUSTOM_BINARY_ENV = "CLAUDE_ZAI_CLI_BINARY"

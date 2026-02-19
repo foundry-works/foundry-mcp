@@ -4,32 +4,30 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, List
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import audit_log
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import (
     add_assumption,
     add_revision,
     list_assumptions,
 )
-
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _assumption_exists,
     _metric_name,
     _metrics,
     _request_id,
     _resolve_specs_dir,
-    _validation_error,
     logger,
 )
 from foundry_mcp.tools.unified.param_schema import Bool, Str, validate_payload
@@ -63,9 +61,7 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "assumption-add"
 
-    err = validate_payload(payload, _ASSUMPTION_ADD_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _ASSUMPTION_ADD_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -79,12 +75,11 @@ def _handle_assumption_add(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None
 
     warnings: List[str] = []
     if _assumption_exists(spec_id, specs_dir, text):
-        warnings.append(
-            "An assumption with identical text already exists; another entry will be appended"
-        )
+        warnings.append("An assumption with identical text already exists; another entry will be appended")
 
     audit_log(
         "tool_invocation",
@@ -189,9 +184,9 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "assumption-list"
 
-    err = validate_payload(payload, _ASSUMPTION_LIST_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(
+        payload, _ASSUMPTION_LIST_SCHEMA, tool_name="authoring", action=action, request_id=request_id
+    )
     if err:
         return err
 
@@ -259,9 +254,7 @@ def _handle_assumption_list(*, config: ServerConfig, **payload: Any) -> dict:
 
     warnings: List[str] = []
     if assumption_type:
-        warnings.append(
-            "assumption_type filter is advisory only; all assumptions are returned"
-        )
+        warnings.append("assumption_type filter is advisory only; all assumptions are returned")
 
     _metrics.counter(metric_key, labels={"status": "success"})
     return asdict(
@@ -278,9 +271,7 @@ def _handle_revision_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "revision-add"
 
-    err = validate_payload(payload, _REVISION_ADD_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _REVISION_ADD_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 

@@ -7,13 +7,13 @@ from typing import Any, Optional
 
 from foundry_mcp.core.research.models.enums import ThreadStatus
 from foundry_mcp.core.research.workflows import ChatWorkflow
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 
@@ -75,6 +75,7 @@ def _handle_thread_get(
     if err:
         return err
 
+    assert isinstance(thread_id, str)
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())
     thread = workflow.get_thread(thread_id)
@@ -103,6 +104,7 @@ def _handle_thread_delete(
     if err:
         return err
 
+    assert isinstance(thread_id, str)
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())
     deleted = workflow.delete_thread(thread_id)
