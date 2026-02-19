@@ -96,7 +96,16 @@ Example:
 
 ## run_fidelity_gate
 
-1. Call `review(action="fidelity-gate", spec_id=..., session_id=..., phase_id=..., step_id=...)`.
+**Parameter sources — all four are required, all come from the current step context:**
+
+| Parameter | Source |
+|-----------|--------|
+| `spec_id` | Session's spec (from preflight) |
+| `session_id` | `session.id` |
+| `phase_id` | `next_step.phase_id` |
+| `step_id` | `next_step.step_id` |
+
+1. Call `review(action="fidelity-gate", spec_id=..., session_id=..., phase_id=<next_step.phase_id>, step_id=<next_step.step_id>)`. All four parameters are **required** — omitting any one causes a validation error.
 2. Capture `gate_attempt_id` from the response — this is **required** in the step report.
 3. Report gate outcome.
 4. Under strict gate policy, the server validates gate evidence integrity via checksum. A checksum failure returns `ERROR_GATE_INTEGRITY_CHECKSUM` (`blocked_runtime`).

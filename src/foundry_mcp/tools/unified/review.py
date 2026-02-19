@@ -1118,6 +1118,12 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
     step_id = payload.get("step_id")
 
     # Validate required parameters
+    _fidelity_gate_field_hints = {
+        "spec_id": "Provide the spec_id from the session.",
+        "session_id": "Provide the session_id.",
+        "phase_id": "Use next_step.phase_id from the orchestrator step.",
+        "step_id": "Use next_step.step_id from the orchestrator step.",
+    }
     for field_name, field_value in [
         ("spec_id", spec_id),
         ("session_id", session_id),
@@ -1130,7 +1136,7 @@ def _handle_fidelity_gate(*, config: ServerConfig, payload: Dict[str, Any]) -> d
                     f"{field_name} is required for fidelity-gate action",
                     error_code=ErrorCode.MISSING_REQUIRED,
                     error_type=ErrorType.VALIDATION,
-                    remediation=f"Provide a valid {field_name}.",
+                    remediation=_fidelity_gate_field_hints[field_name],
                 )
             )
 
