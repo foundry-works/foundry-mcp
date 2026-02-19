@@ -5,14 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0b19] - 2026-02-19
+## [0.12.0b20] - 2026-02-19
 
-### Fixed
+### Changed
 
-- **`foundry run` timeout crash**: The run command applied a 5-second SIGALRM timeout to the entire function, but `tmux attach` / `tmux switch-client` are interactive blocking calls. The alarm fired during attach, crashing with `TimeoutException`. Now cancels the alarm before entering interactive tmux commands.
-- **`foundry run` panes vanishing silently**: tmux closes panes when their command exits, so errors were invisible. Now sets `remain-on-exit on` so failed panes stay visible with their error output. Also increased the watcher delay from 5s to 15s to give `claude` time to boot and create a session.
-- **`foundry run` blank agent pane**: tmux spawns non-interactive shells that don't load aliases or the full user PATH. Now resolves absolute paths for `claude` and `foundry` binaries before passing commands to tmux. Also wraps pane commands with diagnostic echo and stderr redirect so errors are always visible in dead panes.
-- **`foundry run` watcher dying before session exists**: The watcher tried once after a fixed 15s delay. Now retries every 2s for up to 2 minutes, waiting for the agent to create a session before launching the dashboard.
+- **`foundry run` simplified**: Removed tmux/watcher complexity. Now launches claude in interactive mode with the foundry-implement-auto skill via `os.execvpe`, giving full visibility into agent activity. Removed `--detach` and `--layout` options.
 
 ## [0.12.0b14] - 2026-02-19
 
