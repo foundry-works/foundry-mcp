@@ -159,12 +159,15 @@ def run_cmd(
     foundry_bin = shutil.which("foundry")
     safe_foundry = shlex.quote(foundry_bin) if foundry_bin else "foundry"
 
-    # Build watcher command — wait for the agent to boot and create a session,
-    # then launch the dashboard. If it fails, remain-on-exit keeps the error visible.
+    # Build watcher command — retry until the agent creates a session (up to 2 min),
+    # then hand off to the dashboard. remain-on-exit keeps errors visible.
     watcher_cmd = (
-        f"echo 'Waiting for agent to start...' && sleep 15 && "
-        f"{safe_foundry} watch {safe_spec_id} 2>&1; "
-        f"echo '\\n--- Watcher exited with code: '$?' ---'"
+        f"echo 'Waiting for agent to create session...' && "
+        f"for i in $(seq 1 60); do "
+        f"  {safe_foundry} watch {safe_spec_id} 2>/dev/null && break; "
+        f"  sleep 2; "
+        f"done; "
+        f"echo '\\n--- Watcher exited ---'"
     )
 
     # Split direction flag: -v = vertical (top/bottom), -h = horizontal (side-by-side)
