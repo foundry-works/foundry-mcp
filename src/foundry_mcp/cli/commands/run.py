@@ -8,6 +8,7 @@ import hashlib
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 
 import click
@@ -186,6 +187,10 @@ def run_cmd(
     switch_cmd = f"tmux switch-client -t {session_name}"
 
     if not detach:
+        # Cancel the SIGALRM timeout before entering interactive tmux commands
+        # (attach/switch-client block until the user detaches)
+        signal.alarm(0)
+
         if already_in_tmux:
             # Already inside tmux — switch client to avoid nested sessions
             emit_success(
