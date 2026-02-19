@@ -1338,6 +1338,12 @@ class StepOrchestrator(StepEmitterMixin):
 
         Uses the shared check_all_blocked utility from core/task/_helpers.py.
 
+        Important: When all remaining tasks are blocked *because* the active
+        phase is complete (and the next phase depends on it), this is a phase
+        transition — not a true blocker.  In that case we return None so that
+        Steps 11-17 (_determine_next_step) can handle the fidelity gate and
+        phase_complete signal correctly.
+
         Returns:
             OrchestrationResult if all blocked, None if work available
         """
@@ -1346,6 +1352,21 @@ class StepOrchestrator(StepEmitterMixin):
 
         # Use shared utility to check if all pending tasks are blocked
         if check_all_blocked(spec_data):
+            # Before pausing, check if the active phase is complete.
+            # If all implementation tasks in the active phase are done,
+            # this is a phase boundary — let _determine_next_step handle
+            # the transition (verification → fidelity gate → phase_complete).
+            current_phase = self._get_current_phase(session, spec_data)
+            if current_phase and self._all_implementation_tasks_complete(
+                current_phase, session.completed_task_ids
+            ):
+                logger.info(
+                    "All remaining tasks blocked but active phase %s is complete — "
+                    "deferring to phase transition logic",
+                    session.active_phase_id,
+                )
+                return None
+
             logger.warning("All remaining tasks are blocked")
             now = datetime.now(timezone.utc)
             return self._create_pause_result(

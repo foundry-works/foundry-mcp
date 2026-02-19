@@ -2776,3 +2776,65 @@ class TestSignalFileDetection:
         assert result.next_step.type == StepType.PAUSE
         assert result.next_step.reason == PauseReason.USER
         assert session.status == SessionStatus.PAUSED
+
+
+class TestPhaseCompleteNotBlockedRegression:
+    """Regression test: completing all tasks in the active phase should not
+    trigger PauseReason.BLOCKED when the only remaining tasks are in a
+    subsequent phase that depends on the current one."""
+
+    def test_phase_complete_not_treated_as_blocked(self, tmp_path):
+        """When all phase-1 tasks are done and phase-2 is blocked by phase-1,
+        the orchestrator should proceed to fidelity gate / phase_complete
+        rather than pausing with BLOCKED.
+
+        Regression test for the bug where Step 10 (_check_all_blocked) would
+        short-circuit before Steps 11-17 could handle the phase transition.
+        """
+        # Two-phase spec: phase-2 tasks depend on phase-1 tasks.
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task 1", "type": "task", "status": "completed"},
+                        {"id": "task-2", "title": "Task 2", "type": "task", "status": "completed"},
+                    ],
+                },
+                {
+                    "id": "phase-2",
+                    "title": "Phase 2",
+                    "sequence_index": 1,
+                    "tasks": [
+                        {
+                            "id": "task-3",
+                            "title": "Task 3",
+                            "type": "task",
+                            "status": "pending",
+                            "dependencies": {"blocked_by": ["task-1", "task-2"]},
+                        },
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            active_phase_id="phase-1",
+            completed_task_ids=["task-1", "task-2"],
+            stop_conditions=StopConditions(stop_on_phase_completion=True),
+        )
+
+        result = orch.compute_next_step(session)
+
+        # Must NOT be paused with BLOCKED — that's the bug.
+        assert result.success is True
+        assert result.next_step is not None
+        if result.next_step.type == StepType.PAUSE:
+            assert result.next_step.reason != PauseReason.BLOCKED, (
+                "Phase-1 is complete; orchestrator should proceed to gate/phase_complete, "
+                "not pause with BLOCKED"
+            )

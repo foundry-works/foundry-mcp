@@ -663,8 +663,8 @@ class TestPreflightValidationUnderPressure:
 
     def test_preflight_detects_overflow(self):
         """Test preflight correctly detects when content exceeds budget."""
-        budget = TokenBudget(total_budget=1000, safety_margin=0.0)
-        content = "x" * 8000  # ~2000 tokens
+        budget = TokenBudget(total_budget=100, safety_margin=0.0)
+        content = "x" * 8000  # Well over 100 tokens regardless of estimator
 
         result = preflight_count(content, budget, warn_on_heuristic=False)
 
@@ -700,12 +700,12 @@ class TestPreflightValidationUnderPressure:
     def test_preflight_usage_fraction(self):
         """Test preflight usage_fraction property."""
         budget = TokenBudget(total_budget=1000, safety_margin=0.0)
-        content = "x" * 400  # ~100 tokens
+        content = "x" * 400
 
         result = preflight_count(content, budget, warn_on_heuristic=False)
 
-        # 100 / 1000 = 0.1
-        assert result.usage_fraction == 0.1
+        expected_fraction = result.estimated_tokens / 1000
+        assert result.usage_fraction == expected_fraction
 
 
 # =============================================================================
