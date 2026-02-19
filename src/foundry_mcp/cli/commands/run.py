@@ -4,6 +4,7 @@ Creates a tmux session with the agent in one pane and the watcher in another,
 providing the best DX for running autonomous sessions.
 """
 
+import os
 import shutil
 import subprocess
 
@@ -158,23 +159,39 @@ def run_cmd(
             details={"stderr": e.stderr, "returncode": e.returncode},
         )
 
+    already_in_tmux = bool(os.environ.get("TMUX"))
     reattach_cmd = f"tmux attach -t {session_name}"
+    switch_cmd = f"tmux switch-client -t {session_name}"
 
     if not detach:
-        # Attach to the session (replaces this process)
-        emit_success(
-            {
-                "spec_id": spec_id,
-                "session_name": session_name,
-                "posture": posture,
-                "layout": layout,
-                "action": "attaching",
-                "reattach_command": reattach_cmd,
-                "message": f"Attaching to tmux session '{session_name}'...",
-            }
-        )
-        # exec into tmux attach — this replaces the current process
-        subprocess.run(["tmux", "attach", "-t", session_name])
+        if already_in_tmux:
+            # Already inside tmux — switch client to avoid nested sessions
+            emit_success(
+                {
+                    "spec_id": spec_id,
+                    "session_name": session_name,
+                    "posture": posture,
+                    "layout": layout,
+                    "action": "switching",
+                    "reattach_command": switch_cmd,
+                    "message": f"Switching to tmux session '{session_name}'...",
+                }
+            )
+            subprocess.run(["tmux", "switch-client", "-t", session_name])
+        else:
+            # Not inside tmux — attach normally
+            emit_success(
+                {
+                    "spec_id": spec_id,
+                    "session_name": session_name,
+                    "posture": posture,
+                    "layout": layout,
+                    "action": "attaching",
+                    "reattach_command": reattach_cmd,
+                    "message": f"Attaching to tmux session '{session_name}'...",
+                }
+            )
+            subprocess.run(["tmux", "attach", "-t", session_name])
     else:
         emit_success(
             {

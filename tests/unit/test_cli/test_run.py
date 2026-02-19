@@ -214,10 +214,15 @@ class TestRunDefaultOptions:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    @patch.dict("os.environ", {}, clear=False)
     def test_attaches_by_default(
         self, mock_which, mock_run, cli_runner, temp_specs_dir
     ):
-        """run attaches to tmux session by default (no --detach)."""
+        """run attaches to tmux session by default (no --detach, not in tmux)."""
+        # Ensure TMUX is not set
+        import os
+        os.environ.pop("TMUX", None)
+
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
             SimpleNamespace(returncode=0, stdout="", stderr=""),
@@ -234,6 +239,83 @@ class TestRunDefaultOptions:
         attach_call = mock_run.call_args_list[4]
         cmd_args = attach_call[0][0]
         assert cmd_args == ["tmux", "attach", "-t", "foundry-test-spec-001"]
+
+
+class TestRunInsideTmux:
+    """Tests for behavior when already inside a tmux session."""
+
+    @patch("foundry_mcp.cli.commands.run.subprocess.run")
+    @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    @patch.dict("os.environ", {"TMUX": "/tmp/tmux-1000/default,12345,0"})
+    def test_uses_switch_client_when_in_tmux(
+        self, mock_which, mock_run, cli_runner, temp_specs_dir
+    ):
+        """run uses switch-client instead of attach when already in tmux."""
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=1, stdout="", stderr=""),  # has-session
+            SimpleNamespace(returncode=0, stdout="", stderr=""),  # new-session
+            SimpleNamespace(returncode=0, stdout="", stderr=""),  # split-window
+            SimpleNamespace(returncode=0, stdout="", stderr=""),  # select-pane
+            SimpleNamespace(returncode=0, stdout="", stderr=""),  # switch-client
+        ]
+
+        result = cli_runner.invoke(
+            cli,
+            ["--specs-dir", str(temp_specs_dir), "run", "test-spec-001"],
+        )
+
+        switch_call = mock_run.call_args_list[4]
+        cmd_args = switch_call[0][0]
+        assert cmd_args == ["tmux", "switch-client", "-t", "foundry-test-spec-001"]
+
+    @patch("foundry_mcp.cli.commands.run.subprocess.run")
+    @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    @patch.dict("os.environ", {"TMUX": "/tmp/tmux-1000/default,12345,0"})
+    def test_action_is_switching_when_in_tmux(
+        self, mock_which, mock_run, cli_runner, temp_specs_dir
+    ):
+        """run emits action='switching' when already in tmux."""
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=1, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = cli_runner.invoke(
+            cli,
+            ["--specs-dir", str(temp_specs_dir), "run", "test-spec-001"],
+        )
+
+        data = json.loads(result.output)
+        assert data["success"] is True
+        assert data["data"]["action"] == "switching"
+        assert "switch-client" in data["data"]["reattach_command"]
+
+    @patch("foundry_mcp.cli.commands.run.subprocess.run")
+    @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
+    @patch.dict("os.environ", {"TMUX": "/tmp/tmux-1000/default,12345,0"})
+    def test_detach_ignores_tmux_env(
+        self, mock_which, mock_run, cli_runner, temp_specs_dir
+    ):
+        """--detach still detaches normally even when inside tmux."""
+        mock_run.side_effect = [
+            SimpleNamespace(returncode=1, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+            SimpleNamespace(returncode=0, stdout="", stderr=""),
+        ]
+
+        result = cli_runner.invoke(
+            cli,
+            ["--specs-dir", str(temp_specs_dir), "run", "--detach", "test-spec-001"],
+        )
+
+        assert result.exit_code == 0
+        assert mock_run.call_count == 4
+        data = json.loads(result.output)
+        assert data["data"]["action"] == "detached"
 
 
 class TestRunDetachMode:
