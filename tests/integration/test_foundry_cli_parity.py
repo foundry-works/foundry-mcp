@@ -1,4 +1,4 @@
-"""Parity regression tests for native SDD CLI.
+"""Parity regression tests for native Foundry CLI.
 
 Validates that native CLI outputs match expected golden fixture schemas,
 ensuring backward compatibility and output structure stability.

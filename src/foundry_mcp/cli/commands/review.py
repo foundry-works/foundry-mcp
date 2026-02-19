@@ -1,4 +1,4 @@
-"""Review commands for SDD CLI.
+"""Review commands for Foundry CLI.
 
 Provides commands for spec review including:
 - Quick structural review (no LLM required)
@@ -185,8 +185,8 @@ def review_spec_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     llm_status = _get_llm_status()
@@ -407,8 +407,8 @@ def review_fidelity_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Validate mutually exclusive options
@@ -514,7 +514,7 @@ def _run_fidelity_review(
                 f"Specification not found: {spec_id}",
                 code="SPEC_NOT_FOUND",
                 error_type="not_found",
-                remediation="Verify the spec ID exists using 'sdd list'",
+                remediation="Verify the spec ID exists using 'foundry list'",
                 details={"spec_id": spec_id},
             )
         spec_data = load_spec(spec_file)

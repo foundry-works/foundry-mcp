@@ -1,4 +1,4 @@
-"""Cache management commands for SDD CLI.
+"""Cache management commands for Foundry CLI.
 
 Provides commands for inspecting and managing the AI consultation cache.
 """

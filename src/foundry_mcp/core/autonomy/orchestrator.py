@@ -414,6 +414,13 @@ class StepOrchestrator(StepEmitterMixin):
             heartbeat_stale_warning = True
 
         # =================================================================
+        # Step 7b: Check for operator stop signal file
+        # =================================================================
+        stop_signal_result = self._check_stop_signal(session)
+        if stop_signal_result:
+            return stop_signal_result
+
+        # =================================================================
         # Step 8: Enforce Pause Guards
         # =================================================================
         pause_guard_result = self._check_pause_guards(session)
@@ -1316,6 +1323,52 @@ class StepOrchestrator(StepEmitterMixin):
             )
 
         return None
+
+    def _check_stop_signal(
+        self,
+        session: AutonomousSessionState,
+    ) -> Optional[OrchestrationResult]:
+        """Check for operator stop signal file (Step 7b).
+
+        Looks for specs/.autonomy/signals/{spec_id}.stop. If found,
+        consumes (unlinks) the file and pauses the session with
+        PauseReason.USER.
+
+        Returns:
+            OrchestrationResult if signal detected, None otherwise
+        """
+        signal_path = (
+            self.workspace_path / "specs" / ".autonomy" / "signals"
+            / f"{session.spec_id}.stop"
+        )
+
+        if not signal_path.is_file():
+            return None
+
+        # Consume the signal file (best-effort)
+        try:
+            signal_path.unlink()
+        except OSError as e:
+            logger.warning("Failed to consume stop signal file %s: %s", signal_path, e)
+
+        now = datetime.now(timezone.utc)
+
+        # Emit audit event
+        self._emit_audit_event(
+            session,
+            AuditEventType.PAUSE,
+            action="operator_stop_signal",
+            metadata={
+                "signal_file": str(signal_path),
+            },
+        )
+
+        return self._create_pause_result(
+            session,
+            PauseReason.USER,
+            now,
+            "Session paused by operator stop signal. Resume to continue.",
+        )
 
     def _check_all_blocked(
         self,

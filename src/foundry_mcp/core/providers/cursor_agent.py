@@ -255,7 +255,7 @@ class CursorAgentProvider(ProviderContext):
         config_path = cursor_dir / "cli-config.json"
 
         # Create unique backup path for thread-safety
-        backup_suffix = f".sdd-backup.{os.getpid()}.{int(time.time())}"
+        backup_suffix = f".foundry-backup.{os.getpid()}.{int(time.time())}"
         backup_path = Path(str(config_path) + backup_suffix)
 
         # Backup original config if it exists

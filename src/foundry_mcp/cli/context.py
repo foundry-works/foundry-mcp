@@ -1,4 +1,4 @@
-"""Context tracking for SDD CLI sessions.
+"""Context tracking for Foundry CLI sessions.
 
 Provides session markers, consultation limits, and context window tracking
 for CLI-driven LLM workflows.
@@ -189,9 +189,18 @@ class ContextTracker:
     def _load_from_env(self) -> None:
         """Load limits from environment variables."""
         self._default_limits = SessionLimits(
-            max_consultations=int(os.environ.get("SDD_MAX_CONSULTATIONS", "50")),
-            max_context_tokens=int(os.environ.get("SDD_MAX_CONTEXT_TOKENS", "100000")),
-            warn_at_percentage=float(os.environ.get("SDD_WARN_PERCENTAGE", "0.8")),
+            max_consultations=int(
+                os.environ.get("FOUNDRY_MAX_CONSULTATIONS")
+                or os.environ.get("SDD_MAX_CONSULTATIONS", "50")
+            ),
+            max_context_tokens=int(
+                os.environ.get("FOUNDRY_MAX_CONTEXT_TOKENS")
+                or os.environ.get("SDD_MAX_CONTEXT_TOKENS", "100000")
+            ),
+            warn_at_percentage=float(
+                os.environ.get("FOUNDRY_WARN_PERCENTAGE")
+                or os.environ.get("SDD_WARN_PERCENTAGE", "0.8")
+            ),
         )
 
     def start_session(
@@ -284,7 +293,7 @@ class ContextTracker:
 
     def _generate_session_id(self) -> str:
         """Generate a unique session ID."""
-        return f"sdd_{uuid.uuid4().hex[:12]}"
+        return f"foundry_{uuid.uuid4().hex[:12]}"
 
 
 # Global context tracker

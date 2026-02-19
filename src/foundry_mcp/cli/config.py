@@ -1,6 +1,6 @@
 """CLI configuration and workspace detection.
 
-Provides configuration handling for the SDD CLI, leveraging the
+Provides configuration handling for the Foundry CLI, leveraging the
 shared foundry_mcp.config module and core spec utilities.
 """
 
@@ -81,7 +81,7 @@ class CLIContext:
         if specs is None:
             raise FileNotFoundError(
                 "No specs directory found. "
-                "Use --specs-dir or set SDD_SPECS_DIR environment variable."
+                "Use --specs-dir or set FOUNDRY_SPECS_DIR environment variable."
             )
         return specs
 

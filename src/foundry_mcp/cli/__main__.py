@@ -1,4 +1,4 @@
-"""SDD CLI module entry point.
+"""Foundry CLI module entry point.
 
 Enables running the CLI via: python -m foundry_mcp.cli
 """

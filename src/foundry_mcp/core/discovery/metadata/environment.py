@@ -13,17 +13,17 @@ from ..types import ParameterMetadata, ParameterType, ToolMetadata
 
 # Pre-defined metadata for environment tools
 ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
-    "sdd-verify-toolchain": ToolMetadata(
-        name="sdd-verify-toolchain",
-        description="Verify local CLI/toolchain availability including git, python, node, and SDD CLI. "
+    "foundry-verify-toolchain": ToolMetadata(
+        name="foundry-verify-toolchain",
+        description="Verify local CLI/toolchain availability including git, python, node, and Foundry CLI. "
         "Returns readiness status for each tool with version information.",
         parameters=[
             ParameterMetadata(
                 name="tools",
                 type=ParameterType.ARRAY,
-                description="Specific tools to check (default: all). Valid values: git, python, node, sdd",
+                description="Specific tools to check (default: all). Valid values: git, python, node, foundry",
                 required=False,
-                examples=[["git", "python"], ["sdd"]],
+                examples=[["git", "python"], ["foundry"]],
             ),
             ParameterMetadata(
                 name="verbose",
@@ -36,7 +36,7 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
         category="environment",
         version="1.0.0",
         tags=["setup", "verification", "toolchain", "cli"],
-        related_tools=["sdd-verify-environment", "sdd-init-workspace"],
+        related_tools=["foundry-verify-environment", "foundry-init-workspace"],
         examples=[
             {
                 "description": "Verify all tools",
@@ -53,8 +53,8 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
             }
         ],
     ),
-    "sdd-init-workspace": ToolMetadata(
-        name="sdd-init-workspace",
+    "foundry-init-workspace": ToolMetadata(
+        name="foundry-init-workspace",
         description="Bootstrap working directory with specs folders, config files, and git integration. "
         "Creates specs/active, specs/pending, specs/completed, specs/archived directories.",
         parameters=[
@@ -82,7 +82,7 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
         category="environment",
         version="1.0.0",
         tags=["setup", "initialization", "workspace", "config"],
-        related_tools=["sdd-verify-toolchain", "sdd-detect-topology"],
+        related_tools=["foundry-verify-toolchain", "foundry-detect-topology"],
         examples=[
             {
                 "description": "Initialize workspace in current directory",
@@ -101,10 +101,10 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
             }
         ],
     ),
-    "sdd-detect-topology": ToolMetadata(
-        name="sdd-detect-topology",
+    "foundry-detect-topology": ToolMetadata(
+        name="foundry-detect-topology",
         description="Auto-detect repository layout for specs and documentation directories. "
-        "Scans directory structure to identify existing SDD configuration.",
+        "Scans directory structure to identify existing Foundry configuration.",
         parameters=[
             ParameterMetadata(
                 name="path",
@@ -124,7 +124,7 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
         category="environment",
         version="1.0.0",
         tags=["detection", "topology", "repository", "layout"],
-        related_tools=["sdd-init-workspace", "sdd-verify-environment"],
+        related_tools=["foundry-init-workspace", "foundry-verify-environment"],
         examples=[
             {
                 "description": "Detect repository topology",
@@ -141,8 +141,8 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
             }
         ],
     ),
-    "sdd-verify-environment": ToolMetadata(
-        name="sdd-verify-environment",
+    "foundry-verify-environment": ToolMetadata(
+        name="foundry-verify-environment",
         description="Validate OS packages, runtime versions, and credential availability. "
         "Performs comprehensive environment checks beyond basic toolchain verification.",
         parameters=[
@@ -164,7 +164,7 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
         category="environment",
         version="1.0.0",
         tags=["verification", "environment", "runtime", "credentials"],
-        related_tools=["sdd-verify-toolchain", "sdd-detect-topology"],
+        related_tools=["foundry-verify-toolchain", "foundry-detect-topology"],
         examples=[
             {
                 "description": "Run all environment checks",
@@ -187,7 +187,7 @@ ENVIRONMENT_TOOL_METADATA: Dict[str, ToolMetadata] = {
 ENVIRONMENT_FEATURE_FLAGS: Dict[str, FeatureFlagDescriptor] = {
     "environment_tools": FeatureFlagDescriptor(
         name="environment_tools",
-        description="Environment setup and verification tools for SDD workflows",
+        description="Environment setup and verification tools for Foundry workflows",
         state="beta",
         default_enabled=True,
         percentage_rollout=100,

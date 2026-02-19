@@ -234,7 +234,7 @@ _ACTION_SUMMARY = {
     "init": "Initialize the standard specs/ workspace structure",
     "detect": "Detect repository topology (project type, specs/docs)",
     "detect-test-runner": "Detect appropriate test runner for the project",
-    "setup": "Complete SDD setup with permissions + config",
+    "setup": "Complete Foundry setup with permissions + config",
     "get-config": "Read configuration sections from foundry-mcp.toml",
 }
 
@@ -330,7 +330,7 @@ def _handle_verify_toolchain(
                     error_code=ErrorCode.MISSING_REQUIRED,
                     error_type=ErrorType.VALIDATION,
                     data=data,
-                    remediation="Install missing tools before continuing with SDD workflows.",
+                    remediation="Install missing tools before continuing with Foundry workflows.",
                     request_id=request_id,
                 )
             )
@@ -989,7 +989,7 @@ def _handle_setup(
                 warnings.append("foundry-mcp.toml already exists, skipping")
 
         audit_log(
-            "sdd_setup",
+            "foundry_setup",
             tool="environment.setup",
             path=str(base_path),
             preset=permissions_preset,
@@ -1271,27 +1271,27 @@ _ENVIRONMENT_ROUTER = ActionRouter(
             summary=_ACTION_SUMMARY["verify-toolchain"],
             aliases=(
                 "verify_toolchain",
-                "sdd-verify-toolchain",
-                "sdd_verify_toolchain",
+                "foundry-verify-toolchain",
+                "foundry_verify_toolchain",
             ),
         ),
         ActionDefinition(
             name="verify-env",
             handler=_handle_verify_environment,
             summary=_ACTION_SUMMARY["verify-env"],
-            aliases=("verify_env", "sdd-verify-environment", "sdd_verify_environment"),
+            aliases=("verify_env", "foundry-verify-environment", "foundry_verify_environment"),
         ),
         ActionDefinition(
             name="init",
             handler=_handle_init_workspace,
             summary=_ACTION_SUMMARY["init"],
-            aliases=("sdd-init-workspace", "sdd_init_workspace"),
+            aliases=("foundry-init-workspace", "foundry_init_workspace"),
         ),
         ActionDefinition(
             name="detect",
             handler=_handle_detect_topology,
             summary=_ACTION_SUMMARY["detect"],
-            aliases=("sdd-detect-topology", "sdd_detect_topology"),
+            aliases=("foundry-detect-topology", "foundry_detect_topology"),
         ),
         ActionDefinition(
             name="detect-test-runner",
@@ -1299,15 +1299,15 @@ _ENVIRONMENT_ROUTER = ActionRouter(
             summary=_ACTION_SUMMARY["detect-test-runner"],
             aliases=(
                 "detect_test_runner",
-                "sdd-detect-test-runner",
-                "sdd_detect_test_runner",
+                "foundry-detect-test-runner",
+                "foundry_detect_test_runner",
             ),
         ),
         ActionDefinition(
             name="setup",
             handler=_handle_setup,
             summary=_ACTION_SUMMARY["setup"],
-            aliases=("sdd-setup", "sdd_setup"),
+            aliases=("foundry-setup", "foundry_setup"),
         ),
         ActionDefinition(
             name="get-config",

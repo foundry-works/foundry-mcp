@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "Tyler Burleigh" }
 ]
-keywords = ["mcp", "sdd", "specification", "spec-driven-development"]
+keywords = ["mcp", "foundry", "specification", "spec-driven-development"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -29,6 +29,7 @@ dependencies = [
     "tomli>=2.0.0; python_version < '3.11'",
     "filelock>=3.20.1",
     "python-ulid>=2.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +57,7 @@ observability = [
 
 [project.scripts]
 foundry-mcp = "foundry_mcp.server:main"
+foundry = "foundry_mcp.cli.main:cli"
 foundry-cli = "foundry_mcp.cli.main:cli"
 
 [project.urls]

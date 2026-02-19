@@ -1,4 +1,4 @@
-"""SDD CLI entry point.
+"""Foundry CLI entry point.
 
 JSON-first output for AI coding assistants.
 
@@ -15,7 +15,7 @@ from foundry_mcp.cli.registry import register_all_commands
 @click.group()
 @click.option(
     "--specs-dir",
-    envvar="SDD_SPECS_DIR",
+    envvar=["FOUNDRY_SPECS_DIR", "SDD_SPECS_DIR"],
     type=click.Path(exists=False),
     help="Override specs directory path",
 )
@@ -27,7 +27,7 @@ from foundry_mcp.cli.registry import register_all_commands
 )
 @click.pass_context
 def cli(ctx: click.Context, specs_dir: str | None, json_output: bool) -> None:
-    """SDD CLI - Spec-Driven Development for AI assistants.
+    """Foundry CLI - Spec-Driven Development for AI assistants.
 
     All commands output JSON for reliable parsing by AI coding tools.
     """

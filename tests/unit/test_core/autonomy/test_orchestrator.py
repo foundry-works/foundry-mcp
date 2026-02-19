@@ -2676,3 +2676,100 @@ class TestWriteLockTaskCompletionPersistence:
 
         # Should not raise — best-effort
         orch._persist_task_completion_to_spec(session, "task-1")
+
+
+# =============================================================================
+# Step 7b: Signal File Detection
+# =============================================================================
+
+
+class TestSignalFileDetection:
+    """Tests for operator stop signal file detection (Step 7b)."""
+
+    def test_signal_file_triggers_pause(self, tmp_path):
+        """Signal file present -> returns PAUSE step with PauseReason.USER."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            active_phase_id="phase-1",
+        )
+
+        # Create signal file
+        signal_dir = orch.workspace_path / "specs" / ".autonomy" / "signals"
+        signal_dir.mkdir(parents=True)
+        signal_file = signal_dir / f"{session.spec_id}.stop"
+        signal_file.write_text("")
+
+        result = orch.compute_next_step(session)
+
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.PAUSE
+        assert result.next_step.reason == PauseReason.USER
+        assert session.status == SessionStatus.PAUSED
+        assert session.pause_reason == PauseReason.USER
+        assert session.paused_at is not None
+
+    def test_signal_file_consumed_after_detection(self, tmp_path):
+        """Signal file is deleted (consumed) after detection."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            active_phase_id="phase-1",
+        )
+
+        signal_dir = orch.workspace_path / "specs" / ".autonomy" / "signals"
+        signal_dir.mkdir(parents=True)
+        signal_file = signal_dir / f"{session.spec_id}.stop"
+        signal_file.write_text("")
+
+        orch.compute_next_step(session)
+
+        assert not signal_file.exists()
+
+    def test_no_signal_file_normal_flow(self, tmp_path):
+        """No signal file -> normal orchestration flow continues."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            active_phase_id="phase-1",
+        )
+
+        result = orch.compute_next_step(session)
+
+        # Should proceed normally (not a PAUSE due to signal)
+        assert result.success is True
+        if result.next_step is not None:
+            assert result.next_step.reason != PauseReason.USER or result.next_step.type != StepType.PAUSE
+
+    def test_signal_unlink_failure_handled_gracefully(self, tmp_path):
+        """OSError on signal file unlink is handled gracefully (best-effort)."""
+        spec_data = make_spec_data()
+        orch = _make_orchestrator(tmp_path, spec_data)
+
+        session = make_session(
+            spec_structure_hash=compute_spec_structure_hash(spec_data),
+            active_phase_id="phase-1",
+        )
+
+        signal_dir = orch.workspace_path / "specs" / ".autonomy" / "signals"
+        signal_dir.mkdir(parents=True)
+        signal_file = signal_dir / f"{session.spec_id}.stop"
+        signal_file.write_text("")
+
+        # Patch unlink to raise OSError
+        with patch.object(Path, "unlink", side_effect=OSError("permission denied")):
+            result = orch.compute_next_step(session)
+
+        # Should still return PAUSE despite unlink failure
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.PAUSE
+        assert result.next_step.reason == PauseReason.USER
+        assert session.status == SessionStatus.PAUSED
