@@ -588,8 +588,7 @@ def _try_tiebreaker_review(
     has_majority = any(count > majority_threshold for count in verdict_counts.values())
     if has_majority:
         logger.info(
-            "Split verdict detected (%s) but majority exists — "
-            "skipping tiebreaker, synthesis will use majority vote",
+            "Split verdict detected (%s) but majority exists — skipping tiebreaker, synthesis will use majority vote",
             verdict_values,
         )
         return successful_responses, [r.provider_id for r in successful_responses]
@@ -598,9 +597,7 @@ def _try_tiebreaker_review(
     # so we get a genuinely fresh perspective for the tiebreaker.
     used_provider_ids = {r.provider_id for r in all_responses}
     all_available = orchestrator.get_available_providers()
-    tiebreaker_candidates = [
-        pid for pid in all_available if pid not in used_provider_ids
-    ]
+    tiebreaker_candidates = [pid for pid in all_available if pid not in used_provider_ids]
 
     if not tiebreaker_candidates:
         logger.info(
@@ -612,7 +609,8 @@ def _try_tiebreaker_review(
 
     logger.info(
         "Split verdict detected (%s), trying tiebreaker from %d candidates",
-        verdict_values, len(tiebreaker_candidates),
+        verdict_values,
+        len(tiebreaker_candidates),
     )
 
     tiebreaker_response: Optional[ProviderResponse] = None
@@ -628,14 +626,10 @@ def _try_tiebreaker_review(
 
         try:
             # Bypass cache to ensure a fresh, independent evaluation
-            tiebreaker_outcome = orchestrator.consult(
-                tiebreaker_request, use_cache=False
-            )
+            tiebreaker_outcome = orchestrator.consult(tiebreaker_request, use_cache=False)
         except Exception as e:
             logger.warning("Tiebreaker provider %s failed: %s", tiebreaker_pid, e)
-            failed_providers.append(
-                {"provider_id": tiebreaker_pid, "error": str(e)}
-            )
+            failed_providers.append({"provider_id": tiebreaker_pid, "error": str(e)})
             continue
 
         if isinstance(tiebreaker_outcome, ConsultationResult):
@@ -651,24 +645,22 @@ def _try_tiebreaker_review(
             successful_responses.append(tiebreaker_response)
             logger.info(
                 "Tiebreaker provider %s succeeded, synthesis will use %d reviews",
-                tiebreaker_response.provider_id, len(successful_responses),
+                tiebreaker_response.provider_id,
+                len(successful_responses),
             )
             break
 
-        failed_providers.append(
-            {"provider_id": tiebreaker_pid, "error": "no usable content"}
-        )
+        failed_providers.append({"provider_id": tiebreaker_pid, "error": "no usable content"})
         logger.warning(
-            "Tiebreaker provider %s returned no usable content, "
-            "trying next candidate",
+            "Tiebreaker provider %s returned no usable content, trying next candidate",
             tiebreaker_pid,
         )
 
     if tiebreaker_response is None:
         logger.warning(
-            "All %d tiebreaker candidates exhausted, "
-            "proceeding with %d-reviewer synthesis",
-            len(tiebreaker_candidates), len(successful_responses),
+            "All %d tiebreaker candidates exhausted, proceeding with %d-reviewer synthesis",
+            len(tiebreaker_candidates),
+            len(successful_responses),
         )
 
     return successful_responses, [r.provider_id for r in successful_responses]

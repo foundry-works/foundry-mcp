@@ -76,7 +76,9 @@ class TestRunExecvpe:
     @patch("foundry_mcp.cli.commands.run.os.execvpe")
     @patch("foundry_mcp.cli.commands.run.signal.alarm")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/claude")
-    def test_unattended_includes_skip_permissions(self, mock_which, mock_alarm, mock_execvpe, cli_runner, temp_specs_dir):
+    def test_unattended_includes_skip_permissions(
+        self, mock_which, mock_alarm, mock_execvpe, cli_runner, temp_specs_dir
+    ):
         """Default unattended posture includes --dangerously-skip-permissions."""
         result = cli_runner.invoke(
             cli,

@@ -29,22 +29,13 @@ class TestReviewPromptVerdictCriteria:
         assert "Verdict criteria (use these strictly):" in FIDELITY_REVIEW_V1.user_template
 
     def test_review_prompt_pass_criterion(self):
-        assert (
-            '"pass": All spec requirements are implemented correctly'
-            in FIDELITY_REVIEW_V1.user_template
-        )
+        assert '"pass": All spec requirements are implemented correctly' in FIDELITY_REVIEW_V1.user_template
 
     def test_review_prompt_partial_criterion(self):
-        assert (
-            '"partial": Implementation has one or more HIGH-severity deviations'
-            in FIDELITY_REVIEW_V1.user_template
-        )
+        assert '"partial": Implementation has one or more HIGH-severity deviations' in FIDELITY_REVIEW_V1.user_template
 
     def test_review_prompt_fail_criterion(self):
-        assert (
-            '"fail": Implementation has CRITICAL-severity deviations'
-            in FIDELITY_REVIEW_V1.user_template
-        )
+        assert '"fail": Implementation has CRITICAL-severity deviations' in FIDELITY_REVIEW_V1.user_template
 
     def test_review_prompt_medium_low_do_not_downgrade(self):
         assert (
@@ -58,28 +49,16 @@ class TestSynthesisPromptSeverityResolution:
 
     def test_synthesis_prompt_no_blind_partial_fallback(self):
         """The old 'use partial and note disagreement' rule must be gone."""
-        assert (
-            'use "partial" and note disagreement'
-            not in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
-        )
+        assert 'use "partial" and note disagreement' not in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
 
     def test_synthesis_prompt_severity_tiebreaker_pass(self):
-        assert (
-            "No critical or high-severity deviations in any review"
-            in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
-        )
+        assert "No critical or high-severity deviations in any review" in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
 
     def test_synthesis_prompt_severity_tiebreaker_partial(self):
-        assert (
-            "Any high-severity deviations"
-            in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
-        )
+        assert "Any high-severity deviations" in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
 
     def test_synthesis_prompt_severity_tiebreaker_fail(self):
-        assert (
-            "Any critical-severity deviations"
-            in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
-        )
+        assert "Any critical-severity deviations" in FIDELITY_SYNTHESIS_PROMPT_V1.user_template
 
     def test_synthesis_prompt_agreement_levels(self):
         template = FIDELITY_SYNTHESIS_PROMPT_V1.user_template
@@ -118,15 +97,17 @@ def _make_raw_response(provider_id: str, raw_content: str) -> ProviderResponse:
 
 def _make_synthesis_content(verdict: str = "pass", num_models: int = 2) -> str:
     """Return valid synthesis JSON content."""
-    return json.dumps({
-        "verdict": verdict,
-        "deviations": [],
-        "summary": "Synthesized result",
-        "verdict_consensus": {
-            "votes": {"pass": ["provider-a"]},
-            "agreement_level": "strong",
-        },
-    })
+    return json.dumps(
+        {
+            "verdict": verdict,
+            "deviations": [],
+            "summary": "Synthesized result",
+            "verdict_consensus": {
+                "votes": {"pass": ["provider-a"]},
+                "agreement_level": "strong",
+            },
+        }
+    )
 
 
 def _run_fidelity(tmp_path, mock_orch):
@@ -163,7 +144,9 @@ class TestTiebreakerInvocation:
         mock_orch = MagicMock()
         mock_orch.is_available.return_value = True
         mock_orch.get_available_providers.return_value = [
-            "provider-a", "provider-b", "provider-c",
+            "provider-a",
+            "provider-b",
+            "provider-c",
         ]
         mock_orch.consult.side_effect = [
             # Call 1: initial multi-model → split verdict
@@ -263,7 +246,8 @@ class TestTiebreakerInvocation:
         mock_orch = MagicMock()
         mock_orch.is_available.return_value = True
         mock_orch.get_available_providers.return_value = [
-            "provider-a", "provider-b",  # both already used
+            "provider-a",
+            "provider-b",  # both already used
         ]
         mock_orch.consult.side_effect = [
             # Call 1: split verdict
@@ -292,7 +276,10 @@ class TestTiebreakerInvocation:
         mock_orch = MagicMock()
         mock_orch.is_available.return_value = True
         mock_orch.get_available_providers.return_value = [
-            "provider-a", "provider-b", "provider-c", "provider-d",
+            "provider-a",
+            "provider-b",
+            "provider-c",
+            "provider-d",
         ]
         mock_orch.consult.side_effect = [
             # Call 1: split verdict
@@ -336,7 +323,9 @@ class TestTiebreakerInvocation:
         mock_orch = MagicMock()
         mock_orch.is_available.return_value = True
         mock_orch.get_available_providers.return_value = [
-            "provider-a", "provider-b", "provider-c",
+            "provider-a",
+            "provider-b",
+            "provider-c",
         ]
         mock_orch.consult.side_effect = [
             # Call 1: split verdict
@@ -397,7 +386,9 @@ class TestTiebreakerInvocation:
         mock_orch = MagicMock()
         mock_orch.is_available.return_value = True
         mock_orch.get_available_providers.return_value = [
-            "provider-a", "provider-b", "provider-c",
+            "provider-a",
+            "provider-b",
+            "provider-c",
         ]
         mock_orch.consult.side_effect = [
             # Call 1: split verdict

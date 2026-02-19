@@ -1357,12 +1357,9 @@ class StepOrchestrator(StepEmitterMixin):
             # this is a phase boundary — let _determine_next_step handle
             # the transition (verification → fidelity gate → phase_complete).
             current_phase = self._get_current_phase(session, spec_data)
-            if current_phase and self._all_implementation_tasks_complete(
-                current_phase, session.completed_task_ids
-            ):
+            if current_phase and self._all_implementation_tasks_complete(current_phase, session.completed_task_ids):
                 logger.info(
-                    "All remaining tasks blocked but active phase %s is complete — "
-                    "deferring to phase transition logic",
+                    "All remaining tasks blocked but active phase %s is complete — deferring to phase transition logic",
                     session.active_phase_id,
                 )
                 return None

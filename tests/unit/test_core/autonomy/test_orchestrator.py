@@ -2843,6 +2843,5 @@ class TestPhaseCompleteNotBlockedRegression:
         assert result.next_step is not None
         if result.next_step.type == StepType.PAUSE:
             assert result.next_step.reason != PauseReason.BLOCKED, (
-                "Phase-1 is complete; orchestrator should proceed to gate/phase_complete, "
-                "not pause with BLOCKED"
+                "Phase-1 is complete; orchestrator should proceed to gate/phase_complete, not pause with BLOCKED"
             )
