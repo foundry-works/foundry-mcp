@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b23] - 2026-02-19
+
+### Fixed
+
+- **Fidelity cycle counter**: Moved increment from `_record_step_outcome` to `_handle_gate_evidence` so both orchestrator-issued and agent-initiated gates count toward the per-phase limit.
+- **Fidelity review false-partial verdicts**: Added explicit verdict criteria to the review prompt — medium/low-severity style suggestions no longer trigger "partial" verdicts.
+- **Split-verdict synthesis**: Tied verdicts now resolve via deviation severities instead of defaulting to "partial".
+
+### Added
+
+- **Tiebreaker reviewer**: When two fidelity reviewers disagree and no majority exists, an unused provider is consulted as a tiebreaker before synthesis.
+
 ## [0.12.0b22] - 2026-02-19
 
 ### Fixed
