@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b22] - 2026-02-19
+
+### Fixed
+
+- **Phase completion false BLOCKED pause**: When all tasks in the active phase are complete but subsequent phase tasks are dependency-blocked, the orchestrator now defers to phase transition logic (fidelity gate / phase_complete) instead of incorrectly pausing with `BLOCKED`.
+- **Token estimation tests**: Tests no longer assume specific token counts, making them pass regardless of whether tiktoken is installed.
+- **`foundry run` tests**: Rewritten to match the simplified `os.execvpe`-based launcher (tmux tests removed).
+
 ## [0.12.0b21] - 2026-02-19
 
 ### Changed
