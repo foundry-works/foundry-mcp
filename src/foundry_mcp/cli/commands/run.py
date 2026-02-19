@@ -7,7 +7,6 @@ giving the user full visibility into what the agent is doing.
 import os
 import shutil
 import signal
-import sys
 
 import click
 
