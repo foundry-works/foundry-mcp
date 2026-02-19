@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.tools.unified.param_schema import (
     AtLeastOne,
@@ -52,6 +50,7 @@ def _assert_error(result, *, field, code=None):
 # ===================================================================
 # Str
 # ===================================================================
+
 
 class TestStr:
     def test_required_present(self):
@@ -146,6 +145,7 @@ class TestStr:
 # Num
 # ===================================================================
 
+
 class TestNum:
     def test_valid_int(self):
         payload = {"n": 5}
@@ -228,6 +228,7 @@ class TestNum:
 # Bool
 # ===================================================================
 
+
 class TestBool:
     def test_true(self):
         payload = {"flag": True}
@@ -269,6 +270,7 @@ class TestBool:
 # List_
 # ===================================================================
 
+
 class TestList:
     def test_valid(self):
         assert _validate({"items": [1, 2]}, {"items": List_()}) is None
@@ -304,6 +306,7 @@ class TestList:
 # Dict_
 # ===================================================================
 
+
 class TestDict:
     def test_valid(self):
         assert _validate({"meta": {"k": "v"}}, {"meta": Dict_()}) is None
@@ -327,37 +330,34 @@ class TestDict:
 # AtLeastOne cross-field rule
 # ===================================================================
 
+
 class TestAtLeastOne:
     def test_one_present(self):
         rule = AtLeastOne(fields=("a", "b", "c"))
-        result = _validate({"a": "x"}, {"a": Str(), "b": Str(), "c": Str()},
-                           cross_field_rules=[rule])
+        result = _validate({"a": "x"}, {"a": Str(), "b": Str(), "c": Str()}, cross_field_rules=[rule])
         assert result is None
 
     def test_all_present(self):
         rule = AtLeastOne(fields=("a", "b"))
-        result = _validate({"a": "x", "b": "y"}, {"a": Str(), "b": Str()},
-                           cross_field_rules=[rule])
+        result = _validate({"a": "x", "b": "y"}, {"a": Str(), "b": Str()}, cross_field_rules=[rule])
         assert result is None
 
     def test_none_present(self):
-        rule = AtLeastOne(fields=("a", "b", "c"),
-                          remediation="Provide at least one metadata field")
-        result = _validate({}, {"a": Str(), "b": Str(), "c": Str()},
-                           cross_field_rules=[rule])
+        rule = AtLeastOne(fields=("a", "b", "c"), remediation="Provide at least one metadata field")
+        result = _validate({}, {"a": Str(), "b": Str(), "c": Str()}, cross_field_rules=[rule])
         _assert_error(result, field="a")
         assert result["data"]["remediation"] == "Provide at least one metadata field"
 
     def test_custom_error_code(self):
         rule = AtLeastOne(fields=("x", "y"), error_code=ErrorCode.MISSING_REQUIRED)
-        result = _validate({}, {"x": Str(), "y": Str()},
-                           cross_field_rules=[rule])
+        result = _validate({}, {"x": Str(), "y": Str()}, cross_field_rules=[rule])
         _assert_error(result, field="x", code="MISSING_REQUIRED")
 
 
 # ===================================================================
 # Error envelope structure
 # ===================================================================
+
 
 class TestErrorEnvelope:
     """Verify the error dict matches the canonical make_validation_error_fn output."""
@@ -389,14 +389,12 @@ class TestErrorEnvelope:
         assert result["meta"].get("request_id") == "req_abc"
 
     def test_error_message_format(self):
-        result = _validate({}, {"myfield": Str(required=True)},
-                           tool_name="authoring", action="phase-add")
+        result = _validate({}, {"myfield": Str(required=True)}, tool_name="authoring", action="phase-add")
         assert "myfield" in result["error"]
         assert "authoring.phase-add" in result["error"]
 
     def test_details_field_and_action(self):
-        result = _validate({}, {"x": Str(required=True)},
-                           tool_name="task", action="add")
+        result = _validate({}, {"x": Str(required=True)}, tool_name="task", action="add")
         assert result["data"]["details"]["field"] == "x"
         assert result["data"]["details"]["action"] == "task.add"
 
@@ -404,6 +402,7 @@ class TestErrorEnvelope:
 # ===================================================================
 # Multi-field schemas
 # ===================================================================
+
 
 class TestMultiField:
     """Test schemas with multiple fields to verify ordering and short-circuit."""
@@ -456,6 +455,7 @@ class TestMultiField:
 # Edge cases
 # ===================================================================
 
+
 class TestEdgeCases:
     def test_unicode_whitespace_string(self):
         """Non-breaking spaces and other unicode whitespace should be stripped."""
@@ -476,8 +476,11 @@ class TestEdgeCases:
     def test_none_request_id(self):
         """None request_id should still produce valid envelope."""
         result = validate_payload(
-            {}, {"x": Str(required=True)},
-            tool_name=TOOL, action=ACTION, request_id=None,
+            {},
+            {"x": Str(required=True)},
+            tool_name=TOOL,
+            action=ACTION,
+            request_id=None,
         )
         assert result is not None
         assert result["success"] is False

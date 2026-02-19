@@ -8,7 +8,6 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # =============================================================================
 # Fragment ID Utilities
 # =============================================================================
@@ -265,10 +264,7 @@ class DigestPayload(BaseModel):
         """Validate each key point does not exceed 500 characters."""
         for i, point in enumerate(v):
             if len(point) > 500:
-                raise ValueError(
-                    f"key_points[{i}] exceeds maximum length of 500 characters "
-                    f"(got {len(point)})"
-                )
+                raise ValueError(f"key_points[{i}] exceeds maximum length of 500 characters (got {len(point)})")
         return v
 
     @property

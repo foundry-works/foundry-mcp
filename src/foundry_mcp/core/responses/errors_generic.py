@@ -108,8 +108,7 @@ def rate_limit_error(
             "period": period,
             "retry_after": retry_after_seconds,
         },
-        remediation=remediation
-        or f"Wait {retry_after_seconds} seconds before retrying.",
+        remediation=remediation or f"Wait {retry_after_seconds} seconds before retrying.",
         request_id=request_id,
     )
 
@@ -169,8 +168,7 @@ def forbidden_error(
         error_code=ErrorCode.FORBIDDEN,
         error_type=ErrorType.AUTHORIZATION,
         data=data if data else None,
-        remediation=remediation
-        or "Request appropriate permissions from the resource owner.",
+        remediation=remediation or "Request appropriate permissions from the resource owner.",
         request_id=request_id,
     )
 

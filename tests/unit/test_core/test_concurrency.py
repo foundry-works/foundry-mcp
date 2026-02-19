@@ -1,31 +1,31 @@
 """Tests for foundry_mcp.core.concurrency module."""
 
 import asyncio
-import pytest
 import time
 
+import pytest
+
 from foundry_mcp.core.concurrency import (
-    # Concurrency limiting
-    ConcurrencyLimiter,
-    get_tool_limiter,
-    configure_tool_limiter,
-    get_all_limiter_stats,
     # Cancellation handling
     CancellationToken,
-    cancellable_scope,
-    with_cancellation,
-    run_with_cancellation_checkpoints,
-    cancel_tasks_gracefully,
+    # Concurrency limiting
+    ConcurrencyLimiter,
     # Request context
     RequestContext,
-    request_context,
+    cancel_tasks_gracefully,
+    cancellable_scope,
+    configure_tool_limiter,
+    get_all_limiter_stats,
+    get_client_id,
     get_current_context,
     get_current_context_or_none,
-    get_request_id,
-    get_client_id,
     get_elapsed_time,
+    get_request_id,
+    get_tool_limiter,
+    request_context,
+    run_with_cancellation_checkpoints,
+    with_cancellation,
 )
-
 
 # =============================================================================
 # ConcurrencyLimiter Tests
@@ -222,6 +222,7 @@ class TestWithCancellationDecorator:
     @pytest.mark.asyncio
     async def test_decorated_function_runs(self):
         """Test decorated function executes normally."""
+
         @with_cancellation()
         async def my_func():
             return "success"
@@ -258,6 +259,7 @@ class TestRunWithCancellationCheckpoints:
     @pytest.mark.asyncio
     async def test_completes_all_items(self):
         """Test all items are processed when not cancelled."""
+
         async def process(item):
             return item * 2
 
@@ -351,6 +353,7 @@ class TestCancelTasksGracefully:
     @pytest.mark.asyncio
     async def test_cancels_all_tasks(self):
         """Test all tasks are cancelled."""
+
         async def slow_op():
             await asyncio.sleep(10)
 

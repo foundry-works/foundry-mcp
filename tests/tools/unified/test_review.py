@@ -6,8 +6,6 @@ instead of crashing the MCP server.
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestReviewDispatchExceptionHandling:
     """Tests for _dispatch_review_action exception handling."""
@@ -20,9 +18,7 @@ class TestReviewDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.review._REVIEW_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["run"]
                 mock_router.dispatch.side_effect = RuntimeError("Review analysis failed")
 
@@ -47,9 +43,7 @@ class TestReviewDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.review._REVIEW_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["run"]
                 mock_router.dispatch.side_effect = RuntimeError()
 
@@ -74,9 +68,7 @@ class TestReviewDispatchExceptionHandling:
                 "foundry_mcp.tools.unified.common.get_server_role",
                 return_value="maintainer",
             ):
-                with patch(
-                    "foundry_mcp.tools.unified.review._REVIEW_ROUTER"
-                ) as mock_router:
+                with patch("foundry_mcp.tools.unified.review._REVIEW_ROUTER") as mock_router:
                     mock_router.allowed_actions.return_value = ["run"]
                     mock_router.dispatch.side_effect = ValueError("test error")
 

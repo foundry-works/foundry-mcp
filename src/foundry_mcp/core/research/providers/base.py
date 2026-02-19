@@ -100,9 +100,7 @@ class SearchResult:
             metadata={
                 **self.metadata,
                 "score": self.score,
-                "published_date": (
-                    self.published_date.isoformat() if self.published_date else None
-                ),
+                "published_date": (self.published_date.isoformat() if self.published_date else None),
                 "source": self.source,
             },
         )
@@ -237,9 +235,7 @@ class SearchProvider(ABC):
 
         # Check for our custom exception types first
         if isinstance(error, AuthenticationError):
-            return ErrorClassification(
-                retryable=False, trips_breaker=False, error_type=ErrorType.AUTHENTICATION
-            )
+            return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.AUTHENTICATION)
         if isinstance(error, RateLimitError):
             return ErrorClassification(
                 retryable=True,
@@ -250,13 +246,9 @@ class SearchProvider(ABC):
         if isinstance(error, SearchProviderError):
             error_str = str(error).lower()
             if any(code in error_str for code in ["500", "502", "503", "504"]):
-                return ErrorClassification(
-                    retryable=True, trips_breaker=True, error_type=ErrorType.SERVER_ERROR
-                )
+                return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.SERVER_ERROR)
             if "400" in error_str:
-                return ErrorClassification(
-                    retryable=False, trips_breaker=False, error_type=ErrorType.INVALID_REQUEST
-                )
+                return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.INVALID_REQUEST)
             return ErrorClassification(
                 retryable=error.retryable,
                 trips_breaker=error.retryable,
@@ -266,18 +258,12 @@ class SearchProvider(ABC):
         # Check for httpx exceptions (common in HTTP providers)
         error_type_name = type(error).__name__.lower()
         if "timeout" in error_type_name:
-            return ErrorClassification(
-                retryable=True, trips_breaker=True, error_type=ErrorType.TIMEOUT
-            )
+            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.TIMEOUT)
         if "request" in error_type_name or "connection" in error_type_name:
-            return ErrorClassification(
-                retryable=True, trips_breaker=True, error_type=ErrorType.NETWORK
-            )
+            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.NETWORK)
 
         # Default: not retryable, trips breaker
-        return ErrorClassification(
-            retryable=False, trips_breaker=True, error_type=ErrorType.UNKNOWN
-        )
+        return ErrorClassification(retryable=False, trips_breaker=True, error_type=ErrorType.UNKNOWN)
 
 
 # Error classes (canonical definitions in foundry_mcp.core.errors.search)

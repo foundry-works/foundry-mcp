@@ -10,16 +10,16 @@ Tests:
 from __future__ import annotations
 
 import json
-import time
 import threading
+import time
 from pathlib import Path
 from typing import List
 from unittest.mock import MagicMock
 
 from foundry_mcp.core.autonomy.memory import AutonomyStorage
 from foundry_mcp.core.autonomy.models.session_config import SessionCounters
-from .conftest import make_session, make_spec_data
 
+from .conftest import make_session, make_spec_data
 
 # =============================================================================
 # Helpers
@@ -279,9 +279,7 @@ class TestConcurrentStorageWrites:
         # The rest should get idempotent replays (True, record, "")
         replays = [(idx, s, r, e) for idx, s, r, e in results if s and r is not None]
 
-        assert len(first_consumptions) == 1, (
-            f"Expected exactly one first-consumption, got {len(first_consumptions)}"
-        )
+        assert len(first_consumptions) == 1, f"Expected exactly one first-consumption, got {len(first_consumptions)}"
 
 
 # =============================================================================

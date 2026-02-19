@@ -13,6 +13,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.authorization import (
+    Role,
+    check_action_allowed,
+)
 from foundry_mcp.core.autonomy.models.enums import (
     OverrideReasonCode,
     PhaseGateStatus,
@@ -20,27 +24,22 @@ from foundry_mcp.core.autonomy.models.enums import (
 )
 from foundry_mcp.core.autonomy.models.responses import RebaseResultDetail
 from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
 from foundry_mcp.core.autonomy.spec_hash import (
-    compute_spec_structure_hash,
-    get_spec_file_metadata,
-    compute_structural_diff,
     StructuralDiff,
-)
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
+    compute_spec_structure_hash,
+    compute_structural_diff,
+    get_spec_file_metadata,
 )
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
-from foundry_mcp.core.spec import resolve_spec_file
-from foundry_mcp.core.authorization import (
-    check_action_allowed,
-    Role,
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
-
+from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
@@ -49,12 +48,12 @@ from foundry_mcp.tools.unified.task_handlers._helpers import (
     _validate_reason_detail,
 )
 from foundry_mcp.tools.unified.task_handlers._session_common import (
-    _save_with_version_check,
-    _invalid_transition_response,
     _build_session_response,
-    _inject_audit_status,
-    _write_session_journal,
     _compute_required_gates_from_spec,
+    _inject_audit_status,
+    _invalid_transition_response,
+    _save_with_version_check,
+    _write_session_journal,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,6 +108,7 @@ def _reconcile_gates_on_rebase(
             structure snapshot is available. In this case, gate satisfaction is
             conservatively reset for all phases.
     """
+
     def _task_phase_map(spec_data: Optional[Dict[str, Any]]) -> Dict[str, str]:
         mapping: Dict[str, str] = {}
         if not isinstance(spec_data, dict):
@@ -262,20 +262,23 @@ def _handle_session_rebase(
     # Role check - only maintainer can rebase sessions
     # Deferred import: tests mock-patch get_server_role on the handlers_session shim module
     from foundry_mcp.tools.unified.task_handlers.handlers_session import get_server_role as _get_role
+
     current_role = _get_role()
     if current_role in (Role.AUTONOMY_RUNNER.value, Role.OBSERVER.value):
-        return asdict(error_response(
-            f"Session rebase denied for role: {current_role}",
-            error_code=ErrorCode.FORBIDDEN,
-            error_type=ErrorType.AUTHORIZATION,
-            request_id=request_id,
-            details={
-                "action": "session-rebase",
-                "configured_role": current_role,
-                "required_role": Role.MAINTAINER.value,
-                "hint": "Only maintainer role can rebase sessions",
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Session rebase denied for role: {current_role}",
+                error_code=ErrorCode.FORBIDDEN,
+                error_type=ErrorType.AUTHORIZATION,
+                request_id=request_id,
+                details={
+                    "action": "session-rebase",
+                    "configured_role": current_role,
+                    "required_role": Role.MAINTAINER.value,
+                    "hint": "Only maintainer role can rebase sessions",
+                },
+            )
+        )
 
     storage = _get_storage(config, workspace, request_id=request_id)
     if isinstance(storage, dict):
@@ -284,6 +287,7 @@ def _handle_session_rebase(
     session, err = _resolve_session(storage, "session-rebase", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     # Only allow rebase for paused or failed sessions
     if session.status not in {SessionStatus.PAUSED, SessionStatus.FAILED}:
@@ -301,24 +305,28 @@ def _handle_session_rebase(
     spec_path = resolve_spec_file(session.spec_id, specs_dir)
 
     if not spec_path:
-        return asdict(error_response(
-            f"Spec not found: {session.spec_id}",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            request_id=request_id,
-        ))
+        return asdict(
+            error_response(
+                f"Spec not found: {session.spec_id}",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                request_id=request_id,
+            )
+        )
 
     try:
         current_spec_data = load_spec_file(spec_path)
         current_hash = compute_spec_structure_hash(current_spec_data)
         current_metadata = get_spec_file_metadata(spec_path)
     except (OSError, json.JSONDecodeError, ValueError) as e:
-        return asdict(error_response(
-            f"Failed to read spec: {e}",
-            error_code=ErrorCode.INTERNAL_ERROR,
-            error_type=ErrorType.INTERNAL,
-            request_id=request_id,
-        ))
+        return asdict(
+            error_response(
+                f"Failed to read spec: {e}",
+                error_code=ErrorCode.INTERNAL_ERROR,
+                error_type=ErrorType.INTERNAL,
+                request_id=request_id,
+            )
+        )
 
     # Check if spec changed
     now = datetime.now(timezone.utc)
@@ -354,7 +362,9 @@ def _handle_session_rebase(
         )
 
         return _inject_audit_status(
-            _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True, workspace=workspace),
+            _build_session_response(
+                session, request_id, rebase_result=rebase_result, include_resume_context=True, workspace=workspace
+            ),
             journal_ok,
         )
 
@@ -376,44 +386,46 @@ def _handle_session_rebase(
         # Guard: backup missing with completed tasks means we can't verify integrity
         if session.completed_task_ids:
             if not force:
-                return asdict(error_response(
-                    "Cannot rebase: backup spec not found and session has completed tasks. "
-                    "Structural diff cannot verify completed task integrity.",
-                    error_code=ErrorCode.REBASE_BACKUP_MISSING,
-                    error_type=ErrorType.CONFLICT,
-                    request_id=request_id,
-                    details={
-                        "action": "session-rebase",
-                        "completed_task_count": len(session.completed_task_ids),
-                        "completed_task_ids": session.completed_task_ids[:10],
-                        "missing_backup_hash": session.spec_structure_hash[:16],
-                        "hint": "Use force=true to accept potential loss of completion history",
-                    },
-                ))
+                return asdict(
+                    error_response(
+                        "Cannot rebase: backup spec not found and session has completed tasks. "
+                        "Structural diff cannot verify completed task integrity.",
+                        error_code=ErrorCode.REBASE_BACKUP_MISSING,
+                        error_type=ErrorType.CONFLICT,
+                        request_id=request_id,
+                        details={
+                            "action": "session-rebase",
+                            "completed_task_count": len(session.completed_task_ids),
+                            "completed_task_ids": session.completed_task_ids[:10],
+                            "missing_backup_hash": session.spec_structure_hash[:16],
+                            "hint": "Use force=true to accept potential loss of completion history",
+                        },
+                    )
+                )
             else:
                 logger.warning(
                     "Force-rebasing session %s without backup spec; %d completed tasks may lose structural diff coverage",
-                    session.id, len(session.completed_task_ids),
+                    session.id,
+                    len(session.completed_task_ids),
                 )
 
     # Check for completed tasks in removed tasks
-    removed_completed_tasks = [
-        task_id for task_id in session.completed_task_ids
-        if task_id in diff.removed_tasks
-    ]
+    removed_completed_tasks = [task_id for task_id in session.completed_task_ids if task_id in diff.removed_tasks]
 
     if removed_completed_tasks and not force:
-        return asdict(error_response(
-            "Cannot rebase: completed tasks would be removed",
-            error_code=ErrorCode.REBASE_COMPLETED_TASKS_REMOVED,
-            error_type=ErrorType.VALIDATION,
-            request_id=request_id,
-            details={
-                "action": "session-rebase",
-                "removed_completed_tasks": removed_completed_tasks,
-                "hint": "Use force=true to remove these completed tasks and adjust counters",
-            },
-        ))
+        return asdict(
+            error_response(
+                "Cannot rebase: completed tasks would be removed",
+                error_code=ErrorCode.REBASE_COMPLETED_TASKS_REMOVED,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+                details={
+                    "action": "session-rebase",
+                    "removed_completed_tasks": removed_completed_tasks,
+                    "hint": "Use force=true to remove these completed tasks and adjust counters",
+                },
+            )
+        )
 
     # Capture old hash before mutation for accurate journal metadata
     old_spec_hash = session.spec_structure_hash
@@ -497,7 +509,9 @@ def _handle_session_rebase(
     )
 
     return _inject_audit_status(
-        _build_session_response(session, request_id, rebase_result=rebase_result, include_resume_context=True, workspace=workspace),
+        _build_session_response(
+            session, request_id, rebase_result=rebase_result, include_resume_context=True, workspace=workspace
+        ),
         journal_ok,
     )
 
@@ -543,56 +557,63 @@ def _handle_gate_waiver(
 
     # Check if gate waiver is globally enabled
     if not config.autonomy_security.allow_gate_waiver:
-        return asdict(error_response(
-            "Gate waiver is disabled",
-            error_code=ErrorCode.FORBIDDEN,
-            error_type=ErrorType.AUTHORIZATION,
-            request_id=request_id,
-            details={
-                "action": "gate-waiver",
-                "hint": "Enable allow_gate_waiver=true in autonomy_security config",
-            },
-        ))
+        return asdict(
+            error_response(
+                "Gate waiver is disabled",
+                error_code=ErrorCode.FORBIDDEN,
+                error_type=ErrorType.AUTHORIZATION,
+                request_id=request_id,
+                details={
+                    "action": "gate-waiver",
+                    "hint": "Enable allow_gate_waiver=true in autonomy_security config",
+                },
+            )
+        )
 
     # Role check - only maintainer can waive gates
     # Deferred import: tests mock-patch get_server_role on the handlers_session shim module
     from foundry_mcp.tools.unified.task_handlers.handlers_session import get_server_role as _get_role
+
     current_role = _get_role()
     authz_result = check_action_allowed(current_role, "session", "gate-waiver")
 
     # Explicitly deny autonomy_runner and observer roles
     if current_role in (Role.AUTONOMY_RUNNER.value, Role.OBSERVER.value):
-        return asdict(error_response(
-            f"Gate waiver denied for role: {current_role}",
-            error_code=ErrorCode.FORBIDDEN,
-            error_type=ErrorType.AUTHORIZATION,
-            request_id=request_id,
-            details={
-                "action": "gate-waiver",
-                "configured_role": current_role,
-                "required_role": Role.MAINTAINER.value,
-                "hint": "Only maintainer role can waive required gates",
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Gate waiver denied for role: {current_role}",
+                error_code=ErrorCode.FORBIDDEN,
+                error_type=ErrorType.AUTHORIZATION,
+                request_id=request_id,
+                details={
+                    "action": "gate-waiver",
+                    "configured_role": current_role,
+                    "required_role": Role.MAINTAINER.value,
+                    "hint": "Only maintainer role can waive required gates",
+                },
+            )
+        )
 
     if not authz_result.allowed:
-        return asdict(error_response(
-            f"Gate waiver denied: {authz_result.denied_action}",
-            error_code=ErrorCode.FORBIDDEN,
-            error_type=ErrorType.AUTHORIZATION,
-            request_id=request_id,
-            details={
-                "action": "gate-waiver",
-                "configured_role": current_role,
-                "required_role": authz_result.required_role,
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Gate waiver denied: {authz_result.denied_action}",
+                error_code=ErrorCode.FORBIDDEN,
+                error_type=ErrorType.AUTHORIZATION,
+                request_id=request_id,
+                details={
+                    "action": "gate-waiver",
+                    "configured_role": current_role,
+                    "required_role": authz_result.required_role,
+                },
+            )
+        )
 
     # Validate required parameters via schema
     params = {"phase_id": phase_id, "reason_code": reason_code}
-    err = validate_payload(params, _GATE_WAIVER_PARAMS_SCHEMA,
-                           tool_name="task", action="gate-waiver",
-                           request_id=request_id)
+    err = validate_payload(
+        params, _GATE_WAIVER_PARAMS_SCHEMA, tool_name="task", action="gate-waiver", request_id=request_id
+    )
     if err:
         return err
     validated_reason_code = OverrideReasonCode(params["reason_code"])
@@ -609,53 +630,62 @@ def _handle_gate_waiver(
     session, err = _resolve_session(storage, "gate-waiver", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     # Check if phase gate exists
     if phase_id not in session.phase_gates:
-        return asdict(error_response(
-            f"No gate record found for phase: {phase_id}",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            request_id=request_id,
-            details={
-                "action": "gate-waiver",
-                "phase_id": phase_id,
-                "available_phases": list(session.phase_gates.keys()),
-            },
-        ))
+        return asdict(
+            error_response(
+                f"No gate record found for phase: {phase_id}",
+                error_code=ErrorCode.NOT_FOUND,
+                error_type=ErrorType.NOT_FOUND,
+                request_id=request_id,
+                details={
+                    "action": "gate-waiver",
+                    "phase_id": phase_id,
+                    "available_phases": list(session.phase_gates.keys()),
+                },
+            )
+        )
 
     gate_record = session.phase_gates[phase_id]
 
     # Check if gate is already passed
     if gate_record.status == PhaseGateStatus.PASSED:
-        return asdict(error_response(
-            f"Gate already passed for phase: {phase_id}",
-            error_code=ErrorCode.VALIDATION_ERROR,
-            error_type=ErrorType.VALIDATION,
-            request_id=request_id,
-            details={
-                "action": "gate-waiver",
-                "phase_id": phase_id,
-                "current_status": gate_record.status.value,
-                "hint": "Cannot waive a gate that has already passed",
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Gate already passed for phase: {phase_id}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+                details={
+                    "action": "gate-waiver",
+                    "phase_id": phase_id,
+                    "current_status": gate_record.status.value,
+                    "hint": "Cannot waive a gate that has already passed",
+                },
+            )
+        )
 
     # Check if gate is already waived
     if gate_record.status == PhaseGateStatus.WAIVED:
-        return asdict(error_response(
-            f"Gate already waived for phase: {phase_id}",
-            error_code=ErrorCode.VALIDATION_ERROR,
-            error_type=ErrorType.VALIDATION,
-            request_id=request_id,
-            details={
-                "action": "gate-waiver",
-                "phase_id": phase_id,
-                "current_status": gate_record.status.value,
-                "waiver_reason_code": gate_record.waiver_reason_code.value if gate_record.waiver_reason_code else None,
-                "hint": "Gate is already waived",
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Gate already waived for phase: {phase_id}",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+                details={
+                    "action": "gate-waiver",
+                    "phase_id": phase_id,
+                    "current_status": gate_record.status.value,
+                    "waiver_reason_code": gate_record.waiver_reason_code.value
+                    if gate_record.waiver_reason_code
+                    else None,
+                    "hint": "Gate is already waived",
+                },
+            )
+        )
 
     # Apply waiver
     now = datetime.now(timezone.utc)
@@ -707,9 +737,11 @@ def _handle_gate_waiver(
     }
 
     return _inject_audit_status(
-        asdict(success_response(
-            data=response_data,
-            request_id=request_id,
-        )),
+        asdict(
+            success_response(
+                data=response_data,
+                request_id=request_id,
+            )
+        ),
         journal_ok,
     )

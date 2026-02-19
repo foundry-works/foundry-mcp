@@ -7,25 +7,24 @@ from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config.server import ServerConfig
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.task import (
+    REQUIREMENT_TYPES,
     add_task,
     manage_task_dependency,
     move_task,
     remove_task,
-    REQUIREMENT_TYPES,
     update_estimate,
     update_task_metadata,
     update_task_requirements,
 )
-
 from foundry_mcp.tools.unified.param_schema import Bool, Dict_, List_, Num, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _check_autonomy_write_lock,
@@ -107,9 +106,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("task_type") is None:
         payload["task_type"] = "task"
 
-    err = validate_payload(payload, _ADD_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _ADD_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -128,7 +125,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     query = payload.get("query")
 
     if task_type == "research":
-        from foundry_mcp.core.validation.constants import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
+        from foundry_mcp.core.validation.constants import RESEARCH_BLOCKING_MODES, VALID_RESEARCH_TYPES
 
         if research_type is not None and not isinstance(research_type, str):
             return _validation_error(
@@ -196,9 +193,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
             return spec_error
 
         hierarchy = (spec_data or {}).get("hierarchy", {})
-        parent_node = (
-            hierarchy.get(parent) if isinstance(hierarchy, dict) else None
-        )
+        parent_node = hierarchy.get(parent) if isinstance(hierarchy, dict) else None
         if not isinstance(parent_node, dict):
             elapsed_ms = (time.perf_counter() - start) * 1000
             return asdict(
@@ -233,9 +228,7 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
             telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
         _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
-        _metrics.counter(
-            _metric(action), labels={"status": "success", "dry_run": "true"}
-        )
+        _metrics.counter(_metric(action), labels={"status": "success", "dry_run": "true"})
         return asdict(response)
 
     result, error = add_task(
@@ -256,14 +249,8 @@ def _handle_add(*, config: ServerConfig, **payload: Any) -> dict:
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     if error or result is None:
-        code = (
-            ErrorCode.NOT_FOUND
-            if "not found" in (error or "").lower()
-            else ErrorCode.VALIDATION_ERROR
-        )
-        err_type = (
-            ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
-        )
+        code = ErrorCode.NOT_FOUND if "not found" in (error or "").lower() else ErrorCode.VALIDATION_ERROR
+        err_type = ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         return asdict(
             error_response(
                 error or "Failed to add task",
@@ -289,9 +276,7 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "remove"
 
-    err = validate_payload(payload, _REMOVE_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _REMOVE_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -353,9 +338,7 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
             telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
         _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
-        _metrics.counter(
-            _metric(action), labels={"status": "success", "dry_run": "true"}
-        )
+        _metrics.counter(_metric(action), labels={"status": "success", "dry_run": "true"})
         return asdict(response)
 
     result, error = remove_task(
@@ -367,14 +350,8 @@ def _handle_remove(*, config: ServerConfig, **payload: Any) -> dict:
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     if error or result is None:
-        code = (
-            ErrorCode.NOT_FOUND
-            if "not found" in (error or "").lower()
-            else ErrorCode.VALIDATION_ERROR
-        )
-        err_type = (
-            ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
-        )
+        code = ErrorCode.NOT_FOUND if "not found" in (error or "").lower() else ErrorCode.VALIDATION_ERROR
+        err_type = ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         return asdict(
             error_response(
                 error or "Failed to remove task",
@@ -399,9 +376,7 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-estimate"
 
-    err = validate_payload(payload, _UPDATE_ESTIMATE_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _UPDATE_ESTIMATE_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -489,9 +464,7 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
             telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
         _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
-        _metrics.counter(
-            _metric(action), labels={"status": "success", "dry_run": "true"}
-        )
+        _metrics.counter(_metric(action), labels={"status": "success", "dry_run": "true"})
         return asdict(response)
 
     result, error = update_estimate(
@@ -504,14 +477,8 @@ def _handle_update_estimate(*, config: ServerConfig, **payload: Any) -> dict:
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     if error or result is None:
-        code = (
-            ErrorCode.NOT_FOUND
-            if "not found" in (error or "").lower()
-            else ErrorCode.VALIDATION_ERROR
-        )
-        err_type = (
-            ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
-        )
+        code = ErrorCode.NOT_FOUND if "not found" in (error or "").lower() else ErrorCode.VALIDATION_ERROR
+        err_type = ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         return asdict(
             error_response(
                 error or "Failed to update estimate",
@@ -536,9 +503,7 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "update-metadata"
 
-    err = validate_payload(payload, _UPDATE_METADATA_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _UPDATE_METADATA_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -561,9 +526,7 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
         payload.get("verification_type"),
         payload.get("command"),
     ]
-    has_update = any(field is not None for field in update_fields) or bool(
-        custom_metadata
-    )
+    has_update = any(field is not None for field in update_fields) or bool(custom_metadata)
     if not has_update:
         return _validation_error(
             field="title",
@@ -645,9 +608,7 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
             telemetry={"duration_ms": round(elapsed_ms, 2)},
         )
         _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
-        _metrics.counter(
-            _metric(action), labels={"status": "success", "dry_run": "true"}
-        )
+        _metrics.counter(_metric(action), labels={"status": "success", "dry_run": "true"})
         return asdict(response)
 
     result, error = update_task_metadata(
@@ -669,14 +630,8 @@ def _handle_update_metadata(*, config: ServerConfig, **payload: Any) -> dict:
     elapsed_ms = (time.perf_counter() - start) * 1000
 
     if error or result is None:
-        code = (
-            ErrorCode.NOT_FOUND
-            if "not found" in (error or "").lower()
-            else ErrorCode.VALIDATION_ERROR
-        )
-        err_type = (
-            ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
-        )
+        code = ErrorCode.NOT_FOUND if "not found" in (error or "").lower() else ErrorCode.VALIDATION_ERROR
+        err_type = ErrorType.NOT_FOUND if code == ErrorCode.NOT_FOUND else ErrorType.VALIDATION
         return asdict(
             error_response(
                 error or "Failed to update metadata",
@@ -702,9 +657,7 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "move"
 
-    err = validate_payload(payload, _MOVE_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _MOVE_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -717,9 +670,7 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     bypass_reason = payload.get("bypass_reason")
 
     # Schema can't reject empty optional strings
-    if new_parent is not None and (
-        not isinstance(new_parent, str) or not new_parent.strip()
-    ):
+    if new_parent is not None and (not isinstance(new_parent, str) or not new_parent.strip()):
         return _validation_error(
             field="parent",
             action=action,
@@ -815,9 +766,7 @@ def _handle_add_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("dependency_type") is None:
         payload["dependency_type"] = "blocks"
 
-    err = validate_payload(payload, _DEPENDENCY_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _DEPENDENCY_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -916,9 +865,7 @@ def _handle_remove_dependency(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("dependency_type") is None:
         payload["dependency_type"] = "blocks"
 
-    err = validate_payload(payload, _DEPENDENCY_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _DEPENDENCY_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -1010,9 +957,7 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
     if isinstance(rt, str):
         payload["requirement_type"] = rt.lower().strip()
 
-    err = validate_payload(payload, _ADD_REQUIREMENT_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _ADD_REQUIREMENT_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -1067,7 +1012,7 @@ def _handle_add_requirement(*, config: ServerConfig, **payload: Any) -> dict:
                 err_type = ErrorType.NOT_FOUND
                 remediation = "Verify the task ID exists in the specification"
         elif "maximum" in error_lower or "limit" in error_lower:
-            code = ErrorCode.LIMIT_EXCEEDED
+            code = ErrorCode.VALIDATION_ERROR
             err_type = ErrorType.VALIDATION
             remediation = "Remove some requirements before adding new ones"
         elif "requirement_type" in error_lower:

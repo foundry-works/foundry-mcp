@@ -57,10 +57,9 @@ async def async_retry_with_backoff(
     Testing example:
         >>> seeded_rng = random.Random(42)
         >>> sleep_times = []
-        >>> async def fake_sleep(s): sleep_times.append(s)
-        >>> await async_retry_with_backoff(
-        ...     func, rng=seeded_rng, sleep_func=fake_sleep
-        ... )
+        >>> async def fake_sleep(s):
+        ...     sleep_times.append(s)
+        >>> await async_retry_with_backoff(func, rng=seeded_rng, sleep_func=fake_sleep)
     """
     retryable = tuple(retryable_exceptions or [Exception])
     last_exception: Optional[Exception] = None

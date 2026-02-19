@@ -53,9 +53,7 @@ class TestIdeateWorkflowExceptionHandling:
         workflow = IdeateWorkflow(mock_config, mock_memory)
 
         # Mock _generate_ideas to raise an exception
-        with patch.object(
-            workflow, "_generate_ideas", side_effect=RuntimeError("Idea generation failed")
-        ):
+        with patch.object(workflow, "_generate_ideas", side_effect=RuntimeError("Idea generation failed")):
             result = workflow.execute(topic="Test topic", action="generate")
 
         # Should return error result, not raise exception

@@ -12,16 +12,16 @@ from foundry_mcp.core.research.workflows import (
     IdeateWorkflow,
     ThinkDeepWorkflow,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.validation.constants import VALID_RESEARCH_RESULTS
-from foundry_mcp.tools.unified.param_schema import Str, validate_payload
+from foundry_mcp.tools.unified.param_schema import FieldSchema, Str, validate_payload
 
 from ._helpers import _get_config, _get_memory, _validation_error
 
@@ -29,23 +29,23 @@ from ._helpers import _get_config, _get_memory, _validation_error
 # Declarative validation schemas
 # ---------------------------------------------------------------------------
 
-_NODE_EXECUTE_SCHEMA = {
+_NODE_EXECUTE_SCHEMA: dict[str, FieldSchema] = {
     "spec_id": Str(required=True),
     "research_node_id": Str(required=True),
 }
 
-_NODE_RECORD_SCHEMA = {
+_NODE_RECORD_SCHEMA: dict[str, FieldSchema] = {
     "spec_id": Str(required=True),
     "research_node_id": Str(required=True),
     "result": Str(required=True, choices=frozenset(VALID_RESEARCH_RESULTS)),
 }
 
-_NODE_STATUS_SCHEMA = {
+_NODE_STATUS_SCHEMA: dict[str, FieldSchema] = {
     "spec_id": Str(required=True),
     "research_node_id": Str(required=True),
 }
 
-_NODE_FINDINGS_SCHEMA = {
+_NODE_FINDINGS_SCHEMA: dict[str, FieldSchema] = {
     "spec_id": Str(required=True),
     "research_node_id": Str(required=True),
 }
@@ -61,7 +61,7 @@ def _load_research_node(
     Returns:
         (spec_data, node_data, error_message)
     """
-    from foundry_mcp.core.spec import load_spec, find_specs_directory
+    from foundry_mcp.core.spec import find_specs_directory, load_spec
 
     specs_dir = find_specs_directory(workspace)
     if specs_dir is None:
@@ -96,12 +96,15 @@ def _handle_node_execute(
     and stores the session_id back in the node for tracking.
     """
     from datetime import datetime, timezone
-    from foundry_mcp.core.spec import save_spec, find_specs_directory
+
+    from foundry_mcp.core.spec import find_specs_directory, save_spec
 
     payload = {"spec_id": spec_id, "research_node_id": research_node_id}
     err = validate_payload(payload, _NODE_EXECUTE_SCHEMA, tool_name="research", action="node-execute")
     if err:
         return err
+    assert isinstance(spec_id, str)
+    assert isinstance(research_node_id, str)
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -112,6 +115,8 @@ def _handle_node_execute(
                 error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
             )
         )
+    assert spec_data is not None
+    assert node is not None
 
     metadata = node.get("metadata", {})
     research_type = metadata.get("research_type", "consensus")
@@ -119,7 +124,9 @@ def _handle_node_execute(
 
     # Imperative: query depends on runtime metadata fallback
     if not query:
-        return _validation_error(field="query", action="node-execute", message="No query found in node or prompt parameter")
+        return _validation_error(
+            field="query", action="node-execute", message="No query found in node or prompt parameter"
+        )
 
     # Execute the appropriate research workflow
     config = _get_config()
@@ -131,30 +138,30 @@ def _handle_node_execute(
     }
 
     if research_type == "chat":
-        workflow = ChatWorkflow(config.research, _get_memory())
-        result = workflow.chat(prompt=query)
-        session_id = result.thread_id
+        wf_chat = ChatWorkflow(config.research, _get_memory())
+        wf_result = wf_chat.execute(prompt=query)
+        session_id = wf_result.metadata.get("thread_id") if wf_result.metadata else None
         result_data["thread_id"] = session_id
     elif research_type == "consensus":
-        workflow = ConsensusWorkflow(config.research, _get_memory())
-        result = workflow.run(prompt=query)
-        session_id = result.session_id
+        wf_consensus = ConsensusWorkflow(config.research, _get_memory())
+        wf_result = wf_consensus.execute(prompt=query)
+        session_id = wf_result.metadata.get("consensus_id") if wf_result.metadata else None
         result_data["consensus_id"] = session_id
-        result_data["strategy"] = result.strategy.value if result.strategy else None
+        result_data["strategy"] = wf_result.metadata.get("strategy") if wf_result.metadata else None
     elif research_type == "thinkdeep":
-        workflow = ThinkDeepWorkflow(config.research, _get_memory())
-        result = workflow.run(topic=query)
-        session_id = result.investigation_id
+        wf_think = ThinkDeepWorkflow(config.research, _get_memory())
+        wf_result = wf_think.execute(topic=query)
+        session_id = wf_result.metadata.get("investigation_id") if wf_result.metadata else None
         result_data["investigation_id"] = session_id
     elif research_type == "ideate":
-        workflow = IdeateWorkflow(config.research, _get_memory())
-        result = workflow.run(topic=query)
-        session_id = result.ideation_id
+        wf_ideate = IdeateWorkflow(config.research, _get_memory())
+        wf_result = wf_ideate.execute(topic=query)
+        session_id = wf_result.metadata.get("ideation_id") if wf_result.metadata else None
         result_data["ideation_id"] = session_id
     elif research_type == "deep-research":
-        workflow = DeepResearchWorkflow(config.research, _get_memory())
-        result = workflow.start(query=query)
-        session_id = result.research_id
+        wf_deep = DeepResearchWorkflow(config.research, _get_memory())
+        wf_result = wf_deep.execute(query=query)
+        session_id = wf_result.metadata.get("research_id") if wf_result.metadata else None
         result_data["research_id"] = session_id
     else:
         return _validation_error(field="research_type", action="node-execute", message=f"Unsupported: {research_type}")
@@ -162,12 +169,14 @@ def _handle_node_execute(
     # Update node metadata with session info
     metadata["session_id"] = session_id
     history = metadata.setdefault("research_history", [])
-    history.append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "action": "started",
-        "workflow": research_type,
-        "session_id": session_id,
-    })
+    history.append(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": "started",
+            "workflow": research_type,
+            "session_id": session_id,
+        }
+    )
     node["metadata"] = metadata
     node["status"] = "in_progress"
 
@@ -203,12 +212,15 @@ def _handle_node_record(
 ) -> dict:
     """Record research findings to spec node."""
     from datetime import datetime, timezone
-    from foundry_mcp.core.spec import save_spec, find_specs_directory
+
+    from foundry_mcp.core.spec import find_specs_directory, save_spec
 
     payload = {"spec_id": spec_id, "research_node_id": research_node_id, "result": result}
     err = validate_payload(payload, _NODE_RECORD_SCHEMA, tool_name="research", action="node-record")
     if err:
         return err
+    assert isinstance(spec_id, str)
+    assert isinstance(research_node_id, str)
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -219,6 +231,8 @@ def _handle_node_record(
                 error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
             )
         )
+    assert spec_data is not None
+    assert node is not None
 
     metadata = node.get("metadata", {})
 
@@ -237,12 +251,14 @@ def _handle_node_record(
 
     # Add to history
     history = metadata.setdefault("research_history", [])
-    history.append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "action": "completed",
-        "result": result,
-        "session_id": session_id or metadata.get("session_id"),
-    })
+    history.append(
+        {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": "completed",
+            "result": result,
+            "session_id": session_id or metadata.get("session_id"),
+        }
+    )
 
     node["metadata"] = metadata
 
@@ -290,6 +306,8 @@ def _handle_node_status(
     err = validate_payload(payload, _NODE_STATUS_SCHEMA, tool_name="research", action="node-status")
     if err:
         return err
+    assert isinstance(spec_id, str)
+    assert isinstance(research_node_id, str)
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -300,6 +318,7 @@ def _handle_node_status(
                 error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
             )
         )
+    assert node is not None
 
     metadata = node.get("metadata", {})
 
@@ -333,6 +352,8 @@ def _handle_node_findings(
     err = validate_payload(payload, _NODE_FINDINGS_SCHEMA, tool_name="research", action="node-findings")
     if err:
         return err
+    assert isinstance(spec_id, str)
+    assert isinstance(research_node_id, str)
 
     spec_data, node, error = _load_research_node(spec_id, research_node_id, workspace)
     if error:
@@ -343,6 +364,7 @@ def _handle_node_findings(
                 error_type=ErrorType.NOT_FOUND if "not found" in error.lower() else ErrorType.VALIDATION,
             )
         )
+    assert node is not None
 
     metadata = node.get("metadata", {})
     findings = metadata.get("findings", {})

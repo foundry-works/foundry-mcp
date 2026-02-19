@@ -16,13 +16,13 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.core.spec import load_spec, find_spec_file
 from foundry_mcp.core.journal import (
     add_journal_entry,
     find_unjournaled_tasks,
     get_journal_entries,
     save_journal,
 )
+from foundry_mcp.core.spec import find_spec_file, load_spec
 
 logger = get_cli_logger()
 
@@ -300,9 +300,7 @@ def journal_unjournaled_cmd(
 @journal.command("get")
 @click.argument("spec_id")
 @click.option("--task-id", help="Filter by task ID.")
-@click.option(
-    "--last", "-n", "last_n", type=int, help="Get last N entries (most recent)."
-)
+@click.option("--last", "-n", "last_n", type=int, help="Get last N entries (most recent).")
 @click.pass_context
 @cli_command("get")
 @handle_keyboard_interrupt()

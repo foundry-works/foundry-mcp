@@ -17,12 +17,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from foundry_mcp.core.executor import (
-    ProviderExecutor,
-    ExecutorExhaustedError,
-    configure_executor,
-    get_provider_executor,
     DEFAULT_POOL_SIZE,
     DEFAULT_QUEUE_LIMIT,
+    ProviderExecutor,
+    configure_executor,
+    get_provider_executor,
 )
 
 
@@ -44,10 +43,7 @@ class TestProviderExecutorLoadTest:
             start = time.time()
 
             # Run 10 concurrent operations
-            tasks = [
-                executor.run_blocking(blocking_operation)
-                for _ in range(10)
-            ]
+            tasks = [executor.run_blocking(blocking_operation) for _ in range(10)]
             results = await asyncio.gather(*tasks)
 
             elapsed = time.time() - start
@@ -58,7 +54,7 @@ class TestProviderExecutorLoadTest:
 
             # With 4 workers, 10 x 100ms operations should complete in ~300ms
             # (3 batches: 4+4+2). Allow 2x margin = 600ms
-            assert elapsed < 0.6, f"Expected < 600ms, got {elapsed*1000:.0f}ms"
+            assert elapsed < 0.6, f"Expected < 600ms, got {elapsed * 1000:.0f}ms"
 
         finally:
             await executor.shutdown()
@@ -75,10 +71,7 @@ class TestProviderExecutorLoadTest:
 
         try:
             # Run 20 concurrent operations (well within queue limit)
-            tasks = [
-                executor.run_blocking(blocking_operation)
-                for _ in range(20)
-            ]
+            tasks = [executor.run_blocking(blocking_operation) for _ in range(20)]
             results = await asyncio.gather(*tasks)
             assert len(results) == 20
         finally:
@@ -108,10 +101,7 @@ class TestProviderExecutorLoadTest:
 
             try:
                 # Run operations to generate metrics
-                tasks = [
-                    executor.run_blocking(blocking_operation)
-                    for _ in range(4)
-                ]
+                tasks = [executor.run_blocking(blocking_operation) for _ in range(4)]
                 await asyncio.gather(*tasks)
 
                 # Should have recorded active_workers and queued_tasks metrics
@@ -233,10 +223,7 @@ class TestProviderExecutorFallback:
 
         try:
             # Submit multiple operations to overflow queue
-            tasks = [
-                executor.run_blocking(blocking_operation)
-                for _ in range(5)
-            ]
+            tasks = [executor.run_blocking(blocking_operation) for _ in range(5)]
             results = await asyncio.gather(*tasks)
 
             # All should complete (some via fallback)

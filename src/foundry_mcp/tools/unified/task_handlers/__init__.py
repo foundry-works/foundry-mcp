@@ -15,14 +15,12 @@ from foundry_mcp.tools.unified.common import (
     dispatch_with_standard_errors,
 )
 from foundry_mcp.tools.unified.router import ActionDefinition, ActionRouter
-
-from foundry_mcp.tools.unified.task_handlers.handlers_lifecycle import (
-    _handle_block,
-    _handle_complete,
-    _handle_list_blocked,
-    _handle_start,
-    _handle_unblock,
-    _handle_update_status,
+from foundry_mcp.tools.unified.task_handlers._helpers import (
+    _attach_deprecation_metadata,
+    _attach_session_step_loop_metadata,
+    _emit_legacy_action_warning,
+    _normalize_task_action_shape,
+    _validation_error,
 )
 from foundry_mcp.tools.unified.task_handlers.handlers_batch import (
     _handle_complete_batch,
@@ -31,6 +29,24 @@ from foundry_mcp.tools.unified.task_handlers.handlers_batch import (
     _handle_prepare_batch,
     _handle_reset_batch,
     _handle_start_batch,
+)
+from foundry_mcp.tools.unified.task_handlers.handlers_lifecycle import (
+    _handle_block,
+    _handle_complete,
+    _handle_list_blocked,
+    _handle_start,
+    _handle_unblock,
+    _handle_update_status,
+)
+from foundry_mcp.tools.unified.task_handlers.handlers_mutation import (
+    _handle_add,
+    _handle_add_dependency,
+    _handle_add_requirement,
+    _handle_move,
+    _handle_remove,
+    _handle_remove_dependency,
+    _handle_update_estimate,
+    _handle_update_metadata,
 )
 from foundry_mcp.tools.unified.task_handlers.handlers_query import (
     _handle_check_deps,
@@ -42,16 +58,6 @@ from foundry_mcp.tools.unified.task_handlers.handlers_query import (
     _handle_progress,
     _handle_query,
     _handle_session_config,
-)
-from foundry_mcp.tools.unified.task_handlers.handlers_mutation import (
-    _handle_add,
-    _handle_add_dependency,
-    _handle_add_requirement,
-    _handle_move,
-    _handle_remove,
-    _handle_remove_dependency,
-    _handle_update_estimate,
-    _handle_update_metadata,
 )
 from foundry_mcp.tools.unified.task_handlers.handlers_session import (
     _handle_gate_waiver,
@@ -69,15 +75,8 @@ from foundry_mcp.tools.unified.task_handlers.handlers_session import (
 from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
     _handle_session_step_heartbeat,
     _handle_session_step_next,
-    _handle_session_step_report,
     _handle_session_step_replay,
-)
-from foundry_mcp.tools.unified.task_handlers._helpers import (
-    _attach_deprecation_metadata,
-    _attach_session_step_loop_metadata,
-    _emit_legacy_action_warning,
-    _normalize_task_action_shape,
-    _validation_error,
+    _handle_session_step_report,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,10 +119,22 @@ def _handle_session_step_action(
 
 _ACTION_DEFINITIONS = [
     ActionDefinition(name="prepare", handler=_handle_prepare, summary="Prepare next actionable task context"),
-    ActionDefinition(name="prepare-batch", handler=_handle_prepare_batch, summary="Prepare multiple independent tasks for parallel execution"),
-    ActionDefinition(name="start-batch", handler=_handle_start_batch, summary="Atomically start multiple tasks as in_progress"),
-    ActionDefinition(name="complete-batch", handler=_handle_complete_batch, summary="Complete multiple tasks with partial failure support"),
-    ActionDefinition(name="reset-batch", handler=_handle_reset_batch, summary="Reset stale or specified in_progress tasks to pending"),
+    ActionDefinition(
+        name="prepare-batch",
+        handler=_handle_prepare_batch,
+        summary="Prepare multiple independent tasks for parallel execution",
+    ),
+    ActionDefinition(
+        name="start-batch", handler=_handle_start_batch, summary="Atomically start multiple tasks as in_progress"
+    ),
+    ActionDefinition(
+        name="complete-batch",
+        handler=_handle_complete_batch,
+        summary="Complete multiple tasks with partial failure support",
+    ),
+    ActionDefinition(
+        name="reset-batch", handler=_handle_reset_batch, summary="Reset stale or specified in_progress tasks to pending"
+    ),
     ActionDefinition(name="next", handler=_handle_next, summary="Return the next actionable task"),
     ActionDefinition(name="info", handler=_handle_info, summary="Fetch task metadata by ID"),
     ActionDefinition(name="check-deps", handler=_handle_check_deps, summary="Analyze task dependencies and blockers"),
@@ -136,45 +147,107 @@ _ACTION_DEFINITIONS = [
     ActionDefinition(name="add", handler=_handle_add, summary="Add a task"),
     ActionDefinition(name="remove", handler=_handle_remove, summary="Remove a task"),
     ActionDefinition(name="move", handler=_handle_move, summary="Move task to new position or parent"),
-    ActionDefinition(name="add-dependency", handler=_handle_add_dependency, summary="Add a dependency between two tasks"),
-    ActionDefinition(name="remove-dependency", handler=_handle_remove_dependency, summary="Remove a dependency between two tasks"),
-    ActionDefinition(name="add-requirement", handler=_handle_add_requirement, summary="Add a structured requirement to a task"),
+    ActionDefinition(
+        name="add-dependency", handler=_handle_add_dependency, summary="Add a dependency between two tasks"
+    ),
+    ActionDefinition(
+        name="remove-dependency", handler=_handle_remove_dependency, summary="Remove a dependency between two tasks"
+    ),
+    ActionDefinition(
+        name="add-requirement", handler=_handle_add_requirement, summary="Add a structured requirement to a task"
+    ),
     ActionDefinition(name="update-estimate", handler=_handle_update_estimate, summary="Update estimated effort"),
     ActionDefinition(name="update-metadata", handler=_handle_update_metadata, summary="Update task metadata fields"),
-    ActionDefinition(name="metadata-batch", handler=_handle_metadata_batch, summary="Batch update metadata across multiple nodes matching filters"),
-    ActionDefinition(name="fix-verification-types", handler=_handle_fix_verification_types, summary="Fix invalid/missing verification types across verify nodes"),
+    ActionDefinition(
+        name="metadata-batch",
+        handler=_handle_metadata_batch,
+        summary="Batch update metadata across multiple nodes matching filters",
+    ),
+    ActionDefinition(
+        name="fix-verification-types",
+        handler=_handle_fix_verification_types,
+        summary="Fix invalid/missing verification types across verify nodes",
+    ),
     ActionDefinition(name="progress", handler=_handle_progress, summary="Summarize completion metrics for a node"),
     ActionDefinition(name="list", handler=_handle_list, summary="List tasks with pagination and optional filters"),
     ActionDefinition(name="query", handler=_handle_query, summary="Query tasks by status or parent"),
     ActionDefinition(name="hierarchy", handler=_handle_hierarchy, summary="Return paginated hierarchy slices"),
-    ActionDefinition(name="session-config", handler=_handle_session_config, summary="Get/set autonomous session configuration"),
-    ActionDefinition(name="session", handler=_handle_session_action, summary="Canonical autonomous session lifecycle entrypoint (requires command)"),
-    ActionDefinition(name="session-step", handler=_handle_session_step_action, summary="Canonical autonomous session-step entrypoint (requires command)"),
+    ActionDefinition(
+        name="session-config", handler=_handle_session_config, summary="Get/set autonomous session configuration"
+    ),
+    ActionDefinition(
+        name="session",
+        handler=_handle_session_action,
+        summary="Canonical autonomous session lifecycle entrypoint (requires command)",
+    ),
+    ActionDefinition(
+        name="session-step",
+        handler=_handle_session_step_action,
+        summary="Canonical autonomous session-step entrypoint (requires command)",
+    ),
     # Session lifecycle actions
-    ActionDefinition(name="session-start", handler=_handle_session_start, summary="Start a new autonomous session for a spec"),
+    ActionDefinition(
+        name="session-start", handler=_handle_session_start, summary="Start a new autonomous session for a spec"
+    ),
     ActionDefinition(name="session-pause", handler=_handle_session_pause, summary="Pause an active autonomous session"),
-    ActionDefinition(name="session-resume", handler=_handle_session_resume, summary="Resume a paused autonomous session"),
-    ActionDefinition(name="session-end", handler=_handle_session_end, summary="End an autonomous session (terminal state)"),
-    ActionDefinition(name="session-status", handler=_handle_session_status, summary="Get current status of an autonomous session"),
-    ActionDefinition(name="session-events", handler=_handle_session_events, summary="List journal-backed events for an autonomous session"),
-    ActionDefinition(name="session-list", handler=_handle_session_list, summary="List autonomous sessions with optional filtering"),
-    ActionDefinition(name="session-rebase", handler=_handle_session_rebase, summary="Rebase an active session to spec changes"),
-    ActionDefinition(name="session-heartbeat", handler=_handle_session_heartbeat, summary="[Deprecated: use session-step-heartbeat] Update session heartbeat and context metrics"),
-    ActionDefinition(name="session-reset", handler=_handle_session_reset, summary="Reset a failed session to allow retry"),
-    ActionDefinition(name="gate-waiver", handler=_handle_gate_waiver, summary="Privileged gate waiver for required-gate invariant failures (maintainer only)"),
+    ActionDefinition(
+        name="session-resume", handler=_handle_session_resume, summary="Resume a paused autonomous session"
+    ),
+    ActionDefinition(
+        name="session-end", handler=_handle_session_end, summary="End an autonomous session (terminal state)"
+    ),
+    ActionDefinition(
+        name="session-status", handler=_handle_session_status, summary="Get current status of an autonomous session"
+    ),
+    ActionDefinition(
+        name="session-events",
+        handler=_handle_session_events,
+        summary="List journal-backed events for an autonomous session",
+    ),
+    ActionDefinition(
+        name="session-list", handler=_handle_session_list, summary="List autonomous sessions with optional filtering"
+    ),
+    ActionDefinition(
+        name="session-rebase", handler=_handle_session_rebase, summary="Rebase an active session to spec changes"
+    ),
+    ActionDefinition(
+        name="session-heartbeat",
+        handler=_handle_session_heartbeat,
+        summary="[Deprecated: use session-step-heartbeat] Update session heartbeat and context metrics",
+    ),
+    ActionDefinition(
+        name="session-reset", handler=_handle_session_reset, summary="Reset a failed session to allow retry"
+    ),
+    ActionDefinition(
+        name="gate-waiver",
+        handler=_handle_gate_waiver,
+        summary="Privileged gate waiver for required-gate invariant failures (maintainer only)",
+    ),
     # Session-step actions
-    ActionDefinition(name="session-step-next", handler=_handle_session_step_next, summary="Get the next step to execute in a session"),
-    ActionDefinition(name="session-step-report", handler=_handle_session_step_report, summary="Report the outcome of a step execution"),
-    ActionDefinition(name="session-step-replay", handler=_handle_session_step_replay, summary="Replay the last issued response for safe retry"),
-    ActionDefinition(name="session-step-heartbeat", handler=_handle_session_step_heartbeat, summary="Update session heartbeat and context metrics (ADR session-step command)"),
+    ActionDefinition(
+        name="session-step-next", handler=_handle_session_step_next, summary="Get the next step to execute in a session"
+    ),
+    ActionDefinition(
+        name="session-step-report",
+        handler=_handle_session_step_report,
+        summary="Report the outcome of a step execution",
+    ),
+    ActionDefinition(
+        name="session-step-replay",
+        handler=_handle_session_step_replay,
+        summary="Replay the last issued response for safe retry",
+    ),
+    ActionDefinition(
+        name="session-step-heartbeat",
+        handler=_handle_session_step_heartbeat,
+        summary="Update session heartbeat and context metrics (ADR session-step command)",
+    ),
 ]
 
 _TASK_ROUTER = ActionRouter(tool_name="task", actions=_ACTION_DEFINITIONS)
 
 
-def _dispatch_task_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
+def _dispatch_task_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
     request_id = payload.get("request_id")
     if not isinstance(request_id, str):
         request_id = build_request_id("task")

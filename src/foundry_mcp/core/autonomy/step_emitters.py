@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Tuple
 
 from ulid import ULID
@@ -54,9 +54,7 @@ class _OrchestratorProtocol(Protocol):
     storage: AutonomyStorage
     workspace_path: Path
 
-    def _issue_step_proof(
-        self, session_id: str, step_id: str, now: datetime
-    ) -> str: ...
+    def _issue_step_proof(self, session_id: str, step_id: str, now: datetime) -> str: ...
 
     def _emit_audit_event(
         self,
@@ -68,6 +66,7 @@ class _OrchestratorProtocol(Protocol):
         task_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +143,23 @@ class StepEmitterMixin:
     - self.storage: AutonomyStorage
     - self.workspace_path: Path
     """
+
+    if TYPE_CHECKING:
+        storage: AutonomyStorage
+        workspace_path: Path
+
+        def _issue_step_proof(self, session_id: str, step_id: str, now: datetime) -> str: ...
+
+        def _emit_audit_event(
+            self,
+            session: AutonomousSessionState,
+            event_type: AuditEventType,
+            action: str,
+            step_id: Optional[str] = None,
+            phase_id: Optional[str] = None,
+            task_id: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> None: ...
 
     # =========================================================================
     # Gate Invariant Checks
@@ -414,9 +430,7 @@ class StepEmitterMixin:
                 )
 
             # Run independent gate audit before phase-close (P1.4)
-            audit_failure = self._audit_required_gate_integrity(
-                session, spec_data, current_phase.get("id")
-            )
+            audit_failure = self._audit_required_gate_integrity(session, spec_data, current_phase.get("id"))
             if audit_failure:
                 logger.warning(
                     "Gate audit failure on phase-close: %s",
@@ -525,10 +539,7 @@ class StepEmitterMixin:
         for task in current_phase.get("tasks", []):
             task_id = task.get("id", "")
             task_type = task.get("type", "task")
-            if (
-                task_type == "verify"
-                and task_id not in session.completed_task_ids
-            ):
+            if task_type == "verify" and task_id not in session.completed_task_ids:
                 return task
 
         return None
@@ -580,10 +591,7 @@ class StepEmitterMixin:
         for task in phase.get("tasks", []):
             task_type = task.get("type", "task")
             task_id = task.get("id", "")
-            if (
-                task_type == "verify"
-                and task_id not in session.completed_task_ids
-            ):
+            if task_type == "verify" and task_id not in session.completed_task_ids:
                 return False  # Verifications still pending
 
         return True
@@ -1039,6 +1047,10 @@ class StepEmitterMixin:
                 gate_attempt_id=None,
                 review_path=None,
                 evaluated_at=None,
+                waiver_reason_code=None,
+                waiver_reason_detail=None,
+                waived_at=None,
+                waived_by_role=None,
             )
 
         instructions = [
@@ -1184,8 +1196,7 @@ class StepEmitterMixin:
             gate_attempt_id=None,
             instructions=None,
             reason=None,
-            message=f"Spec {session.spec_id} execution completed. "
-            f"Total tasks: {session.counters.tasks_completed}",
+            message=f"Spec {session.spec_id} execution completed. Total tasks: {session.counters.tasks_completed}",
             step_proof=step_proof,
         )
 

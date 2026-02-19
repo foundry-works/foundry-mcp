@@ -14,13 +14,13 @@ import click
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.resilience import (
-    SLOW_TIMEOUT,
     MEDIUM_TIMEOUT,
-    with_sync_timeout,
+    SLOW_TIMEOUT,
     handle_keyboard_interrupt,
+    with_sync_timeout,
 )
-from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.core.llm_config.consultation import get_consultation_config
+from foundry_mcp.core.spec import find_specs_directory
 
 logger = get_cli_logger()
 
@@ -268,8 +268,8 @@ def plan_review_cmd(
         from foundry_mcp.core.ai_consultation import (
             ConsultationOrchestrator,
             ConsultationRequest,
-            ConsultationWorkflow,
             ConsultationResult,
+            ConsultationWorkflow,
         )
 
         orchestrator = ConsultationOrchestrator()
@@ -316,9 +316,7 @@ def plan_review_cmd(
                 return
 
             review_content = result.primary_content
-            provider_used = (
-                result.responses[0].provider_id if result.responses else "unknown"
-            )
+            provider_used = result.responses[0].provider_id if result.responses else "unknown"
 
     except ImportError:
         emit_error(
@@ -599,9 +597,7 @@ def plan_list_cmd(ctx: click.Context) -> None:
                 "count": 0,
                 "plans_dir": str(plans_dir),
             },
-            telemetry={
-                "duration_ms": round((time.perf_counter() - start_time) * 1000, 2)
-            },
+            telemetry={"duration_ms": round((time.perf_counter() - start_time) * 1000, 2)},
         )
         return
 
@@ -622,9 +618,7 @@ def plan_list_cmd(ctx: click.Context) -> None:
     reviews_dir = specs_dir / ".plan-reviews"
     for plan in plans:
         plan_name = plan["name"]
-        review_files = (
-            list(reviews_dir.glob(f"{plan_name}-*.md")) if reviews_dir.exists() else []
-        )
+        review_files = list(reviews_dir.glob(f"{plan_name}-*.md")) if reviews_dir.exists() else []
         plan["reviews"] = [rf.stem for rf in review_files]
         plan["has_review"] = len(review_files) > 0
 

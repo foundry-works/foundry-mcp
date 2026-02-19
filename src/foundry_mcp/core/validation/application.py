@@ -3,7 +3,7 @@
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from foundry_mcp.core.validation.models import FixAction, FixReport
 from foundry_mcp.core.validation.stats import _recalculate_counts

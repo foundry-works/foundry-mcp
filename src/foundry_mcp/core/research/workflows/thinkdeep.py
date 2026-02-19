@@ -11,7 +11,6 @@ from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
 from foundry_mcp.core.research.models.thinkdeep import (
-    Hypothesis,
     InvestigationStep,
     ThinkDeepState,
 )
@@ -173,10 +172,7 @@ class ThinkDeepWorkflow(ResearchWorkflowBase):
             Next query string
         """
         # Summarize current hypotheses
-        hyp_summary = "\n".join(
-            f"- {h.statement} (confidence: {h.confidence.value})"
-            for h in state.hypotheses
-        )
+        hyp_summary = "\n".join(f"- {h.statement} (confidence: {h.confidence.value})" for h in state.hypotheses)
 
         return f"""Based on our investigation so far:
 
@@ -286,10 +282,7 @@ Be thorough but concise. Focus on advancing understanding systematically."""
         # Update existing hypotheses based on evidence language
         for hyp in state.hypotheses:
             # Look for supporting evidence
-            if any(
-                phrase in response_lower
-                for phrase in ["supports", "confirms", "evidence for", "consistent with"]
-            ):
+            if any(phrase in response_lower for phrase in ["supports", "confirms", "evidence for", "consistent with"]):
                 hyp.add_evidence(f"Step {step.id}: {response[:200]}...", supporting=True)
                 step.hypotheses_updated.append(hyp.id)
 
@@ -301,8 +294,7 @@ Be thorough but concise. Focus on advancing understanding systematically."""
 
             # Look for contradicting evidence
             if any(
-                phrase in response_lower
-                for phrase in ["contradicts", "refutes", "evidence against", "inconsistent"]
+                phrase in response_lower for phrase in ["contradicts", "refutes", "evidence against", "inconsistent"]
             ):
                 hyp.add_evidence(f"Step {step.id}: {response[:200]}...", supporting=False)
                 step.hypotheses_updated.append(hyp.id)
@@ -373,7 +365,9 @@ Be thorough but concise. Focus on advancing understanding systematically."""
                     "id": s.id,
                     "depth": s.depth,
                     "query": s.query,
-                    "response_preview": s.response[:200] + "..." if s.response and len(s.response) > 200 else s.response,
+                    "response_preview": s.response[:200] + "..."
+                    if s.response and len(s.response) > 200
+                    else s.response,
                     "timestamp": s.timestamp.isoformat(),
                 }
                 for s in state.steps

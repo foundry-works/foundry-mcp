@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.research.document_digest import DocumentDigestor  # noqa: F401  # re-export for test patch targets
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
@@ -46,11 +46,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     finalize_phase,
 )
 
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
-
 logger = logging.getLogger(__name__)
 
 
@@ -68,8 +63,16 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
     """
 
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     async def _execute_analysis_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout: float,
@@ -150,9 +153,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
         # Store overall fidelity in metadata (content_fidelity is now per-item dict)
         state.dropped_content_ids = allocation_result.dropped_ids
         allocation_dict = allocation_result.to_dict()
-        allocation_dict["overall_fidelity_level"] = fidelity_level_from_score(
-            allocation_result.fidelity
-        )
+        allocation_dict["overall_fidelity_level"] = fidelity_level_from_score(allocation_result.fidelity)
         state.content_allocation_metadata = allocation_dict
 
         logger.info(
@@ -177,9 +178,7 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
         )
 
         if not valid:
-            logger.warning(
-                "Analysis phase final-fit validation failed, proceeding with truncated prompts"
-            )
+            logger.warning("Analysis phase final-fit validation failed, proceeding with truncated prompts")
 
         # Check for cancellation before making provider call
         self._check_cancellation(state)

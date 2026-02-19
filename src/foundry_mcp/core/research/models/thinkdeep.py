@@ -45,9 +45,7 @@ class InvestigationStep(BaseModel):
     hypotheses_generated: list[str] = Field(
         default_factory=list, description="IDs of hypotheses generated in this step"
     )
-    hypotheses_updated: list[str] = Field(
-        default_factory=list, description="IDs of hypotheses updated in this step"
-    )
+    hypotheses_updated: list[str] = Field(default_factory=list, description="IDs of hypotheses updated in this step")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     provider_id: Optional[str] = Field(default=None)
     model_used: Optional[str] = Field(default=None)
@@ -63,12 +61,8 @@ class ThinkDeepState(BaseModel):
     max_depth: int = Field(default=5, description="Maximum investigation depth")
     hypotheses: list[Hypothesis] = Field(default_factory=list)
     steps: list[InvestigationStep] = Field(default_factory=list)
-    converged: bool = Field(
-        default=False, description="Whether investigation has converged"
-    )
-    convergence_reason: Optional[str] = Field(
-        default=None, description="Reason for convergence if converged"
-    )
+    converged: bool = Field(default=False, description="Whether investigation has converged")
+    convergence_reason: Optional[str] = Field(default=None, description="Reason for convergence if converged")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     system_prompt: Optional[str] = Field(default=None)
@@ -90,9 +84,7 @@ class ThinkDeepState(BaseModel):
 
     def add_step(self, query: str, depth: Optional[int] = None) -> InvestigationStep:
         """Create and add a new investigation step."""
-        step = InvestigationStep(
-            depth=depth if depth is not None else self.current_depth, query=query
-        )
+        step = InvestigationStep(depth=depth if depth is not None else self.current_depth, query=query)
         self.steps.append(step)
         self.updated_at = datetime.utcnow()
         return step
@@ -107,8 +99,7 @@ class ThinkDeepState(BaseModel):
 
         # Converge if all hypotheses have high confidence
         if self.hypotheses and all(
-            h.confidence in (ConfidenceLevel.HIGH, ConfidenceLevel.CONFIRMED)
-            for h in self.hypotheses
+            h.confidence in (ConfidenceLevel.HIGH, ConfidenceLevel.CONFIRMED) for h in self.hypotheses
         ):
             self.converged = True
             self.convergence_reason = "All hypotheses reached high confidence"

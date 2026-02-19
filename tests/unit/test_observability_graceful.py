@@ -154,6 +154,7 @@ class TestMcpToolDecoratorFastPath:
     def test_async_decorator_works_without_observability(self):
         """Async decorator should work correctly when observability is disabled."""
         import asyncio
+
         from foundry_mcp.core.observability import mcp_tool
 
         @mcp_tool(tool_name="test_async_tool")

@@ -7,9 +7,7 @@ from foundry_mcp.core.validation.constants import STATUS_FIELDS
 from foundry_mcp.core.validation.models import SpecStats
 
 
-def calculate_stats(
-    spec_data: Dict[str, Any], file_path: Optional[str] = None
-) -> SpecStats:
+def calculate_stats(spec_data: Dict[str, Any], file_path: Optional[str] = None) -> SpecStats:
     """
     Calculate statistics for a spec file.
 

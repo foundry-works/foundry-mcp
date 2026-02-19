@@ -143,8 +143,7 @@ def negotiate_capabilities(
         else:
             negotiated["response_version"] = _capabilities.response_version
             warnings.append(
-                f"Requested version '{requested_version}' not supported, "
-                f"using '{_capabilities.response_version}'"
+                f"Requested version '{requested_version}' not supported, using '{_capabilities.response_version}'"
             )
 
     # Feature negotiation

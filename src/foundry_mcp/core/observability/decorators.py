@@ -9,13 +9,13 @@ import time
 from typing import Any, Callable, Optional, TypeVar
 
 from foundry_mcp.core.context import (
-    get_correlation_id,
     generate_correlation_id,
+    get_correlation_id,
     sync_request_context,
 )
+from foundry_mcp.core.observability.audit import _audit
 from foundry_mcp.core.observability.manager import get_observability_manager
 from foundry_mcp.core.observability.metrics import _metrics
-from foundry_mcp.core.observability.audit import _audit
 
 T = TypeVar("T")
 
@@ -94,13 +94,9 @@ def mcp_tool(
             # Use context manager if we need to establish context
             if not existing_corr_id:
                 with sync_request_context(correlation_id=corr_id):
-                    return await _async_tool_impl(
-                        func, name, corr_id, emit_metrics, audit, *args, **kwargs
-                    )
+                    return await _async_tool_impl(func, name, corr_id, emit_metrics, audit, *args, **kwargs)
             else:
-                return await _async_tool_impl(
-                    func, name, corr_id, emit_metrics, audit, *args, **kwargs
-                )
+                return await _async_tool_impl(func, name, corr_id, emit_metrics, audit, *args, **kwargs)
 
         async def _async_tool_impl(
             func: Callable[..., T],
@@ -139,9 +135,9 @@ def mcp_tool(
             try:
                 if span_context:
                     with span_context:
-                        result = await func(*args, **kwargs)
+                        result = await func(*args, **kwargs)  # type: ignore[misc]
                 else:
-                    result = await func(*args, **kwargs)
+                    result = await func(*args, **kwargs)  # type: ignore[misc]
                 return result
             except Exception as e:
                 success = False
@@ -156,9 +152,7 @@ def mcp_tool(
                 # End Prometheus active operation tracking
                 if prom_exporter:
                     prom_exporter.record_tool_end(name)
-                    prom_exporter.record_tool_invocation(
-                        name, success=success, duration_ms=duration_ms
-                    )
+                    prom_exporter.record_tool_invocation(name, success=success, duration_ms=duration_ms)
 
                 if emit_metrics:
                     labels = {"tool": name, "status": "success" if success else "error"}
@@ -188,13 +182,9 @@ def mcp_tool(
             # Use context manager if we need to establish context
             if not existing_corr_id:
                 with sync_request_context(correlation_id=corr_id):
-                    return _sync_tool_impl(
-                        func, name, corr_id, emit_metrics, audit, args, kwargs
-                    )
+                    return _sync_tool_impl(func, name, corr_id, emit_metrics, audit, args, kwargs)
             else:
-                return _sync_tool_impl(
-                    func, name, corr_id, emit_metrics, audit, args, kwargs
-                )
+                return _sync_tool_impl(func, name, corr_id, emit_metrics, audit, args, kwargs)
 
         def _sync_tool_impl(
             _wrapped_func: Callable[..., T],
@@ -255,9 +245,7 @@ def mcp_tool(
                 # End Prometheus active operation tracking
                 if prom_exporter:
                     prom_exporter.record_tool_end(_tool_name)
-                    prom_exporter.record_tool_invocation(
-                        _tool_name, success=success, duration_ms=duration_ms
-                    )
+                    prom_exporter.record_tool_invocation(_tool_name, success=success, duration_ms=duration_ms)
 
                 if _emit_metrics:
                     labels = {"tool": _tool_name, "status": "success" if success else "error"}
@@ -282,7 +270,7 @@ def mcp_tool(
         import asyncio
 
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return async_wrapper  # type: ignore[reportReturnType]
         return sync_wrapper
 
     return decorator
@@ -336,9 +324,9 @@ def mcp_resource(
             try:
                 if span_context:
                     with span_context:
-                        result = await func(*args, **kwargs)
+                        result = await func(*args, **kwargs)  # type: ignore[misc]
                 else:
-                    result = await func(*args, **kwargs)
+                    result = await func(*args, **kwargs)  # type: ignore[misc]
                 return result
             except Exception as e:
                 success = False
@@ -360,9 +348,7 @@ def mcp_resource(
                         "status": "success" if success else "error",
                     }
                     _metrics.counter("resource.access", labels=labels)
-                    _metrics.timer(
-                        "resource.latency", duration_ms, labels={"resource_type": rtype}
-                    )
+                    _metrics.timer("resource.latency", duration_ms, labels={"resource_type": rtype})
 
                 if audit:
                     _audit.resource_access(
@@ -424,9 +410,7 @@ def mcp_resource(
                         "status": "success" if success else "error",
                     }
                     _metrics.counter("resource.access", labels=labels)
-                    _metrics.timer(
-                        "resource.latency", duration_ms, labels={"resource_type": rtype}
-                    )
+                    _metrics.timer("resource.latency", duration_ms, labels={"resource_type": rtype})
 
                 if audit:
                     _audit.resource_access(
@@ -441,7 +425,7 @@ def mcp_resource(
         import asyncio
 
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return async_wrapper  # type: ignore[reportReturnType]
         return sync_wrapper
 
     return decorator

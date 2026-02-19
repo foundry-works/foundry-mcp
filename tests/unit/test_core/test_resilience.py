@@ -11,28 +11,27 @@ import time
 import pytest
 
 from foundry_mcp.core.resilience import (
+    BACKGROUND_TIMEOUT,
     # Timeout constants
     FAST_TIMEOUT,
     MEDIUM_TIMEOUT,
     SLOW_TIMEOUT,
-    BACKGROUND_TIMEOUT,
+    CircuitBreaker,
+    CircuitBreakerError,
+    # Circuit breaker
+    CircuitState,
+    # Health check
+    HealthStatus,
     # Timeout utilities
     TimeoutException,
-    with_timeout,
+    check_dependencies,
+    health_check,
     # Retry utilities
     retry_with_backoff,
     retryable,
-    # Circuit breaker
-    CircuitState,
-    CircuitBreaker,
-    CircuitBreakerError,
     with_circuit_breaker,
-    # Health check
-    HealthStatus,
-    health_check,
-    check_dependencies,
+    with_timeout,
 )
-
 
 # =============================================================================
 # Timeout Constants Tests
@@ -463,9 +462,7 @@ class TestCircuitBreaker:
 
     def test_half_open_failure_reopens_circuit(self):
         """Failure in HALF_OPEN should reopen circuit."""
-        cb = CircuitBreaker(
-            name="test", failure_threshold=2, recovery_timeout=0.01
-        )
+        cb = CircuitBreaker(name="test", failure_threshold=2, recovery_timeout=0.01)
 
         # Open circuit
         cb.record_failure()
@@ -528,9 +525,7 @@ class TestCircuitBreaker:
 
     def test_get_status_retry_after_when_open(self):
         """get_status() should include retry_after when OPEN."""
-        cb = CircuitBreaker(
-            name="test", failure_threshold=2, recovery_timeout=10.0
-        )
+        cb = CircuitBreaker(name="test", failure_threshold=2, recovery_timeout=10.0)
 
         cb.record_failure()
         cb.record_failure()
@@ -736,10 +731,12 @@ class TestCheckDependencies:
         async def healthy():
             return True
 
-        result = await check_dependencies({
-            "service1": healthy,
-            "service2": healthy,
-        })
+        result = await check_dependencies(
+            {
+                "service1": healthy,
+                "service2": healthy,
+            }
+        )
 
         assert result["status"] == "healthy"
         assert len(result["unhealthy"]) == 0
@@ -756,10 +753,12 @@ class TestCheckDependencies:
         async def unhealthy():
             raise ValueError("fail")
 
-        result = await check_dependencies({
-            "good": healthy,
-            "bad": unhealthy,
-        })
+        result = await check_dependencies(
+            {
+                "good": healthy,
+                "bad": unhealthy,
+            }
+        )
 
         assert result["status"] == "degraded"
         assert "bad" in result["unhealthy"]
@@ -776,11 +775,13 @@ class TestCheckDependencies:
             return True
 
         # Run 3 checks that each take 50ms
-        result = await check_dependencies({
-            "check1": slow_check,
-            "check2": slow_check,
-            "check3": slow_check,
-        })
+        result = await check_dependencies(
+            {
+                "check1": slow_check,
+                "check2": slow_check,
+                "check3": slow_check,
+            }
+        )
 
         elapsed = time.time() - start
 

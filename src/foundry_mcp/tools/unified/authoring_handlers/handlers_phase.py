@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import audit_log
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import (
     CATEGORIES,
     PHASE_TEMPLATES,
@@ -29,7 +29,6 @@ from foundry_mcp.core.spec import (
     update_phase_metadata,
 )
 from foundry_mcp.core.task import TASK_TYPES
-
 from foundry_mcp.tools.unified.authoring_handlers._helpers import (
     _metric_name,
     _metrics,
@@ -42,10 +41,14 @@ from foundry_mcp.tools.unified.authoring_handlers._helpers import (
 from foundry_mcp.tools.unified.param_schema import AtLeastOne, Bool, Num, Str, validate_payload
 
 _PHASE_ADD_SCHEMA = {
-    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                   remediation="Pass the spec identifier to authoring"),
-    "title": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                 remediation="Include a descriptive title for the new phase"),
+    "spec_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the spec identifier to authoring"
+    ),
+    "title": Str(
+        required=True,
+        error_code=ErrorCode.MISSING_REQUIRED,
+        remediation="Include a descriptive title for the new phase",
+    ),
     "description": Str(),
     "purpose": Str(),
     "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
@@ -56,10 +59,12 @@ _PHASE_ADD_SCHEMA = {
 }
 
 _PHASE_UPDATE_METADATA_SCHEMA = {
-    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                   remediation="Pass the spec identifier to authoring"),
-    "phase_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                    remediation="Pass the phase identifier (e.g., 'phase-1')"),
+    "spec_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the spec identifier to authoring"
+    ),
+    "phase_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the phase identifier (e.g., 'phase-1')"
+    ),
     "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
     "description": Str(),
     "purpose": Str(),
@@ -68,8 +73,9 @@ _PHASE_UPDATE_METADATA_SCHEMA = {
 }
 
 _PHASE_ADD_BULK_SCHEMA = {
-    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                   remediation="Pass the spec identifier to authoring"),
+    "spec_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the spec identifier to authoring"
+    ),
     "position": Num(integer_only=True, min_val=0),
     "link_previous": Bool(default=True),
     "dry_run": Bool(default=False),
@@ -77,10 +83,14 @@ _PHASE_ADD_BULK_SCHEMA = {
 }
 
 _PHASE_MOVE_SCHEMA = {
-    "spec_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                   remediation='Use spec(action="list") to find available spec IDs'),
-    "phase_id": Str(required=True, error_code=ErrorCode.MISSING_REQUIRED,
-                    remediation="Specify a phase ID like phase-1 or phase-2"),
+    "spec_id": Str(
+        required=True,
+        error_code=ErrorCode.MISSING_REQUIRED,
+        remediation='Use spec(action="list") to find available spec IDs',
+    ),
+    "phase_id": Str(
+        required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Specify a phase ID like phase-1 or phase-2"
+    ),
     # position validated imperatively — needs MISSING_REQUIRED vs INVALID_FORMAT
     "link_previous": Bool(default=True, error_code=ErrorCode.INVALID_FORMAT),
     "dry_run": Bool(default=False, error_code=ErrorCode.INVALID_FORMAT),
@@ -100,9 +110,7 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-add"
 
-    err = validate_payload(payload, _PHASE_ADD_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PHASE_ADD_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -119,12 +127,11 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     warnings: List[str] = []
     if _phase_exists(spec_id, specs_dir, title):
-        warnings.append(
-            f"Phase titled '{title}' already exists; the new phase will still be added"
-        )
+        warnings.append(f"Phase titled '{title}' already exists; the new phase will still be added")
 
     audit_log(
         "tool_invocation",
@@ -221,16 +228,20 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
     request_id = _request_id()
     action = "phase-update-metadata"
 
-    err = validate_payload(payload, _PHASE_UPDATE_METADATA_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id,
-                           cross_field_rules=[
-                               AtLeastOne(
-                                   fields=("estimated_hours", "description", "purpose"),
-                                   error_code=ErrorCode.VALIDATION_ERROR,
-                                   remediation="Include estimated_hours, description, or purpose",
-                               ),
-                           ])
+    err = validate_payload(
+        payload,
+        _PHASE_UPDATE_METADATA_SCHEMA,
+        tool_name="authoring",
+        action=action,
+        request_id=request_id,
+        cross_field_rules=[
+            AtLeastOne(
+                fields=("estimated_hours", "description", "purpose"),
+                error_code=ErrorCode.VALIDATION_ERROR,
+                remediation="Include estimated_hours, description, or purpose",
+            ),
+        ],
+    )
     if err:
         return err
 
@@ -245,6 +256,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     audit_log(
         "tool_invocation",
@@ -311,7 +323,7 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
             return asdict(
                 error_response(
                     f"Node '{phase_id}' is not a phase",
-                    error_code=ErrorCode.VALIDATION_FAILED,
+                    error_code=ErrorCode.VALIDATION_ERROR,
                     error_type=ErrorType.VALIDATION,
                     remediation="Provide a valid phase ID (e.g., 'phase-1')",
                     request_id=request_id,
@@ -341,9 +353,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-add-bulk"
 
-    err = validate_payload(payload, _PHASE_ADD_BULK_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PHASE_ADD_BULK_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -492,9 +502,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
 
     estimated_hours = phase_obj.get("estimated_hours")
     if estimated_hours is not None:
-        if isinstance(estimated_hours, bool) or not isinstance(
-            estimated_hours, (int, float)
-        ):
+        if isinstance(estimated_hours, bool) or not isinstance(estimated_hours, (int, float)):
             return _validation_error(
                 field="phase.estimated_hours",
                 action=action,
@@ -539,13 +547,12 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # Check for duplicate phase title (warning only)
     warnings: List[str] = []
     if _phase_exists(spec_id, specs_dir, title):
-        warnings.append(
-            f"Phase titled '{title}' already exists; the new phase will still be added"
-        )
+        warnings.append(f"Phase titled '{title}' already exists; the new phase will still be added")
 
     audit_log(
         "tool_invocation",
@@ -563,8 +570,7 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
     if dry_run:
         _metrics.counter(metric_key, labels={"status": "success", "dry_run": "true"})
         preview_tasks = [
-            {"task_id": "(preview)", "title": t.get("title", ""), "type": t.get("type", "")}
-            for t in tasks
+            {"task_id": "(preview)", "title": t.get("title", ""), "type": t.get("type", "")} for t in tasks
         ]
         return asdict(
             success_response(
@@ -743,6 +749,7 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
 
     elif template_action == "show":
         try:
+            assert isinstance(template_name, str)
             template_struct = get_phase_template_structure(template_name)
             data["template_name"] = template_name
             data["content"] = {
@@ -846,6 +853,8 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
         specs_dir, specs_err = _resolve_specs_dir(config, path)
         if specs_err:
             return specs_err
+
+        assert isinstance(template_name, str)
 
         audit_log(
             "tool_invocation",
@@ -955,9 +964,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-move"
 
-    err = validate_payload(payload, _PHASE_MOVE_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PHASE_MOVE_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -1000,6 +1007,7 @@ def _handle_phase_move(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     audit_log(
         "tool_invocation",
@@ -1112,9 +1120,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "phase-remove"
 
-    err = validate_payload(payload, _PHASE_REMOVE_SCHEMA,
-                           tool_name="authoring", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PHASE_REMOVE_SCHEMA, tool_name="authoring", action=action, request_id=request_id)
     if err:
         return err
 
@@ -1127,6 +1133,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     audit_log(
         "tool_invocation",
@@ -1140,9 +1147,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
 
     metric_key = _metric_name(action)
     if dry_run:
-        _metrics.counter(
-            metric_key, labels={"status": "success", "force": str(force).lower()}
-        )
+        _metrics.counter(metric_key, labels={"status": "success", "force": str(force).lower()})
         return asdict(
             success_response(
                 data={
@@ -1233,9 +1238,7 @@ def _handle_phase_remove(*, config: ServerConfig, **payload: Any) -> dict:
             )
         )
 
-    _metrics.counter(
-        metric_key, labels={"status": "success", "force": str(force).lower()}
-    )
+    _metrics.counter(metric_key, labels={"status": "success", "force": str(force).lower()})
     return asdict(
         success_response(
             data={"spec_id": spec_id, "dry_run": False, **(result or {})},

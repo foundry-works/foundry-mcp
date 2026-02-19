@@ -7,14 +7,12 @@ Covers:
 - Terminal session status derivation from canonical enum set
 """
 
-import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from foundry_mcp.core.autonomy.models.enums import SessionStatus
 from foundry_mcp.core.autonomy.write_lock import (
-    AUTONOMY_WRITE_LOCK_ACTIVE,
     NON_TERMINAL_SESSION_STATUSES,
     PROTECTED_LIFECYCLE_ACTIONS,
     PROTECTED_TASK_ACTIONS,
@@ -27,8 +25,6 @@ from foundry_mcp.core.autonomy.write_lock import (
     is_protected_action,
     make_write_lock_error_response,
 )
-from foundry_mcp.core.autonomy.models.enums import SessionStatus
-
 
 # =============================================================================
 # Action Classification
@@ -133,15 +129,19 @@ class TestCheckAutonomyWriteLock:
 
     def test_bypass_with_reason_returns_bypassed(self):
         session_data = {"id": "session-1", "status": "running"}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="maintainer",
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock._write_bypass_journal_entry",
-            return_value=True,
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="maintainer",
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._write_bypass_journal_entry",
+                return_value=True,
+            ),
         ):
             result = check_autonomy_write_lock(
                 "spec-1",
@@ -156,12 +156,15 @@ class TestCheckAutonomyWriteLock:
 
     def test_bypass_without_reason_stays_locked(self):
         session_data = {"id": "session-1", "status": "running"}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="maintainer",
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="maintainer",
+            ),
         ):
             result = check_autonomy_write_lock(
                 "spec-1",
@@ -175,12 +178,15 @@ class TestCheckAutonomyWriteLock:
 
     def test_bypass_with_empty_reason_stays_locked(self):
         session_data = {"id": "session-1", "status": "running"}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="maintainer",
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="maintainer",
+            ),
         ):
             result = check_autonomy_write_lock(
                 "spec-1",
@@ -195,12 +201,15 @@ class TestCheckAutonomyWriteLock:
     def test_bypass_denied_for_non_maintainer_role(self):
         """Bypass is denied by role even when config allows bypass."""
         session_data = {"id": "session-1", "status": "running", "write_lock_enforced": True}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="observer",
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="observer",
+            ),
         ):
             result = check_autonomy_write_lock(
                 "spec-1",
@@ -216,12 +225,15 @@ class TestCheckAutonomyWriteLock:
     def test_role_check_precedes_config_check(self):
         """Role-denied error takes precedence over config-denied error."""
         session_data = {"id": "session-1", "status": "running", "write_lock_enforced": True}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="observer",
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="observer",
+            ),
         ):
             result = check_autonomy_write_lock(
                 "spec-1",
@@ -236,12 +248,15 @@ class TestCheckAutonomyWriteLock:
     def test_bypass_denied_by_config(self):
         """Bypass is denied when allow_lock_bypass=False (default)."""
         session_data = {"id": "session-1", "status": "running", "write_lock_enforced": True}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="maintainer",
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="maintainer",
+            ),
         ):
             # Default allow_lock_bypass=False should deny bypass
             result = check_autonomy_write_lock(
@@ -258,15 +273,19 @@ class TestCheckAutonomyWriteLock:
     def test_bypass_allowed_when_config_permits(self):
         """Bypass works when allow_lock_bypass=True."""
         session_data = {"id": "session-1", "status": "running", "write_lock_enforced": True}
-        with patch(
-            "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
-            return_value=session_data,
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock.get_server_role",
-            return_value="maintainer",
-        ), patch(
-            "foundry_mcp.core.autonomy.write_lock._write_bypass_journal_entry",
-            return_value=True,
+        with (
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._find_active_session_for_spec",
+                return_value=session_data,
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock.get_server_role",
+                return_value="maintainer",
+            ),
+            patch(
+                "foundry_mcp.core.autonomy.write_lock._write_bypass_journal_entry",
+                return_value=True,
+            ),
         ):
             result = check_autonomy_write_lock(
                 "spec-1",

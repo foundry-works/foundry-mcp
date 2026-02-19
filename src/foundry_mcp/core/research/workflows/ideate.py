@@ -218,7 +218,7 @@ class IdeateWorkflow(ResearchWorkflowBase):
             )
 
         # Build clustering prompt
-        ideas_text = "\n".join(f"{i+1}. {idea.content}" for i, idea in enumerate(state.ideas))
+        ideas_text = "\n".join(f"{i + 1}. {idea.content}" for i, idea in enumerate(state.ideas))
         prompt = f"""Analyze these ideas and group them into 3-5 thematic clusters:
 
 {ideas_text}
@@ -283,7 +283,7 @@ IDEAS: [comma-separated numbers]"""
             )
 
         criteria_text = ", ".join(state.scoring_criteria)
-        ideas_text = "\n".join(f"{i+1}. {idea.content}" for i, idea in enumerate(state.ideas))
+        ideas_text = "\n".join(f"{i + 1}. {idea.content}" for i, idea in enumerate(state.ideas))
 
         prompt = f"""Score each idea on a scale of 0.0 to 1.0 based on these criteria: {criteria_text}
 
@@ -465,10 +465,10 @@ Provide:
 **Updated**: {state.updated_at.isoformat()}
 
 ## Perspectives
-{', '.join(state.perspectives)}
+{", ".join(state.perspectives)}
 
 ## Scoring Criteria
-{', '.join(state.scoring_criteria)}
+{", ".join(state.scoring_criteria)}
 """
 
         if state.clusters:

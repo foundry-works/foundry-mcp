@@ -5,31 +5,32 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.lifecycle import (
+    VALID_FOLDERS,
+    LifecycleState,
+    MoveResult,
+    activate_spec,
+    archive_spec,
+    complete_spec,
+    get_lifecycle_state,
+    move_spec,
+)
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
-from foundry_mcp.core.lifecycle import (
-    VALID_FOLDERS,
-    MoveResult,
-    LifecycleState,
-    archive_spec,
-    activate_spec,
-    complete_spec,
-    get_lifecycle_state,
-    move_spec,
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.common import (
     build_request_id,
@@ -46,9 +47,12 @@ from foundry_mcp.tools.unified.router import (
 # Import write-lock helpers for autonomy session protection.
 try:
     from foundry_mcp.core.autonomy.write_lock import (
-        check_autonomy_write_lock as _check_write_lock_impl,
         WriteLockStatus as _WriteLockStatus,
     )
+    from foundry_mcp.core.autonomy.write_lock import (
+        check_autonomy_write_lock as _check_write_lock_impl,
+    )
+
     _WRITE_LOCK_AVAILABLE = True
 except ImportError:
     _check_write_lock_impl = None  # type: ignore[misc,assignment]
@@ -65,7 +69,7 @@ def _check_autonomy_write_lock(
     config: Optional[ServerConfig] = None,
 ) -> Optional[dict]:
     """Check autonomy write-lock and return error response if blocked."""
-    if not _WRITE_LOCK_AVAILABLE or _check_write_lock_impl is None:
+    if not _WRITE_LOCK_AVAILABLE or _check_write_lock_impl is None or _WriteLockStatus is None:
         return None
 
     allow_lock_bypass = False
@@ -81,19 +85,22 @@ def _check_autonomy_write_lock(
     )
 
     if result.status == _WriteLockStatus.LOCKED:
-        return asdict(error_response(
-            result.message or "Autonomy write lock is active for this spec",
-            error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
-            error_type=ErrorType.CONFLICT,
-            request_id=request_id,
-            details={
-                "session_id": result.session_id,
-                "session_status": result.session_status,
-                "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
-            },
-        ))
+        return asdict(
+            error_response(
+                result.message or "Autonomy write lock is active for this spec",
+                error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
+                error_type=ErrorType.CONFLICT,
+                request_id=request_id,
+                details={
+                    "session_id": result.session_id,
+                    "session_status": result.session_status,
+                    "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
+                },
+            )
+        )
 
     return None
+
 
 logger = logging.getLogger(__name__)
 _metrics = get_metrics()
@@ -126,8 +133,9 @@ _SPEC_PATH_SCHEMA = {
 
 _MOVE_SCHEMA = {
     **_SPEC_PATH_SCHEMA,
-    "to_folder": Str(required=True, choices=frozenset(VALID_FOLDERS),
-                     remediation="Use one of: pending, active, completed, archived"),
+    "to_folder": Str(
+        required=True, choices=frozenset(VALID_FOLDERS), remediation="Use one of: pending, active, completed, archived"
+    ),
 }
 
 _COMPLETE_SCHEMA = {
@@ -166,11 +174,7 @@ def _classify_error(error_message: str) -> tuple[ErrorCode, ErrorType, str]:
             ErrorType.VALIDATION,
             "Use one of the supported lifecycle folders",
         )
-    if (
-        "cannot move" in lowered
-        or "cannot complete" in lowered
-        or "already exists" in lowered
-    ):
+    if "cannot move" in lowered or "cannot complete" in lowered or "already exists" in lowered:
         return (
             ErrorCode.CONFLICT,
             ErrorType.CONFLICT,
@@ -233,9 +237,7 @@ def _move_result_response(
     )
 
 
-def _state_response(
-    state: LifecycleState, *, request_id: str, elapsed_ms: float
-) -> dict:
+def _state_response(state: LifecycleState, *, request_id: str, elapsed_ms: float) -> dict:
     return asdict(
         success_response(
             data={
@@ -258,9 +260,7 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     action = "move"
     request_id = _request_id()
 
-    err = validate_payload(payload, _MOVE_SCHEMA,
-                           tool_name="lifecycle", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _MOVE_SCHEMA, tool_name="lifecycle", action=action, request_id=request_id)
     if err:
         return err
 
@@ -273,6 +273,7 @@ def _handle_move(*, config: ServerConfig, **payload: Any) -> dict:
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
@@ -323,9 +324,7 @@ def _handle_activate(*, config: ServerConfig, **payload: Any) -> dict:
     action = "activate"
     request_id = _request_id()
 
-    err = validate_payload(payload, _SPEC_PATH_SCHEMA,
-                           tool_name="lifecycle", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_PATH_SCHEMA, tool_name="lifecycle", action=action, request_id=request_id)
     if err:
         return err
 
@@ -337,6 +336,7 @@ def _handle_activate(*, config: ServerConfig, **payload: Any) -> dict:
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
@@ -386,9 +386,7 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
     action = "complete"
     request_id = _request_id()
 
-    err = validate_payload(payload, _COMPLETE_SCHEMA,
-                           tool_name="lifecycle", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _COMPLETE_SCHEMA, tool_name="lifecycle", action=action, request_id=request_id)
     if err:
         return err
 
@@ -401,6 +399,7 @@ def _handle_complete(*, config: ServerConfig, **payload: Any) -> dict:
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
@@ -451,9 +450,7 @@ def _handle_archive(*, config: ServerConfig, **payload: Any) -> dict:
     action = "archive"
     request_id = _request_id()
 
-    err = validate_payload(payload, _SPEC_PATH_SCHEMA,
-                           tool_name="lifecycle", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_PATH_SCHEMA, tool_name="lifecycle", action=action, request_id=request_id)
     if err:
         return err
 
@@ -465,6 +462,7 @@ def _handle_archive(*, config: ServerConfig, **payload: Any) -> dict:
     workspace_root, specs_dir, specs_err = _resolve_workspace_for_write_lock(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # Check autonomy write-lock before proceeding with protected mutation
     lock_error = _check_autonomy_write_lock(
@@ -514,9 +512,7 @@ def _handle_state(*, config: ServerConfig, **payload: Any) -> dict:
     action = "state"
     request_id = _request_id()
 
-    err = validate_payload(payload, _SPEC_PATH_SCHEMA,
-                           tool_name="lifecycle", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _SPEC_PATH_SCHEMA, tool_name="lifecycle", action=action, request_id=request_id)
     if err:
         return err
 
@@ -526,6 +522,7 @@ def _handle_state(*, config: ServerConfig, **payload: Any) -> dict:
     specs_dir, specs_err = resolve_specs_dir(config, path)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     start = time.perf_counter()
     try:
@@ -593,12 +590,8 @@ _LIFECYCLE_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_lifecycle_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _LIFECYCLE_ROUTER, "lifecycle", action, config=config, **payload
-    )
+def _dispatch_lifecycle_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_LIFECYCLE_ROUTER, "lifecycle", action, config=config, **payload)
 
 
 def register_unified_lifecycle_tool(mcp: FastMCP, config: ServerConfig) -> None:

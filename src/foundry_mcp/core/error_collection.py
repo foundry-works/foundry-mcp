@@ -41,9 +41,9 @@ import re
 import threading
 import traceback
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.core.context import get_correlation_id
 from foundry_mcp.core.observability import redact_sensitive_data
@@ -175,8 +175,7 @@ class ErrorFingerprinter:
     def __init__(self) -> None:
         """Initialize fingerprinter with compiled patterns."""
         self._compiled_patterns = [
-            (re.compile(pattern, re.IGNORECASE), replacement)
-            for pattern, replacement in self._NORMALIZE_PATTERNS
+            (re.compile(pattern, re.IGNORECASE), replacement) for pattern, replacement in self._NORMALIZE_PATTERNS
         ]
 
     def _normalize_message(self, message: str) -> str:
@@ -309,9 +308,7 @@ class ErrorCollector:
         """Generate a unique error ID."""
         return f"err_{uuid.uuid4().hex[:12]}"
 
-    def _extract_exception_info(
-        self, error: Exception
-    ) -> Tuple[str, Optional[str]]:
+    def _extract_exception_info(self, error: Exception) -> Tuple[str, Optional[str]]:
         """Extract exception type and sanitized stack trace.
 
         Args:
@@ -326,9 +323,7 @@ class ErrorCollector:
         if self._include_stack_traces:
             try:
                 # Get the full traceback
-                tb_lines = traceback.format_exception(
-                    type(error), error, error.__traceback__
-                )
+                tb_lines = traceback.format_exception(type(error), error, error.__traceback__)
                 raw_trace = "".join(tb_lines)
                 # Redact sensitive data from stack trace
                 stack_trace = redact_sensitive_data(raw_trace)
@@ -339,11 +334,21 @@ class ErrorCollector:
 
     # Sensitive key name patterns that should always be redacted
     _SENSITIVE_KEY_PATTERNS = [
-        "api_key", "apikey", "api-key",
-        "password", "passwd", "pwd",
-        "secret", "token", "auth",
-        "credential", "private", "key",
-        "bearer", "access_token", "refresh_token",
+        "api_key",
+        "apikey",
+        "api-key",
+        "password",
+        "passwd",
+        "pwd",
+        "secret",
+        "token",
+        "auth",
+        "credential",
+        "private",
+        "key",
+        "bearer",
+        "access_token",
+        "refresh_token",
     ]
 
     def _is_sensitive_key(self, key: str) -> bool:
@@ -351,9 +356,7 @@ class ErrorCollector:
         key_lower = key.lower()
         return any(pattern in key_lower for pattern in self._SENSITIVE_KEY_PATTERNS)
 
-    def _redact_input_params(
-        self, params: Optional[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
+    def _redact_input_params(self, params: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Redact sensitive data from input parameters.
 
         Args:
@@ -393,9 +396,7 @@ class ErrorCollector:
         except Exception:
             return None
 
-    def _map_exception_to_codes(
-        self, error: Exception
-    ) -> Tuple[str, str]:
+    def _map_exception_to_codes(self, error: Exception) -> Tuple[str, str]:
         """Map an exception to error_code and error_type.
 
         Args:

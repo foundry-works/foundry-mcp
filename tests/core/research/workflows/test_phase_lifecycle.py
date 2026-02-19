@@ -23,7 +23,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     finalize_phase,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -151,9 +150,7 @@ class TestExecuteLLMCallSuccess:
             timeout=90.0,
         )
 
-        event_types = [
-            call.args[1] for call in mock_workflow._write_audit_event.call_args_list
-        ]
+        event_types = [call.args[1] for call in mock_workflow._write_audit_event.call_args_list]
         assert "llm.call.started" in event_types
         assert "llm.call.completed" in event_types
 
@@ -161,9 +158,7 @@ class TestExecuteLLMCallSuccess:
     async def test_tracks_tokens(self, mock_workflow, sample_state):
         """Should add tokens_used to state.total_tokens_used."""
         sample_state.total_tokens_used = 100
-        mock_workflow._execute_provider_async.return_value = _make_success_result(
-            tokens_used=50
-        )
+        mock_workflow._execute_provider_async.return_value = _make_success_result(tokens_used=50)
 
         await execute_llm_call(
             workflow=mock_workflow,
@@ -324,9 +319,7 @@ class TestExecuteLLMCallContextWindowError:
 
             # Verify error audit event
             completed_calls = [
-                c
-                for c in mock_workflow._write_audit_event.call_args_list
-                if c.args[1] == "llm.call.completed"
+                c for c in mock_workflow._write_audit_event.call_args_list if c.args[1] == "llm.call.completed"
             ]
             assert len(completed_calls) == 1
             assert completed_calls[0].kwargs["data"]["status"] == "error"
@@ -346,9 +339,7 @@ class TestExecuteLLMCallProviderFailure:
     @pytest.mark.asyncio
     async def test_returns_failed_result_directly(self, mock_workflow, sample_state):
         """Should return the failed WorkflowResult from the provider."""
-        failed = _make_failure_result(
-            error="provider unavailable", metadata={"timeout": False}
-        )
+        failed = _make_failure_result(error="provider unavailable", metadata={"timeout": False})
         mock_workflow._execute_provider_async.return_value = failed
 
         ret = await execute_llm_call(
@@ -370,9 +361,7 @@ class TestExecuteLLMCallProviderFailure:
     @pytest.mark.asyncio
     async def test_timeout_failure(self, mock_workflow, sample_state):
         """Should handle timeout metadata correctly."""
-        failed = _make_failure_result(
-            error="timeout", metadata={"timeout": True, "providers_tried": ["a", "b"]}
-        )
+        failed = _make_failure_result(error="timeout", metadata={"timeout": True, "providers_tried": ["a", "b"]})
         mock_workflow._execute_provider_async.return_value = failed
 
         ret = await execute_llm_call(
@@ -478,9 +467,7 @@ class TestEdgeCases:
     async def test_zero_tokens_used_not_tracked(self, mock_workflow, sample_state):
         """Should not add to total_tokens_used when tokens_used is 0/None."""
         sample_state.total_tokens_used = 100
-        mock_workflow._execute_provider_async.return_value = _make_success_result(
-            tokens_used=0
-        )
+        mock_workflow._execute_provider_async.return_value = _make_success_result(tokens_used=0)
 
         await execute_llm_call(
             workflow=mock_workflow,

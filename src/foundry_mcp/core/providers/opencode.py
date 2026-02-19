@@ -155,9 +155,7 @@ class OpenCodeProvider(ProviderContext):
         super().__init__(metadata, hooks)
         self._runner = runner or _default_runner
         self._binary = binary or os.environ.get(CUSTOM_BINARY_ENV, DEFAULT_BINARY)
-        self._wrapper_path = wrapper_path or Path(
-            os.environ.get(CUSTOM_WRAPPER_ENV, str(DEFAULT_WRAPPER_SCRIPT))
-        )
+        self._wrapper_path = wrapper_path or Path(os.environ.get(CUSTOM_WRAPPER_ENV, str(DEFAULT_WRAPPER_SCRIPT)))
 
         # Prepare environment for subprocess with secure API key handling
         self._env = self._prepare_subprocess_env(env)
@@ -197,9 +195,7 @@ class OpenCodeProvider(ProviderContext):
         # Clean up config file
         self._cleanup_config_file()
 
-    def _prepare_subprocess_env(
-        self, custom_env: Optional[Dict[str, str]]
-    ) -> Dict[str, str]:
+    def _prepare_subprocess_env(self, custom_env: Optional[Dict[str, str]]) -> Dict[str, str]:
         """
         Prepare environment variables for subprocess execution.
 
@@ -316,8 +312,8 @@ class OpenCodeProvider(ProviderContext):
 
     def _is_opencode_server_healthy(self, server_url: str) -> bool:
         """Verify the opencode server is actually responding (not just port open)."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         try:
             # Try to hit the opencode server - it should respond to HTTP
@@ -340,11 +336,7 @@ class OpenCodeProvider(ProviderContext):
     def _ensure_server_running(self) -> None:
         """Ensure OpenCode server is running, start if necessary."""
         # Extract port from server URL (default: 4096)
-        server_url = (
-            self._env.get("OPENCODE_SERVER_URL", DEFAULT_SERVER_URL)
-            if self._env
-            else DEFAULT_SERVER_URL
-        )
+        server_url = self._env.get("OPENCODE_SERVER_URL", DEFAULT_SERVER_URL) if self._env else DEFAULT_SERVER_URL
         try:
             # Parse port from URL (e.g., "http://localhost:4096" -> 4096)
             port = int(server_url.split(":")[-1].rstrip("/"))
@@ -359,8 +351,7 @@ class OpenCodeProvider(ProviderContext):
             else:
                 # Port is open but server not responding properly
                 logger.warning(
-                    f"Port {port} is open but OpenCode server not responding. "
-                    "Another process may be using this port."
+                    f"Port {port} is open but OpenCode server not responding. Another process may be using this port."
                 )
                 raise ProviderExecutionError(
                     f"Port {port} is in use but OpenCode server is not responding. "
@@ -596,9 +587,7 @@ class OpenCodeProvider(ProviderContext):
                 chunk_content = msg.get("content", "")
                 content_parts.append(chunk_content)
                 if request.stream:
-                    self._emit_stream_chunk(
-                        StreamChunk(content=chunk_content, index=len(content_parts) - 1)
-                    )
+                    self._emit_stream_chunk(StreamChunk(content=chunk_content, index=len(content_parts) - 1))
 
             elif msg_type == "done":
                 # Final response with metadata

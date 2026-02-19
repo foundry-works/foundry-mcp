@@ -57,12 +57,14 @@ def success_response(
         >>> success_response(
         ...     data={"findings": [...]},
         ...     warnings=["CONTENT_TRUNCATED: 3 findings compressed"],
-        ...     warning_details=[{
-        ...         "code": "CONTENT_TRUNCATED",
-        ...         "severity": "info",
-        ...         "message": "3 findings compressed to fit budget",
-        ...         "context": {"dropped_count": 3, "reason": "token_limit"}
-        ...     }],
+        ...     warning_details=[
+        ...         {
+        ...             "code": "CONTENT_TRUNCATED",
+        ...             "severity": "info",
+        ...             "message": "3 findings compressed to fit budget",
+        ...             "context": {"dropped_count": 3, "reason": "token_limit"},
+        ...         }
+        ...     ],
         ...     content_fidelity="partial",
         ...     dropped_content_ids=["finding-003", "finding-004"],
         ... )
@@ -130,24 +132,16 @@ def error_response(
     if data:
         payload.update(dict(data))
 
-    effective_error_code: Union[ErrorCode, str] = (
-        error_code if error_code is not None else ErrorCode.INTERNAL_ERROR
-    )
-    effective_error_type: Union[ErrorType, str] = (
-        error_type if error_type is not None else ErrorType.INTERNAL
-    )
+    effective_error_code: Union[ErrorCode, str] = error_code if error_code is not None else ErrorCode.INTERNAL_ERROR
+    effective_error_type: Union[ErrorType, str] = error_type if error_type is not None else ErrorType.INTERNAL
 
     if "error_code" not in payload:
         payload["error_code"] = (
-            effective_error_code.value
-            if isinstance(effective_error_code, Enum)
-            else effective_error_code
+            effective_error_code.value if isinstance(effective_error_code, Enum) else effective_error_code
         )
     if "error_type" not in payload:
         payload["error_type"] = (
-            effective_error_type.value
-            if isinstance(effective_error_type, Enum)
-            else effective_error_type
+            effective_error_type.value if isinstance(effective_error_type, Enum) else effective_error_type
         )
     if remediation is not None and "remediation" not in payload:
         payload["remediation"] = remediation

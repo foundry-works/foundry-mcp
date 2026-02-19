@@ -8,7 +8,10 @@ Provides thread-safe persistence for autonomous execution sessions with:
 - Garbage collection with TTL
 """
 
+from __future__ import annotations
+
 import base64
+import binascii
 import hashlib
 import json
 import logging
@@ -18,15 +21,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from filelock import FileLock, Timeout
+from filelock import BaseFileLock, FileLock
 
-from .models.enums import SessionStatus, TERMINAL_STATUSES
+if TYPE_CHECKING:
+    from .models.steps import StepProofRecord
+
+from .models.enums import TERMINAL_STATUSES, SessionStatus
 from .models.responses import SessionSummary
 from .models.state import AutonomousSessionState
 from .state_migrations import (
-    CURRENT_SCHEMA_VERSION,
     migrate_state,
 )
 
@@ -105,12 +110,15 @@ def encode_cursor(
     Returns:
         Base64-encoded opaque cursor
     """
-    cursor_data = json.dumps({
-        "v": schema_version,
-        "u": last_updated_at,
-        "s": last_session_id,
-        "f": filters_hash,
-    }, separators=(",", ":"))
+    cursor_data = json.dumps(
+        {
+            "v": schema_version,
+            "u": last_updated_at,
+            "s": last_session_id,
+            "f": filters_hash,
+        },
+        separators=(",", ":"),
+    )
     return base64.urlsafe_b64encode(cursor_data.encode()).decode()
 
 
@@ -134,7 +142,7 @@ def decode_cursor(cursor: str) -> Tuple[int, str, str, str]:
             cursor_data["s"],
             cursor_data["f"],
         )
-    except (json.JSONDecodeError, KeyError, base64.binascii.Error) as e:
+    except (json.JSONDecodeError, KeyError, binascii.Error) as e:
         raise ValueError(f"Invalid cursor: {e}") from e
 
 
@@ -151,10 +159,14 @@ def compute_filters_hash(
     Returns:
         Short hash of filters
     """
-    filter_data = json.dumps({
-        "status": status_filter,
-        "spec_id": spec_id,
-    }, separators=(",", ":"), sort_keys=True)
+    filter_data = json.dumps(
+        {
+            "status": status_filter,
+            "spec_id": spec_id,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     return hashlib.sha256(filter_data.encode()).hexdigest()[:8]
 
 
@@ -293,9 +305,7 @@ class AutonomyStorage:
                     disk_data = json.loads(session_path.read_text())
                     disk_version = disk_data.get("state_version", 1)
                     if disk_version != expected_version:
-                        raise VersionConflictError(
-                            session.id, expected_version, disk_version
-                        )
+                        raise VersionConflictError(session.id, expected_version, disk_version)
                 except json.JSONDecodeError:
                     pass  # Corrupted file, allow overwrite
 
@@ -620,6 +630,7 @@ class AutonomyStorage:
         Delegates to the shared implementation in models.py to avoid duplication.
         """
         from foundry_mcp.core.autonomy.models.signals import compute_effective_status
+
         return compute_effective_status(session)
 
     # =========================================================================
@@ -763,7 +774,7 @@ class AutonomyStorage:
         self,
         spec_id: str,
         timeout: float = LOCK_ACQUISITION_TIMEOUT,
-    ) -> FileLock:
+    ) -> "BaseFileLock":
         """Acquire per-spec lock for atomic operations.
 
         Args:
@@ -850,7 +861,7 @@ class AutonomyStorage:
             if lock_path.name.startswith("spec_"):
                 # Spec locks: orphaned if no active pointer references this spec
                 # Extract spec_id from lock filename (spec_{spec_id}.lock)
-                spec_id = lock_path.stem[len("spec_"):]
+                spec_id = lock_path.stem[len("spec_") :]
                 if spec_id:
                     pointer_path = self.index_path / f"{spec_id}.active"
                     if not pointer_path.exists():
@@ -925,9 +936,7 @@ class AutonomyStorage:
         safe_id = sanitize_id(session_id)
         return self.locks_path / f"proof_{safe_id}.lock"
 
-    def _cleanup_proof_records(
-        self, records: Dict[str, Any]
-    ) -> Tuple[Dict[str, Any], int]:
+    def _cleanup_proof_records(self, records: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
         """Evict expired and excess proof records.
 
         Two-phase cleanup:
@@ -961,6 +970,7 @@ class AutonomyStorage:
 
         # Phase 2: LRU eviction if still over max
         if len(surviving) > MAX_PROOF_RECORDS:
+
             def _consumed_at_key(item: Tuple[str, Any]) -> str:
                 rec = item[1]
                 if isinstance(rec, dict):
@@ -1007,7 +1017,6 @@ class AutonomyStorage:
         Raises:
             Timeout: If lock acquisition times out
         """
-        from .models.steps import StepProofRecord
 
         proof_path = self._get_proof_path(session_id)
         lock_path = self._get_proof_lock_path(session_id)
@@ -1102,9 +1111,7 @@ class AutonomyStorage:
             except (ValueError, KeyError):
                 return False
 
-            response_json = json.dumps(
-                response, sort_keys=True, separators=(",", ":"), default=str
-            )
+            response_json = json.dumps(response, sort_keys=True, separators=(",", ":"), default=str)
             record.step_id = step_id
             record.cached_response = response
             record.response_hash = hashlib.sha256(response_json.encode()).hexdigest()

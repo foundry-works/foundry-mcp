@@ -7,16 +7,11 @@ Split from ``analysis.py`` to keep each module focused.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.document_digest import deserialize_payload
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
-
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +79,7 @@ Guidelines for quality_updates:
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
     def _build_analysis_user_prompt(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         allocation_result: Optional[AllocationResult] = None,
     ) -> str:
@@ -164,7 +159,7 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
                         if payload.evidence_snippets:
                             prompt_parts.append("  Evidence:")
                             for ev in payload.evidence_snippets[:3]:
-                                prompt_parts.append(f"    - \"{ev.text[:200]}\" [{ev.locator}]")
+                                prompt_parts.append(f'    - "{ev.text[:200]}" [{ev.locator}]')
                     except Exception:
                         # Fallback to raw content if parsing fails
                         content = source.content[:content_limit]
@@ -177,14 +172,16 @@ IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
             prompt_parts.append("")
 
-        prompt_parts.extend([
-            "Please analyze these sources and:",
-            "1. Extract 2-5 key findings relevant to the research query",
-            "2. Assess confidence levels based on source agreement and authority",
-            "3. Identify any knowledge gaps or unanswered questions",
-            "4. Assess the quality of each source",
-            "",
-            "Return your analysis as JSON.",
-        ])
+        prompt_parts.extend(
+            [
+                "Please analyze these sources and:",
+                "1. Extract 2-5 key findings relevant to the research query",
+                "2. Assess confidence levels based on source agreement and authority",
+                "3. Identify any knowledge gaps or unanswered questions",
+                "4. Assess the quality of each source",
+                "",
+                "Return your analysis as JSON.",
+            ]
+        )
 
         return "\n".join(prompt_parts)

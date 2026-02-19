@@ -44,12 +44,7 @@ class StructuralDiff:
     @property
     def has_changes(self) -> bool:
         """Check if there are any structural changes."""
-        return bool(
-            self.added_phases
-            or self.removed_phases
-            or self.added_tasks
-            or self.removed_tasks
-        )
+        return bool(self.added_phases or self.removed_phases or self.added_tasks or self.removed_tasks)
 
     def to_dict(self) -> Dict[str, List[str]]:
         """Convert to dictionary for serialization."""
@@ -133,9 +128,7 @@ def compute_spec_structure_hash(spec_data: Dict[str, Any]) -> str:
 
     # Sort for determinism
     structure["task_ids"] = sorted(task_ids)
-    structure["task_phase_mappings"] = sorted(
-        task_phase_mappings, key=lambda x: (x[0], x[1])
-    )
+    structure["task_phase_mappings"] = sorted(task_phase_mappings, key=lambda x: (x[0], x[1]))
 
     # Serialize with sorted keys for determinism
     canonical_json = json.dumps(
@@ -265,11 +258,7 @@ def _extract_phase_ids(spec_data: Dict[str, Any]) -> set:
     if not isinstance(phases, list):
         return set()
 
-    return {
-        phase.get("id")
-        for phase in phases
-        if isinstance(phase, dict) and phase.get("id")
-    }
+    return {phase.get("id") for phase in phases if isinstance(phase, dict) and phase.get("id")}
 
 
 def _extract_task_ids(spec_data: Dict[str, Any]) -> set:

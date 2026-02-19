@@ -4,8 +4,7 @@ Provides hierarchical progress recalculation and status updates.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Any
-
+from typing import Any, Dict, List, Optional
 
 # Status icons for task visualization
 STATUS_ICONS = {
@@ -81,7 +80,7 @@ def recalculate_progress(spec_data: Dict[str, Any], node_id: str = "spec-root") 
     return spec_data
 
 
-def update_node_status(node: Dict[str, Any], hierarchy: Dict[str, Any] = None) -> None:
+def update_node_status(node: Dict[str, Any], hierarchy: Optional[Dict[str, Any]] = None) -> None:
     """
     Update a node's status based on its children's progress.
 
@@ -224,7 +223,7 @@ def get_progress_summary(spec_data: Dict[str, Any], node_id: str = "spec-root") 
                     "id": key,
                     "title": value.get("title", ""),
                     "completed": value.get("completed_tasks", 0),
-                    "total": value.get("total_tasks", 0)
+                    "total": value.get("total_tasks", 0),
                 }
                 break
             elif current_phase is None and value.get("status") == "pending":
@@ -232,7 +231,7 @@ def get_progress_summary(spec_data: Dict[str, Any], node_id: str = "spec-root") 
                     "id": key,
                     "title": value.get("title", ""),
                     "completed": value.get("completed_tasks", 0),
-                    "total": value.get("total_tasks", 0)
+                    "total": value.get("total_tasks", 0),
                 }
 
     return {
@@ -245,7 +244,7 @@ def get_progress_summary(spec_data: Dict[str, Any], node_id: str = "spec-root") 
         "completed_tasks": completed,
         "percentage": percentage,
         "remaining_tasks": total - completed,
-        "current_phase": current_phase
+        "current_phase": current_phase,
     }
 
 
@@ -271,14 +270,16 @@ def list_phases(spec_data: Dict[str, Any]) -> List[Dict[str, Any]]:
             completed = value.get("completed_tasks", 0)
             percentage = int((completed / total * 100)) if total > 0 else 0
 
-            phases.append({
-                "id": key,
-                "title": value.get("title", ""),
-                "status": value.get("status", ""),
-                "completed_tasks": completed,
-                "total_tasks": total,
-                "percentage": percentage
-            })
+            phases.append(
+                {
+                    "id": key,
+                    "title": value.get("title", ""),
+                    "status": value.get("status", ""),
+                    "completed_tasks": completed,
+                    "total_tasks": total,
+                    "percentage": percentage,
+                }
+            )
 
     # Sort by phase ID (phase-1, phase-2, etc.)
     phases.sort(key=lambda p: p["id"])
@@ -301,12 +302,7 @@ def get_task_counts_by_status(spec_data: Dict[str, Any]) -> Dict[str, int]:
 
     hierarchy = spec_data.get("hierarchy", {})
 
-    counts = {
-        "pending": 0,
-        "in_progress": 0,
-        "completed": 0,
-        "blocked": 0
-    }
+    counts = {"pending": 0, "in_progress": 0, "completed": 0, "blocked": 0}
 
     for node in hierarchy.values():
         if node.get("type") == "task":
@@ -380,8 +376,4 @@ def sync_computed_fields(spec_data: Dict[str, Any]) -> Dict[str, Any]:
     # Update last_updated timestamp
     spec_data["last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    return {
-        "progress_percentage": progress_pct,
-        "current_phase": current_phase,
-        "status": status
-    }
+    return {"progress_percentage": progress_pct, "current_phase": current_phase, "status": status}

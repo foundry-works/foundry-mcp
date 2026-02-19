@@ -28,7 +28,6 @@ from foundry_mcp.core.providers.base import (
     ProviderUnavailableError,
 )
 
-
 # =============================================================================
 # Test Fixtures and Helpers
 # =============================================================================
@@ -104,9 +103,7 @@ class TestGeminiProvider:
         """GeminiProvider should accept custom binary path."""
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
 
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, binary="/custom/gemini"
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, binary="/custom/gemini")
         assert provider._binary == "/custom/gemini"
 
     def test_validate_request_warns_on_unsupported_params(self, hooks, caplog):
@@ -144,19 +141,11 @@ class TestGeminiProvider:
             {
                 "response": "Hello from Gemini!",
                 "model": "gemini-2.5-flash",
-                "stats": {
-                    "models": {
-                        "gemini-2.5-flash": {
-                            "tokens": {"prompt": 10, "candidates": 5, "total": 15}
-                        }
-                    }
-                },
+                "stats": {"models": {"gemini-2.5-flash": {"tokens": {"prompt": 10, "candidates": 5, "total": 15}}}},
             }
         )
         runner = make_mock_runner(stdout=mock_output)
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         result = provider.generate(ProviderRequest(prompt="Hello"))
 
@@ -171,9 +160,7 @@ class TestGeminiProvider:
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
 
         runner = make_mock_runner(returncode=1, stderr="Command failed")
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         with pytest.raises(ProviderExecutionError, match="exited with code 1"):
             provider.generate(ProviderRequest(prompt="test"))
@@ -183,9 +170,7 @@ class TestGeminiProvider:
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
 
         runner = make_mock_runner(stdout="")
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         with pytest.raises(ProviderExecutionError, match="empty output"):
             provider.generate(ProviderRequest(prompt="test"))
@@ -195,9 +180,7 @@ class TestGeminiProvider:
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
 
         runner = make_mock_runner(stdout="not valid json")
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         with pytest.raises(ProviderExecutionError, match="invalid JSON"):
             provider.generate(ProviderRequest(prompt="test"))
@@ -207,9 +190,7 @@ class TestGeminiProvider:
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
 
         runner = make_mock_runner(raises=subprocess.TimeoutExpired("gemini", 30))
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         with pytest.raises(ProviderTimeoutError):
             provider.generate(ProviderRequest(prompt="test"))
@@ -219,9 +200,7 @@ class TestGeminiProvider:
         from foundry_mcp.core.providers.gemini import GEMINI_METADATA, GeminiProvider
 
         runner = make_mock_runner(raises=FileNotFoundError("gemini not found"))
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         with pytest.raises(ProviderUnavailableError, match="not available"):
             provider.generate(ProviderRequest(prompt="test"))
@@ -235,9 +214,7 @@ class TestGeminiProvider:
 
         mock_output = json.dumps({"response": "Streamed content"})
         runner = make_mock_runner(stdout=mock_output)
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         result = provider.generate(ProviderRequest(prompt="test", stream=True))
 
@@ -251,9 +228,7 @@ class TestGeminiProvider:
 
         mock_output = json.dumps({"response": "OK", "model": "pro"})
         runner = make_mock_runner(stdout=mock_output)
-        provider = GeminiProvider(
-            metadata=GEMINI_METADATA, hooks=hooks, runner=runner
-        )
+        provider = GeminiProvider(metadata=GEMINI_METADATA, hooks=hooks, runner=runner)
 
         request = ProviderRequest(prompt="test", metadata={"model": "pro"})
         result = provider.generate(request)
@@ -351,9 +326,7 @@ class TestCodexProvider:
         from foundry_mcp.core.providers.codex import CODEX_METADATA, CodexProvider
 
         provider = CodexProvider(metadata=CODEX_METADATA, hooks=hooks)
-        command = provider._build_command(
-            "gpt-5.1-codex", ["/path/to/image.png"]
-        )
+        command = provider._build_command("gpt-5.1-codex", ["/path/to/image.png"])
 
         assert "--image" in command
         assert "/path/to/image.png" in command
@@ -436,9 +409,7 @@ class TestCursorAgentProvider:
         # Create mock cursor config dir
         with patch.object(Path, "home", return_value=tmp_path):
             (tmp_path / ".cursor").mkdir(exist_ok=True)
-            provider = CursorAgentProvider(
-                metadata=CURSOR_METADATA, hooks=hooks, runner=runner
-            )
+            provider = CursorAgentProvider(metadata=CURSOR_METADATA, hooks=hooks, runner=runner)
 
             result = provider.generate(ProviderRequest(prompt="Hello"))
 
@@ -490,9 +461,7 @@ class TestCursorAgentProvider:
 
         with patch.object(Path, "home", return_value=tmp_path):
             (tmp_path / ".cursor").mkdir(exist_ok=True)
-            provider = CursorAgentProvider(
-                metadata=CURSOR_METADATA, hooks=hooks, runner=runner
-            )
+            provider = CursorAgentProvider(metadata=CURSOR_METADATA, hooks=hooks, runner=runner)
 
             result = provider.generate(ProviderRequest(prompt="test"))
 
@@ -542,9 +511,7 @@ class TestClaudeProvider:
             }
         )
         runner = make_mock_runner(stdout=mock_output)
-        provider = ClaudeProvider(
-            metadata=CLAUDE_METADATA, hooks=hooks, runner=runner
-        )
+        provider = ClaudeProvider(metadata=CLAUDE_METADATA, hooks=hooks, runner=runner)
 
         result = provider.generate(ProviderRequest(prompt="Hello"))
 
@@ -572,9 +539,7 @@ class TestClaudeProvider:
         from foundry_mcp.core.providers.claude import CLAUDE_METADATA, ClaudeProvider
 
         runner = make_mock_runner(returncode=1, stderr="Auth failed")
-        provider = ClaudeProvider(
-            metadata=CLAUDE_METADATA, hooks=hooks, runner=runner
-        )
+        provider = ClaudeProvider(metadata=CLAUDE_METADATA, hooks=hooks, runner=runner)
 
         with pytest.raises(ProviderExecutionError, match="exited with code 1"):
             provider.generate(ProviderRequest(prompt="test"))
@@ -588,9 +553,7 @@ class TestClaudeProvider:
 
         mock_output = json.dumps({"result": "Streamed"})
         runner = make_mock_runner(stdout=mock_output)
-        provider = ClaudeProvider(
-            metadata=CLAUDE_METADATA, hooks=hooks, runner=runner
-        )
+        provider = ClaudeProvider(metadata=CLAUDE_METADATA, hooks=hooks, runner=runner)
 
         provider.generate(ProviderRequest(prompt="test", stream=True))
 

@@ -72,13 +72,9 @@ class TestStopForceMode:
 
     @patch("foundry_mcp.cli.commands.stop.subprocess.run")
     @patch("foundry_mcp.cli.commands.stop.os.kill")
-    def test_force_kills_matching_processes(
-        self, mock_kill, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_force_kills_matching_processes(self, mock_kill, mock_run, cli_runner, temp_specs_dir):
         """--force finds processes via pgrep and sends SIGTERM."""
-        mock_run.return_value = SimpleNamespace(
-            returncode=0, stdout="1234\n5678\n", stderr=""
-        )
+        mock_run.return_value = SimpleNamespace(returncode=0, stdout="1234\n5678\n", stderr="")
 
         result = cli_runner.invoke(
             cli,
@@ -110,9 +106,7 @@ class TestStopForceRegexEscaping:
     """Tests for regex escaping in --force mode pgrep pattern."""
 
     @patch("foundry_mcp.cli.commands.stop.subprocess.run")
-    def test_pgrep_pattern_escapes_regex_metacharacters(
-        self, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_pgrep_pattern_escapes_regex_metacharacters(self, mock_run, cli_runner, temp_specs_dir):
         """--force escapes regex metacharacters in spec_id for pgrep -f."""
         import re
 
@@ -149,9 +143,7 @@ class TestStopWaitMode:
 
     @patch("foundry_mcp.cli.commands.stop.time.sleep")
     @patch("foundry_mcp.core.autonomy.memory.AutonomyStorage")
-    def test_wait_exits_on_terminal_status(
-        self, mock_storage_cls, mock_sleep, cli_runner, temp_specs_dir
-    ):
+    def test_wait_exits_on_terminal_status(self, mock_storage_cls, mock_sleep, cli_runner, temp_specs_dir):
         """--wait polls and exits when session reaches terminal status."""
         mock_storage = MagicMock()
         mock_storage_cls.return_value = mock_storage
@@ -172,9 +164,7 @@ class TestStopWaitMode:
 
     @patch("foundry_mcp.cli.commands.stop.time.sleep")
     @patch("foundry_mcp.core.autonomy.memory.AutonomyStorage")
-    def test_wait_exits_when_no_active_session(
-        self, mock_storage_cls, mock_sleep, cli_runner, temp_specs_dir
-    ):
+    def test_wait_exits_when_no_active_session(self, mock_storage_cls, mock_sleep, cli_runner, temp_specs_dir):
         """--wait returns no_active_session when session is gone."""
         mock_storage = MagicMock()
         mock_storage_cls.return_value = mock_storage
@@ -196,9 +186,7 @@ class TestStopWaitTimeout:
     @patch("foundry_mcp.cli.commands.stop.time.sleep")
     @patch("foundry_mcp.cli.commands.stop.time.monotonic")
     @patch("foundry_mcp.core.autonomy.memory.AutonomyStorage")
-    def test_wait_times_out(
-        self, mock_storage_cls, mock_monotonic, mock_sleep, cli_runner, temp_specs_dir
-    ):
+    def test_wait_times_out(self, mock_storage_cls, mock_monotonic, mock_sleep, cli_runner, temp_specs_dir):
         """--wait returns timeout when deadline is exceeded."""
         mock_storage = MagicMock()
         mock_storage_cls.return_value = mock_storage

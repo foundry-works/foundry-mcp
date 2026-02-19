@@ -20,7 +20,6 @@ from typing import Any, Dict, List
 
 from foundry_mcp.core.prompts import PromptBuilder, PromptRegistry, PromptTemplate
 
-
 # =============================================================================
 # Response Schema for MARKDOWN_PLAN_REVIEW Templates
 # =============================================================================
@@ -476,9 +475,7 @@ class MarkdownPlanReviewPromptBuilder(PromptBuilder):
         """
         if prompt_id not in MARKDOWN_PLAN_REVIEW_TEMPLATES:
             available = sorted(MARKDOWN_PLAN_REVIEW_TEMPLATES.keys())
-            raise KeyError(
-                f"Template '{prompt_id}' not found. Available: {available}"
-            )
+            raise KeyError(f"Template '{prompt_id}' not found. Available: {available}")
         return self._registry.get_required(prompt_id)
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -18,13 +18,13 @@ from foundry_mcp.core.health import (
 )
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability.prometheus import get_prometheus_exporter
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
 from foundry_mcp.tools.unified.router import (
@@ -193,7 +193,9 @@ def _dispatch_health_action(
     if action.lower() == "check":
         kwargs["include_details"] = include_details
     return dispatch_with_standard_errors(
-        _HEALTH_ROUTER, "health", action,
+        _HEALTH_ROUTER,
+        "health",
+        action,
         include_details_in_router_error=True,
         config=config,
         **kwargs,

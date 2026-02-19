@@ -58,7 +58,6 @@ from typing import Any, Dict, Optional
 
 from foundry_mcp.core.responses.builders import success_response
 
-
 # ---------------------------------------------------------------------------
 # Pagination Constants
 # ---------------------------------------------------------------------------
@@ -143,7 +142,7 @@ def decode_cursor(cursor: str) -> Dict[str, Any]:
             f"Failed to decode cursor: {str(e)}",
             cursor=cursor,
             reason="decode_failed",
-        )
+        ) from e
 
 
 def validate_cursor(cursor: str) -> bool:

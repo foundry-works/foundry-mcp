@@ -63,7 +63,7 @@ class CircuitBreakerMixin:
 
         # Trim window to max size (keep most recent)
         if len(self._attempt_window) > self._window_size:
-            self._attempt_window = self._attempt_window[-self._window_size:]
+            self._attempt_window = self._attempt_window[-self._window_size :]
 
         # Calculate failure ratio
         total_attempts = len(self._attempt_window)
@@ -104,7 +104,7 @@ class CircuitBreakerMixin:
         # Legacy: also append to old failure_window for backward compatibility
         self._failure_window.append(time.time())
         if len(self._failure_window) > self._failure_window_size:
-            self._failure_window = self._failure_window[-self._failure_window_size:]
+            self._failure_window = self._failure_window[-self._failure_window_size :]
 
     def _record_success(self) -> None:
         """Record a successful digest operation.

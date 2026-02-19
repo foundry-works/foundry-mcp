@@ -19,11 +19,13 @@ class ToolRegistry:
 
     Example:
         >>> registry = ToolRegistry()
-        >>> registry.register(ToolMetadata(
-        ...     name="get_user",
-        ...     description="Get user by ID",
-        ...     category="users",
-        ... ))
+        >>> registry.register(
+        ...     ToolMetadata(
+        ...         name="get_user",
+        ...         description="Get user by ID",
+        ...         category="users",
+        ...     )
+        ... )
         >>> tools = registry.list_tools(category="users")
     """
 
@@ -142,11 +144,7 @@ class ToolRegistry:
         result = []
         for category, tool_names in sorted(self._categories.items()):
             # Filter out deprecated tools from count
-            active_count = sum(
-                1
-                for name in tool_names
-                if name in self._tools and not self._tools[name].deprecated
-            )
+            active_count = sum(1 for name in tool_names if name in self._tools and not self._tools[name].deprecated)
 
             result.append(
                 {

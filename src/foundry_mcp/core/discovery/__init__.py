@@ -10,22 +10,7 @@ All public symbols are re-exported from sub-modules for backward compatibility.
 
 # --- Types (leaf module) ---
 
-from .types import (  # noqa: F401
-    SCHEMA_VERSION,
-    ParameterMetadata,
-    ParameterType,
-    ToolMetadata,
-)
-
-# --- Registry ---
-
-from .registry import (  # noqa: F401
-    ToolRegistry,
-    get_tool_registry,
-)
-
 # --- Capabilities ---
-
 from .capabilities import (  # noqa: F401
     ServerCapabilities,
     get_capabilities,
@@ -34,7 +19,6 @@ from .capabilities import (  # noqa: F401
 )
 
 # --- Deprecation ---
-
 from .deprecation import (  # noqa: F401
     deprecated_tool,
     get_deprecation_info,
@@ -42,13 +26,11 @@ from .deprecation import (  # noqa: F401
 )
 
 # --- Feature flag descriptors (used by metadata modules) ---
-
 from .flags import (  # noqa: F401
     FeatureFlagDescriptor,
 )
 
 # --- Metadata (environment, LLM, provider) ---
-
 from .metadata import (  # noqa: F401
     ENVIRONMENT_FEATURE_FLAGS,
     ENVIRONMENT_TOOL_METADATA,
@@ -68,4 +50,16 @@ from .metadata import (  # noqa: F401
     register_environment_tools,
     register_llm_tools,
     register_provider_tools_discovery,
+)
+
+# --- Registry ---
+from .registry import (  # noqa: F401
+    ToolRegistry,
+    get_tool_registry,
+)
+from .types import (  # noqa: F401
+    SCHEMA_VERSION,
+    ParameterMetadata,
+    ParameterType,
+    ToolMetadata,
 )

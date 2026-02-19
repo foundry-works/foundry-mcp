@@ -16,7 +16,7 @@ to ensure CLI output matches the response-v2 schema used by MCP tools.
 import json
 import sys
 from dataclasses import asdict
-from typing import Any, Mapping, Sequence, NoReturn
+from typing import Any, Mapping, NoReturn, Sequence
 
 from foundry_mcp.cli.logging import generate_request_id, get_request_id, set_request_id
 from foundry_mcp.core.responses.builders import (

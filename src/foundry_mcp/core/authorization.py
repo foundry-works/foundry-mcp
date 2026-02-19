@@ -64,57 +64,61 @@ class Role(str, Enum):
 # =============================================================================
 
 # Actions allowed for autonomy_runner role - session management and step control only
-AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset({
-    # Spec resolution
-    "spec-find",
-    # Runtime capability preflight
-    "server-capabilities",
-    # Session lifecycle
-    "session-start",
-    "session-resume",
-    "session-heartbeat",
-    "session-rebase",
-    "session-list",
-    "session-status",
-    # Session-step actions
-    "session-step-next",
-    "session-step-report",
-    "session-step-replay",
-    "session-step-heartbeat",
-    # Fidelity gate
-    "review-fidelity-gate",
-    # Verification execution (required for proof-carrying receipts)
-    "verification-execute",
-    # Read-only task context (used by step handlers for scope understanding)
-    "prepare",
-})
+AUTONOMY_RUNNER_ALLOWLIST: FrozenSet[str] = frozenset(
+    {
+        # Spec resolution
+        "spec-find",
+        # Runtime capability preflight
+        "server-capabilities",
+        # Session lifecycle
+        "session-start",
+        "session-resume",
+        "session-heartbeat",
+        "session-rebase",
+        "session-list",
+        "session-status",
+        # Session-step actions
+        "session-step-next",
+        "session-step-report",
+        "session-step-replay",
+        "session-step-heartbeat",
+        # Fidelity gate
+        "review-fidelity-gate",
+        # Verification execution (required for proof-carrying receipts)
+        "verification-execute",
+        # Read-only task context (used by step handlers for scope understanding)
+        "prepare",
+    }
+)
 
 # Actions allowed for maintainer role - full mutation access (wildcard)
 MAINTAINER_ALLOWLIST: FrozenSet[str] = frozenset({"*"})
 
 # Actions allowed for observer role - read-only operations
-OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset({
-    # Read-only task actions
-    "list",
-    "get",
-    "view",
-    "status",
-    "search",
-    "progress",
-    "info",
-    "query",
-    "prepare",
-    # Read-only session actions
-    "session-status",
-    "session-events",
-    "session-list",
-    # Read-only spec actions
-    "spec-list",
-    "spec-info",
-    # Read-only journal actions
-    "journal-list",
-    "journal-get",
-})
+OBSERVER_ALLOWLIST: FrozenSet[str] = frozenset(
+    {
+        # Read-only task actions
+        "list",
+        "get",
+        "view",
+        "status",
+        "search",
+        "progress",
+        "info",
+        "query",
+        "prepare",
+        # Read-only session actions
+        "session-status",
+        "session-events",
+        "session-list",
+        # Read-only spec actions
+        "spec-list",
+        "spec-info",
+        # Read-only journal actions
+        "journal-list",
+        "journal-get",
+    }
+)
 
 # Role to allowlist mapping
 _ROLE_ALLOWLISTS: Dict[str, FrozenSet[str]] = {
@@ -512,8 +516,7 @@ class RateLimitTracker:
             if denial_count >= self._config.max_consecutive_denials:
                 self._rate_limited_until[action] = now + self._config.retry_after_seconds
                 logger.warning(
-                    "Rate limiting triggered for action '%s' after %d denials. "
-                    "Retry after %d seconds.",
+                    "Rate limiting triggered for action '%s' after %d denials. Retry after %d seconds.",
                     action,
                     denial_count,
                     self._config.retry_after_seconds,
@@ -545,9 +548,7 @@ class RateLimitTracker:
             pass
         else:
             window_start = now - self._config.denial_window_seconds
-            self._denials[action] = [
-                d for d in self._denials[action] if d.timestamp >= window_start
-            ]
+            self._denials[action] = [d for d in self._denials[action] if d.timestamp >= window_start]
             if not self._denials[action]:
                 del self._denials[action]
 
@@ -828,12 +829,12 @@ def validate_runner_path(
             # Check if path is within workspace
             try:
                 full_path.relative_to(workspace_root)
-            except ValueError:
+            except ValueError as e:
                 raise PathValidationError(
                     path=path_str,
                     reason="outside_workspace",
                     detail=f"Path is outside configured workspace_root: {config.workspace_root}",
-                )
+                ) from e
         except PathValidationError:
             raise
         except Exception as e:

@@ -78,8 +78,7 @@ class ProviderFactory(Protocol):
         model: Optional[str] = None,
         dependencies: Optional[Dict[str, object]] = None,
         overrides: Optional[Dict[str, object]] = None,
-    ) -> ProviderContext:
-        ...
+    ) -> ProviderContext: ...
 
 
 # Type aliases for registry callables
@@ -321,15 +320,11 @@ def register_lazy_provider(
 
     metadata_resolver: Optional[MetadataResolver] = None
     if metadata_attr:
-        metadata_resolver = _build_attr_resolver(
-            module_path, metadata_attr, provider_id
-        )
+        metadata_resolver = _build_attr_resolver(module_path, metadata_attr, provider_id)
 
     availability_check: Optional[AvailabilityCheck] = None
     if availability_attr:
-        availability_check = _build_attr_resolver(
-            module_path, availability_attr, provider_id
-        )
+        availability_check = _build_attr_resolver(module_path, availability_attr, provider_id)
 
     register_provider(
         provider_id,
@@ -343,9 +338,7 @@ def register_lazy_provider(
     )
 
 
-def _build_attr_resolver(
-    module_path: str, attr: str, provider_id: str
-) -> Callable[[], Any]:
+def _build_attr_resolver(module_path: str, attr: str, provider_id: str) -> Callable[[], Any]:
     """Build a lazy attribute resolver for a module."""
 
     def _resolver() -> Any:
@@ -440,9 +433,7 @@ def resolve_provider(
     """
     registration = _REGISTRY.get(provider_id)
     if registration is None:
-        raise ProviderUnavailableError(
-            f"Provider '{provider_id}' is not registered.", provider=provider_id
-        )
+        raise ProviderUnavailableError(f"Provider '{provider_id}' is not registered.", provider=provider_id)
 
     if not registration.is_available():
         raise ProviderUnavailableError(

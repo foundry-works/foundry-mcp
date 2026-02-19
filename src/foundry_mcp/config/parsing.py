@@ -78,5 +78,3 @@ def _try_parse_bool(value: Any) -> Optional[bool]:
     if normalized in {"false", "0", "no", "off"}:
         return False
     return None
-
-

@@ -72,8 +72,8 @@ def register_all_commands(cli: click.Group) -> None:
         specs,
         stop_cmd,
         tasks,
-        watch_cmd,
         validate_group,
+        watch_cmd,
     )
 
     cli.add_command(specs)

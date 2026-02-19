@@ -108,9 +108,7 @@ PROVIDER_TOOL_METADATA: Dict[str, ToolMetadata] = {
                             "name": "Gemini",
                             "version": "1.0.0",
                             "default_model": "gemini-pro",
-                            "supported_models": [
-                                {"id": "gemini-pro", "name": "Gemini Pro", "is_default": True}
-                            ],
+                            "supported_models": [{"id": "gemini-pro", "name": "Gemini Pro", "is_default": True}],
                         },
                         "capabilities": ["text_generation", "streaming"],
                         "health": {"status": "healthy", "reason": None},
@@ -299,9 +297,7 @@ def get_provider_capabilities() -> Dict[str, Any]:
             "extensible": True,
             "description": "Pluggable provider architecture with registry support",
         },
-        "feature_flags": {
-            name: flag.to_dict() for name, flag in PROVIDER_FEATURE_FLAGS.items()
-        },
+        "feature_flags": {name: flag.to_dict() for name, flag in PROVIDER_FEATURE_FLAGS.items()},
     }
 
 

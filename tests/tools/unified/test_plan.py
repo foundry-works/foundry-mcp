@@ -18,9 +18,7 @@ class TestPlanDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["create"]
                 mock_router.dispatch.side_effect = RuntimeError("Plan execution failed")
 
@@ -44,9 +42,7 @@ class TestPlanDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["create"]
                 mock_router.dispatch.side_effect = RuntimeError()
 
@@ -70,9 +66,7 @@ class TestPlanDispatchExceptionHandling:
                 "foundry_mcp.tools.unified.common.get_server_role",
                 return_value="maintainer",
             ):
-                with patch(
-                    "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-                ) as mock_router:
+                with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
                     mock_router.allowed_actions.return_value = ["create"]
                     mock_router.dispatch.side_effect = ValueError("test error")
 
@@ -92,9 +86,7 @@ class TestPlanDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.plan._PLAN_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.plan._PLAN_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["create"]
                 mock_router.dispatch.return_value = {"success": True}
 

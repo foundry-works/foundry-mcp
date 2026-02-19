@@ -30,7 +30,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from filelock import FileLock
+from filelock import BaseFileLock, FileLock
 from pydantic import BaseModel, Field
 
 from foundry_mcp.core.authorization import get_server_role
@@ -81,12 +81,8 @@ class AuditEvent(BaseModel):
 
     # Event details
     action: str = Field(..., description="Action taken (e.g., 'issue_step', 'consume_step')")
-    payload_digest: Optional[str] = Field(
-        None, description="SHA-256 hash of relevant payload data"
-    )
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional event context"
-    )
+    payload_digest: Optional[str] = Field(None, description="SHA-256 hash of relevant payload data")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional event context")
 
     # Hash chain
     prev_hash: str = Field(..., description="Hash of previous entry")
@@ -125,18 +121,12 @@ class VerificationResult(BaseModel):
 
     valid: bool = Field(..., description="Whether the chain is valid")
     total_entries: int = Field(..., description="Total entries checked")
-    divergence_point: Optional[int] = Field(
-        None, description="Sequence number where divergence detected"
-    )
+    divergence_point: Optional[int] = Field(None, description="Sequence number where divergence detected")
     divergence_type: Optional[str] = Field(
         None, description="Type of divergence (hash_mismatch, sequence_gap, corrupted_entry)"
     )
-    divergence_detail: Optional[str] = Field(
-        None, description="Detailed explanation of divergence"
-    )
-    warnings: List[str] = Field(
-        default_factory=list, description="Non-fatal issues found"
-    )
+    divergence_detail: Optional[str] = Field(None, description="Detailed explanation of divergence")
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal issues found")
 
 
 class AuditLedger:
@@ -173,9 +163,7 @@ class AuditLedger:
         if storage_path:
             self.storage_dir = storage_path
         else:
-            self.storage_dir = (
-                self.workspace_path / "specs" / ".autonomy" / "audit" / spec_id
-            )
+            self.storage_dir = self.workspace_path / "specs" / ".autonomy" / "audit" / spec_id
 
         self.ledger_path = self.storage_dir / LEDGER_FILENAME
         self.lock_path = self.storage_dir / ".ledger.lock"
@@ -194,7 +182,7 @@ class AuditLedger:
         """Ensure storage directories exist."""
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-    def _acquire_lock(self) -> "FileLock":
+    def _acquire_lock(self) -> "BaseFileLock":
         """Get file lock for ledger operations."""
         return FileLock(self.lock_path, timeout=LOCK_TIMEOUT)
 
@@ -358,9 +346,7 @@ class AuditLedger:
             if entry.sequence != expected_sequence:
                 divergence_point = entry.sequence
                 divergence_type = "sequence_gap"
-                divergence_detail = (
-                    f"Expected sequence {expected_sequence}, got {entry.sequence}"
-                )
+                divergence_detail = f"Expected sequence {expected_sequence}, got {entry.sequence}"
                 break
 
             # Check prev_hash
@@ -388,9 +374,7 @@ class AuditLedger:
             if i > 0 and entries[i - 1] is not None:
                 prev_entry = entries[i - 1]
                 if prev_entry.timestamp > entry.timestamp:
-                    warnings.append(
-                        f"Timestamp out of order at sequence {entry.sequence}"
-                    )
+                    warnings.append(f"Timestamp out of order at sequence {entry.sequence}")
 
             prev_hash = entry.event_hash
             expected_sequence += 1

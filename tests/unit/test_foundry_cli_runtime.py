@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 
 from foundry_mcp.cli.config import CLIContext, create_context
-from foundry_mcp.core.spec import find_specs_directory
 from foundry_mcp.cli.logging import (
     CLILogContext,
     CLILogger,
@@ -36,6 +35,7 @@ from foundry_mcp.cli.resilience import (
     handle_keyboard_interrupt,
     with_sync_timeout,
 )
+from foundry_mcp.core.spec import find_specs_directory
 
 
 class TestCLIOutput:
@@ -376,4 +376,3 @@ class TestIntegration:
         assert len(results) == 1
         assert results[0]["request_id"].startswith("cli_")
         assert isinstance(results[0]["logger"], CLILogger)
-

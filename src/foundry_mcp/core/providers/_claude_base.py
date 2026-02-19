@@ -142,6 +142,7 @@ IMPORTANT SECURITY NOTE: When using shell commands, be aware of the following re
 
 # ── Runner protocol ────────────────────────────────────────────────────────
 
+
 class RunnerProtocol(Protocol):
     """Callable signature used for executing Claude CLI commands."""
 
@@ -222,15 +223,11 @@ class ClaudeCLIProviderBase(ProviderContext):
         if request.attachments:
             unsupported.append("attachments")
         if unsupported:
-            logger.warning(
-                f"{self._cli_label} ignoring unsupported parameters: {', '.join(unsupported)}"
-            )
+            logger.warning(f"{self._cli_label} ignoring unsupported parameters: {', '.join(unsupported)}")
 
     # ── Command construction ───────────────────────────────────────────
 
-    def _build_command(
-        self, model: str, system_prompt: Optional[str] = None
-    ) -> List[str]:
+    def _build_command(self, model: str, system_prompt: Optional[str] = None) -> List[str]:
         command = [self._binary, "--print", "--output-format", "json"]
         command.extend(["--allowed-tools"] + ALLOWED_TOOLS)
         command.extend(["--disallowed-tools"] + DISALLOWED_TOOLS)
@@ -298,8 +295,7 @@ class ClaudeCLIProviderBase(ProviderContext):
             input_tokens=int(usage.get("input_tokens") or 0),
             output_tokens=int(usage.get("output_tokens") or 0),
             cached_input_tokens=int(usage.get("cached_input_tokens") or 0),
-            total_tokens=int(usage.get("input_tokens") or 0)
-            + int(usage.get("output_tokens") or 0),
+            total_tokens=int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0),
         )
 
     def _resolve_model(self, request: ProviderRequest) -> str:
@@ -357,9 +353,7 @@ class ClaudeCLIProviderBase(ProviderContext):
             )
 
         payload = self._parse_output(completed.stdout)
-        content = str(
-            payload.get("result") or payload.get("content") or ""
-        ).strip()
+        content = str(payload.get("result") or payload.get("content") or "").strip()
         model_usage = payload.get("modelUsage") or {}
         reported_model = list(model_usage.keys())[0] if model_usage else model
         usage = self._extract_usage(payload)

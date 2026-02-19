@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -61,6 +60,7 @@ class TestCooperativeCancellationTiming:
 
     def test_cooperative_cancellation_with_quick_response(self):
         """Should handle very fast cooperative shutdown."""
+
         def quick_worker(task: BackgroundTask):
             """Worker that checks cancellation immediately."""
             while not task.is_cancelled:
@@ -157,6 +157,7 @@ class TestForcedCancellationTiming:
 
     def test_forced_cancellation_after_timeout(self):
         """Should transition to CANCELLED even if thread ignores signal."""
+
         def stubborn_worker(task: BackgroundTask):
             """Worker that ignores cancellation signal."""
             # Intentionally ignores task.is_cancelled
@@ -183,6 +184,7 @@ class TestForcedCancellationTiming:
 
     def test_immediate_forced_cancellation(self):
         """Should force cancel immediately with timeout=0."""
+
         def slow_worker(task: BackgroundTask):
             """Worker that would take long to stop."""
             for _ in range(100):
@@ -308,9 +310,7 @@ class TestForcedCancellationWithBlockingProvider:
             return blocking_provider()
 
         task = BackgroundTask(research_id="blocking-provider-test")
-        thread = threading.Thread(
-            target=workflow_with_blocking_provider, args=(task,), daemon=True
-        )
+        thread = threading.Thread(target=workflow_with_blocking_provider, args=(task,), daemon=True)
         thread.start()
         task.thread = thread
 
@@ -330,6 +330,7 @@ class TestForcedCancellationWithBlockingProvider:
 
     def test_forced_cancellation_marks_status_immediately_after_timeout(self):
         """Should mark task as CANCELLED immediately after timeout expires."""
+
         def infinite_worker(task: BackgroundTask):
             """Worker that never checks cancellation."""
             while True:
@@ -386,6 +387,7 @@ class TestForcedCancellationWithBlockingProvider:
 
     def test_forced_cancellation_total_time_guarantee(self):
         """Should guarantee total cancellation time is bounded."""
+
         def stubborn_worker(task: BackgroundTask):
             """Worker that completely ignores cancellation."""
             time.sleep(60)  # Would run for 60s
@@ -413,6 +415,7 @@ class TestCancellationTimingEdgeCases:
 
     def test_cancel_already_completed_task(self):
         """Should return False instantly for completed task."""
+
         def quick_worker():
             pass  # Exits immediately
 

@@ -12,7 +12,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from foundry_mcp.core.research.context_budget import (
     AllocationResult,
@@ -30,15 +30,14 @@ from foundry_mcp.core.research.models.deep_research import DeepResearchState
 from foundry_mcp.core.research.models.enums import ConfidenceLevel
 from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
 from foundry_mcp.core.research.token_management import (
-    TokenBudget,
     PreflightResult,
+    TokenBudget,
     estimate_tokens,
     get_effective_context,
     get_model_limits,
     get_provider_model_from_spec,
     preflight_count,
 )
-
 from foundry_mcp.core.research.workflows.deep_research._constants import (
     ANALYSIS_OUTPUT_RESERVED,
     ANALYSIS_PHASE_BUDGET_FRACTION,
@@ -161,10 +160,7 @@ def archive_digest_source(
 
     computed_hash = digestor._compute_source_hash(canonical_text)
     if computed_hash != source_text_hash:
-        raise ValueError(
-            "Canonical text hash mismatch: "
-            f"computed={computed_hash}, payload={source_text_hash}"
-        )
+        raise ValueError(f"Canonical text hash mismatch: computed={computed_hash}, payload={source_text_hash}")
 
     archive_path = write_digest_archive(
         source_id=source.id,
@@ -254,14 +250,16 @@ def allocate_source_budget(
                 # Fallback to raw digest JSON if parsing fails
                 content = source.content or source.snippet or ""
 
-        content_items.append(ContentItem(
-            id=source.id,
-            content=content,
-            priority=int_priority,
-            source_id=source.id,
-            source_ref=source,
-            protected=source.quality == SourceQuality.HIGH,  # Protect high-quality sources
-        ))
+        content_items.append(
+            ContentItem(
+                id=source.id,
+                content=content,
+                priority=int_priority,
+                source_id=source.id,
+                source_ref=source,
+                protected=source.quality == SourceQuality.HIGH,  # Protect high-quality sources
+            )
+        )
 
     # Allocate budget using ContextBudgetManager
     manager = ContextBudgetManager(provider=provider, model=model)
@@ -323,17 +321,19 @@ def allocate_synthesis_budget(
         int_priority = confidence_scores.get(finding.confidence, 2)
 
         # Build finding content for token estimation
-        confidence_label = finding.confidence.value if hasattr(finding.confidence, 'value') else str(finding.confidence)
+        confidence_label = finding.confidence.value if hasattr(finding.confidence, "value") else str(finding.confidence)
         source_refs = ", ".join(finding.source_ids) if finding.source_ids else "no sources"
         content = f"[{confidence_label.upper()}] {finding.content}\nSources: {source_refs}"
 
-        content_items.append(ContentItem(
-            id=finding.id,
-            content=content,
-            priority=int_priority,
-            source_id=None,
-            protected=True,  # Findings get full fidelity
-        ))
+        content_items.append(
+            ContentItem(
+                id=finding.id,
+                content=content,
+                priority=int_priority,
+                source_id=None,
+                protected=True,  # Findings get full fidelity
+            )
+        )
 
     # Add sources - they get compressed more aggressively
     for source in state.sources:
@@ -370,14 +370,16 @@ def allocate_synthesis_budget(
             content_parts.append(f"Snippet: {source.snippet[:200]}...")
         content = "\n".join(content_parts)
 
-        content_items.append(ContentItem(
-            id=source.id,
-            content=content,
-            priority=int_priority,
-            source_id=source.id,
-            source_ref=source,
-            protected=False,  # Sources can be dropped if needed
-        ))
+        content_items.append(
+            ContentItem(
+                id=source.id,
+                content=content,
+                priority=int_priority,
+                source_id=source.id,
+                source_ref=source,
+                protected=False,  # Sources can be dropped if needed
+            )
+        )
 
     # Allocate budget using ContextBudgetManager
     manager = ContextBudgetManager(provider=provider, model=model)
@@ -627,8 +629,7 @@ def final_fit_validate(
         # Over budget - try to compress
         if iteration + 1 >= FINAL_FIT_MAX_ITERATIONS:
             logger.warning(
-                "Final-fit validation failed for %s after %d iterations: "
-                "%d tokens exceeds budget by %d",
+                "Final-fit validation failed for %s after %d iterations: %d tokens exceeds budget by %d",
                 phase,
                 iteration + 1,
                 result.estimated_tokens,

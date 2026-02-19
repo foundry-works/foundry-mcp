@@ -35,8 +35,8 @@ from foundry_mcp.core.autonomy.orchestrator import (
     OrchestrationResult,
     StepOrchestrator,
 )
-from .conftest import make_session, make_spec_data
 
+from .conftest import make_session, make_spec_data
 
 # =============================================================================
 # Helpers
@@ -170,9 +170,7 @@ class TestAllTasksBlocked:
         )
 
         # Mock _validate_spec_integrity to return the blocked spec data (no error)
-        with patch.object(
-            orchestrator, "_validate_spec_integrity", return_value=(blocked_spec, None)
-        ):
+        with patch.object(orchestrator, "_validate_spec_integrity", return_value=(blocked_spec, None)):
             result = orchestrator.compute_next_step(session)
 
         # The result should be a pause with BLOCKED reason
@@ -231,9 +229,7 @@ class TestAllTasksBlocked:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -259,7 +255,6 @@ class TestStepProofExpired:
         """A proof consumed beyond grace window returns STEP_PROOF_EXPIRED."""
         from foundry_mcp.core.autonomy.memory import AutonomyStorage
         from foundry_mcp.core.autonomy.models.steps import StepProofRecord
-
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
         )
@@ -287,11 +282,13 @@ class TestStepProofExpired:
             task_id="task-1",
             phase_id="phase-1",
             task_title="Task 1",
-            instructions=[StepInstruction(
-                tool="foundry",
-                action="implement",
-                description="Implement task 1",
-            )],
+            instructions=[
+                StepInstruction(
+                    tool="foundry",
+                    action="implement",
+                    description="Implement task 1",
+                )
+            ],
             message="Implement task 1",
             step_proof="current-proof",
         )
@@ -313,9 +310,7 @@ class TestStepProofExpired:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             _handle_session_step_next(
                 config=config,
@@ -387,7 +382,6 @@ class TestStepProofConflict:
         """Same proof token with different payload hash returns PROOF_CONFLICT."""
         from foundry_mcp.core.autonomy.memory import AutonomyStorage
         from foundry_mcp.core.autonomy.models.steps import StepProofRecord
-
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
             _handle_session_start,
         )
@@ -414,11 +408,13 @@ class TestStepProofConflict:
             task_id="task-1",
             phase_id="phase-1",
             task_title="Task 1",
-            instructions=[StepInstruction(
-                tool="foundry",
-                action="implement",
-                description="Implement task 1",
-            )],
+            instructions=[
+                StepInstruction(
+                    tool="foundry",
+                    action="implement",
+                    description="Implement task 1",
+                )
+            ],
             message="Implement task 1",
             step_proof="current-proof",
         )
@@ -440,9 +436,7 @@ class TestStepProofConflict:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             _handle_session_step_next(
                 config=config,
@@ -668,9 +662,7 @@ class TestRepeatedInvalidGateEvidence:
         )
 
         # Mock _validate_spec_integrity to skip spec loading
-        with patch.object(
-            orchestrator, "_validate_spec_integrity", return_value=(spec_data, None)
-        ):
+        with patch.object(orchestrator, "_validate_spec_integrity", return_value=(spec_data, None)):
             result = orchestrator.compute_next_step(session, result_feedback)
 
         # Should be an error about invalid gate evidence

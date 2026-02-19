@@ -8,9 +8,10 @@ Loading and validation logic lives in the ``_ServerConfigLoader`` mixin
 
 import logging
 from dataclasses import dataclass, field
-from importlib.metadata import version as get_package_version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_package_version
 from pathlib import Path
-from typing import Optional, List, Dict, TypeVar
+from typing import List, Optional, TypeVar
 
 from foundry_mcp.config.autonomy import (
     AutonomyPostureConfig,
@@ -23,7 +24,6 @@ from foundry_mcp.config.domains import (
     HealthConfig,
     MetricsPersistenceConfig,
     ObservabilityConfig,
-    RunnerConfig,
     TestConfig,
 )
 from foundry_mcp.config.loader import _ServerConfigLoader
@@ -89,9 +89,7 @@ class ServerConfig(_ServerConfigLoader):
     # Autonomy security configuration
     autonomy_security: AutonomySecurityConfig = field(default_factory=AutonomySecurityConfig)
     autonomy_posture: AutonomyPostureConfig = field(default_factory=AutonomyPostureConfig)
-    autonomy_session_defaults: AutonomySessionDefaultsConfig = field(
-        default_factory=AutonomySessionDefaultsConfig
-    )
+    autonomy_session_defaults: AutonomySessionDefaultsConfig = field(default_factory=AutonomySessionDefaultsConfig)
 
     # Tool registration control
     disabled_tools: List[str] = field(default_factory=list)
@@ -171,13 +169,10 @@ class ServerConfig(_ServerConfigLoader):
         if self.structured_logging:
             # JSON-style structured logging
             formatter = logging.Formatter(
-                '{"timestamp":"%(asctime)s","level":"%(levelname)s",'
-                '"logger":"%(name)s","message":"%(message)s"}'
+                '{"timestamp":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}'
             )
         else:
-            formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            )
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)

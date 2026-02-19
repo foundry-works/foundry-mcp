@@ -36,6 +36,8 @@ Example Usage:
             print(result.content)
 """
 
+from foundry_mcp.core.ai_consultation.cache import ResultCache
+from foundry_mcp.core.ai_consultation.orchestrator import ConsultationOrchestrator
 from foundry_mcp.core.ai_consultation.types import (
     AgreementMetadata,
     ConsensusResult,
@@ -46,8 +48,6 @@ from foundry_mcp.core.ai_consultation.types import (
     ProviderResponse,
     ResolvedProvider,
 )
-from foundry_mcp.core.ai_consultation.cache import ResultCache
-from foundry_mcp.core.ai_consultation.orchestrator import ConsultationOrchestrator
 
 __all__ = [
     # Workflow types

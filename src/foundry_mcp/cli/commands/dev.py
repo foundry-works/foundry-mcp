@@ -307,8 +307,7 @@ def dev_start_cmd(
             server_configs.append(
                 {
                     "name": "uvicorn",
-                    "command": f"uvicorn main:app --host {host} --port {port}"
-                    + (" --reload" if reload else ""),
+                    "command": f"uvicorn main:app --host {host} --port {port}" + (" --reload" if reload else ""),
                 }
             )
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -325,8 +324,7 @@ def dev_start_cmd(
             server_configs.append(
                 {
                     "name": "flask",
-                    "command": f"flask run --host {host} --port {port}"
-                    + (" --reload" if reload else ""),
+                    "command": f"flask run --host {host} --port {port}" + (" --reload" if reload else ""),
                 }
             )
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -433,9 +431,7 @@ def dev_check_cmd(ctx: click.Context) -> None:
 
     duration_ms = (time.perf_counter() - start_time) * 1000
 
-    all_required = all(
-        tools.get(t, {}).get("available", False) for t in ["python", "pip", "git"]
-    )
+    all_required = all(tools.get(t, {}).get("available", False) for t in ["python", "pip", "git"])
 
     emit_success(
         {

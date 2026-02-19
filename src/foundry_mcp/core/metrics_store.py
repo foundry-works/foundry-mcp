@@ -7,8 +7,7 @@
 import warnings as _warnings
 
 _warnings.warn(
-    "foundry_mcp.core.metrics_store is deprecated, "
-    "use foundry_mcp.core.metrics.store instead",
+    "foundry_mcp.core.metrics_store is deprecated, use foundry_mcp.core.metrics.store instead",
     DeprecationWarning,
     stacklevel=2,
 )

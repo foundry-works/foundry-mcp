@@ -7,8 +7,7 @@
 import warnings as _warnings
 
 _warnings.warn(
-    "foundry_mcp.core.metrics_registry is deprecated, "
-    "use foundry_mcp.core.metrics.registry instead",
+    "foundry_mcp.core.metrics_registry is deprecated, use foundry_mcp.core.metrics.registry instead",
     DeprecationWarning,
     stacklevel=2,
 )

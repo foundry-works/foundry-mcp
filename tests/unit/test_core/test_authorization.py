@@ -1,37 +1,36 @@
 """Tests for authorization module."""
 
-import threading
 import os
 import subprocess
 import sys
+import threading
 import time
 from unittest.mock import patch
 
 import pytest
 
 from foundry_mcp.core.authorization import (
-    Role,
-    AuthzResult,
     AUTONOMY_RUNNER_ALLOWLIST,
     MAINTAINER_ALLOWLIST,
     OBSERVER_ALLOWLIST,
-    server_role_var,
-    get_server_role,
-    set_server_role,
-    get_role_allowlist,
-    check_action_allowed,
-    initialize_role_from_config,
+    PathValidationError,
     RateLimitConfig,
     RateLimitTracker,
-    get_rate_limit_tracker,
-    reset_rate_limit_tracker,
+    Role,
     RunnerIsolationConfig,
-    set_runner_isolation_config,
+    StdinTimeoutError,
+    check_action_allowed,
+    get_rate_limit_tracker,
+    get_role_allowlist,
+    get_server_role,
+    initialize_role_from_config,
+    reset_rate_limit_tracker,
     reset_runner_isolation_config,
     run_isolated_subprocess,
-    StdinTimeoutError,
+    server_role_var,
+    set_runner_isolation_config,
+    set_server_role,
     validate_runner_path,
-    PathValidationError,
 )
 
 
@@ -365,11 +364,7 @@ class TestRateLimitTracker:
         for index in range(200):
             tracker.record_denial(f"action-{index}")
 
-        tracked_actions = (
-            set(tracker._denials)
-            | set(tracker._rate_limited_until)
-            | set(tracker._last_seen)
-        )
+        tracked_actions = set(tracker._denials) | set(tracker._rate_limited_until) | set(tracker._last_seen)
         assert len(tracked_actions) <= 32
 
     def test_global_cleanup_sweeps_expired_rate_limits(self):

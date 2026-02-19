@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Optional tiktoken import for accurate token counting
 try:
     import tiktoken
+
     _TIKTOKEN_AVAILABLE = True
 except ImportError:
     tiktoken = None  # type: ignore
@@ -36,6 +37,7 @@ _MAX_CACHE_SIZE = 10_000
 
 class TokenCountEstimateWarning(UserWarning):
     """Warning emitted when using character-based heuristic for token estimation."""
+
     pass
 
 

@@ -6,7 +6,7 @@ tracing and Prometheus metrics) with graceful degradation.
 
 import logging
 import threading
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     from foundry_mcp.config.domains import ObservabilityConfig
@@ -122,7 +122,8 @@ class ObservabilityManager:
             # Initialize OpenTelemetry if enabled
             if config.enabled and config.otel_enabled and _OPENTELEMETRY_AVAILABLE:
                 try:
-                    from foundry_mcp.core.observability.otel import OTelConfig, initialize as init_otel
+                    from foundry_mcp.core.observability.otel import OTelConfig
+                    from foundry_mcp.core.observability.otel import initialize as init_otel
 
                     otel_config = OTelConfig(
                         enabled=True,

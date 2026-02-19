@@ -240,9 +240,7 @@ def get_environment_capabilities() -> Dict[str, Any]:
             "tools": list(ENVIRONMENT_TOOL_METADATA.keys()),
             "description": "Environment verification and workspace initialization tools",
         },
-        "feature_flags": {
-            name: flag.to_dict() for name, flag in ENVIRONMENT_FEATURE_FLAGS.items()
-        },
+        "feature_flags": {name: flag.to_dict() for name, flag in ENVIRONMENT_FEATURE_FLAGS.items()},
     }
 
 

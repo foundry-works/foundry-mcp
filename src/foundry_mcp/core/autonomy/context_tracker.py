@@ -96,9 +96,7 @@ class ContextTracker:
 
         # Tier 2: Caller-reported (with hardening)
         if caller_reported_pct is not None:
-            hardened_pct = self._validate_and_harden(
-                session, caller_reported_pct, now
-            )
+            hardened_pct = self._validate_and_harden(session, caller_reported_pct, now)
             self._update_report_tracking(session, hardened_pct, now)
             return hardened_pct, "caller"
 
@@ -163,9 +161,7 @@ class ContextTracker:
             else:
                 # No timestamp — fall through to stat-based freshness
                 try:
-                    mtime = datetime.fromtimestamp(
-                        self._sidecar_path.stat().st_mtime, tz=timezone.utc
-                    )
+                    mtime = datetime.fromtimestamp(self._sidecar_path.stat().st_mtime, tz=timezone.utc)
                     if now - mtime > max_age:
                         logger.debug("Sidecar file stale by mtime")
                         return None
@@ -228,10 +224,7 @@ class ContextTracker:
             session.context.consecutive_same_reports = 0
 
         # Apply staleness penalty
-        if (
-            session.context.consecutive_same_reports
-            >= session.limits.context_staleness_threshold
-        ):
+        if session.context.consecutive_same_reports >= session.limits.context_staleness_threshold:
             penalty = session.limits.context_staleness_penalty_pct
             pct = min(100, pct + penalty)
             logger.info(

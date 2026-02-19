@@ -16,10 +16,6 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
@@ -28,6 +24,10 @@ from foundry_mcp.core.responses.errors_ai import (
     ai_no_provider_error,
     ai_provider_error,
     ai_provider_timeout_error,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,9 +183,7 @@ def _run_ai_review(
                 consultation_cache=consultation_cache,
                 message=f"Dry run - {review_type} review would use template {template_id}",
                 stats={
-                    "total_tasks": context.stats.totals.get("tasks", 0)
-                    if context.stats
-                    else 0,
+                    "total_tasks": context.stats.totals.get("tasks", 0) if context.stats else 0,
                 },
                 telemetry={"duration_ms": round(duration_ms, 2)},
             )
@@ -268,9 +266,7 @@ def _run_ai_review(
 
     is_consensus = isinstance(result, ConsensusResult)
     if is_consensus:
-        primary = (
-            result.successful_responses[0] if result.successful_responses else None
-        )
+        primary = result.successful_responses[0] if result.successful_responses else None
         provider_id = primary.provider_id if primary else None
         model_used = primary.model_used if primary else None
         cached = bool(primary.cache_hit) if primary else False
@@ -299,9 +295,7 @@ def _run_ai_review(
         )
 
     total_tasks = context.stats.totals.get("tasks", 0) if context.stats else 0
-    completed_tasks = (
-        context.stats.status_counts.get("completed", 0) if context.stats else 0
-    )
+    completed_tasks = context.stats.status_counts.get("completed", 0) if context.stats else 0
 
     return asdict(
         success_response(
@@ -319,9 +313,7 @@ def _run_ai_review(
             stats={
                 "total_tasks": total_tasks,
                 "completed_tasks": completed_tasks,
-                "progress_percentage": context.progress.get("percentage", 0)
-                if context.progress
-                else 0,
+                "progress_percentage": context.progress.get("percentage", 0) if context.progress else 0,
             },
             telemetry={"duration_ms": round(duration_ms, 2)},
         )

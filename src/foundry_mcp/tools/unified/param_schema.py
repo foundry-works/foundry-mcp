@@ -12,15 +12,14 @@ Example::
 
     _SCHEMA = {
         "spec_id": Str(required=True, remediation="Pass the spec identifier"),
-        "title":   Str(required=True),
-        "hours":   Num(min_val=0),
+        "title": Str(required=True),
+        "hours": Num(min_val=0),
         "dry_run": Bool(default=False),
     }
 
+
     def _handle(*, config, **payload):
-        err = validate_payload(payload, _SCHEMA,
-                               tool_name="authoring", action="do-thing",
-                               request_id=rid)
+        err = validate_payload(payload, _SCHEMA, tool_name="authoring", action="do-thing", request_id=rid)
         if err:
             return err
         # payload values are now validated and normalised in-place
@@ -29,14 +28,14 @@ Example::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple, Union
+from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Tuple, Union
 
 from foundry_mcp.core.responses.types import ErrorCode
-
 
 # ---------------------------------------------------------------------------
 # Schema types
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Str:
@@ -111,9 +110,10 @@ FieldSchema = Union[Str, Num, Bool, List_, Dict_]
 # Validation engine
 # ---------------------------------------------------------------------------
 
+
 def validate_payload(
     payload: Dict[str, Any],
-    schema: Dict[str, FieldSchema],
+    schema: Mapping[str, FieldSchema],
     *,
     tool_name: str,
     action: str,
@@ -134,8 +134,8 @@ def validate_payload(
     """
     from dataclasses import asdict as _asdict
 
-    from foundry_mcp.core.responses.types import ErrorType
     from foundry_mcp.core.responses.builders import error_response
+    from foundry_mcp.core.responses.types import ErrorType
 
     def _error(
         field: str,
@@ -220,8 +220,7 @@ def _check_type(
     """Return an error dict if *value* fails the type check for *spec*."""
     if isinstance(spec, Str):
         if not isinstance(value, str):
-            return _error(field, f"{field} must be a string",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"{field} must be a string", code=spec.error_code, remediation=spec.remediation)
 
     elif isinstance(spec, Num):
         # bool is a subclass of int — reject booleans explicitly.
@@ -229,23 +228,19 @@ def _check_type(
             msg = "Provide an integer value" if spec.integer_only else "Provide a numeric value"
             return _error(field, msg, code=spec.error_code, remediation=spec.remediation)
         if spec.integer_only and not isinstance(value, int):
-            return _error(field, f"{field} must be an integer",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"{field} must be an integer", code=spec.error_code, remediation=spec.remediation)
 
     elif isinstance(spec, Bool):
         if not isinstance(value, bool):
-            return _error(field, "Expected a boolean value",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, "Expected a boolean value", code=spec.error_code, remediation=spec.remediation)
 
     elif isinstance(spec, List_):
         if not isinstance(value, list):
-            return _error(field, f"{field} must be a list",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"{field} must be a list", code=spec.error_code, remediation=spec.remediation)
 
     elif isinstance(spec, Dict_):
         if not isinstance(value, dict):
-            return _error(field, f"{field} must be a dict",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"{field} must be a dict", code=spec.error_code, remediation=spec.remediation)
 
     return None
 
@@ -267,31 +262,44 @@ def _check_format(
                 remediation=spec.remediation,
             )
         if spec.min_length is not None and len(text) < spec.min_length:
-            return _error(field, f"{field} must be at least {spec.min_length} characters",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(
+                field,
+                f"{field} must be at least {spec.min_length} characters",
+                code=spec.error_code,
+                remediation=spec.remediation,
+            )
         if spec.max_length is not None and len(text) > spec.max_length:
-            return _error(field, f"{field} must be at most {spec.max_length} characters",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(
+                field,
+                f"{field} must be at most {spec.max_length} characters",
+                code=spec.error_code,
+                remediation=spec.remediation,
+            )
         if spec.choices is not None and text not in spec.choices:
             allowed = ", ".join(sorted(spec.choices))
-            return _error(field, f"Must be one of: {allowed}",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"Must be one of: {allowed}", code=spec.error_code, remediation=spec.remediation)
 
     elif isinstance(spec, Num):
         if spec.min_val is not None and value < spec.min_val:
-            return _error(field, f"Value must be >= {spec.min_val}",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"Value must be >= {spec.min_val}", code=spec.error_code, remediation=spec.remediation)
         if spec.max_val is not None and value > spec.max_val:
-            return _error(field, f"Value must be <= {spec.max_val}",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(field, f"Value must be <= {spec.max_val}", code=spec.error_code, remediation=spec.remediation)
 
     elif isinstance(spec, List_):
         if spec.min_items is not None and len(value) < spec.min_items:
-            return _error(field, f"{field} must have at least {spec.min_items} items",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(
+                field,
+                f"{field} must have at least {spec.min_items} items",
+                code=spec.error_code,
+                remediation=spec.remediation,
+            )
         if spec.max_items is not None and len(value) > spec.max_items:
-            return _error(field, f"{field} must have at most {spec.max_items} items",
-                          code=spec.error_code, remediation=spec.remediation)
+            return _error(
+                field,
+                f"{field} must have at most {spec.max_items} items",
+                code=spec.error_code,
+                remediation=spec.remediation,
+            )
 
     return None
 

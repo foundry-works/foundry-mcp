@@ -7,8 +7,7 @@
 import warnings as _warnings
 
 _warnings.warn(
-    "foundry_mcp.core.otel is deprecated, "
-    "use foundry_mcp.core.observability.otel instead",
+    "foundry_mcp.core.otel is deprecated, use foundry_mcp.core.observability.otel instead",
     DeprecationWarning,
     stacklevel=2,
 )

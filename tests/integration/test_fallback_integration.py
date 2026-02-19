@@ -59,10 +59,7 @@ def _make_orchestrator(
     max_retries: int = 0,
     workflows: Dict[str, WorkflowConsultationConfig] | None = None,
 ) -> ConsultationOrchestrator:
-    priority_specs = [
-        entry if entry.startswith("[") else f"[cli]{entry}"
-        for entry in priority
-    ]
+    priority_specs = [entry if entry.startswith("[") else f"[cli]{entry}" for entry in priority]
     config = ConsultationConfig(
         priority=priority_specs,
         default_timeout=30.0,
@@ -93,15 +90,21 @@ def test_single_model_fallback_respects_priority_order(tmp_path):
     )
 
     providers = {
-        "provider-a": _FakeProvider([
-            _result(provider_id="provider-a", success=False, error="rate limit"),
-        ]),
-        "provider-b": _FakeProvider([
-            _result(provider_id="provider-b", success=True, content="fallback success"),
-        ]),
-        "provider-c": _FakeProvider([
-            _result(provider_id="provider-c", success=True, content="should not run"),
-        ]),
+        "provider-a": _FakeProvider(
+            [
+                _result(provider_id="provider-a", success=False, error="rate limit"),
+            ]
+        ),
+        "provider-b": _FakeProvider(
+            [
+                _result(provider_id="provider-b", success=True, content="fallback success"),
+            ]
+        ),
+        "provider-c": _FakeProvider(
+            [
+                _result(provider_id="provider-c", success=True, content="should not run"),
+            ]
+        ),
     }
     resolve_order: List[str] = []
 
@@ -109,12 +112,15 @@ def test_single_model_fallback_respects_priority_order(tmp_path):
         resolve_order.append(provider_id)
         return providers[provider_id]
 
-    with patch(
-        "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
-        return_value=True,
-    ), patch(
-        "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
-        side_effect=_resolve,
+    with (
+        patch(
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
+            return_value=True,
+        ),
+        patch(
+            "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
+            side_effect=_resolve,
+        ),
     ):
         outcome = orchestrator.consult(request, use_cache=False)
 
@@ -138,14 +144,18 @@ def test_single_model_retries_before_fallback(tmp_path):
     )
 
     providers = {
-        "provider-a": _FakeProvider([
-            _result(provider_id="provider-a", success=False, error="timed out"),
-            _result(provider_id="provider-a", success=False, error="timed out"),
-            _result(provider_id="provider-a", success=True, content="retry success"),
-        ]),
-        "provider-b": _FakeProvider([
-            _result(provider_id="provider-b", success=True, content="fallback success"),
-        ]),
+        "provider-a": _FakeProvider(
+            [
+                _result(provider_id="provider-a", success=False, error="timed out"),
+                _result(provider_id="provider-a", success=False, error="timed out"),
+                _result(provider_id="provider-a", success=True, content="retry success"),
+            ]
+        ),
+        "provider-b": _FakeProvider(
+            [
+                _result(provider_id="provider-b", success=True, content="fallback success"),
+            ]
+        ),
     }
     resolve_order: List[str] = []
 
@@ -153,12 +163,15 @@ def test_single_model_retries_before_fallback(tmp_path):
         resolve_order.append(provider_id)
         return providers[provider_id]
 
-    with patch(
-        "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
-        return_value=True,
-    ), patch(
-        "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
-        side_effect=_resolve,
+    with (
+        patch(
+            "foundry_mcp.core.ai_consultation.orchestrator.check_provider_available",
+            return_value=True,
+        ),
+        patch(
+            "foundry_mcp.core.ai_consultation.orchestrator.resolve_provider",
+            side_effect=_resolve,
+        ),
     ):
         outcome = orchestrator.consult(request, use_cache=False)
 

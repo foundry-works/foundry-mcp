@@ -15,15 +15,31 @@ Usage:
 """
 
 # --- Base / Registry ---
+# --- Authorization errors ---
+from foundry_mcp.core.errors.authorization import (
+    PathValidationError,
+    StdinTimeoutError,
+)
 from foundry_mcp.core.errors.base import ERROR_MAPPINGS, error_to_response
+
+# --- Execution errors ---
+from foundry_mcp.core.errors.execution import (
+    ActionRouterError,
+    ExecutorExhaustedError,
+    FoundryImplementV2Error,
+)
 
 # --- LLM errors ---
 from foundry_mcp.core.errors.llm import (
     AuthenticationError as LLMAuthenticationError,
+)
+from foundry_mcp.core.errors.llm import (
     ContentFilterError,
     InvalidRequestError,
     LLMError,
     ModelNotFoundError,
+)
+from foundry_mcp.core.errors.llm import (
     RateLimitError as LLMRateLimitError,
 )
 
@@ -35,13 +51,6 @@ from foundry_mcp.core.errors.provider import (
     ProviderTimeoutError,
     ProviderUnavailableError,
     ValidationError,
-)
-
-# --- Search provider errors ---
-from foundry_mcp.core.errors.search import (
-    AuthenticationError as SearchAuthenticationError,
-    RateLimitError as SearchRateLimitError,
-    SearchProviderError,
 )
 
 # --- Research errors ---
@@ -65,6 +74,17 @@ from foundry_mcp.core.errors.resilience import (
     TimeoutException,
 )
 
+# --- Search provider errors ---
+from foundry_mcp.core.errors.search import (
+    AuthenticationError as SearchAuthenticationError,
+)
+from foundry_mcp.core.errors.search import (
+    RateLimitError as SearchRateLimitError,
+)
+from foundry_mcp.core.errors.search import (
+    SearchProviderError,
+)
+
 # --- Storage errors ---
 from foundry_mcp.core.errors.storage import (
     CursorError,
@@ -72,19 +92,6 @@ from foundry_mcp.core.errors.storage import (
     MigrationError,
     SessionCorrupted,
     VersionConflictError,
-)
-
-# --- Authorization errors ---
-from foundry_mcp.core.errors.authorization import (
-    PathValidationError,
-    StdinTimeoutError,
-)
-
-# --- Execution errors ---
-from foundry_mcp.core.errors.execution import (
-    ActionRouterError,
-    ExecutorExhaustedError,
-    FoundryImplementV2Error,
 )
 
 __all__ = [

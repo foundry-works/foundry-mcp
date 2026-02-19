@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from foundry_mcp.core.research.models.deep_research import (
     DeepResearchPhase,
@@ -31,6 +31,12 @@ class PersistenceMixin:
     - self._last_persisted_phase: DeepResearchPhase | None
     - self._last_persisted_iteration: int | None
     """
+
+    config: Any
+    memory: Any
+    _last_persisted_at: Any
+    _last_persisted_phase: DeepResearchPhase | None
+    _last_persisted_iteration: int | None
 
     def _sync_persistence_tracking_from_state(self, state: DeepResearchState) -> None:
         """Sync persistence tracking fields from state metadata if available.
@@ -115,21 +121,13 @@ class PersistenceMixin:
             return True
 
         # Priority 2: Phase or iteration change always persists
-        if (
-            self._last_persisted_phase is not None
-            and state.phase != self._last_persisted_phase
-        ):
+        if self._last_persisted_phase is not None and state.phase != self._last_persisted_phase:
             return True
-        if (
-            self._last_persisted_iteration is not None
-            and state.iteration != self._last_persisted_iteration
-        ):
+        if self._last_persisted_iteration is not None and state.iteration != self._last_persisted_iteration:
             return True
 
         # Priority 3: Check throttle interval
-        throttle_seconds = getattr(
-            self.config, "status_persistence_throttle_seconds", 5
-        )
+        throttle_seconds = getattr(self.config, "status_persistence_throttle_seconds", 5)
 
         # 0 means always persist (backwards compatibility)
         if throttle_seconds == 0:

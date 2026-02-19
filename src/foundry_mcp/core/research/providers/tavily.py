@@ -28,12 +28,12 @@ from typing import Any, Optional
 
 import httpx
 
-from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.errors.search import (
     AuthenticationError,
     RateLimitError,
     SearchProviderError,
 )
+from foundry_mcp.core.research.models.sources import ResearchSource, SourceType
 from foundry_mcp.core.research.providers.base import (
     SearchProvider,
     SearchResult,
@@ -85,10 +85,7 @@ def _normalize_include_raw_content(value: bool | str) -> bool | str:
         return False
     if isinstance(value, str) and value in ("markdown", "text"):
         return value
-    raise ValueError(
-        f"Invalid include_raw_content: {value!r}. "
-        "Use bool or 'markdown'/'text'."
-    )
+    raise ValueError(f"Invalid include_raw_content: {value!r}. Use bool or 'markdown'/'text'.")
 
 
 def _validate_search_params(
@@ -111,22 +108,14 @@ def _validate_search_params(
         ValueError: If any parameter is invalid.
     """
     if search_depth not in VALID_SEARCH_DEPTHS:
-        raise ValueError(
-            f"Invalid search_depth: {search_depth!r}. "
-            f"Must be one of: {sorted(VALID_SEARCH_DEPTHS)}"
-        )
+        raise ValueError(f"Invalid search_depth: {search_depth!r}. Must be one of: {sorted(VALID_SEARCH_DEPTHS)}")
 
     if topic not in VALID_TOPICS:
-        raise ValueError(
-            f"Invalid topic: {topic!r}. "
-            f"Must be one of: {sorted(VALID_TOPICS)}"
-        )
+        raise ValueError(f"Invalid topic: {topic!r}. Must be one of: {sorted(VALID_TOPICS)}")
 
     if days is not None:
         if not isinstance(days, int) or days < 1 or days > 365:
-            raise ValueError(
-                f"Invalid days: {days!r}. Must be an integer between 1 and 365."
-            )
+            raise ValueError(f"Invalid days: {days!r}. Must be an integer between 1 and 365.")
 
     if country is not None:
         if not isinstance(country, str) or not re.match(r"^[A-Z]{2}$", country):
@@ -137,10 +126,7 @@ def _validate_search_params(
 
     if chunks_per_source is not None:
         if not isinstance(chunks_per_source, int) or chunks_per_source < 1 or chunks_per_source > 5:
-            raise ValueError(
-                f"Invalid chunks_per_source: {chunks_per_source!r}. "
-                "Must be an integer between 1 and 5."
-            )
+            raise ValueError(f"Invalid chunks_per_source: {chunks_per_source!r}. Must be an integer between 1 and 5.")
 
 
 class TavilySearchProvider(SearchProvider):
@@ -189,8 +175,7 @@ class TavilySearchProvider(SearchProvider):
         self._api_key = api_key or os.environ.get("TAVILY_API_KEY")
         if not self._api_key:
             raise ValueError(
-                "Tavily API key required. Provide via api_key parameter "
-                "or TAVILY_API_KEY environment variable."
+                "Tavily API key required. Provide via api_key parameter or TAVILY_API_KEY environment variable."
             )
 
         self._base_url = base_url.rstrip("/")
@@ -434,7 +419,9 @@ class TavilySearchProvider(SearchProvider):
                 return response.json()
 
         executor = create_resilience_executor(
-            "tavily", self.resilience_config, self.classify_error,
+            "tavily",
+            self.resilience_config,
+            self.classify_error,
         )
         return await executor(make_request, timeout=self._timeout)
 

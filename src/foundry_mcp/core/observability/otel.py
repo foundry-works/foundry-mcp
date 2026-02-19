@@ -157,8 +157,8 @@ class OTelConfig:
 
         return cls(
             enabled=enabled,
-            otlp_endpoint=otlp_endpoint,
-            service_name=service_name,
+            otlp_endpoint=otlp_endpoint or "http://localhost:4317",
+            service_name=service_name or "foundry-mcp",
             sample_rate=sample_rate,
             export_interval_ms=export_interval_ms,
             additional_attributes=additional_attributes,
@@ -281,12 +281,7 @@ def is_enabled() -> bool:
         True if OTel is enabled, available, and initialized
     """
     _ensure_initialized()
-    return (
-        _config is not None
-        and _config.enabled
-        and _OPENTELEMETRY_AVAILABLE
-        and _initialized
-    )
+    return _config is not None and _config.enabled and _OPENTELEMETRY_AVAILABLE and _initialized
 
 
 def get_tracer(name: str = __name__) -> TracerType:

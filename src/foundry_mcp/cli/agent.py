@@ -74,9 +74,7 @@ def agent_gated(required_agent: str) -> Callable[[F], F]:
                         "current_agent": current_agent,
                         "hint": f"Set FOUNDRY_MCP_AGENT_TYPE={required_agent} or configure in foundry-mcp.toml",
                     },
-                    meta={
-                        "warning": f"Feature unavailable for agent_type='{current_agent}'"
-                    },
+                    meta={"warning": f"Feature unavailable for agent_type='{current_agent}'"},
                 )
                 return
 

@@ -25,8 +25,8 @@ from foundry_mcp.core.authorization import (
     initialize_role_from_config,
 )
 from foundry_mcp.core.observability import audit_log, get_observability_manager
-from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.prompts.workflows import register_workflow_prompts
+from foundry_mcp.resources.specs import register_spec_resources
 from foundry_mcp.tools.unified import register_unified_tools
 
 logger = logging.getLogger(__name__)
@@ -115,15 +115,9 @@ def _init_metrics_persistence(config: ServerConfig) -> None:
 def _init_authorization_rate_limits(config: ServerConfig) -> None:
     """Initialize authorization denial rate-limiting from server config."""
     rate_limit_config = RateLimitConfig(
-        max_consecutive_denials=(
-            config.autonomy_security.rate_limit_max_consecutive_denials
-        ),
-        denial_window_seconds=(
-            config.autonomy_security.rate_limit_denial_window_seconds
-        ),
-        retry_after_seconds=(
-            config.autonomy_security.rate_limit_retry_after_seconds
-        ),
+        max_consecutive_denials=(config.autonomy_security.rate_limit_max_consecutive_denials),
+        denial_window_seconds=(config.autonomy_security.rate_limit_denial_window_seconds),
+        retry_after_seconds=(config.autonomy_security.rate_limit_retry_after_seconds),
     )
     get_rate_limit_tracker(rate_limit_config)
     logger.info(

@@ -116,6 +116,7 @@ def _record_extraction_metrics(
     if _pdf_extraction_pages is not None and pages_extracted > 0:
         _pdf_extraction_pages.labels(status=status).inc(pages_extracted)
 
+
 # =============================================================================
 # Lazy Import for pdfminer.six (Optional Fallback)
 # =============================================================================
@@ -141,6 +142,7 @@ def _get_pdfminer():
     _pdfminer_checked = True
     try:
         from pdfminer import high_level as pdfminer_hl
+
         _pdfminer_module = pdfminer_hl
         logger.debug("pdfminer.six available for fallback extraction")
     except ImportError:
@@ -149,6 +151,7 @@ def _get_pdfminer():
 
     return _pdfminer_module
 
+
 # =============================================================================
 # Security Constants
 # =============================================================================
@@ -156,11 +159,13 @@ def _get_pdfminer():
 PDF_MAGIC_BYTES = b"%PDF-"
 """PDF files must start with this magic byte sequence."""
 
-VALID_PDF_CONTENT_TYPES = frozenset([
-    "application/pdf",
-    "application/x-pdf",
-    "application/octet-stream",  # Some servers serve PDFs with this
-])
+VALID_PDF_CONTENT_TYPES = frozenset(
+    [
+        "application/pdf",
+        "application/x-pdf",
+        "application/octet-stream",  # Some servers serve PDFs with this
+    ]
+)
 """Content-types that are acceptable for PDF responses."""
 
 DEFAULT_MAX_PDF_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -189,7 +194,6 @@ from foundry_mcp.core.errors.research import (  # noqa: E402
     SSRFError,
 )
 
-
 # =============================================================================
 # SSRF Protection
 # =============================================================================
@@ -212,13 +216,7 @@ def is_internal_ip(ip: str) -> bool:
     """
     try:
         addr = ipaddress.ip_address(ip)
-        return (
-            addr.is_private
-            or addr.is_loopback
-            or addr.is_link_local
-            or addr.is_reserved
-            or addr.is_multicast
-        )
+        return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_multicast
     except ValueError:
         # Invalid IP format - treat as unsafe
         return True
@@ -256,8 +254,12 @@ def validate_url_for_ssrf(url: str) -> None:
 
     # Block common internal hostnames
     internal_patterns = [
-        "internal", "intranet", "corp", "private",
-        "metadata", "169.254.169.254",  # Cloud metadata endpoints
+        "internal",
+        "intranet",
+        "corp",
+        "private",
+        "metadata",
+        "169.254.169.254",  # Cloud metadata endpoints
     ]
     for pattern in internal_patterns:
         if pattern in hostname:
@@ -280,11 +282,9 @@ def validate_url_for_ssrf(url: str) -> None:
     try:
         addrinfo = socket.getaddrinfo(hostname, None)
         for _, _, _, _, sockaddr in addrinfo:
-            ip = sockaddr[0]
+            ip = str(sockaddr[0])
             if is_internal_ip(ip):
-                raise SSRFError(
-                    f"Hostname {hostname} resolves to internal IP: {ip}"
-                )
+                raise SSRFError(f"Hostname {hostname} resolves to internal IP: {ip}")
     except socket.gaierror:
         # DNS resolution failed - allow the request to fail naturally later
         logger.debug(f"DNS resolution failed for {hostname}, allowing request")
@@ -300,15 +300,11 @@ def validate_pdf_magic_bytes(data: bytes) -> None:
         InvalidPDFError: If magic bytes don't match %PDF-.
     """
     if len(data) < len(PDF_MAGIC_BYTES):
-        raise InvalidPDFError(
-            f"Data too short to be a PDF ({len(data)} bytes)"
-        )
+        raise InvalidPDFError(f"Data too short to be a PDF ({len(data)} bytes)")
     if not data.startswith(PDF_MAGIC_BYTES):
         # Show first few bytes in hex for debugging
         preview = data[:20].hex()
-        raise InvalidPDFError(
-            f"Invalid PDF: missing %PDF- header. Got: {preview}..."
-        )
+        raise InvalidPDFError(f"Invalid PDF: missing %PDF- header. Got: {preview}...")
 
 
 def validate_content_type(content_type: Optional[str]) -> None:
@@ -329,8 +325,7 @@ def validate_content_type(content_type: Optional[str]) -> None:
 
     if base_type not in VALID_PDF_CONTENT_TYPES:
         raise InvalidPDFError(
-            f"Invalid Content-Type for PDF: {content_type}. "
-            f"Expected one of: {', '.join(VALID_PDF_CONTENT_TYPES)}"
+            f"Invalid Content-Type for PDF: {content_type}. Expected one of: {', '.join(VALID_PDF_CONTENT_TYPES)}"
         )
 
 
@@ -475,15 +470,11 @@ class PDFExtractor:
             pdf_bytes = source.getvalue()
             source.seek(0)
         else:
-            raise ValueError(
-                f"source must be bytes or BytesIO, got {type(source).__name__}"
-            )
+            raise ValueError(f"source must be bytes or BytesIO, got {type(source).__name__}")
 
         # Check size limit
         if len(pdf_bytes) > self.max_size:
-            raise PDFSizeError(
-                f"PDF size ({len(pdf_bytes)} bytes) exceeds limit ({self.max_size} bytes)"
-            )
+            raise PDFSizeError(f"PDF size ({len(pdf_bytes)} bytes) exceeds limit ({self.max_size} bytes)")
 
         # Validate magic bytes
         if validate_magic:
@@ -496,14 +487,10 @@ class PDFExtractor:
                 loop.run_in_executor(None, self._extract_sync, source),
                 timeout=self.timeout,
             )
-        except asyncio.TimeoutError:
-            raise PDFSecurityError(
-                f"PDF extraction timed out after {self.timeout}s"
-            )
+        except asyncio.TimeoutError as e:
+            raise PDFSecurityError(f"PDF extraction timed out after {self.timeout}s") from e
 
-    def _extract_page_with_pdfminer(
-        self, pdf_bytes: bytes, page_num: int
-    ) -> Optional[str]:
+    def _extract_page_with_pdfminer(self, pdf_bytes: bytes, page_num: int) -> Optional[str]:
         """Extract a single page using pdfminer.six as fallback.
 
         Args:
@@ -521,7 +508,7 @@ class PDFExtractor:
         try:
             output = io.StringIO()
             # Extract single page (page_numbers uses 0-based indices)
-            pdfminer_hl.extract_text_to_fp(
+            pdfminer_hl.extract_text_to_fp(  # type: ignore[union-attr]
                 io.BytesIO(pdf_bytes),
                 output,
                 page_numbers=[page_num - 1],  # 0-based index
@@ -531,9 +518,7 @@ class PDFExtractor:
             logger.debug(f"pdfminer.six fallback failed for page {page_num}: {e}")
             return None
 
-    def _extract_full_with_pdfminer_fallback(
-        self, pdf_bytes: bytes, original_error: str
-    ) -> PDFExtractionResult:
+    def _extract_full_with_pdfminer_fallback(self, pdf_bytes: bytes, original_error: str) -> PDFExtractionResult:
         """Extract PDF using pdfminer.six when pypdf completely fails.
 
         This is used when PdfReader() fails to parse the PDF at all.
@@ -570,7 +555,7 @@ class PDFExtractor:
             for page_num in range(self.max_pages):
                 try:
                     output = io.StringIO()
-                    pdfminer_hl.extract_text_to_fp(
+                    pdfminer_hl.extract_text_to_fp(  # type: ignore[union-attr]
                         io.BytesIO(pdf_bytes),
                         output,
                         page_numbers=[page_num],  # 0-based index
@@ -599,9 +584,7 @@ class PDFExtractor:
                     if page_num == 0:
                         raise page_error
                     # Otherwise, we've reached the end or hit a bad page
-                    logger.debug(
-                        f"pdfminer.six stopped at page {page_num}: {page_error}"
-                    )
+                    logger.debug(f"pdfminer.six stopped at page {page_num}: {page_error}")
                     break
 
             if page_texts:
@@ -613,13 +596,9 @@ class PDFExtractor:
                     f"extracted {extracted_count} pages, {len(full_text)} chars"
                 )
 
-                warnings.append(
-                    f"Extracted {extracted_count} pages using pdfminer.six fallback"
-                )
+                warnings.append(f"Extracted {extracted_count} pages using pdfminer.six fallback")
                 if len(page_texts) >= self.max_pages:
-                    warnings.append(
-                        f"Extraction stopped at max_pages limit ({self.max_pages})"
-                    )
+                    warnings.append(f"Extraction stopped at max_pages limit ({self.max_pages})")
 
                 return PDFExtractionResult(
                     text=full_text,
@@ -692,12 +671,8 @@ class PDFExtractor:
 
         # Warn if truncating
         if total_page_count > self.max_pages:
-            warnings.append(
-                f"PDF has {total_page_count} pages, extracting only first {self.max_pages}"
-            )
-            logger.warning(
-                f"PDF truncated: {total_page_count} pages, limit is {self.max_pages}"
-            )
+            warnings.append(f"PDF has {total_page_count} pages, extracting only first {self.max_pages}")
+            logger.warning(f"PDF truncated: {total_page_count} pages, limit is {self.max_pages}")
 
         # Extract pages incrementally (page-by-page for memory efficiency)
         for page_num in range(1, pages_to_extract + 1):
@@ -723,13 +698,9 @@ class PDFExtractor:
 
             # Record result and any warnings
             if not page_text.strip():
-                warnings.append(
-                    f"Page {page_num}: No text extracted (may be image-based)"
-                )
+                warnings.append(f"Page {page_num}: No text extracted (may be image-based)")
             elif used_fallback:
-                warnings.append(
-                    f"Page {page_num}: Extracted using pdfminer.six fallback"
-                )
+                warnings.append(f"Page {page_num}: Extracted using pdfminer.six fallback")
 
             page_texts.append(page_text)
 
@@ -798,10 +769,8 @@ class PDFExtractor:
         # Import httpx here to avoid import at module level if not needed
         try:
             import httpx
-        except ImportError:
-            raise ImportError(
-                "httpx is required for URL fetching. Install with: pip install httpx"
-            )
+        except ImportError as e:
+            raise ImportError("httpx is required for URL fetching. Install with: pip install httpx") from e
 
         logger.debug(f"Fetching PDF from URL: {url}")
 
@@ -809,7 +778,7 @@ class PDFExtractor:
         visited: set[str] = set()
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            for redirect_index in range(MAX_PDF_REDIRECTS + 1):
+            for _redirect_index in range(MAX_PDF_REDIRECTS + 1):
                 if current_url in visited:
                     raise SSRFError(f"Redirect loop detected for {current_url}")
                 visited.add(current_url)
@@ -826,9 +795,7 @@ class PDFExtractor:
                     if response.status_code in {301, 302, 303, 307, 308}:
                         location = response.headers.get("location")
                         if not location:
-                            raise InvalidPDFError(
-                                f"Redirect response missing Location header: {current_url}"
-                            )
+                            raise InvalidPDFError(f"Redirect response missing Location header: {current_url}")
                         next_url = urljoin(current_url, location)
                         logger.debug("Redirect detected: %s -> %s", current_url, next_url)
                         current_url = next_url
@@ -863,6 +830,4 @@ class PDFExtractor:
                 # Extract text
                 return await self.extract(pdf_bytes, validate_magic=False)  # Already validated
 
-        raise InvalidPDFError(
-            f"Too many redirects while fetching PDF (max {MAX_PDF_REDIRECTS})"
-        )
+        raise InvalidPDFError(f"Too many redirects while fetching PDF (max {MAX_PDF_REDIRECTS})")

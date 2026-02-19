@@ -4,9 +4,6 @@ Tests validation, serialization/deserialization, and enum behavior
 for all models defined in foundry_mcp.core.research.models.
 """
 
-import json
-from datetime import datetime
-
 import pytest
 from pydantic import ValidationError
 
@@ -36,7 +33,6 @@ from foundry_mcp.core.research.models.thinkdeep import (
     InvestigationStep,
     ThinkDeepState,
 )
-
 
 # =============================================================================
 # Enum Tests
@@ -310,9 +306,7 @@ class TestThinkDeepState:
     def test_add_hypothesis(self):
         """Should add hypotheses correctly."""
         state = ThinkDeepState(topic="Test")
-        hyp = state.add_hypothesis(
-            "Hypothesis 1", confidence=ConfidenceLevel.LOW
-        )
+        hyp = state.add_hypothesis("Hypothesis 1", confidence=ConfidenceLevel.LOW)
 
         assert len(state.hypotheses) == 1
         assert hyp.statement == "Hypothesis 1"

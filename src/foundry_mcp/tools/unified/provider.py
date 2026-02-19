@@ -27,15 +27,15 @@ from foundry_mcp.core.providers import (
     get_provider_statuses,
     resolve_provider,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
 from foundry_mcp.core.responses.sanitization import sanitize_error_message
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.tools.unified.common import (
     build_request_id,
     dispatch_with_standard_errors,
@@ -90,9 +90,7 @@ _EXECUTE_SCHEMA = {
 def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
 
-    err = validate_payload(payload, _LIST_SCHEMA,
-                           tool_name="provider", action="list",
-                           request_id=request_id)
+    err = validate_payload(payload, _LIST_SCHEMA, tool_name="provider", action="list", request_id=request_id)
     if err:
         return err
 
@@ -114,21 +112,13 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG0
         )
 
     total_count = len(providers)
-    available_count = sum(
-        1 for provider in providers if provider.get("available", False)
-    )
-    visible = (
-        providers
-        if include
-        else [provider for provider in providers if provider.get("available", False)]
-    )
+    available_count = sum(1 for provider in providers if provider.get("available", False))
+    visible = providers if include else [provider for provider in providers if provider.get("available", False)]
 
     warnings: List[str] = []
     if not include and available_count < total_count:
         missing = total_count - available_count
-        warnings.append(
-            f"{missing} provider(s) filtered out because they are unavailable"
-        )
+        warnings.append(f"{missing} provider(s) filtered out because they are unavailable")
 
     _metrics.counter(_metric_name("list"), labels={"status": "success"})
     return asdict(
@@ -147,9 +137,7 @@ def _handle_list(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG0
 def _handle_status(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: ARG001
     request_id = _request_id()
 
-    err = validate_payload(payload, _STATUS_SCHEMA,
-                           tool_name="provider", action="status",
-                           request_id=request_id)
+    err = validate_payload(payload, _STATUS_SCHEMA, tool_name="provider", action="status", request_id=request_id)
     if err:
         return err
 
@@ -160,9 +148,7 @@ def _handle_status(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: AR
         metadata = get_provider_metadata(provider_id)
         statuses = get_provider_statuses()
     except Exception:
-        logger.exception(
-            "Failed to load provider status", extra={"provider_id": provider_id}
-        )
+        logger.exception("Failed to load provider status", extra={"provider_id": provider_id})
         _metrics.counter(_metric_name("status"), labels={"status": "error"})
         return asdict(
             error_response(
@@ -185,16 +171,12 @@ def _handle_status(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: AR
                 {
                     "id": model.id,
                     "name": model.display_name or model.id,
-                    "context_window": model.routing_hints.get("context_window")
-                    if model.routing_hints
-                    else None,
+                    "context_window": model.routing_hints.get("context_window") if model.routing_hints else None,
                     "is_default": model.id == metadata.default_model,
                 }
                 for model in (metadata.models or [])
             ],
-            "documentation_url": metadata.extra.get("documentation_url")
-            if metadata.extra
-            else None,
+            "documentation_url": metadata.extra.get("documentation_url") if metadata.extra else None,
             "tags": metadata.extra.get("tags", []) if metadata.extra else [],
         }
         capabilities = [cap.value for cap in (metadata.capabilities or [])]
@@ -238,13 +220,12 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
     request_id = _request_id()
     action = "execute"
 
-    err = validate_payload(payload, _EXECUTE_SCHEMA,
-                           tool_name="provider", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _EXECUTE_SCHEMA, tool_name="provider", action=action, request_id=request_id)
     if err:
         return err
 
     provider_id = payload["provider_id"]
+    assert isinstance(provider_id, str)
     prompt_text = payload["prompt"]
     model_name = payload.get("model")
     max_tokens = payload.get("max_tokens")
@@ -266,9 +247,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
             )
         )
 
-    known_providers = {
-        entry.get("id") for entry in provider_summaries if entry.get("id")
-    }
+    known_providers = {entry.get("id") for entry in provider_summaries if entry.get("id")}
     if provider_id not in known_providers:
         _metrics.counter(_metric_name(action), labels={"status": "not_found"})
         return asdict(
@@ -295,9 +274,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
                 )
             )
     except Exception:
-        logger.exception(
-            "Failed to check provider availability", extra={"provider_id": provider_id}
-        )
+        logger.exception("Failed to check provider availability", extra={"provider_id": provider_id})
         _metrics.counter(_metric_name(action), labels={"status": "error"})
         return asdict(
             error_response(
@@ -381,9 +358,7 @@ def _handle_execute(*, config: ServerConfig, **payload: Any) -> dict:  # noqa: A
             )
         )
     except Exception as exc:
-        logger.exception(
-            "Unexpected provider execution failure", extra={"provider_id": provider_id}
-        )
+        logger.exception("Unexpected provider execution failure", extra={"provider_id": provider_id})
         _metrics.counter(metric_key, labels={"status": "error"})
         return asdict(
             error_response(
@@ -444,12 +419,8 @@ _PROVIDER_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_provider_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _PROVIDER_ROUTER, "provider", action, config=config, **payload
-    )
+def _dispatch_provider_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_PROVIDER_ROUTER, "provider", action, config=config, **payload)
 
 
 def register_unified_provider_tool(mcp: FastMCP, config: ServerConfig) -> None:

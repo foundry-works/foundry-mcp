@@ -20,32 +20,26 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from foundry_mcp.core.autonomy.models.enums import (
     FailureReason,
-    GatePolicy,
     PauseReason,
     SessionStatus,
     StepType,
 )
 from foundry_mcp.core.autonomy.models.gates import PendingManualGateAck
-from foundry_mcp.core.autonomy.models.session_config import (
-    SessionCounters,
-    SessionLimits,
-    StopConditions,
-)
-from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.autonomy.models.steps import LastStepIssued
-from .conftest import make_session, make_spec_data
 
+from .conftest import make_session, make_spec_data
 
 # =============================================================================
 # Helpers
 # =============================================================================
+
 
 def _make_config(workspace: Path) -> MagicMock:
     """Create a mock ServerConfig that points at a workspace."""
@@ -490,15 +484,17 @@ class TestSessionPause:
     def test_pause_running_session(self, tmp_path):
         """Pausing a running session transitions to paused."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data_start = _assert_success(resp_start)
 
@@ -515,15 +511,17 @@ class TestSessionPause:
     def test_pause_invalid_reason_fallback(self, tmp_path):
         """Invalid PauseReason string falls back to USER."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_pause(
@@ -539,25 +537,31 @@ class TestSessionPause:
     def test_pause_non_running_session(self, tmp_path):
         """Pausing a non-running session returns INVALID_STATE_TRANSITION."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         # Pause it first
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         # Try to pause again
         resp = _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
@@ -573,23 +577,29 @@ class TestSessionResume:
     def test_resume_paused_session(self, tmp_path):
         """Resuming a paused session transitions to running."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_resume,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_resume(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "running"
@@ -598,35 +608,41 @@ class TestSessionResume:
     def test_resume_running_session_rejected(self, tmp_path):
         """Resuming a running session returns INVALID_STATE_TRANSITION."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_resume,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_resume(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
     def test_resume_failed_without_force_rejected(self, tmp_path):
         """Resuming a failed session without force returns INVALID_STATE_TRANSITION."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_resume,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_resume,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data_start = _assert_success(resp_start)
         session_id = data_start["session_id"]
@@ -639,23 +655,27 @@ class TestSessionResume:
         storage.save(session)
 
         resp = _handle_session_resume(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
     def test_resume_failed_with_force(self, tmp_path):
         """force=True resumes a failed session."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_resume,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_resume,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -677,17 +697,19 @@ class TestSessionResume:
 
     def test_resume_failed_spec_structure_changed_requires_rebase(self, tmp_path):
         """Resume from SPEC_STRUCTURE_CHANGED failure checks hash; if changed, returns SPEC_REBASE_REQUIRED."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_resume,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_resume,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -711,24 +733,28 @@ class TestSessionResume:
 
     def test_resume_manual_gate_ack_required(self, tmp_path):
         """Resuming with pending manual gate ack but no gate_ack returns error."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_resume,
+            _handle_session_start,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
         # Pause, then set pending gate ack
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         storage = _get_storage(config, str(workspace))
@@ -741,29 +767,35 @@ class TestSessionResume:
         storage.save(session)
 
         resp = _handle_session_resume(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
     def test_resume_manual_gate_ack_wrong_id(self, tmp_path):
         """Providing wrong gate_ack returns INVALID_GATE_ACK."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_resume,
+            _handle_session_start,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         storage = _get_storage(config, str(workspace))
@@ -786,23 +818,27 @@ class TestSessionResume:
 
     def test_resume_manual_gate_ack_correct(self, tmp_path):
         """Correct gate acknowledgment clears pending ack and resumes."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_resume,
+            _handle_session_start,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         storage = _get_storage(config, str(workspace))
@@ -836,15 +872,17 @@ class TestSessionEnd:
     def test_end_running_session(self, tmp_path):
         """Ending a running session transitions to ended."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_end,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_end(
@@ -859,19 +897,23 @@ class TestSessionEnd:
     def test_end_paused_session(self, tmp_path):
         """Ending a paused session transitions to ended."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_pause,
             _handle_session_end,
+            _handle_session_pause,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_end(
@@ -886,15 +928,17 @@ class TestSessionEnd:
     def test_end_already_ended_rejected(self, tmp_path):
         """Ending an already ended session returns INVALID_STATE_TRANSITION."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_end,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -917,8 +961,8 @@ class TestSessionEnd:
     def test_end_requires_reason_code(self, tmp_path):
         """Ending a session without reason_code returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_end,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -936,8 +980,8 @@ class TestSessionEnd:
     def test_end_rejects_invalid_reason_code(self, tmp_path):
         """Ending a session with invalid reason_code returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_end,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -973,12 +1017,16 @@ class TestSessionStatus:
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data_start = _assert_success(resp_start)
 
         resp = _handle_session_status(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["session_id"] == data_start["session_id"]
@@ -997,7 +1045,9 @@ class TestSessionStatus:
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1009,7 +1059,9 @@ class TestSessionStatus:
         storage.save(session)
 
         resp = _handle_session_status(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["session_signal"] == "phase_complete"
@@ -1026,7 +1078,9 @@ class TestSessionStatus:
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1053,7 +1107,9 @@ class TestSessionStatus:
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         resp = _handle_session_status(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
 
@@ -1083,7 +1139,9 @@ class TestSessionStatus:
         config = _make_config(workspace)
 
         resp = _handle_session_status(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
@@ -1106,7 +1164,8 @@ class TestSessionList:
         config = _make_config(workspace)
 
         resp = _handle_session_list(
-            config=config, workspace=str(workspace),
+            config=config,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["sessions"] == []
@@ -1115,19 +1174,22 @@ class TestSessionList:
     def test_list_returns_sessions(self, tmp_path):
         """Listing returns created sessions."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_list,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_list(
-            config=config, workspace=str(workspace),
+            config=config,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert len(data["sessions"]) == 1
@@ -1136,9 +1198,8 @@ class TestSessionList:
     def test_list_pagination_limit(self, tmp_path):
         """Pagination limit is respected."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_list,
-            _handle_session_end,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -1162,7 +1223,9 @@ class TestSessionList:
             )
 
         resp = _handle_session_list(
-            config=config, workspace=str(workspace), limit=2,
+            config=config,
+            workspace=str(workspace),
+            limit=2,
         )
         data = _assert_success(resp)
         assert len(data["sessions"]) == 2
@@ -1171,21 +1234,25 @@ class TestSessionList:
     def test_list_filter_by_status(self, tmp_path):
         """Status filter returns only matching sessions."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_pause,
             _handle_session_list,
+            _handle_session_pause,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         # Pause the session
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         # List running sessions (should be empty)
@@ -1218,15 +1285,17 @@ class TestSessionEvents:
     def test_events_returns_journal_backed_session_view(self, tmp_path):
         """session-events returns journal entries filtered to the target session."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1277,15 +1346,17 @@ class TestSessionEvents:
     def test_events_pagination_cursor(self, tmp_path):
         """session-events paginates with stable cursor semantics."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1329,15 +1400,17 @@ class TestSessionEvents:
     def test_events_invalid_cursor_returns_validation_error(self, tmp_path):
         """session-events rejects malformed cursors."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1354,9 +1427,9 @@ class TestSessionEvents:
     def test_events_filter_to_requested_session(self, tmp_path):
         """session-events does not leak entries across sessions."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_end,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -1365,14 +1438,14 @@ class TestSessionEvents:
         spec_two = make_spec_data(spec_id="test-spec-002")
         spec_two["title"] = "Spec 2"
         spec_two["journal"] = []
-        (workspace / "specs" / "active" / "test-spec-002.json").write_text(
-            json.dumps(spec_two, indent=2)
-        )
+        (workspace / "specs" / "active" / "test-spec-002.json").write_text(json.dumps(spec_two, indent=2))
 
         config = _make_config(workspace)
 
         first_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         first_session_id = _assert_success(first_start)["session_id"]
         _handle_session_end(
@@ -1383,7 +1456,9 @@ class TestSessionEvents:
         )
 
         second_start = _handle_session_start(
-            config=config, spec_id="test-spec-002", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-002",
+            workspace=str(workspace),
         )
         second_session_id = _assert_success(second_start)["session_id"]
 
@@ -1436,23 +1511,29 @@ class TestSessionRebase:
     def test_rebase_no_change(self, tmp_path):
         """Rebase with no structural change transitions to running."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_rebase,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_rebase(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "running"
@@ -1461,39 +1542,46 @@ class TestSessionRebase:
     def test_rebase_running_session_rejected(self, tmp_path):
         """Rebase on running session returns INVALID_STATE_TRANSITION."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_rebase,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_rebase(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
     def test_rebase_detects_structural_change(self, tmp_path):
         """Rebase detects when spec has structurally changed."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_rebase,
+            _handle_session_start,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         # Modify spec on disk (add a new task, changing structure)
@@ -1505,7 +1593,9 @@ class TestSessionRebase:
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         resp = _handle_session_rebase(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["status"] == "running"
@@ -1524,7 +1614,9 @@ class TestSessionRebase:
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1554,7 +1646,9 @@ class TestSessionRebase:
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         resp = _handle_session_rebase(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _assert_success(resp)
 
@@ -1575,7 +1669,9 @@ class TestSessionRebase:
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1603,7 +1699,9 @@ class TestSessionRebase:
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         resp = _handle_session_rebase(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         _assert_success(resp)
 
@@ -1613,19 +1711,20 @@ class TestSessionRebase:
 
     def test_rebase_completed_task_removal_guarded(self, tmp_path):
         """Rebase with removed completed tasks returns error without force."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_pause,
-            _handle_session_rebase,
-        )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1652,30 +1751,32 @@ class TestSessionRebase:
 
         # Now remove task-1 from spec on disk
         spec_data = json.loads(spec_path.read_text())
-        spec_data["phases"][0]["tasks"] = [
-            t for t in spec_data["phases"][0]["tasks"] if t["id"] != "task-1"
-        ]
+        spec_data["phases"][0]["tasks"] = [t for t in spec_data["phases"][0]["tasks"] if t["id"] != "task-1"]
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         resp = _handle_session_rebase(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         assert resp["success"] is False
 
     def test_rebase_force_removes_completed_tasks(self, tmp_path):
         """force=True allows rebase even when completed tasks are removed."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_rebase,
-        )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_rebase,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1701,9 +1802,7 @@ class TestSessionRebase:
 
         # Remove task-1 from spec
         spec_data = json.loads(spec_path.read_text())
-        spec_data["phases"][0]["tasks"] = [
-            t for t in spec_data["phases"][0]["tasks"] if t["id"] != "task-1"
-        ]
+        spec_data["phases"][0]["tasks"] = [t for t in spec_data["phases"][0]["tasks"] if t["id"] != "task-1"]
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         resp = _handle_session_rebase(
@@ -1889,15 +1988,17 @@ class TestSessionHeartbeat:
     def test_heartbeat_updates_timestamp(self, tmp_path):
         """Heartbeat updates last_heartbeat_at."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_heartbeat,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_heartbeat(
@@ -1913,15 +2014,17 @@ class TestSessionHeartbeat:
     def test_heartbeat_invalid_context_pct(self, tmp_path):
         """context_usage_pct out of range returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_heartbeat,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_heartbeat(
@@ -1950,17 +2053,19 @@ class TestSessionHeartbeat:
 
     def test_heartbeat_with_estimated_tokens(self, tmp_path):
         """Heartbeat with estimated_tokens_used updates context."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_heartbeat,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_heartbeat,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -1996,17 +2101,19 @@ class TestSessionReset:
 
     def test_reset_failed_session(self, tmp_path):
         """Resetting a failed session deletes it (ADR escape hatch)."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_reset,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_reset,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -2051,15 +2158,17 @@ class TestSessionReset:
     def test_reset_running_rejected(self, tmp_path):
         """Resetting a running session returns INVALID_STATE_TRANSITION."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_reset,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -2074,21 +2183,25 @@ class TestSessionReset:
     def test_reset_paused_rejected(self, tmp_path):
         """Resetting a paused (not failed) session returns error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
             _handle_session_reset,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
         _handle_session_pause(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_reset(
@@ -2102,14 +2215,16 @@ class TestSessionReset:
     def test_reset_requires_reason_code(self, tmp_path):
         """Reset without reason_code returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_reset,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -2124,14 +2239,16 @@ class TestSessionReset:
     def test_reset_rejects_invalid_reason_code(self, tmp_path):
         """Reset with invalid reason_code returns validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_reset,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -2192,17 +2309,19 @@ class TestSessionReset:
 
     def test_reset_allowed_for_maintainer(self, tmp_path):
         """Maintainer role is allowed to reset failed sessions."""
-        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
-            _handle_session_reset,
-        )
         from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
+        from foundry_mcp.tools.unified.task_handlers.handlers_session import (
+            _handle_session_reset,
+            _handle_session_start,
+        )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -2245,12 +2364,16 @@ class TestSessionResolution:
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
         resp = _handle_session_status(
-            config=config, session_id=session_id, workspace=str(workspace),
+            config=config,
+            session_id=session_id,
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["session_id"] == session_id
@@ -2266,11 +2389,15 @@ class TestSessionResolution:
         config = _make_config(workspace)
 
         _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
 
         resp = _handle_session_status(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         data = _assert_success(resp)
         assert data["spec_id"] == "test-spec-001"
@@ -2289,15 +2416,17 @@ class TestSessionEventsBenchmark:
         import time as time_mod
 
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
         config = _make_config(workspace)
 
         resp_start = _handle_session_start(
-            config=config, spec_id="test-spec-001", workspace=str(workspace),
+            config=config,
+            spec_id="test-spec-001",
+            workspace=str(workspace),
         )
         session_id = _assert_success(resp_start)["session_id"]
 
@@ -2308,17 +2437,19 @@ class TestSessionEventsBenchmark:
         base_time = datetime.now(timezone.utc)
         for i in range(10_000):
             ts = (base_time + timedelta(seconds=i)).isoformat().replace("+00:00", "Z")
-            journal.append({
-                "timestamp": ts,
-                "entry_type": "session",
-                "title": f"Step {i}",
-                "content": f"Executed step {i}",
-                "author": "autonomy",
-                "metadata": {
-                    "session_id": session_id,
-                    "action": "step",
-                },
-            })
+            journal.append(
+                {
+                    "timestamp": ts,
+                    "entry_type": "session",
+                    "title": f"Step {i}",
+                    "content": f"Executed step {i}",
+                    "author": "autonomy",
+                    "metadata": {
+                        "session_id": session_id,
+                        "action": "step",
+                    },
+                }
+            )
         spec_path.write_text(json.dumps(spec_data))
 
         # Benchmark: first page query should be under 200ms.
@@ -2334,9 +2465,7 @@ class TestSessionEventsBenchmark:
         data = _assert_success(resp)
         assert len(data["events"]) == 50
         assert resp["meta"]["telemetry"]["journal_entries_scanned"] == 10_000
-        assert elapsed_ms < 200, (
-            f"session-events query took {elapsed_ms:.1f}ms, exceeds 200ms design target"
-        )
+        assert elapsed_ms < 200, f"session-events query took {elapsed_ms:.1f}ms, exceeds 200ms design target"
 
 
 # =============================================================================
@@ -2400,9 +2529,9 @@ class TestOperatorObservabilityFields:
         session_id = data["session_id"]
 
         # Manually set last_step_issued on the session to simulate step issuance
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.core.autonomy.models.enums import StepType
         from foundry_mcp.core.autonomy.models.steps import LastStepIssued
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         storage = _get_storage(config, str(workspace))
         session = storage.load(session_id)
@@ -2444,9 +2573,9 @@ class TestOperatorObservabilityFields:
         data = _assert_success(resp)
         session_id = data["session_id"]
 
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.core.autonomy.models.enums import StepType
         from foundry_mcp.core.autonomy.models.steps import LastStepIssued
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         storage = _get_storage(config, str(workspace))
         session = storage.load(session_id)
@@ -2586,8 +2715,8 @@ class TestSessionEventsCursorPagination:
     def test_events_cursor_pagination(self, tmp_path):
         """Cursor pagination returns non-overlapping pages of events."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -2607,17 +2736,19 @@ class TestSessionEventsCursorPagination:
         spec_data = json.loads(spec_path.read_text())
         journal = spec_data.setdefault("journal", [])
         for i in range(10):
-            journal.append({
-                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "entry_type": "session",
-                "title": f"Event {i}",
-                "content": f"Content {i}",
-                "author": "autonomy",
-                "metadata": {
-                    "session_id": session_id,
-                    "action": "test",
-                },
-            })
+            journal.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "entry_type": "session",
+                    "title": f"Event {i}",
+                    "content": f"Content {i}",
+                    "author": "autonomy",
+                    "metadata": {
+                        "session_id": session_id,
+                        "action": "test",
+                    },
+                }
+            )
         spec_path.write_text(json.dumps(spec_data, indent=2))
 
         # First page with small limit
@@ -2656,8 +2787,8 @@ class TestSessionEventsCursorPagination:
     def test_events_invalid_cursor_returns_error(self, tmp_path):
         """Invalid cursor returns a validation error."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -2682,8 +2813,8 @@ class TestSessionEventsCursorPagination:
     def test_events_response_includes_telemetry(self, tmp_path):
         """session-events includes telemetry metadata."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_events,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)
@@ -2765,8 +2896,8 @@ class TestAuditStatusObservability:
     def test_audit_status_failed_when_journal_write_fails(self, tmp_path):
         """audit_status=failed when journal write returns False."""
         from foundry_mcp.tools.unified.task_handlers.handlers_session import (
-            _handle_session_start,
             _handle_session_pause,
+            _handle_session_start,
         )
 
         workspace = _setup_workspace(tmp_path)

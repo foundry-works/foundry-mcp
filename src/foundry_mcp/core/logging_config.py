@@ -172,9 +172,7 @@ class StructuredFormatter(logging.Formatter):
 
         # Timestamp
         if self.timestamp_format == "iso":
-            log_entry["timestamp"] = datetime.fromtimestamp(
-                record.created, tz=timezone.utc
-            ).isoformat()
+            log_entry["timestamp"] = datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat()
         else:
             log_entry["timestamp"] = record.created
 

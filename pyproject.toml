@@ -54,6 +54,11 @@ pdf = [
 observability = [
     "foundry-mcp[tracing,metrics]",
 ]
+dev = [
+    "ruff>=0.9.0,<0.10",
+    "pyright>=1.1.390",
+    "foundry-mcp[test]",
+]
 
 [project.scripts]
 foundry-mcp = "foundry_mcp.server:main"
@@ -76,3 +81,23 @@ include = ["src"]
 exclude = ["**/__pycache__"]
 typeCheckingMode = "basic"
 reportMissingImports = "warning"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "B"]
+ignore = ["E501", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["foundry_mcp"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B007", "B017", "B023", "B028", "E721", "E731", "F401", "F841"]

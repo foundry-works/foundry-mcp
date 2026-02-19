@@ -42,11 +42,7 @@ class PhaseGateRecord(BaseModel):
     review_path: Optional[str] = Field(None, description="Path to review file")
     evaluated_at: Optional[datetime] = Field(None, description="When gate was evaluated")
     # Waiver metadata (set when status is WAIVED)
-    waiver_reason_code: Optional[OverrideReasonCode] = Field(
-        None, description="Structured reason code for gate waiver"
-    )
-    waiver_reason_detail: Optional[str] = Field(
-        None, description="Free-text detail for waiver reason"
-    )
+    waiver_reason_code: Optional[OverrideReasonCode] = Field(None, description="Structured reason code for gate waiver")
+    waiver_reason_detail: Optional[str] = Field(None, description="Free-text detail for waiver reason")
     waived_at: Optional[datetime] = Field(None, description="When gate was waived")
     waived_by_role: Optional[str] = Field(None, description="Role that waived the gate")

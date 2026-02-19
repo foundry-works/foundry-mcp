@@ -10,8 +10,7 @@ import asyncio
 import hashlib
 import logging
 import math
-import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from foundry_mcp.core.research.document_digest import (
     DigestConfig,
@@ -29,11 +28,6 @@ from foundry_mcp.core.research.workflows.deep_research._budgeting import (
     archive_digest_source,
 )
 
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
-
 logger = logging.getLogger(__name__)
 
 
@@ -45,8 +39,16 @@ class DigestStepMixin:
     - _write_audit_event(), _check_cancellation() (cross-cutting methods)
     """
 
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     async def _execute_digest_step_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         query: str,
     ) -> dict[str, Any]:
@@ -202,7 +204,7 @@ class DigestStepMixin:
         # Step 4: Select top N eligible for digest
         eligible_sources: list[ResearchSource] = []
 
-        for source, score in ranked_sources:
+        for source, _score in ranked_sources:
             if len(eligible_sources) >= max_sources:
                 break
 
@@ -278,10 +280,7 @@ class DigestStepMixin:
                 page_offsets = source.metadata.get("_pdf_page_offsets")
                 page_boundaries = None
                 if page_offsets:
-                    page_boundaries = [
-                        (idx + 1, start, end)
-                        for idx, (start, end) in enumerate(page_offsets)
-                    ]
+                    page_boundaries = [(idx + 1, start, end) for idx, (start, end) in enumerate(page_offsets)]
 
                 try:
                     # Use per-source timeout with cancellation propagation
@@ -402,9 +401,7 @@ class DigestStepMixin:
 
                         # Emit digest.error audit event for non-exception failures
                         error_msg = (
-                            "; ".join(result.warnings)
-                            if result.warnings
-                            else "Digest failed without specific error"
+                            "; ".join(result.warnings) if result.warnings else "Digest failed without specific error"
                         )
                         if len(error_msg) > 200:
                             error_msg = error_msg[:200] + "...[truncated]"
@@ -429,9 +426,7 @@ class DigestStepMixin:
                     )
                     source.metadata["_digest_timeout"] = True
                     async with stats_lock:
-                        stats["digest_errors"].append(
-                            f"Source {source.id}: timeout after {per_source_timeout:.1f}s"
-                        )
+                        stats["digest_errors"].append(f"Source {source.id}: timeout after {per_source_timeout:.1f}s")
 
                     # Record fidelity as FULL (content unchanged) with timeout warning
                     state.record_item_fidelity(
@@ -527,9 +522,7 @@ class DigestStepMixin:
                     # Check if already handled by per-source timeout or error
                     if not source.metadata.get("_digest_timeout") and not source.metadata.get("_digest_error"):
                         source.metadata["_digest_timeout"] = True
-                        stats["digest_errors"].append(
-                            f"Source {source.id}: batch timeout after {batch_timeout:.1f}s"
-                        )
+                        stats["digest_errors"].append(f"Source {source.id}: batch timeout after {batch_timeout:.1f}s")
                         state.record_item_fidelity(
                             item_id=source.id,
                             phase="digest",

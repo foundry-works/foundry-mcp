@@ -6,13 +6,13 @@ from dataclasses import asdict
 from typing import Any, Optional
 
 from foundry_mcp.core.research.workflows import DeepResearchWorkflow
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 
@@ -180,9 +180,7 @@ def _handle_deep_research_status(
                 f"BEFORE next check: Tell user about progress. {checks_remaining} checks remaining."
             )
         else:
-            status_data["next_action"] = (
-                "Max checks reached. Offer user options: wait, background, or cancel."
-            )
+            status_data["next_action"] = "Max checks reached. Offer user options: wait, background, or cancel."
 
         return asdict(success_response(data=status_data))
     else:
@@ -288,6 +286,7 @@ def _handle_deep_research_delete(
     config = _get_config()
     workflow = DeepResearchWorkflow(config.research, _get_memory())
 
+    assert research_id is not None  # validated by _DR_DELETE_SCHEMA
     deleted = workflow.delete_session(research_id)
 
     if not deleted:

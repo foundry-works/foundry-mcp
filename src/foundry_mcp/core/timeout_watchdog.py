@@ -122,9 +122,7 @@ class TimeoutWatchdog:
             await asyncio.wait_for(self._task, timeout=timeout)
             logger.info("TimeoutWatchdog stopped gracefully")
         except asyncio.TimeoutError:
-            logger.warning(
-                "TimeoutWatchdog did not stop within %.1fs, cancelling", timeout
-            )
+            logger.warning("TimeoutWatchdog did not stop within %.1fs, cancelling", timeout)
             self._task.cancel()
             try:
                 await self._task
@@ -154,9 +152,7 @@ class TimeoutWatchdog:
 
             # Wait for poll_interval or until stop is requested
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(), timeout=self.poll_interval
-                )
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self.poll_interval)
                 # If we get here, stop was requested
                 break
             except asyncio.TimeoutError:
@@ -213,9 +209,7 @@ class TimeoutWatchdog:
             task.force_cancel()
             logger.debug("Cancellation triggered for timed-out task %s", task.research_id)
         except Exception as e:
-            logger.exception(
-                "Error triggering cancellation for task %s: %s", task.research_id, e
-            )
+            logger.exception("Error triggering cancellation for task %s: %s", task.research_id, e)
 
         # Mark the task as timed out (sets status to TIMEOUT)
         task.mark_timeout()
@@ -228,13 +222,9 @@ class TimeoutWatchdog:
             try:
                 self.on_timeout(task)
             except Exception as e:
-                logger.exception(
-                    "Error in on_timeout callback for task %s: %s", task.research_id, e
-                )
+                logger.exception("Error in on_timeout callback for task %s: %s", task.research_id, e)
 
-    def _emit_timeout_audit_event(
-        self, task: "BackgroundTask", elapsed_seconds: float
-    ) -> None:
+    def _emit_timeout_audit_event(self, task: "BackgroundTask", elapsed_seconds: float) -> None:
         """Emit a task.timeout audit event.
 
         Args:
@@ -281,13 +271,9 @@ class TimeoutWatchdog:
             try:
                 self.on_stale(task)
             except Exception as e:
-                logger.exception(
-                    "Error in on_stale callback for task %s: %s", task.research_id, e
-                )
+                logger.exception("Error in on_stale callback for task %s: %s", task.research_id, e)
 
-    def _emit_stale_audit_event(
-        self, task: "BackgroundTask", inactive_seconds: float
-    ) -> None:
+    def _emit_stale_audit_event(self, task: "BackgroundTask", inactive_seconds: float) -> None:
         """Emit a task.stale audit event.
 
         Args:

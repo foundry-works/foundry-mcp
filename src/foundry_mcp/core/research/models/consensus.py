@@ -26,25 +26,15 @@ class ModelResponse(BaseModel):
 class ConsensusConfig(BaseModel):
     """Configuration for a CONSENSUS workflow execution."""
 
-    providers: list[str] = Field(
-        ..., description="List of provider IDs to consult", min_length=1
-    )
+    providers: list[str] = Field(..., description="List of provider IDs to consult", min_length=1)
     strategy: ConsensusStrategy = Field(default=ConsensusStrategy.SYNTHESIZE)
     synthesis_provider: Optional[str] = Field(
         default=None, description="Provider to use for synthesis (if strategy=synthesize)"
     )
-    timeout_per_provider: float = Field(
-        default=360.0, description="Timeout in seconds per provider"
-    )
-    max_concurrent: int = Field(
-        default=3, description="Maximum concurrent provider calls"
-    )
-    require_all: bool = Field(
-        default=False, description="Require all providers to succeed"
-    )
-    min_responses: int = Field(
-        default=1, description="Minimum responses needed for success"
-    )
+    timeout_per_provider: float = Field(default=360.0, description="Timeout in seconds per provider")
+    max_concurrent: int = Field(default=3, description="Maximum concurrent provider calls")
+    require_all: bool = Field(default=False, description="Require all providers to succeed")
+    min_responses: int = Field(default=1, description="Minimum responses needed for success")
 
 
 class ConsensusState(BaseModel):
@@ -54,9 +44,7 @@ class ConsensusState(BaseModel):
     prompt: str = Field(..., description="The prompt sent to all providers")
     config: ConsensusConfig = Field(..., description="Consensus configuration")
     responses: list[ModelResponse] = Field(default_factory=list)
-    synthesis: Optional[str] = Field(
-        default=None, description="Synthesized response if strategy requires it"
-    )
+    synthesis: Optional[str] = Field(default=None, description="Synthesized response if strategy requires it")
     completed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = Field(default=None)

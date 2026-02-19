@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -17,13 +16,9 @@ class VerificationReceipt(BaseModel):
     in last_step_result when reporting outcome='success'.
     """
 
-    command_hash: str = Field(
-        ..., description="SHA-256 hash of the verification command executed"
-    )
+    command_hash: str = Field(..., description="SHA-256 hash of the verification command executed")
     exit_code: int = Field(..., description="Exit code from the verification command")
-    output_digest: str = Field(
-        ..., description="SHA-256 hash of the combined stdout/stderr output"
-    )
+    output_digest: str = Field(..., description="SHA-256 hash of the combined stdout/stderr output")
     issued_at: datetime = Field(..., description="When this receipt was issued")
     step_id: str = Field(..., description="Step ID this receipt is bound to")
 
@@ -62,9 +57,7 @@ class PendingVerificationReceipt(BaseModel):
 
     step_id: str = Field(..., description="Step ID this pending receipt is bound to")
     task_id: str = Field(..., description="Verification task ID")
-    expected_command_hash: str = Field(
-        ..., description="Expected SHA-256 hash of the verification command"
-    )
+    expected_command_hash: str = Field(..., description="Expected SHA-256 hash of the verification command")
     issued_at: datetime = Field(..., description="When this pending receipt was created")
 
     @field_validator("expected_command_hash")

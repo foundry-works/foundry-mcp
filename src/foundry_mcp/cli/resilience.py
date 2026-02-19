@@ -10,10 +10,10 @@ from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
 
 from foundry_mcp.core.resilience import (
+    BACKGROUND_TIMEOUT,
     FAST_TIMEOUT,
     MEDIUM_TIMEOUT,
     SLOW_TIMEOUT,
-    BACKGROUND_TIMEOUT,
     TimeoutException,
     retry_with_backoff,
 )

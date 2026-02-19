@@ -28,9 +28,7 @@ class TestChatWorkflowExceptionHandling:
         workflow = ChatWorkflow(mock_config, mock_memory)
 
         # Mock _get_or_create_thread to raise an exception
-        with patch.object(
-            workflow, "_get_or_create_thread", side_effect=RuntimeError("Storage unavailable")
-        ):
+        with patch.object(workflow, "_get_or_create_thread", side_effect=RuntimeError("Storage unavailable")):
             result = workflow.execute(prompt="Hello")
 
         # Should return error result, not raise exception
@@ -76,9 +74,7 @@ class TestChatWorkflowExceptionHandling:
 
         # Note: KeyboardInterrupt is NOT a subclass of Exception, so it won't be caught
         # This test verifies behavior for Exception subclasses only
-        with patch.object(
-            workflow, "_get_or_create_thread", side_effect=ValueError("Invalid thread state")
-        ):
+        with patch.object(workflow, "_get_or_create_thread", side_effect=ValueError("Invalid thread state")):
             result = workflow.execute(prompt="Hello")
 
         assert result.success is False
@@ -93,9 +89,7 @@ class TestChatWorkflowExceptionHandling:
         workflow = ChatWorkflow(mock_config, mock_memory)
 
         # Create an exception with no message
-        with patch.object(
-            workflow, "_get_or_create_thread", side_effect=RuntimeError()
-        ):
+        with patch.object(workflow, "_get_or_create_thread", side_effect=RuntimeError()):
             result = workflow.execute(prompt="Hello")
 
         # Should use class name when message is empty

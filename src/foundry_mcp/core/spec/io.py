@@ -12,7 +12,7 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from foundry_mcp.core.spec._constants import (
     DEFAULT_BACKUP_PAGE_SIZE,
@@ -20,7 +20,6 @@ from foundry_mcp.core.spec._constants import (
     DEFAULT_MAX_BACKUPS,
     MAX_BACKUP_PAGE_SIZE,
 )
-
 
 # ---------------------------------------------------------------------------
 # Git / directory discovery
@@ -130,9 +129,7 @@ def find_spec_file(spec_id: str, specs_dir: Path) -> Optional[Path]:
     return None
 
 
-def resolve_spec_file(
-    spec_name_or_path: str, specs_dir: Optional[Path] = None
-) -> Optional[Path]:
+def resolve_spec_file(spec_name_or_path: str, specs_dir: Optional[Path] = None) -> Optional[Path]:
     """
     Resolve spec file from either a spec name or full path.
 
@@ -207,9 +204,7 @@ def _migrate_spec_fields(spec_data: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def load_spec(
-    spec_id: str, specs_dir: Optional[Path] = None
-) -> Optional[Dict[str, Any]]:
+def load_spec(spec_id: str, specs_dir: Optional[Path] = None) -> Optional[Dict[str, Any]]:
     """
     Load the JSON spec file for a given spec ID or path.
 
@@ -253,7 +248,7 @@ def _validate_spec_structure(spec_data: Dict[str, Any]) -> bool:
     if not isinstance(hierarchy, dict):
         return False
 
-    for node_id, node_data in hierarchy.items():
+    for _node_id, node_data in hierarchy.items():
         if not isinstance(node_data, dict):
             return False
         if "type" not in node_data or "status" not in node_data:
@@ -299,9 +294,7 @@ def save_spec(
         if not _validate_spec_structure(spec_data):
             return False
 
-    spec_data["last_updated"] = (
-        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    )
+    spec_data["last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     if backup:
         backup_spec(spec_id, specs_dir)
@@ -403,10 +396,7 @@ def _apply_backup_retention(backups_dir: Path, max_backups: int) -> int:
     """
     # List all timestamped backup files (exclude latest.json)
     backup_files = sorted(
-        [
-            f for f in backups_dir.glob("*.json")
-            if f.name != "latest.json" and f.is_file()
-        ],
+        [f for f in backups_dir.glob("*.json") if f.name != "latest.json" and f.is_file()],
         key=lambda p: p.name,  # Sort by filename (timestamp order)
     )
 
@@ -476,9 +466,7 @@ def list_spec_backups(
         specs_dir = find_specs_directory()
 
     # Normalize page size
-    page_size = normalize_page_size(
-        limit, default=DEFAULT_BACKUP_PAGE_SIZE, maximum=MAX_BACKUP_PAGE_SIZE
-    )
+    page_size = normalize_page_size(limit, default=DEFAULT_BACKUP_PAGE_SIZE, maximum=MAX_BACKUP_PAGE_SIZE)
 
     result: Dict[str, Any] = {
         "spec_id": spec_id,
@@ -501,11 +489,7 @@ def list_spec_backups(
 
     # List all timestamped backup files (exclude latest.json)
     backup_files = sorted(
-        [
-            f
-            for f in backups_dir.glob("*.json")
-            if f.name != "latest.json" and f.is_file()
-        ],
+        [f for f in backups_dir.glob("*.json") if f.name != "latest.json" and f.is_file()],
         key=lambda p: p.name,
         reverse=True,  # Newest first
     )
@@ -638,11 +622,13 @@ def _diff_node(
         new_val = new_node.get(field)
 
         if old_val != new_val:
-            field_changes.append({
-                "field": field,
-                "old": old_val,
-                "new": new_val,
-            })
+            field_changes.append(
+                {
+                    "field": field,
+                    "old": old_val,
+                    "new": new_val,
+                }
+            )
 
     if not field_changes:
         return None
@@ -743,11 +729,13 @@ def diff_specs(
             partial = True
             break
         node = target_hierarchy[node_id]
-        added.append({
-            "node_id": node_id,
-            "type": node.get("type"),
-            "title": node.get("title"),
-        })
+        added.append(
+            {
+                "node_id": node_id,
+                "type": node.get("type"),
+                "title": node.get("title"),
+            }
+        )
 
     # Build removed list
     removed = []
@@ -756,11 +744,13 @@ def diff_specs(
             partial = True
             break
         node = source_hierarchy[node_id]
-        removed.append({
-            "node_id": node_id,
-            "type": node.get("type"),
-            "title": node.get("title"),
-        })
+        removed.append(
+            {
+                "node_id": node_id,
+                "type": node.get("type"),
+                "title": node.get("title"),
+            }
+        )
 
     # Build modified list
     modified = []
@@ -777,10 +767,11 @@ def diff_specs(
     # Calculate actual counts (may exceed displayed if partial)
     total_added = len(added_ids)
     total_removed = len(removed_ids)
-    total_modified = sum(
-        1 for nid in common_ids
-        if _diff_node(source_hierarchy[nid], target_hierarchy[nid], nid)
-    ) if not partial else len(modified)  # Only count all if not already partial
+    total_modified = (
+        sum(1 for nid in common_ids if _diff_node(source_hierarchy[nid], target_hierarchy[nid], nid))
+        if not partial
+        else len(modified)
+    )  # Only count all if not already partial
 
     return {
         "summary": {
@@ -913,9 +904,7 @@ def rollback_spec(
 # ---------------------------------------------------------------------------
 
 
-def list_specs(
-    specs_dir: Optional[Path] = None, status: Optional[str] = None
-) -> List[Dict[str, Any]]:
+def list_specs(specs_dir: Optional[Path] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     List specification files with optional filtering.
 
@@ -961,9 +950,7 @@ def list_specs(
             hierarchy = spec_data.get("hierarchy", {})
 
             total_tasks = len(hierarchy)
-            completed_tasks = sum(
-                1 for task in hierarchy.values() if task.get("status") == "completed"
-            )
+            completed_tasks = sum(1 for task in hierarchy.values() if task.get("status") == "completed")
 
             progress_pct = 0
             if total_tasks > 0:

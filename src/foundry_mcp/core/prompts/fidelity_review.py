@@ -25,7 +25,6 @@ from typing import Any, Dict, List
 
 from foundry_mcp.core.prompts import PromptBuilder, PromptTemplate
 
-
 # =============================================================================
 # Response Schema
 # =============================================================================

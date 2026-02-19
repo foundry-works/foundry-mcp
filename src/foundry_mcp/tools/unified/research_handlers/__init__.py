@@ -10,21 +10,13 @@ from mcp.server.fastmcp import FastMCP
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.tools.unified.common import dispatch_with_standard_errors
-from foundry_mcp.tools.unified.router import ActionDefinition, ActionRouter
-
 from foundry_mcp.tools.unified.research_handlers._helpers import (
     _ACTION_SUMMARY,
-    _config,
+    _config,  # noqa: F401
     _get_config,
-    _get_memory,
-    _memory,
-    _validation_error,
-)
-from foundry_mcp.tools.unified.research_handlers.handlers_workflows import (
-    _handle_chat,
-    _handle_consensus,
-    _handle_ideate,
-    _handle_thinkdeep,
+    _get_memory,  # noqa: F401
+    _memory,  # noqa: F401
+    _validation_error,  # noqa: F401
 )
 from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (
     _handle_deep_research,
@@ -33,21 +25,28 @@ from foundry_mcp.tools.unified.research_handlers.handlers_deep_research import (
     _handle_deep_research_report,
     _handle_deep_research_status,
 )
-from foundry_mcp.tools.unified.research_handlers.handlers_threads import (
-    _handle_thread_delete,
-    _handle_thread_get,
-    _handle_thread_list,
+from foundry_mcp.tools.unified.research_handlers.handlers_extract import (
+    _handle_extract,
 )
 from foundry_mcp.tools.unified.research_handlers.handlers_spec_nodes import (
     _handle_node_execute,
     _handle_node_findings,
     _handle_node_record,
     _handle_node_status,
-    _load_research_node,
+    _load_research_node,  # noqa: F401
 )
-from foundry_mcp.tools.unified.research_handlers.handlers_extract import (
-    _handle_extract,
+from foundry_mcp.tools.unified.research_handlers.handlers_threads import (
+    _handle_thread_delete,
+    _handle_thread_get,
+    _handle_thread_list,
 )
+from foundry_mcp.tools.unified.research_handlers.handlers_workflows import (
+    _handle_chat,
+    _handle_consensus,
+    _handle_ideate,
+    _handle_thinkdeep,
+)
+from foundry_mcp.tools.unified.router import ActionDefinition, ActionRouter
 
 logger = logging.getLogger(__name__)
 

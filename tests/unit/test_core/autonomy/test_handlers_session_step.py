@@ -31,17 +31,17 @@ from foundry_mcp.core.autonomy.models.steps import LastStepIssued
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_ALL_TASKS_BLOCKED,
     ERROR_GATE_AUDIT_FAILURE,
-    ERROR_INVALID_GATE_EVIDENCE,
     ERROR_GATE_INTEGRITY_CHECKSUM,
     ERROR_HEARTBEAT_STALE,
+    ERROR_INVALID_GATE_EVIDENCE,
     ERROR_REQUIRED_GATE_UNSATISFIED,
     ERROR_SESSION_UNRECOVERABLE,
     ERROR_SPEC_REBASE_REQUIRED,
     ERROR_STEP_MISMATCH,
-    ERROR_STEP_PROOF_MISSING,
-    ERROR_STEP_PROOF_MISMATCH,
     ERROR_STEP_PROOF_CONFLICT,
     ERROR_STEP_PROOF_EXPIRED,
+    ERROR_STEP_PROOF_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
     ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
     ERROR_VERIFICATION_RECEIPT_INVALID,
@@ -51,10 +51,10 @@ from foundry_mcp.core.autonomy.orchestrator import (
 
 from .conftest import make_session, make_spec_data
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
+
 
 def _make_config(workspace: Path) -> MagicMock:
     config = MagicMock()
@@ -99,7 +99,9 @@ def _create_session_for_step_tests(tmp_path: Path) -> tuple:
     config = _make_config(workspace)
 
     resp = _handle_session_start(
-        config=config, spec_id="test-spec-001", workspace=str(workspace),
+        config=config,
+        spec_id="test-spec-001",
+        workspace=str(workspace),
     )
     data = _assert_success(resp)
     return workspace, config, data["session_id"]
@@ -511,9 +513,7 @@ class TestSessionStepNext:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -541,9 +541,7 @@ class TestSessionStepNext:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -580,9 +578,7 @@ class TestSessionStepNext:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -648,9 +644,7 @@ class TestSessionStepNext:
             "step_proof": "proof-replay-1",
         }
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             first = _handle_session_step_next(
                 config=config,
@@ -660,9 +654,7 @@ class TestSessionStepNext:
             )
         _assert_success(first)
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             replay = _handle_session_step_next(
                 config=config,
                 session_id=session_id,
@@ -700,9 +692,7 @@ class TestSessionStepNext:
             next_step=None,
             should_persist=False,
         )
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             _handle_session_step_next(
                 config=config,
@@ -769,9 +759,7 @@ class TestSessionStepNext:
             "phase_id": "phase-1",
             "step_proof": "proof-expired-1",
         }
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             _handle_session_step_next(
                 config=config,
@@ -908,9 +896,7 @@ class TestSessionStepNext:
             replay_response=cached_response,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -940,9 +926,7 @@ class TestSessionStepNext:
             should_persist=False,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -967,11 +951,10 @@ class TestSessionStepNext:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch, patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step._get_storage"
-        ) as MockGetStorage:
+        with (
+            patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch,
+            patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step._get_storage") as MockGetStorage,
+        ):
             mock_storage = MagicMock()
             mock_storage.load.return_value = make_session(session_id=session_id)
             # lookup_active_session not needed since we provide spec_id
@@ -1004,9 +987,7 @@ class TestSessionStepNext:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -1017,7 +998,6 @@ class TestSessionStepNext:
 
         call_args = MockOrch.return_value.compute_next_step.call_args
         assert call_args.kwargs["heartbeat_at"] is not None
-
 
     def test_next_rejects_invalid_context_usage_pct(self, tmp_path):
         """Step-next rejects context_usage_pct outside 0-100 bounds."""
@@ -1060,9 +1040,7 @@ class TestSessionStepNext:
             should_persist=True,
         )
 
-        with patch(
-            "foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator"
-        ) as MockOrch:
+        with patch("foundry_mcp.tools.unified.task_handlers.handlers_session_step.StepOrchestrator") as MockOrch:
             MockOrch.return_value.compute_next_step.return_value = mock_result
             resp = _handle_session_step_next(
                 config=config,
@@ -1266,10 +1244,10 @@ class TestSessionStepReplay:
 
     def test_replay_returns_cached_response(self, tmp_path):
         """Replay returns the cached response data inside a standard envelope."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
             _handle_session_step_replay,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
 
@@ -1297,10 +1275,10 @@ class TestSessionStepReplay:
 
     def test_replay_by_session_id(self, tmp_path):
         """Replay works when resolved by session_id."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
             _handle_session_step_replay,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
 
@@ -1434,10 +1412,10 @@ class TestProofReissueOnReplay:
 
     def test_consumed_proof_triggers_reissue(self, tmp_path):
         """Replay detects consumed proof and returns a new one."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
             _handle_session_step_replay,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
         storage = _get_storage(config, str(workspace))
@@ -1497,10 +1475,10 @@ class TestProofReissueOnReplay:
 
     def test_unconsumed_proof_returns_unchanged(self, tmp_path):
         """Replay returns unchanged response when proof is not consumed."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
             _handle_session_step_replay,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
         storage = _get_storage(config, str(workspace))
@@ -1542,10 +1520,10 @@ class TestProofReissueOnReplay:
 
     def test_response_without_proof_returns_unchanged(self, tmp_path):
         """Replay returns unchanged response when cached response has no proof."""
+        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
         from foundry_mcp.tools.unified.task_handlers.handlers_session_step import (
             _handle_session_step_replay,
         )
-        from foundry_mcp.tools.unified.task_handlers._helpers import _get_storage
 
         workspace, config, session_id = _create_session_for_step_tests(tmp_path)
         storage = _get_storage(config, str(workspace))

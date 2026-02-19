@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 try:
     import tomllib
@@ -71,9 +71,7 @@ class WorkflowConfig:
             raise ValueError(f"batch_size must be at least 1, got {self.batch_size}")
 
         if not 50 <= self.context_threshold <= 100:
-            raise ValueError(
-                f"context_threshold must be between 50 and 100, got {self.context_threshold}"
-            )
+            raise ValueError(f"context_threshold must be between 50 and 100, got {self.context_threshold}")
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WorkflowConfig":
@@ -95,11 +93,9 @@ class WorkflowConfig:
             mode_str = data["mode"].lower()
             try:
                 config.mode = WorkflowMode(mode_str)
-            except ValueError:
+            except ValueError as e:
                 valid = [m.value for m in WorkflowMode]
-                raise ValueError(
-                    f"Invalid workflow mode '{mode_str}'. Must be one of: {valid}"
-                )
+                raise ValueError(f"Invalid workflow mode '{mode_str}'. Must be one of: {valid}") from e
 
         # Parse boolean fields
         if "auto_validate" in data:

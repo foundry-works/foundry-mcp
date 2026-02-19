@@ -14,7 +14,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Router dispatch baseline
 # ---------------------------------------------------------------------------
@@ -29,20 +28,20 @@ import pytest
 # )
 
 DISPATCH_BASELINES = [
-    ("authoring",     "_dispatch_authoring_action",     "_AUTHORING_ROUTER",     "authoring",     "kw",       "create"),
-    ("environment",   "_dispatch_environment_action",   "_ENVIRONMENT_ROUTER",   "environment",   "kw",       "info"),
-    ("error",         "_dispatch_error_action",         "_ERROR_ROUTER",         "error",         "kw",       "list"),
-    ("health",        "_dispatch_health_action",        "_HEALTH_ROUTER",        "health",        "health",   "check"),
-    ("journal",       "_dispatch_journal_action",       "_JOURNAL_ROUTER",       "journal",       "kw",       "add"),
-    ("lifecycle",     "_dispatch_lifecycle_action",     "_LIFECYCLE_ROUTER",     "lifecycle",     "kw",       "move"),
-    ("plan",          "_dispatch_plan_action",          "_PLAN_ROUTER",          "plan",          "pos",      "create"),
-    ("provider",      "_dispatch_provider_action",      "_PROVIDER_ROUTER",      "provider",      "kw",       "list"),
-    ("research_handlers", "_dispatch_research_action",   "_RESEARCH_ROUTER",      "research",      "research", "chat"),
-    ("review",        "_dispatch_review_action",        "_REVIEW_ROUTER",        "review",        "kw",       "spec"),
-    ("server",        "_dispatch_server_action",        "_SERVER_ROUTER",        "server",        "kw",       "tools"),
-    ("spec",          "_dispatch_spec_action",          "_SPEC_ROUTER",          "spec",          "kw",       "list"),
-    ("task",          "_dispatch_task_action",          "_TASK_ROUTER",          "task",          "kw",       "list"),
-    ("verification",  "_dispatch_verification_action",  "_VERIFICATION_ROUTER",  "verification",  "kw",       "add"),
+    ("authoring", "_dispatch_authoring_action", "_AUTHORING_ROUTER", "authoring", "kw", "create"),
+    ("environment", "_dispatch_environment_action", "_ENVIRONMENT_ROUTER", "environment", "kw", "info"),
+    ("error", "_dispatch_error_action", "_ERROR_ROUTER", "error", "kw", "list"),
+    ("health", "_dispatch_health_action", "_HEALTH_ROUTER", "health", "health", "check"),
+    ("journal", "_dispatch_journal_action", "_JOURNAL_ROUTER", "journal", "kw", "add"),
+    ("lifecycle", "_dispatch_lifecycle_action", "_LIFECYCLE_ROUTER", "lifecycle", "kw", "move"),
+    ("plan", "_dispatch_plan_action", "_PLAN_ROUTER", "plan", "pos", "create"),
+    ("provider", "_dispatch_provider_action", "_PROVIDER_ROUTER", "provider", "kw", "list"),
+    ("research_handlers", "_dispatch_research_action", "_RESEARCH_ROUTER", "research", "research", "chat"),
+    ("review", "_dispatch_review_action", "_REVIEW_ROUTER", "review", "kw", "spec"),
+    ("server", "_dispatch_server_action", "_SERVER_ROUTER", "server", "kw", "tools"),
+    ("spec", "_dispatch_spec_action", "_SPEC_ROUTER", "spec", "kw", "list"),
+    ("task", "_dispatch_task_action", "_TASK_ROUTER", "task", "kw", "list"),
+    ("verification", "_dispatch_verification_action", "_VERIFICATION_ROUTER", "verification", "kw", "add"),
 ]
 
 # Derive IDs for parametrize
@@ -52,6 +51,7 @@ _BASELINE_IDS = [entry[0] for entry in DISPATCH_BASELINES]
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_config(mock_config):
@@ -88,6 +88,7 @@ def _call_dispatch(module_name, dispatch_fn_name, call_style, action, mock_confi
 # Envelope assertion helpers (shared with snapshot tests)
 # ---------------------------------------------------------------------------
 
+
 def assert_error_envelope(response: dict) -> None:
     """Assert response-v2 error envelope invariants."""
     assert isinstance(response, dict), "Response must be a dict"
@@ -122,6 +123,7 @@ def assert_internal_error_envelope(response: dict) -> None:
 # 1. Parametrized unsupported-action tests (all 14 routers)
 # ---------------------------------------------------------------------------
 
+
 class TestUnsupportedActionEnvelope:
     """Every router produces a valid VALIDATION_ERROR envelope for unknown actions."""
 
@@ -131,12 +133,21 @@ class TestUnsupportedActionEnvelope:
         ids=_BASELINE_IDS,
     )
     def test_unsupported_action(
-        self, mock_config, module_name, dispatch_fn_name, router_const,
-        tool_name, call_style, valid_action,
+        self,
+        mock_config,
+        module_name,
+        dispatch_fn_name,
+        router_const,
+        tool_name,
+        call_style,
+        valid_action,
     ):
         result = _call_dispatch(
-            module_name, dispatch_fn_name, call_style,
-            "nonexistent-action", mock_config,
+            module_name,
+            dispatch_fn_name,
+            call_style,
+            "nonexistent-action",
+            mock_config,
         )
         assert_unsupported_action_envelope(result)
         # Error message references the tool name
@@ -150,6 +161,7 @@ class TestUnsupportedActionEnvelope:
 # 2. Parametrized internal-error tests (all 14 routers)
 # ---------------------------------------------------------------------------
 
+
 class TestInternalErrorEnvelope:
     """Every router produces a valid INTERNAL_ERROR envelope for unexpected exceptions."""
 
@@ -159,19 +171,31 @@ class TestInternalErrorEnvelope:
         ids=_BASELINE_IDS,
     )
     def test_internal_error(
-        self, mock_config, module_name, dispatch_fn_name, router_const,
-        tool_name, call_style, valid_action,
+        self,
+        mock_config,
+        module_name,
+        dispatch_fn_name,
+        router_const,
+        tool_name,
+        call_style,
+        valid_action,
     ):
         patch_target = f"foundry_mcp.tools.unified.{module_name}.{router_const}"
-        with patch(patch_target) as mock_router, patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="maintainer",
+        with (
+            patch(patch_target) as mock_router,
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ),
         ):
             mock_router.allowed_actions.return_value = [valid_action]
             mock_router.dispatch.side_effect = RuntimeError("boom")
             result = _call_dispatch(
-                module_name, dispatch_fn_name, call_style,
-                valid_action, mock_config,
+                module_name,
+                dispatch_fn_name,
+                call_style,
+                valid_action,
+                mock_config,
             )
         assert_internal_error_envelope(result)
         # Details capture the action and exception type
@@ -183,6 +207,7 @@ class TestInternalErrorEnvelope:
 # 3. Authorization parity tests (all 14 routers)
 # ---------------------------------------------------------------------------
 
+
 class TestAuthorizationParity:
     """Every router should enforce authorization consistently."""
 
@@ -192,18 +217,29 @@ class TestAuthorizationParity:
         ids=_BASELINE_IDS,
     )
     def test_router_enforces_authorization(
-        self, mock_config, module_name, dispatch_fn_name, router_const,
-        tool_name, call_style, valid_action,
+        self,
+        mock_config,
+        module_name,
+        dispatch_fn_name,
+        router_const,
+        tool_name,
+        call_style,
+        valid_action,
     ):
         patch_target = f"foundry_mcp.tools.unified.{module_name}.{router_const}"
-        with patch(patch_target) as mock_router, patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="observer",
-        ), patch(
-            "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
-        ) as mock_tracker_factory, patch(
-            "foundry_mcp.tools.unified.common.check_action_allowed",
-        ) as mock_check_action_allowed:
+        with (
+            patch(patch_target) as mock_router,
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="observer",
+            ),
+            patch(
+                "foundry_mcp.tools.unified.common.get_rate_limit_tracker",
+            ) as mock_tracker_factory,
+            patch(
+                "foundry_mcp.tools.unified.common.check_action_allowed",
+            ) as mock_check_action_allowed,
+        ):
             mock_router.allowed_actions.return_value = [valid_action]
             mock_router.dispatch.return_value = {"success": True, "data": {}}
 
@@ -216,8 +252,11 @@ class TestAuthorizationParity:
             )
 
             result = _call_dispatch(
-                module_name, dispatch_fn_name, call_style,
-                valid_action, mock_config,
+                module_name,
+                dispatch_fn_name,
+                call_style,
+                valid_action,
+                mock_config,
             )
 
         assert_error_envelope(result)
@@ -229,6 +268,7 @@ class TestAuthorizationParity:
 # 4. Full-envelope snapshot tests for representative routers
 # ---------------------------------------------------------------------------
 
+
 class TestEnvelopeSnapshots:
     """Full-envelope structure checks for representative routers.
 
@@ -239,8 +279,11 @@ class TestEnvelopeSnapshots:
     def test_environment_unsupported_action_snapshot(self, mock_config):
         """Environment: full envelope for unsupported action."""
         result = _call_dispatch(
-            "environment", "_dispatch_environment_action", "kw",
-            "nonexistent-action", mock_config,
+            "environment",
+            "_dispatch_environment_action",
+            "kw",
+            "nonexistent-action",
+            mock_config,
         )
         # Structure
         assert result["success"] is False
@@ -259,8 +302,11 @@ class TestEnvelopeSnapshots:
     def test_health_unsupported_action_snapshot_with_details(self):
         """Health: full envelope includes details for unsupported action."""
         result = _call_dispatch(
-            "health", "_dispatch_health_action", "health",
-            "nonexistent-action", None,
+            "health",
+            "_dispatch_health_action",
+            "health",
+            "nonexistent-action",
+            None,
         )
         assert result["success"] is False
         assert result["data"]["error_code"] == "VALIDATION_ERROR"
@@ -274,17 +320,21 @@ class TestEnvelopeSnapshots:
 
     def test_server_internal_error_snapshot(self, mock_config):
         """Server: full envelope for internal error."""
-        with patch(
-            "foundry_mcp.tools.unified.server._SERVER_ROUTER"
-        ) as mock_router, patch(
-            "foundry_mcp.tools.unified.common.get_server_role",
-            return_value="maintainer",
+        with (
+            patch("foundry_mcp.tools.unified.server._SERVER_ROUTER") as mock_router,
+            patch(
+                "foundry_mcp.tools.unified.common.get_server_role",
+                return_value="maintainer",
+            ),
         ):
             mock_router.allowed_actions.return_value = ["tools"]
             mock_router.dispatch.side_effect = ValueError("db connection lost")
             result = _call_dispatch(
-                "server", "_dispatch_server_action", "kw",
-                "tools", mock_config,
+                "server",
+                "_dispatch_server_action",
+                "kw",
+                "tools",
+                mock_config,
             )
         assert result["success"] is False
         assert result["meta"]["version"] == "response-v2"
@@ -301,8 +351,11 @@ class TestEnvelopeSnapshots:
     def test_research_unsupported_action_snapshot_with_details(self):
         """Research: full envelope includes details for unsupported action."""
         result = _call_dispatch(
-            "research", "_dispatch_research_action", "research",
-            "nonexistent-action", None,
+            "research",
+            "_dispatch_research_action",
+            "research",
+            "nonexistent-action",
+            None,
         )
         assert result["success"] is False
         assert result["data"]["error_code"] == "VALIDATION_ERROR"
@@ -313,14 +366,15 @@ class TestEnvelopeSnapshots:
 
     def test_task_internal_error_snapshot(self, mock_config):
         """Task: full envelope for internal error with empty exception message."""
-        with patch(
-            "foundry_mcp.tools.unified.task._TASK_ROUTER"
-        ) as mock_router:
+        with patch("foundry_mcp.tools.unified.task._TASK_ROUTER") as mock_router:
             mock_router.allowed_actions.return_value = ["list"]
             mock_router.dispatch.side_effect = RuntimeError()
             result = _call_dispatch(
-                "task", "_dispatch_task_action", "kw",
-                "list", mock_config,
+                "task",
+                "_dispatch_task_action",
+                "kw",
+                "list",
+                mock_config,
             )
         assert result["success"] is False
         assert result["data"]["error_code"] == "INTERNAL_ERROR"

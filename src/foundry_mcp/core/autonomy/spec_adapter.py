@@ -74,13 +74,15 @@ def ensure_phases_view(spec_data: Dict[str, Any]) -> Dict[str, Any]:
         tasks: List[Dict[str, Any]] = []
         _collect_leaf_tasks(hierarchy, phase_id, tasks)
 
-        phases.append({
-            "id": phase_id,
-            "title": phase_node.get("title", ""),
-            "sequence_index": seq_idx,
-            "metadata": phase_node.get("metadata", {}),
-            "tasks": tasks,
-        })
+        phases.append(
+            {
+                "id": phase_id,
+                "title": phase_node.get("title", ""),
+                "sequence_index": seq_idx,
+                "metadata": phase_node.get("metadata", {}),
+                "tasks": tasks,
+            }
+        )
 
     spec_data["phases"] = phases
 
@@ -125,15 +127,17 @@ def _collect_leaf_tasks(
             deps = node.get("dependencies", {})
             blocked_by = deps.get("blocked_by", []) if isinstance(deps, dict) else []
 
-            out.append({
-                "id": node_id,
-                "title": node.get("title", ""),
-                "type": "task" if node_type in ("task", "subtask") else "verify",
-                "status": node.get("status", "pending"),
-                "depends": list(blocked_by),
-                "dependencies": list(blocked_by),
-                "metadata": node.get("metadata", {}),
-            })
+            out.append(
+                {
+                    "id": node_id,
+                    "title": node.get("title", ""),
+                    "type": "task" if node_type in ("task", "subtask") else "verify",
+                    "status": node.get("status", "pending"),
+                    "depends": list(blocked_by),
+                    "dependencies": list(blocked_by),
+                    "metadata": node.get("metadata", {}),
+                }
+            )
         else:
             # Parent with children — recurse; don't emit the parent itself
             for child_id in children:

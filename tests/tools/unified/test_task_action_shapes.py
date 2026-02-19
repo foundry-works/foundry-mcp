@@ -77,9 +77,7 @@ def _mock_config() -> MagicMock:
 def test_dispatch_session_canonical_maps_to_legacy_action() -> None:
     from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
-    with patch(
-        "foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors"
-    ) as mock_dispatch:
+    with patch("foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors") as mock_dispatch:
         mock_dispatch.return_value = {
             "success": True,
             "data": {"ok": True},
@@ -103,9 +101,7 @@ def test_dispatch_session_canonical_maps_to_legacy_action() -> None:
 def test_dispatch_legacy_action_includes_deprecation_metadata() -> None:
     from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
-    with patch(
-        "foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors"
-    ) as mock_dispatch:
+    with patch("foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors") as mock_dispatch:
         mock_dispatch.return_value = {
             "success": True,
             "data": {"ok": True},
@@ -129,9 +125,7 @@ def test_dispatch_legacy_action_includes_deprecation_metadata() -> None:
 def test_dispatch_legacy_action_emits_warn_log(caplog) -> None:
     from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
-    with patch(
-        "foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors"
-    ) as mock_dispatch:
+    with patch("foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors") as mock_dispatch:
         mock_dispatch.return_value = {
             "success": True,
             "data": {"ok": True},
@@ -154,9 +148,7 @@ def test_dispatch_legacy_action_emits_warn_log(caplog) -> None:
 def test_dispatch_shim_includes_deprecation_metadata() -> None:
     from foundry_mcp.tools.unified.task import _dispatch_task_action
 
-    with patch(
-        "foundry_mcp.tools.unified.task.dispatch_with_standard_errors"
-    ) as mock_dispatch:
+    with patch("foundry_mcp.tools.unified.task.dispatch_with_standard_errors") as mock_dispatch:
         mock_dispatch.return_value = {
             "success": False,
             "data": {"error_code": "CONFLICT", "error_type": "conflict"},
@@ -179,9 +171,7 @@ def test_dispatch_shim_includes_deprecation_metadata() -> None:
 def test_dispatch_session_step_authorization_denial_includes_loop_signal() -> None:
     from foundry_mcp.tools.unified.task_handlers import _dispatch_task_action
 
-    with patch(
-        "foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors"
-    ) as mock_dispatch:
+    with patch("foundry_mcp.tools.unified.task_handlers.dispatch_with_standard_errors") as mock_dispatch:
         mock_dispatch.return_value = {
             "success": False,
             "data": {
@@ -227,9 +217,7 @@ def test_docs_task_examples_supported_by_action_shape_adapter(example_input: dic
 def test_manifest_task_examples_supported_by_action_shape_adapter() -> None:
     manifest_path = Path(__file__).resolve().parents[3] / "mcp" / "capabilities_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    task_tool = next(
-        tool for tool in manifest["tools"]["unified"] if tool["name"] == "task"
-    )
+    task_tool = next(tool for tool in manifest["tools"]["unified"] if tool["name"] == "task")
 
     for example in task_tool.get("examples", []):
         input_payload = dict(example["input"])

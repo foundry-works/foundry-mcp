@@ -1,7 +1,6 @@
 """Tests for check_spec_completeness and detect_duplicate_tasks functions."""
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -179,9 +178,7 @@ class TestCheckSpecCompleteness:
         spec_file = temp_specs_dir / "active" / "complete-spec-001.json"
         spec_file.write_text(json.dumps(complete_spec))
 
-        result, error = check_spec_completeness(
-            "complete-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("complete-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["completeness_score"] == 100
@@ -192,9 +189,7 @@ class TestCheckSpecCompleteness:
         spec_file = temp_specs_dir / "active" / "incomplete-spec-001.json"
         spec_file.write_text(json.dumps(incomplete_spec))
 
-        result, error = check_spec_completeness(
-            "incomplete-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("incomplete-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["completeness_score"] < 100
@@ -213,9 +208,7 @@ class TestCheckSpecCompleteness:
         spec_file = temp_specs_dir / "active" / "incomplete-spec-001.json"
         spec_file.write_text(json.dumps(incomplete_spec))
 
-        result, error = check_spec_completeness(
-            "incomplete-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("incomplete-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         categories = result["categories"]
@@ -230,9 +223,7 @@ class TestCheckSpecCompleteness:
 
     def test_spec_not_found(self, temp_specs_dir):
         """Should return error for non-existent spec."""
-        result, error = check_spec_completeness(
-            "nonexistent-spec", specs_dir=temp_specs_dir
-        )
+        result, error = check_spec_completeness("nonexistent-spec", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "not found" in error.lower()
@@ -270,9 +261,7 @@ class TestDetectDuplicateTasks:
 
         # task-1-1 and task-1-2 should be similar
         node_pairs = [(d["node_a"], d["node_b"]) for d in result["duplicates"]]
-        found_auth_pair = any(
-            ("task-1-1" in pair and "task-1-2" in pair) for pair in node_pairs
-        )
+        found_auth_pair = any(("task-1-1" in pair and "task-1-2" in pair) for pair in node_pairs)
         assert found_auth_pair
 
     def test_threshold_filtering(self, temp_specs_dir, duplicate_spec):
@@ -371,9 +360,7 @@ class TestDetectDuplicateTasks:
 
     def test_spec_not_found(self, temp_specs_dir):
         """Should return error for non-existent spec."""
-        result, error = detect_duplicate_tasks(
-            "nonexistent-spec", specs_dir=temp_specs_dir
-        )
+        result, error = detect_duplicate_tasks("nonexistent-spec", specs_dir=temp_specs_dir)
 
         assert result is None
         assert "not found" in error.lower()
@@ -397,9 +384,7 @@ class TestDetectDuplicateTasks:
         spec_file = temp_specs_dir / "active" / "duplicate-spec-001.json"
         spec_file.write_text(json.dumps(duplicate_spec))
 
-        result, error = detect_duplicate_tasks(
-            "duplicate-spec-001", specs_dir=temp_specs_dir
-        )
+        result, error = detect_duplicate_tasks("duplicate-spec-001", specs_dir=temp_specs_dir)
 
         assert error is None
         assert "spec_id" in result

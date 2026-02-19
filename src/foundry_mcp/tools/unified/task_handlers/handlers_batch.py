@@ -9,35 +9,32 @@ from typing import Any, Dict, List, Optional
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.batch_operations import (
-    prepare_batch_context,
-    start_batch,
-    complete_batch,
-    reset_batch,
     DEFAULT_MAX_TASKS,
     DEFAULT_TOKEN_BUDGET,
     STALE_TASK_THRESHOLD_HOURS,
-)
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
+    complete_batch,
+    prepare_batch_context,
+    reset_batch,
+    start_batch,
 )
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import save_spec
 from foundry_mcp.core.task import batch_update_tasks
 from foundry_mcp.core.validation.constants import VALID_VERIFICATION_TYPES
-
 from foundry_mcp.tools.unified.param_schema import Bool, Dict_, List_, Num, Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _ALLOWED_STATUS,
     _TASK_WARNING_THRESHOLD,
-    _VALID_NODE_TYPES,
     _attach_meta,
     _check_autonomy_write_lock,
     _load_spec_data,
-    _match_nodes_for_batch,
     _metric,
     _metrics,
     _request_id,
@@ -103,9 +100,7 @@ def _handle_prepare_batch(*, config: ServerConfig, **payload: Any) -> dict:
     if payload.get("token_budget") is None:
         payload["token_budget"] = DEFAULT_TOKEN_BUDGET
 
-    err = validate_payload(payload, _PREPARE_BATCH_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _PREPARE_BATCH_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -173,9 +168,7 @@ def _handle_start_batch(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "start-batch"
 
-    err = validate_payload(payload, _START_BATCH_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _START_BATCH_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -253,9 +246,7 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "complete-batch"
 
-    err = validate_payload(payload, _COMPLETE_BATCH_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _COMPLETE_BATCH_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -288,7 +279,15 @@ def _handle_complete_batch(*, config: ServerConfig, **payload: Any) -> dict:
 
     if error:
         _metrics.counter(_metric(action), labels={"status": "error"})
-        return asdict(error_response(error, error_code=ErrorCode.OPERATION_FAILED, error_type=ErrorType.VALIDATION, request_id=request_id, details=result if result else None))
+        return asdict(
+            error_response(
+                error,
+                error_code=ErrorCode.OPERATION_FAILED,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+                details=result if result else None,
+            )
+        )
 
     _metrics.timer(_metric(action) + ".duration_ms", elapsed_ms)
     _metrics.counter(_metric(action), labels={"status": "success"})
@@ -315,9 +314,7 @@ def _handle_reset_batch(*, config: ServerConfig, **payload: Any) -> dict:
     request_id = _request_id()
     action = "reset-batch"
 
-    err = validate_payload(payload, _RESET_BATCH_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _RESET_BATCH_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -412,9 +409,7 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
     action = "metadata-batch"
     start = time.perf_counter()
 
-    err = validate_payload(payload, _METADATA_BATCH_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(payload, _METADATA_BATCH_SCHEMA, tool_name="task", action=action, request_id=request_id)
     if err:
         return err
 
@@ -479,9 +474,7 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
     dry_run = payload["dry_run"]
 
     # Content validation for labels and owners (schema checks type only)
-    if labels is not None and not all(
-        isinstance(k, str) and isinstance(v, str) for k, v in labels.items()
-    ):
+    if labels is not None and not all(isinstance(k, str) and isinstance(v, str) for k, v in labels.items()):
         return _validation_error(
             field="labels",
             action=action,
@@ -500,15 +493,17 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
         )
 
     # At least one metadata field must be provided
-    has_metadata = any([
-        description is not None,
-        file_path is not None,
-        estimated_hours is not None,
-        category is not None,
-        labels is not None,
-        owners is not None,
-        update_metadata,
-    ])
+    has_metadata = any(
+        [
+            description is not None,
+            file_path is not None,
+            estimated_hours is not None,
+            category is not None,
+            labels is not None,
+            owners is not None,
+            update_metadata,
+        ]
+    )
     if not has_metadata:
         return _validation_error(
             field="description",
@@ -582,9 +577,7 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
     # Build response with response-v2 envelope
     warnings: List[str] = result.get("warnings", [])
     if result["matched_count"] > _TASK_WARNING_THRESHOLD and not warnings:
-        warnings.append(
-            f"Updated {result['matched_count']} tasks; consider using more specific filters."
-        )
+        warnings.append(f"Updated {result['matched_count']} tasks; consider using more specific filters.")
 
     response = success_response(
         spec_id=result["spec_id"],
@@ -611,9 +604,7 @@ def _handle_metadata_batch(*, config: ServerConfig, **payload: Any) -> dict:
     return response_dict
 
 
-def _handle_fix_verification_types(
-    *, config: ServerConfig, **payload: Any
-) -> dict:
+def _handle_fix_verification_types(*, config: ServerConfig, **payload: Any) -> dict:
     """Fix verification types across all verify nodes in a spec.
 
     This action:
@@ -626,9 +617,9 @@ def _handle_fix_verification_types(
     request_id = _request_id()
     action = "fix-verification-types"
 
-    err = validate_payload(payload, _FIX_VERIFICATION_TYPES_SCHEMA,
-                           tool_name="task", action=action,
-                           request_id=request_id)
+    err = validate_payload(
+        payload, _FIX_VERIFICATION_TYPES_SCHEMA, tool_name="task", action=action, request_id=request_id
+    )
     if err:
         return err
 

@@ -10,14 +10,12 @@ import time
 from typing import Awaitable, Callable, Optional, TypeVar
 
 from foundry_mcp.core.context import get_correlation_id
-from foundry_mcp.core.observability import audit_log
 from foundry_mcp.core.errors.resilience import (
     CircuitBreakerError,
     RateLimitWaitError,
     TimeBudgetExceededError,
 )
-from foundry_mcp.core.resilience import CircuitState
-
+from foundry_mcp.core.observability import audit_log
 from foundry_mcp.core.research.providers.resilience.config import get_provider_config
 from foundry_mcp.core.research.providers.resilience.manager import (
     ProviderResilienceManager,
@@ -28,6 +26,7 @@ from foundry_mcp.core.research.providers.resilience.models import (
     ErrorType,
     ProviderResilienceConfig,
 )
+from foundry_mcp.core.resilience import CircuitState
 
 T = TypeVar("T")
 
@@ -315,7 +314,7 @@ async def execute_with_resilience(
                     budget_seconds=time_budget,
                     elapsed_seconds=time.monotonic() - start_time,
                     operation=provider_name,
-                )
+                ) from last_exception
 
             await asyncio.sleep(delay)
 
@@ -366,10 +365,7 @@ def _default_classify_error(error: Exception) -> ErrorClassification:
         )
 
     # Network errors (retryable, trip breaker)
-    if any(
-        term in error_str
-        for term in ["connection", "network", "dns", "refused", "reset"]
-    ):
+    if any(term in error_str for term in ["connection", "network", "dns", "refused", "reset"]):
         return ErrorClassification(
             retryable=True,
             trips_breaker=True,

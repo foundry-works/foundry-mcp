@@ -6,7 +6,7 @@ implementations with mocked providers.
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,20 +15,15 @@ from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.providers import ProviderResult, ProviderStatus
 from foundry_mcp.core.research.memory import ResearchMemory
 from foundry_mcp.core.research.models.enums import (
-    ConfidenceLevel,
     ConsensusStrategy,
-    IdeationPhase,
-    ThreadStatus,
 )
 from foundry_mcp.core.research.workflows.base import (
-    ResearchWorkflowBase,
     WorkflowResult,
 )
 from foundry_mcp.core.research.workflows.chat import ChatWorkflow
 from foundry_mcp.core.research.workflows.consensus import ConsensusWorkflow
 from foundry_mcp.core.research.workflows.ideate import IdeateWorkflow
 from foundry_mcp.core.research.workflows.thinkdeep import ThinkDeepWorkflow
-
 
 # =============================================================================
 # WorkflowResult Dataclass Tests
@@ -206,9 +201,7 @@ class TestChatWorkflow:
         """Should create new thread and return response."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(prompt="Hello, how are you?")
 
         assert result.success is True
@@ -225,26 +218,20 @@ class TestChatWorkflow:
         workflow = ChatWorkflow(research_config, mock_memory)
 
         # First message - create thread
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result1 = workflow.execute(prompt="First message")
 
         thread_id = result1.metadata["thread_id"]
 
         # Second message - continue thread
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result2 = workflow.execute(prompt="Second message", thread_id=thread_id)
 
         assert result2.success is True
         assert result2.metadata["thread_id"] == thread_id
         assert result2.metadata["message_count"] >= 2
 
-    def test_execute_provider_unavailable(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_execute_provider_unavailable(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should return error when provider unavailable."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
@@ -264,9 +251,7 @@ class TestChatWorkflow:
         workflow = ChatWorkflow(research_config, mock_memory)
 
         # Create some threads
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             workflow.execute(prompt="Thread 1", title="First Thread")
             workflow.execute(prompt="Thread 2", title="Second Thread")
 
@@ -282,9 +267,7 @@ class TestChatWorkflow:
         """Should get thread by ID."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(prompt="Test", title="My Thread")
 
         thread_id = result.metadata["thread_id"]
@@ -302,9 +285,7 @@ class TestChatWorkflow:
         """Should delete thread."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(prompt="Test")
 
         thread_id = result.metadata["thread_id"]
@@ -320,9 +301,7 @@ class TestChatWorkflow:
         """Should return properly structured response."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(prompt="Test")
 
         # Verify structure
@@ -399,9 +378,7 @@ class TestConsensusWorkflow:
         assert result.success is True
         assert "providers_consulted" in result.metadata
 
-    def test_execute_provider_failure(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_execute_provider_failure(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should handle provider failures gracefully."""
         workflow = ConsensusWorkflow(research_config, mock_memory)
 
@@ -456,9 +433,7 @@ class TestConsensusWorkflow:
             "foundry_mcp.core.research.workflows.consensus.available_providers",
             return_value=["codex", "gemini"],
         ):
-            with patch(
-                "foundry_mcp.core.research.workflows.consensus.resolve_provider"
-            ) as mock_resolve:
+            with patch("foundry_mcp.core.research.workflows.consensus.resolve_provider") as mock_resolve:
                 # Set up mock provider that returns successful results
                 mock_context = MagicMock()
                 mock_result = MagicMock()
@@ -500,9 +475,7 @@ class TestConsensusWorkflow:
             "foundry_mcp.core.research.workflows.consensus.available_providers",
             return_value=["gemini"],  # Only gemini available
         ):
-            with patch(
-                "foundry_mcp.core.research.workflows.consensus.resolve_provider"
-            ) as mock_resolve:
+            with patch("foundry_mcp.core.research.workflows.consensus.resolve_provider") as mock_resolve:
                 mock_context = MagicMock()
                 mock_result = MagicMock()
                 mock_result.status = ProviderStatus.SUCCESS
@@ -546,9 +519,7 @@ class TestThinkDeepWorkflow:
         """Should start new investigation with topic."""
         workflow = ThinkDeepWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(topic="Why do databases use B-trees?")
 
         assert result.success is True
@@ -565,17 +536,13 @@ class TestThinkDeepWorkflow:
         workflow = ThinkDeepWorkflow(research_config, mock_memory)
 
         # Start investigation
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result1 = workflow.execute(topic="Test investigation")
 
         investigation_id = result1.metadata["investigation_id"]
 
         # Continue investigation
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result2 = workflow.execute(
                 investigation_id=investigation_id,
                 query="What else should we consider?",
@@ -593,9 +560,7 @@ class TestThinkDeepWorkflow:
         """Should respect max_depth configuration."""
         workflow = ThinkDeepWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(topic="Test", max_depth=2)
 
         assert result.metadata.get("max_depth", research_config.thinkdeep_max_depth) <= 3
@@ -609,9 +574,7 @@ class TestThinkDeepWorkflow:
         """Should return properly structured response."""
         workflow = ThinkDeepWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result = workflow.execute(topic="Test topic")
 
         assert isinstance(result, WorkflowResult)
@@ -645,9 +608,7 @@ class TestIdeateWorkflow:
         """Should generate ideas for a topic."""
         workflow = IdeateWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_ideate_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_ideate_provider_context):
             result = workflow.execute(
                 topic="New features for the app",
                 action="generate",
@@ -667,9 +628,7 @@ class TestIdeateWorkflow:
         workflow = IdeateWorkflow(research_config, mock_memory)
 
         # First generate ideas
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_ideate_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_ideate_provider_context):
             result1 = workflow.execute(
                 topic="Test ideas",
                 action="generate",
@@ -692,9 +651,7 @@ class TestIdeateWorkflow:
         )
 
         # Then cluster them
-        with patch.object(
-            workflow, "_resolve_provider", return_value=cluster_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=cluster_context):
             result2 = workflow.execute(
                 ideation_id=ideation_id,
                 action="cluster",
@@ -711,9 +668,7 @@ class TestIdeateWorkflow:
         """Should generate ideas from multiple perspectives."""
         workflow = IdeateWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_ideate_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_ideate_provider_context):
             result = workflow.execute(
                 topic="Product improvements",
                 action="generate",
@@ -731,9 +686,7 @@ class TestIdeateWorkflow:
         """Should return properly structured response."""
         workflow = IdeateWorkflow(research_config, mock_memory)
 
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_ideate_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_ideate_provider_context):
             result = workflow.execute(topic="Test", action="generate")
 
         assert isinstance(result, WorkflowResult)
@@ -753,9 +706,7 @@ class TestIdeateWorkflow:
 class TestResearchWorkflowBase:
     """Tests for ResearchWorkflowBase abstract class."""
 
-    def test_resolve_provider_caches(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_resolve_provider_caches(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should cache resolved providers."""
         # Use ChatWorkflow as concrete implementation
         workflow = ChatWorkflow(research_config, mock_memory)
@@ -764,9 +715,7 @@ class TestResearchWorkflowBase:
             "foundry_mcp.core.research.workflows.base.available_providers",
             return_value=["gemini"],
         ):
-            with patch(
-                "foundry_mcp.core.research.workflows.base.resolve_provider"
-            ) as mock_resolve:
+            with patch("foundry_mcp.core.research.workflows.base.resolve_provider") as mock_resolve:
                 mock_context = MagicMock()
                 mock_resolve.return_value = mock_context
 
@@ -778,9 +727,7 @@ class TestResearchWorkflowBase:
                 assert result1 is result2
                 mock_resolve.assert_called_once()
 
-    def test_resolve_provider_unavailable(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_resolve_provider_unavailable(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should return None for unavailable provider."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
@@ -792,9 +739,7 @@ class TestResearchWorkflowBase:
 
         assert result is None
 
-    def test_get_available_providers(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_get_available_providers(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should return list of available providers."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
@@ -806,9 +751,7 @@ class TestResearchWorkflowBase:
 
         assert providers == ["gemini", "claude", "openai"]
 
-    def test_resolve_provider_with_full_spec(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_resolve_provider_with_full_spec(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should correctly parse full provider specs like [cli]codex:gpt-5.2-codex.
 
         This tests the fix for provider spec parsing where:
@@ -821,9 +764,7 @@ class TestResearchWorkflowBase:
             "foundry_mcp.core.research.workflows.base.available_providers",
             return_value=["codex", "gemini"],
         ):
-            with patch(
-                "foundry_mcp.core.research.workflows.base.resolve_provider"
-            ) as mock_resolve:
+            with patch("foundry_mcp.core.research.workflows.base.resolve_provider") as mock_resolve:
                 mock_context = MagicMock()
                 mock_resolve.return_value = mock_context
 
@@ -837,9 +778,7 @@ class TestResearchWorkflowBase:
                 assert call_args[0][0] == "codex"  # base provider ID
                 assert call_args[1]["model"] == "gpt-5.2-codex"  # model from spec
 
-    def test_resolve_provider_with_simple_id(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_resolve_provider_with_simple_id(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should handle simple provider IDs without model."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
@@ -847,9 +786,7 @@ class TestResearchWorkflowBase:
             "foundry_mcp.core.research.workflows.base.available_providers",
             return_value=["gemini"],
         ):
-            with patch(
-                "foundry_mcp.core.research.workflows.base.resolve_provider"
-            ) as mock_resolve:
+            with patch("foundry_mcp.core.research.workflows.base.resolve_provider") as mock_resolve:
                 mock_context = MagicMock()
                 mock_resolve.return_value = mock_context
 
@@ -860,9 +797,7 @@ class TestResearchWorkflowBase:
                 assert call_args[0][0] == "gemini"
                 assert call_args[1]["model"] is None
 
-    def test_resolve_provider_caches_by_full_spec(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_resolve_provider_caches_by_full_spec(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should cache providers using full spec string as key."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
@@ -870,9 +805,7 @@ class TestResearchWorkflowBase:
             "foundry_mcp.core.research.workflows.base.available_providers",
             return_value=["codex"],
         ):
-            with patch(
-                "foundry_mcp.core.research.workflows.base.resolve_provider"
-            ) as mock_resolve:
+            with patch("foundry_mcp.core.research.workflows.base.resolve_provider") as mock_resolve:
                 mock_context = MagicMock()
                 mock_resolve.return_value = mock_context
 
@@ -888,9 +821,7 @@ class TestResearchWorkflowBase:
 
                 assert mock_resolve.call_count == 2
 
-    def test_resolve_provider_invalid_spec(
-        self, research_config: ResearchConfig, mock_memory: ResearchMemory
-    ):
+    def test_resolve_provider_invalid_spec(self, research_config: ResearchConfig, mock_memory: ResearchMemory):
         """Should return None for invalid provider spec."""
         workflow = ChatWorkflow(research_config, mock_memory)
 
@@ -995,11 +926,12 @@ class TestDeepResearchRobustness:
 
     def test_active_sessions_lock_exists(self):
         """Should have a lock for protecting _active_research_sessions."""
-        from foundry_mcp.core.research.workflows.deep_research import (
-            _active_sessions_lock,
-            _active_research_sessions,
-        )
         import threading
+
+        from foundry_mcp.core.research.workflows.deep_research import (
+            _active_research_sessions,
+            _active_sessions_lock,
+        )
 
         assert isinstance(_active_sessions_lock, type(threading.Lock()))
         assert isinstance(_active_research_sessions, dict)
@@ -1012,12 +944,14 @@ class TestDeepResearchRobustness:
         assert isinstance(DeepResearchWorkflow._tasks, dict)
         # WeakValueDictionary has different type
         from weakref import WeakValueDictionary
+
         assert not isinstance(DeepResearchWorkflow._tasks, WeakValueDictionary)
 
     def test_tasks_lock_exists(self):
         """Should have a lock for protecting _tasks."""
-        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
         import threading
+
+        from foundry_mcp.core.research.workflows.deep_research import DeepResearchWorkflow
 
         assert isinstance(DeepResearchWorkflow._tasks_lock, type(threading.Lock()))
 
@@ -1067,11 +1001,11 @@ class TestDeepResearchRobustness:
 
     def test_timezone_aware_datetime_in_deep_research(self):
         """Should use timezone-aware datetime, not deprecated utcnow()."""
-        from foundry_mcp.core.research.workflows.deep_research import AgentDecision
         from datetime import timezone
 
         # Create an AgentDecision to test the default_factory
-        from foundry_mcp.core.research.workflows.deep_research import AgentRole
+        from foundry_mcp.core.research.workflows.deep_research import AgentDecision, AgentRole
+
         decision = AgentDecision(
             agent=AgentRole.PLANNER,
             action="test",
@@ -1140,9 +1074,10 @@ class TestFileStorageRobustness:
 
     def test_load_with_ttl_expiry_inside_lock(self, tmp_path: Path):
         """Should check expiry inside lock to avoid TOCTOU race."""
+        import time
+
         from foundry_mcp.core.research.memory import FileStorageBackend
         from foundry_mcp.core.research.models.conversations import ConversationThread
-        import time
 
         # Create backend with very short TTL
         backend = FileStorageBackend(
@@ -1242,9 +1177,7 @@ class TestChatWorkflowFailureRecovery:
         assert result1.success is False
 
         # Second message succeeds (provider available)
-        with patch.object(
-            workflow, "_resolve_provider", return_value=mock_provider_context
-        ):
+        with patch.object(workflow, "_resolve_provider", return_value=mock_provider_context):
             result2 = workflow.execute(prompt="Second message", thread_id=thread_id)
 
         assert result2.success is True
@@ -1273,10 +1206,12 @@ class TestConsensusWorkflowFailureRecovery:
         original_save = mock_memory.save_consensus
 
         def tracking_save(state):
-            save_calls.append({
-                "has_responses": len(state.responses) > 0,
-                "completed": state.completed_at is not None,
-            })
+            save_calls.append(
+                {
+                    "has_responses": len(state.responses) > 0,
+                    "completed": state.completed_at is not None,
+                }
+            )
             return original_save(state)
 
         mock_memory.save_consensus = tracking_save
@@ -1365,12 +1300,13 @@ class TestDeepResearchTimeoutRecovery:
 
     def test_cleanup_stale_tasks_removes_old_completed(self):
         """Should clean up old completed tasks from registry."""
-        from foundry_mcp.core.research.workflows.deep_research import (
-            DeepResearchWorkflow,
-            BackgroundTask,
-        )
         import threading
         import time
+
+        from foundry_mcp.core.research.workflows.deep_research import (
+            BackgroundTask,
+            DeepResearchWorkflow,
+        )
 
         # Clear any existing tasks
         with DeepResearchWorkflow._tasks_lock:
@@ -1418,12 +1354,12 @@ class TestDeepResearchTimeoutRecovery:
 
     def test_active_sessions_protected_by_lock(self):
         """Should protect active sessions dict with lock during iteration."""
+
         from foundry_mcp.core.research.workflows.deep_research import (
+            DeepResearchState,
             _active_research_sessions,
             _active_sessions_lock,
-            DeepResearchState,
         )
-        import threading
 
         # Create some test states
         state1 = DeepResearchState(original_query="Query 1")
@@ -1485,12 +1421,13 @@ class TestConcurrentAccessSafety:
 
     def test_tasks_dict_thread_safe_access(self):
         """Should access tasks dict safely from multiple threads."""
-        from foundry_mcp.core.research.workflows.deep_research import (
-            DeepResearchWorkflow,
-            BackgroundTask,
-        )
         import threading
         import time
+
+        from foundry_mcp.core.research.workflows.deep_research import (
+            BackgroundTask,
+            DeepResearchWorkflow,
+        )
 
         # Clear existing tasks
         with DeepResearchWorkflow._tasks_lock:

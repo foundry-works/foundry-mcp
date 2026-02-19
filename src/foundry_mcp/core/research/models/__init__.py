@@ -6,9 +6,22 @@ Callers can continue using:
 """
 
 # --- Wave 1: Extracted sub-modules ---
+# --- Wave 2: Extracted sub-modules ---
+from foundry_mcp.core.research.models.consensus import (
+    ConsensusConfig,
+    ConsensusState,
+    ModelResponse,
+)
 from foundry_mcp.core.research.models.conversations import (
     ConversationMessage,
     ConversationThread,
+)
+
+# --- Wave 3: Extracted sub-modules ---
+from foundry_mcp.core.research.models.deep_research import (
+    DeepResearchConfig,
+    DeepResearchPhase,
+    DeepResearchState,
 )
 from foundry_mcp.core.research.models.digest import (
     DigestPayload,
@@ -25,35 +38,16 @@ from foundry_mcp.core.research.models.enums import (
     ThreadStatus,
     WorkflowType,
 )
-
-# --- Wave 2: Extracted sub-modules ---
-from foundry_mcp.core.research.models.consensus import (
-    ConsensusConfig,
-    ConsensusState,
-    ModelResponse,
-)
-from foundry_mcp.core.research.models.ideation import (
-    Idea,
-    IdeaCluster,
-    IdeationState,
-)
-from foundry_mcp.core.research.models.thinkdeep import (
-    Hypothesis,
-    InvestigationStep,
-    ThinkDeepState,
-)
-
-# --- Wave 3: Extracted sub-modules ---
-from foundry_mcp.core.research.models.deep_research import (
-    DeepResearchConfig,
-    DeepResearchPhase,
-    DeepResearchState,
-)
 from foundry_mcp.core.research.models.fidelity import (
     ContentFidelityRecord,
     FidelityLevel,
     PhaseContentFidelityRecord,
     PhaseMetrics,
+)
+from foundry_mcp.core.research.models.ideation import (
+    Idea,
+    IdeaCluster,
+    IdeationState,
 )
 from foundry_mcp.core.research.models.sources import (
     DOMAIN_TIERS,
@@ -64,6 +58,11 @@ from foundry_mcp.core.research.models.sources import (
     SourceQuality,
     SourceType,
     SubQuery,
+)
+from foundry_mcp.core.research.models.thinkdeep import (
+    Hypothesis,
+    InvestigationStep,
+    ThinkDeepState,
 )
 
 __all__ = [

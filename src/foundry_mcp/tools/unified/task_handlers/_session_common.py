@@ -28,13 +28,13 @@ from foundry_mcp.core.autonomy.models.responses import (
 )
 from foundry_mcp.core.autonomy.models.signals import derive_loop_signal
 from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.core.spec import load_spec
 
@@ -76,19 +76,21 @@ def _save_with_version_check(
         return None
     except VersionConflictError as exc:
         logger.warning("Version conflict on %s: %s", action, exc)
-        return asdict(error_response(
-            "Concurrent modification detected: session was modified by another actor",
-            error_code=ErrorCode.VERSION_CONFLICT,
-            error_type=ErrorType.CONFLICT,
-            request_id=request_id,
-            details={
-                "action": action,
-                "session_id": session.id,
-                "expected_version": exc.expected_version,
-                "actual_version": exc.actual_version,
-                "remediation": "Reload session state and retry the operation",
-            },
-        ))
+        return asdict(
+            error_response(
+                "Concurrent modification detected: session was modified by another actor",
+                error_code=ErrorCode.VERSION_CONFLICT,
+                error_type=ErrorType.CONFLICT,
+                request_id=request_id,
+                details={
+                    "action": action,
+                    "session_id": session.id,
+                    "expected_version": exc.expected_version,
+                    "actual_version": exc.actual_version,
+                    "remediation": "Reload session state and retry the operation",
+                },
+            )
+        )
 
 
 def _invalid_transition_response(
@@ -99,19 +101,21 @@ def _invalid_transition_response(
     reason: Optional[str] = None,
 ) -> dict:
     """Return invalid state transition error response."""
-    return asdict(error_response(
-        f"Invalid state transition: {current_status} -> {target_status}",
-        error_code=ErrorCode.INVALID_STATE_TRANSITION,
-        error_type=ErrorType.VALIDATION,
-        request_id=request_id,
-        details={
-            "action": action,
-            "current_status": current_status,
-            "target_status": target_status,
-            "reason": reason,
-            "hint": "Check session status before attempting transition",
-        },
-    ))
+    return asdict(
+        error_response(
+            f"Invalid state transition: {current_status} -> {target_status}",
+            error_code=ErrorCode.INVALID_STATE_TRANSITION,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "action": action,
+                "current_status": current_status,
+                "target_status": target_status,
+                "reason": reason,
+                "hint": "Check session status before attempting transition",
+            },
+        )
+    )
 
 
 def _compute_effective_status(session: AutonomousSessionState) -> Optional[SessionStatus]:
@@ -120,6 +124,7 @@ def _compute_effective_status(session: AutonomousSessionState) -> Optional[Sessi
     Delegates to the shared implementation in models.py to avoid duplication.
     """
     from foundry_mcp.core.autonomy.models.signals import compute_effective_status
+
     return compute_effective_status(session)
 
 
@@ -182,9 +187,7 @@ def _build_active_phase_progress(
         total_tasks += 1
         task_id = task.get("id")
         status = str(task.get("status") or "").lower()
-        is_completed = bool(
-            isinstance(task_id, str) and task_id in completed_task_ids
-        ) or status == "completed"
+        is_completed = bool(isinstance(task_id, str) and task_id in completed_task_ids) or status == "completed"
 
         if is_completed:
             completed_tasks += 1
@@ -238,9 +241,7 @@ def _build_retry_counters(
 
     phase_retry_counts: Dict[str, int] = {}
     if session.active_phase_id:
-        phase_retry_counts[session.active_phase_id] = (
-            session.counters.fidelity_review_cycles_in_active_phase
-        )
+        phase_retry_counts[session.active_phase_id] = session.counters.fidelity_review_cycles_in_active_phase
 
     return RetryCounters(
         consecutive_errors=session.counters.consecutive_errors,
@@ -303,11 +304,13 @@ def _build_resume_context(
             PhaseGateStatus.PASSED,
             PhaseGateStatus.WAIVED,
         ):
-            completed_phases.append(CompletedPhaseSummary(
-                phase_id=phase_id,
-                title=phase_title,
-                gate_status=gate_record.status,
-            ))
+            completed_phases.append(
+                CompletedPhaseSummary(
+                    phase_id=phase_id,
+                    title=phase_title,
+                    gate_status=gate_record.status,
+                )
+            )
 
         # Process tasks in this phase
         tasks = phase.get("tasks", [])
@@ -321,19 +324,23 @@ def _build_resume_context(
             task_title = task.get("title", task_id)
 
             if task_id in session.completed_task_ids:
-                completed_tasks.append(CompletedTaskSummary(
-                    task_id=task_id,
-                    title=task_title,
-                    phase_id=phase_id,
-                    files_touched=None,  # Not tracked in spec data
-                ))
+                completed_tasks.append(
+                    CompletedTaskSummary(
+                        task_id=task_id,
+                        title=task_title,
+                        phase_id=phase_id,
+                        files_touched=None,  # Not tracked in spec data
+                    )
+                )
             elif phase_id == session.active_phase_id:
                 task_type = task.get("type", "task")
                 if task_type in ("task", "verify"):
-                    pending_tasks_in_phase.append(PendingTaskSummary(
-                        task_id=task_id,
-                        title=task_title,
-                    ))
+                    pending_tasks_in_phase.append(
+                        PendingTaskSummary(
+                            task_id=task_id,
+                            title=task_title,
+                        )
+                    )
 
     # Cap recent completed tasks at 10 (most recent = last appended)
     recent_completed = completed_tasks[-10:] if len(completed_tasks) > 10 else completed_tasks
@@ -342,7 +349,8 @@ def _build_resume_context(
     journal_available = bool(spec_data.get("journal"))
     journal_hint = (
         f"Use journal(action='list', spec_id='{session.spec_id}') to view journal entries"
-        if journal_available else None
+        if journal_available
+        else None
     )
 
     return ResumeContext(
@@ -394,9 +402,7 @@ def _build_session_response(
         last_step_id=last_step_issued.step_id if last_step_issued else None,
         last_step_type=last_step_issued.type if last_step_issued else None,
         current_task_id=(
-            last_step_issued.task_id
-            if last_step_issued and last_step_issued.task_id
-            else session.last_task_id
+            last_step_issued.task_id if last_step_issued and last_step_issued.task_id else session.last_task_id
         ),
         active_phase_progress=active_phase_progress,
         retry_counters=retry_counters,
@@ -413,10 +419,12 @@ def _build_session_response(
     if effective_status:
         data["effective_status"] = effective_status.value
 
-    return asdict(success_response(
-        data=data,
-        request_id=request_id,
-    ))
+    return asdict(
+        success_response(
+            data=data,
+            request_id=request_id,
+        )
+    )
 
 
 def _inject_audit_status(response: dict, *journal_results: bool) -> dict:

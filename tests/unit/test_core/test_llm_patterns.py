@@ -1,19 +1,17 @@
 """Tests for foundry_mcp.core.llm_patterns module."""
 
-
 from foundry_mcp.core.llm_patterns import (
-    # Progressive disclosure
-    DetailLevel,
-    DisclosureConfig,
-    progressive_disclosure,
-    get_detail_level,
     # Batch operations
     BatchItemResult,
     BatchResult,
+    # Progressive disclosure
+    DetailLevel,
+    DisclosureConfig,
     batch_response,
+    get_detail_level,
     paginated_batch_response,
+    progressive_disclosure,
 )
-
 
 # =============================================================================
 # DetailLevel Tests

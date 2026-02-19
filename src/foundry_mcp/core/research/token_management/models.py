@@ -64,6 +64,5 @@ class ModelContextLimits:
         if self.budgeting_mode == BudgetingMode.COMBINED:
             if self.output_reserved > self.context_window:
                 raise ValueError(
-                    f"output_reserved ({self.output_reserved}) cannot exceed "
-                    f"context_window ({self.context_window})"
+                    f"output_reserved ({self.output_reserved}) cannot exceed context_window ({self.context_window})"
                 )

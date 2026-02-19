@@ -15,16 +15,16 @@ from typing import Any, Dict, List, Optional
 from ulid import ULID
 
 from foundry_mcp.config.server import ServerConfig
-from foundry_mcp.core.autonomy.memory import (
-    VersionConflictError,
+from foundry_mcp.core.authorization import (
+    Role,
 )
 from foundry_mcp.core.autonomy.models.enums import (
+    TERMINAL_STATUSES,
     FailureReason,
     GatePolicy,
     OverrideReasonCode,
     PauseReason,
     SessionStatus,
-    TERMINAL_STATUSES,
 )
 from foundry_mcp.core.autonomy.models.session_config import (
     SessionContext,
@@ -33,40 +33,36 @@ from foundry_mcp.core.autonomy.models.session_config import (
     StopConditions,
 )
 from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
+from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
 from foundry_mcp.core.autonomy.spec_hash import (
     compute_spec_structure_hash,
     get_spec_file_metadata,
-)
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
 )
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
-from foundry_mcp.core.autonomy.spec_adapter import load_spec_file
-from foundry_mcp.core.spec import resolve_spec_file
-from foundry_mcp.core.authorization import (
-    Role,
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
-
+from foundry_mcp.core.spec import resolve_spec_file
 from foundry_mcp.tools.unified.param_schema import Str, validate_payload
 from foundry_mcp.tools.unified.task_handlers._helpers import (
     _get_storage,
     _request_id,
     _resolve_session,
     _session_not_found_response,
-    _validation_error,
     _validate_reason_detail,
+    _validation_error,
 )
 from foundry_mcp.tools.unified.task_handlers._session_common import (
-    _save_with_version_check,
-    _invalid_transition_response,
     _build_session_response,
-    _inject_audit_status,
-    _write_session_journal,
     _compute_required_gates_from_spec,
+    _inject_audit_status,
+    _invalid_transition_response,
+    _save_with_version_check,
+    _write_session_journal,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,28 +113,26 @@ def _validate_posture_constraints(
     if profile == "unattended":
         # Unattended posture enforces strict gate policy
         if gate_policy is not None and gate_policy.lower() != "strict":
-            violations.append(
-                f"gate_policy='{gate_policy}' is not allowed under unattended posture (must be 'strict')"
-            )
+            violations.append(f"gate_policy='{gate_policy}' is not allowed under unattended posture (must be 'strict')")
         # Unattended posture requires write lock
         if enforce_autonomy_write_lock is not None and not enforce_autonomy_write_lock:
-            violations.append(
-                "enforce_autonomy_write_lock=false is not allowed under unattended posture"
-            )
+            violations.append("enforce_autonomy_write_lock=false is not allowed under unattended posture")
 
     if violations:
-        return asdict(error_response(
-            f"Session configuration violates '{profile}' posture constraints",
-            error_code=ErrorCode.AUTHORIZATION,
-            error_type=ErrorType.AUTHORIZATION,
-            request_id=request_id,
-            details={
-                "action": "session-start",
-                "posture_profile": profile,
-                "violations": violations,
-                "hint": "Adjust session parameters to match the active posture profile, or change the posture",
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Session configuration violates '{profile}' posture constraints",
+                error_code=ErrorCode.AUTHORIZATION,
+                error_type=ErrorType.AUTHORIZATION,
+                request_id=request_id,
+                details={
+                    "action": "session-start",
+                    "posture_profile": profile,
+                    "violations": violations,
+                    "hint": "Adjust session parameters to match the active posture profile, or change the posture",
+                },
+            )
+        )
 
     return None
 
@@ -199,18 +193,20 @@ def _handle_existing_session(
         )
         return None
 
-    return asdict(error_response(
-        "Active session already exists for this spec",
-        error_code=ErrorCode.SPEC_SESSION_EXISTS,
-        error_type=ErrorType.CONFLICT,
-        request_id=request_id,
-        details={
-            "spec_id": spec_id,
-            "existing_session_id": existing_session_id,
-            "existing_status": existing_session.status.value,
-            "hint": "End existing session or use force=true to replace it",
-        },
-    ))
+    return asdict(
+        error_response(
+            "Active session already exists for this spec",
+            error_code=ErrorCode.SPEC_SESSION_EXISTS,
+            error_type=ErrorType.CONFLICT,
+            request_id=request_id,
+            details={
+                "spec_id": spec_id,
+                "existing_session_id": existing_session_id,
+                "existing_status": existing_session.status.value,
+                "hint": "End existing session or use force=true to replace it",
+            },
+        )
+    )
 
 
 def _load_spec_for_session_start(
@@ -229,26 +225,40 @@ def _load_spec_for_session_start(
     spec_path = resolve_spec_file(spec_id, specs_dir)
 
     if not spec_path:
-        return None, None, None, asdict(error_response(
-            f"Spec not found: {spec_id}",
-            error_code=ErrorCode.NOT_FOUND,
-            error_type=ErrorType.NOT_FOUND,
-            request_id=request_id,
-            details={"spec_id": spec_id},
-        ))
+        return (
+            None,
+            None,
+            None,
+            asdict(
+                error_response(
+                    f"Spec not found: {spec_id}",
+                    error_code=ErrorCode.NOT_FOUND,
+                    error_type=ErrorType.NOT_FOUND,
+                    request_id=request_id,
+                    details={"spec_id": spec_id},
+                )
+            ),
+        )
 
     try:
         spec_data = load_spec_file(spec_path)
         spec_structure_hash = compute_spec_structure_hash(spec_data)
         spec_metadata = get_spec_file_metadata(spec_path)
     except (OSError, json.JSONDecodeError, ValueError) as e:
-        return None, None, None, asdict(error_response(
-            f"Failed to read spec: {e}",
-            error_code=ErrorCode.INTERNAL_ERROR,
-            error_type=ErrorType.INTERNAL,
-            request_id=request_id,
-            details={"spec_id": spec_id},
-        ))
+        return (
+            None,
+            None,
+            None,
+            asdict(
+                error_response(
+                    f"Failed to read spec: {e}",
+                    error_code=ErrorCode.INTERNAL_ERROR,
+                    error_type=ErrorType.INTERNAL,
+                    request_id=request_id,
+                    details={"spec_id": spec_id},
+                )
+            ),
+        )
 
     return spec_data, spec_structure_hash, spec_metadata, None
 
@@ -275,22 +285,24 @@ def _resolve_session_config(
     def _resolve(caller_value: Any, attr_name: str, expected_type: type) -> Any:
         if caller_value is not None:
             return caller_value
-        if session_defaults is not None and isinstance(
-            getattr(session_defaults, attr_name, None), expected_type
-        ):
+        if session_defaults is not None and isinstance(getattr(session_defaults, attr_name, None), expected_type):
             return getattr(session_defaults, attr_name)
         return None
 
     # Build limits — some fields fall back to server defaults, others are direct
     limits_kwargs: Dict[str, Any] = {}
     _LIMITS_WITH_DEFAULTS = [
-        "max_tasks_per_session", "max_consecutive_errors",
+        "max_tasks_per_session",
+        "max_consecutive_errors",
         "max_fidelity_review_cycles_per_phase",
     ]
     _LIMITS_DIRECT = [
-        "context_threshold_pct", "heartbeat_stale_minutes",
-        "heartbeat_grace_minutes", "step_stale_minutes",
-        "avg_pct_per_step", "context_staleness_threshold",
+        "context_threshold_pct",
+        "heartbeat_stale_minutes",
+        "heartbeat_grace_minutes",
+        "step_stale_minutes",
+        "avg_pct_per_step",
+        "context_staleness_threshold",
         "context_staleness_penalty_pct",
     ]
     for attr in _LIMITS_WITH_DEFAULTS:
@@ -314,22 +326,23 @@ def _resolve_session_config(
     resolved_gate_policy_raw = "strict"
     if gate_policy is not None:
         resolved_gate_policy_raw = gate_policy
-    elif session_defaults is not None and isinstance(
-        getattr(session_defaults, "gate_policy", None), str
-    ):
+    elif session_defaults is not None and isinstance(getattr(session_defaults, "gate_policy", None), str):
         resolved_gate_policy_raw = session_defaults.gate_policy
 
     try:
         resolved_gate_policy = GatePolicy(str(resolved_gate_policy_raw).lower())
     except ValueError:
-        return None, None, None, None, _validation_error(
-            action="session-start",
-            field="gate_policy",
-            message=(
-                f"Invalid gate_policy: {resolved_gate_policy_raw}. "
-                "Must be one of: strict, lenient, manual"
+        return (
+            None,
+            None,
+            None,
+            None,
+            _validation_error(
+                action="session-start",
+                field="gate_policy",
+                message=(f"Invalid gate_policy: {resolved_gate_policy_raw}. Must be one of: strict, lenient, manual"),
+                request_id=request_id,
             ),
-            request_id=request_id,
         )
 
     enforce_lock = overrides.get("enforce_autonomy_write_lock")
@@ -427,14 +440,16 @@ def _handle_session_start(
     request_id = _request_id()
 
     params = {"spec_id": spec_id}
-    err = validate_payload(params, _SESSION_START_SCHEMA,
-                           tool_name="task", action="session-start",
-                           request_id=request_id)
+    err = validate_payload(
+        params, _SESSION_START_SCHEMA, tool_name="task", action="session-start", request_id=request_id
+    )
     if err:
         return err
+    assert isinstance(spec_id, str)
 
     posture_err = _validate_posture_constraints(
-        config, gate_policy=gate_policy,
+        config,
+        gate_policy=gate_policy,
         enforce_autonomy_write_lock=enforce_autonomy_write_lock,
         request_id=request_id,
     )
@@ -447,7 +462,8 @@ def _handle_session_start(
 
     # --- Resolve session configuration ---
     config_overrides = {
-        k: v for k, v in {
+        k: v
+        for k, v in {
             "gate_policy": gate_policy,
             "max_tasks_per_session": max_tasks_per_session,
             "max_consecutive_errors": max_consecutive_errors,
@@ -462,10 +478,11 @@ def _handle_session_start(
             "context_staleness_threshold": context_staleness_threshold,
             "context_staleness_penalty_pct": context_staleness_penalty_pct,
             "enforce_autonomy_write_lock": enforce_autonomy_write_lock,
-        }.items() if v is not None
+        }.items()
+        if v is not None
     }
-    limits, stop_conditions, resolved_gate_policy, write_lock, cfg_err = (
-        _resolve_session_config(config, config_overrides, request_id)
+    limits, stop_conditions, resolved_gate_policy, write_lock, cfg_err = _resolve_session_config(
+        config, config_overrides, request_id
     )
     if cfg_err:
         return cfg_err
@@ -474,25 +491,32 @@ def _handle_session_start(
     try:
         spec_lock = storage.acquire_spec_lock(spec_id, timeout=5)
     except (OSError, TimeoutError) as e:
-        return asdict(error_response(
-            f"Failed to acquire spec lock: {e}",
-            error_code=ErrorCode.LOCK_TIMEOUT,
-            error_type=ErrorType.UNAVAILABLE,
-            request_id=request_id,
-            details={"spec_id": spec_id, "action": "session-start"},
-        ))
+        return asdict(
+            error_response(
+                f"Failed to acquire spec lock: {e}",
+                error_code=ErrorCode.LOCK_TIMEOUT,
+                error_type=ErrorType.UNAVAILABLE,
+                request_id=request_id,
+                details={"spec_id": spec_id, "action": "session-start"},
+            )
+        )
 
     with spec_lock:
         # Check for existing session (dedup / force-end)
         existing_resp = _handle_existing_session(
-            storage, spec_id, idempotency_key, force, request_id, workspace,
+            storage,
+            spec_id,
+            idempotency_key,
+            force,
+            request_id,
+            workspace,
         )
         if existing_resp is not None:
             return existing_resp
 
         # Load spec and compute hash
-        spec_data, spec_structure_hash, spec_metadata, spec_err = (
-            _load_spec_for_session_start(spec_id, workspace, request_id)
+        spec_data, spec_structure_hash, spec_metadata, spec_err = _load_spec_for_session_start(
+            spec_id, workspace, request_id
         )
         if spec_err:
             return spec_err
@@ -509,10 +533,26 @@ def _handle_session_start(
             status=SessionStatus.RUNNING,
             created_at=now,
             updated_at=now,
+            paused_at=None,
+            pause_reason=None,
+            failure_reason=None,
+            active_phase_id=None,
+            last_task_id=None,
+            last_step_issued=None,
+            last_issued_response=None,
+            pending_gate_evidence=None,
+            pending_manual_gate_ack=None,
+            pending_verification_receipt=None,
             counters=SessionCounters(),
             limits=limits,
             stop_conditions=stop_conditions,
-            context=SessionContext(),
+            context=SessionContext(
+                estimated_tokens_used=None,
+                last_heartbeat_at=None,
+                context_source=None,
+                last_context_report_at=None,
+                last_context_report_pct=None,
+            ),
             write_lock_enforced=write_lock,
             gate_policy=resolved_gate_policy,
         )
@@ -523,18 +563,22 @@ def _handle_session_start(
             storage.save(session)
         except (OSError, ValueError, TimeoutError) as e:
             logger.error("Failed to save session state: %s", e)
-            return asdict(error_response(
-                f"Failed to create session: {e}",
-                error_code=ErrorCode.INTERNAL_ERROR,
-                error_type=ErrorType.INTERNAL,
-                request_id=request_id,
-            ))
+            return asdict(
+                error_response(
+                    f"Failed to create session: {e}",
+                    error_code=ErrorCode.INTERNAL_ERROR,
+                    error_type=ErrorType.INTERNAL,
+                    request_id=request_id,
+                )
+            )
 
         # Journal + pointer (best-effort)
         journal_ok = _write_session_journal(
-            spec_id=spec_id, action="start",
+            spec_id=spec_id,
+            action="start",
             summary=f"Started autonomous session {session.id}",
-            session_id=session.id, workspace=workspace,
+            session_id=session.id,
+            workspace=workspace,
             metadata={"idempotency_key": idempotency_key},
         )
         storage.set_active_session(spec_id, session.id)
@@ -594,6 +638,7 @@ def _handle_session_pause(
     session, err = _resolve_session(storage, "session-pause", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     # Validate state transition
     if session.status != SessionStatus.RUNNING:
@@ -684,6 +729,7 @@ def _handle_session_resume(
     session, err = _resolve_session(storage, "session-resume", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     # Validate state transition
     if session.status == SessionStatus.FAILED:
@@ -707,19 +753,21 @@ def _handle_session_resume(
                     current_spec_data = load_spec_file(spec_path)
                     current_hash = compute_spec_structure_hash(current_spec_data)
                     if current_hash != session.spec_structure_hash:
-                        return asdict(error_response(
-                            "Spec structure has changed since session was created. Use session-rebase to reconcile.",
-                            error_code=ErrorCode.SPEC_REBASE_REQUIRED,
-                            error_type=ErrorType.CONFLICT,
-                            request_id=request_id,
-                            details={
-                                "action": "session-resume",
-                                "spec_id": session.spec_id,
-                                "old_hash": session.spec_structure_hash[:16],
-                                "new_hash": current_hash[:16],
-                                "hint": "Use session-rebase to reconcile spec structure changes before resuming",
-                            },
-                        ))
+                        return asdict(
+                            error_response(
+                                "Spec structure has changed since session was created. Use session-rebase to reconcile.",
+                                error_code=ErrorCode.SPEC_REBASE_REQUIRED,
+                                error_type=ErrorType.CONFLICT,
+                                request_id=request_id,
+                                details={
+                                    "action": "session-resume",
+                                    "spec_id": session.spec_id,
+                                    "old_hash": session.spec_structure_hash[:16],
+                                    "new_hash": current_hash[:16],
+                                    "hint": "Use session-rebase to reconcile spec structure changes before resuming",
+                                },
+                            )
+                        )
                 except (OSError, json.JSONDecodeError, ValueError) as e:
                     logger.warning("Failed to validate spec structure on resume: %s", e)
 
@@ -735,31 +783,38 @@ def _handle_session_resume(
     # Check manual gate acknowledgment
     if session.pending_manual_gate_ack:
         if not acknowledge_gate_review:
-            return asdict(error_response(
-                "Manual gate acknowledgment required",
-                error_code=ErrorCode.MANUAL_GATE_ACK_REQUIRED,
-                error_type=ErrorType.VALIDATION,
-                request_id=request_id,
-                details={
-                    "action": "session-resume",
-                    "gate_attempt_id": session.pending_manual_gate_ack.gate_attempt_id,
-                    "phase_id": session.pending_manual_gate_ack.phase_id,
-                    "hint": "Provide acknowledge_gate_review=true and acknowledged_gate_attempt_id to acknowledge",
-                },
-            ))
+            return asdict(
+                error_response(
+                    "Manual gate acknowledgment required",
+                    error_code=ErrorCode.MANUAL_GATE_ACK_REQUIRED,
+                    error_type=ErrorType.VALIDATION,
+                    request_id=request_id,
+                    details={
+                        "action": "session-resume",
+                        "gate_attempt_id": session.pending_manual_gate_ack.gate_attempt_id,
+                        "phase_id": session.pending_manual_gate_ack.phase_id,
+                        "hint": "Provide acknowledge_gate_review=true and acknowledged_gate_attempt_id to acknowledge",
+                    },
+                )
+            )
 
-        if not acknowledged_gate_attempt_id or acknowledged_gate_attempt_id != session.pending_manual_gate_ack.gate_attempt_id:
-            return asdict(error_response(
-                "Invalid gate acknowledgment",
-                error_code=ErrorCode.INVALID_GATE_ACK,
-                error_type=ErrorType.VALIDATION,
-                request_id=request_id,
-                details={
-                    "action": "session-resume",
-                    "expected": session.pending_manual_gate_ack.gate_attempt_id,
-                    "provided": acknowledged_gate_attempt_id,
-                },
-            ))
+        if (
+            not acknowledged_gate_attempt_id
+            or acknowledged_gate_attempt_id != session.pending_manual_gate_ack.gate_attempt_id
+        ):
+            return asdict(
+                error_response(
+                    "Invalid gate acknowledgment",
+                    error_code=ErrorCode.INVALID_GATE_ACK,
+                    error_type=ErrorType.VALIDATION,
+                    request_id=request_id,
+                    details={
+                        "action": "session-resume",
+                        "expected": session.pending_manual_gate_ack.gate_attempt_id,
+                        "provided": acknowledged_gate_attempt_id,
+                    },
+                )
+            )
 
         # Clear pending gate ack
         session.pending_manual_gate_ack = None
@@ -784,7 +839,11 @@ def _handle_session_resume(
         summary=f"Session resumed{', forced from failed' if force else ''}",
         session_id=session.id,
         workspace=workspace,
-        metadata={"acknowledge_gate_review": acknowledge_gate_review, "acknowledged_gate_attempt_id": acknowledged_gate_attempt_id, "force": force},
+        metadata={
+            "acknowledge_gate_review": acknowledge_gate_review,
+            "acknowledged_gate_attempt_id": acknowledged_gate_attempt_id,
+            "force": force,
+        },
     )
 
     logger.info("Resumed session %s for spec %s", session.id, session.spec_id)
@@ -832,9 +891,7 @@ def _handle_session_end(
     request_id = _request_id()
 
     params = {"reason_code": reason_code}
-    err = validate_payload(params, _SESSION_END_SCHEMA,
-                           tool_name="task", action="session-end",
-                           request_id=request_id)
+    err = validate_payload(params, _SESSION_END_SCHEMA, tool_name="task", action="session-end", request_id=request_id)
     if err:
         return err
     validated_reason_code = OverrideReasonCode(params["reason_code"])
@@ -851,6 +908,7 @@ def _handle_session_end(
     session, err = _resolve_session(storage, "session-end", request_id, session_id, spec_id)
     if err:
         return err
+    assert session is not None
 
     # Validate state transition (any non-terminal -> ended)
     if session.status in {SessionStatus.COMPLETED, SessionStatus.ENDED}:
@@ -866,6 +924,7 @@ def _handle_session_end(
     previous_status = session.status
     # Deferred import: tests mock-patch get_server_role on the handlers_session shim module
     from foundry_mcp.tools.unified.task_handlers.handlers_session import get_server_role as _get_role
+
     current_role = _get_role()
 
     # Update session
@@ -940,11 +999,12 @@ def _handle_session_reset(
     request_id = _request_id()
 
     params = {"reason_code": reason_code, "session_id": session_id}
-    err = validate_payload(params, _SESSION_RESET_SCHEMA,
-                           tool_name="task", action="session-reset",
-                           request_id=request_id)
+    err = validate_payload(
+        params, _SESSION_RESET_SCHEMA, tool_name="task", action="session-reset", request_id=request_id
+    )
     if err:
         return err
+    assert isinstance(session_id, str)
     validated_reason_code = OverrideReasonCode(params["reason_code"])
 
     # Validate reason_detail length
@@ -955,20 +1015,23 @@ def _handle_session_reset(
     # Role check - only maintainer can reset sessions
     # Deferred import: tests mock-patch get_server_role on the handlers_session shim module
     from foundry_mcp.tools.unified.task_handlers.handlers_session import get_server_role as _get_role
+
     current_role = _get_role()
     if current_role in (Role.AUTONOMY_RUNNER.value, Role.OBSERVER.value):
-        return asdict(error_response(
-            f"Session reset denied for role: {current_role}",
-            error_code=ErrorCode.FORBIDDEN,
-            error_type=ErrorType.AUTHORIZATION,
-            request_id=request_id,
-            details={
-                "action": "session-reset",
-                "configured_role": current_role,
-                "required_role": Role.MAINTAINER.value,
-                "hint": "Only maintainer role can reset failed sessions",
-            },
-        ))
+        return asdict(
+            error_response(
+                f"Session reset denied for role: {current_role}",
+                error_code=ErrorCode.FORBIDDEN,
+                error_type=ErrorType.AUTHORIZATION,
+                request_id=request_id,
+                details={
+                    "action": "session-reset",
+                    "configured_role": current_role,
+                    "required_role": Role.MAINTAINER.value,
+                    "hint": "Only maintainer role can reset failed sessions",
+                },
+            )
+        )
 
     storage = _get_storage(config, workspace, request_id=request_id)
     if isinstance(storage, dict):
@@ -1010,17 +1073,21 @@ def _handle_session_reset(
         },
     )
 
-    logger.info("Reset (deleted) session %s for spec %s: %s", deleted_session_id, deleted_spec_id, validated_reason_code.value)
+    logger.info(
+        "Reset (deleted) session %s for spec %s: %s", deleted_session_id, deleted_spec_id, validated_reason_code.value
+    )
 
     return _inject_audit_status(
-        asdict(success_response(
-            data={
-                "session_id": deleted_session_id,
-                "spec_id": deleted_spec_id,
-                "result": "deleted",
-                "reason_code": validated_reason_code.value,
-            },
-            request_id=request_id,
-        )),
+        asdict(
+            success_response(
+                data={
+                    "session_id": deleted_session_id,
+                    "spec_id": deleted_spec_id,
+                    "result": "deleted",
+                    "reason_code": validated_reason_code.value,
+                },
+                request_id=request_id,
+            )
+        ),
         journal_ok,
     )

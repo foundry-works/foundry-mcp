@@ -2,11 +2,12 @@
 Spec modification operations using direct Python APIs.
 Replaces subprocess calls to external CLI tools.
 """
+
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from .spec import load_spec, save_spec, update_node, find_specs_directory
+from .spec import find_specs_directory, load_spec, save_spec, update_node
 
 
 def apply_modifications(
@@ -47,72 +48,86 @@ def apply_modifications(
 
     for mod in modifications:
         action = mod.get("action")
-        node_id = mod.get("node_id")
+        node_id = str(mod.get("node_id", ""))
 
         if action == "update_node":
             mod_changes = mod.get("changes", {})
             if update_node(spec_data, node_id, mod_changes):
                 applied += 1
-                changes.append({
-                    "action": action,
-                    "node_id": node_id,
-                    "status": "applied",
-                    "changes": mod_changes,
-                })
+                changes.append(
+                    {
+                        "action": action,
+                        "node_id": node_id,
+                        "status": "applied",
+                        "changes": mod_changes,
+                    }
+                )
             else:
                 skipped += 1
-                changes.append({
-                    "action": action,
-                    "node_id": node_id,
-                    "status": "skipped",
-                    "reason": "node not found",
-                })
+                changes.append(
+                    {
+                        "action": action,
+                        "node_id": node_id,
+                        "status": "skipped",
+                        "reason": "node not found",
+                    }
+                )
 
         elif action == "add_node":
             node_data = mod.get("data", {})
             parent_id = mod.get("parent")
             if _add_node(spec_data, node_id, node_data, parent_id):
                 applied += 1
-                changes.append({
-                    "action": action,
-                    "node_id": node_id,
-                    "status": "applied",
-                })
+                changes.append(
+                    {
+                        "action": action,
+                        "node_id": node_id,
+                        "status": "applied",
+                    }
+                )
             else:
                 skipped += 1
-                changes.append({
-                    "action": action,
-                    "node_id": node_id,
-                    "status": "skipped",
-                    "reason": "failed to add node",
-                })
+                changes.append(
+                    {
+                        "action": action,
+                        "node_id": node_id,
+                        "status": "skipped",
+                        "reason": "failed to add node",
+                    }
+                )
 
         elif action == "remove_node":
             cascade = mod.get("cascade", False)
             if _remove_node(spec_data, node_id, cascade=cascade):
                 applied += 1
-                changes.append({
-                    "action": action,
-                    "node_id": node_id,
-                    "status": "applied",
-                })
+                changes.append(
+                    {
+                        "action": action,
+                        "node_id": node_id,
+                        "status": "applied",
+                    }
+                )
             else:
                 skipped += 1
-                changes.append({
-                    "action": action,
-                    "node_id": node_id,
-                    "status": "skipped",
-                    "reason": "node not found",
-                })
+                changes.append(
+                    {
+                        "action": action,
+                        "node_id": node_id,
+                        "status": "skipped",
+                        "reason": "node not found",
+                    }
+                )
 
         else:
             skipped += 1
-            changes.append({
-                "action": action,
-                "node_id": node_id,
-                "status": "skipped",
-                "reason": f"unknown action: {action}",
-            })
+            changes.append(
+                {
+                    "action": action,
+                    "node_id": node_id,
+                    "status": "skipped",
+                    "reason": f"unknown action: {action}",
+                }
+            )
 
     if not dry_run and applied > 0:
         save_spec(spec_id, spec_data, specs_dir, backup=True)
@@ -138,7 +153,7 @@ def load_modifications_file(file_path: str) -> List[Dict[str, Any]]:
     if not path.exists():
         raise FileNotFoundError(f"Modifications file not found: {file_path}")
 
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         data = json.load(f)
 
     return data.get("modifications", [])
@@ -215,7 +230,7 @@ def _remove_node(
     del hierarchy[node_id]
 
     # Remove from any parent's children list
-    for other_id, other_node in hierarchy.items():
+    for _other_id, other_node in hierarchy.items():
         children = other_node.get("children", [])
         if node_id in children:
             children.remove(node_id)

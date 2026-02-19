@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import time
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
@@ -17,21 +16,15 @@ from foundry_mcp.core.autonomy.models.signals import (
     derive_loop_signal,
     derive_recommended_actions,
 )
+from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.autonomy.orchestrator import ERROR_SESSION_UNRECOVERABLE
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.pagination import (
-    CursorError,
-    decode_cursor,
-    encode_cursor,
-    normalize_page_size,
+from foundry_mcp.core.responses.builders import (
+    error_response,
 )
 from foundry_mcp.core.responses.types import (
     ErrorCode,
     ErrorType,
-)
-from foundry_mcp.core.responses.builders import (
-    error_response,
-    success_response,
 )
 from foundry_mcp.core.spec import load_spec
 from foundry_mcp.tools.unified.common import (
@@ -61,9 +54,7 @@ def _metric(action: str) -> str:
 _validation_error = make_validation_error_fn("task", default_code=ErrorCode.MISSING_REQUIRED)
 
 
-def _validate_context_usage_pct(
-    value: Optional[int], action: str, request_id: str
-) -> Optional[dict]:
+def _validate_context_usage_pct(value: Optional[int], action: str, request_id: str) -> Optional[dict]:
     """Validate context_usage_pct bounds (0-100 integer).
 
     Returns an error response dict if invalid, None if valid or absent.
@@ -86,9 +77,7 @@ _SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 _SPEC_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 
-def _validate_session_id(
-    value: Optional[str], action: str, request_id: str
-) -> Optional[dict]:
+def _validate_session_id(value: Optional[str], action: str, request_id: str) -> Optional[dict]:
     """Validate session_id format.
 
     Returns an error response dict if invalid, None if valid or absent.
@@ -107,9 +96,7 @@ def _validate_session_id(
     return None
 
 
-def _validate_spec_id(
-    value: Optional[str], action: str, request_id: str
-) -> Optional[dict]:
+def _validate_spec_id(value: Optional[str], action: str, request_id: str) -> Optional[dict]:
     """Validate spec_id format.
 
     Returns an error response dict if invalid, None if valid or absent.
@@ -251,10 +238,7 @@ def _check_deprecation_expired(
         return _validation_error(
             action=action,
             field="action",
-            message=(
-                f"Action '{action}' was removed on {date_str}. "
-                f"Use {replacement} instead."
-            ),
+            message=(f"Action '{action}' was removed on {date_str}. Use {replacement} instead."),
             request_id=request_id,
             code=ErrorCode.INVALID_FORMAT,
         )
@@ -357,8 +341,7 @@ def _normalize_task_action_shape(
                     action="session-step",
                     field="command",
                     message=(
-                        f"unsupported command '{normalized_command}'. "
-                        "Expected one of: next, report, replay, heartbeat"
+                        f"unsupported command '{normalized_command}'. Expected one of: next, report, replay, heartbeat"
                     ),
                     request_id=request_id,
                     code=ErrorCode.INVALID_FORMAT,
@@ -456,10 +439,7 @@ def attach_loop_metadata(response: dict, *, overwrite: bool = True) -> dict:
             error_code=error_code,
         )
         if recommended_actions:
-            data["recommended_actions"] = [
-                ra.model_dump(mode="json", by_alias=True)
-                for ra in recommended_actions
-            ]
+            data["recommended_actions"] = [ra.model_dump(mode="json", by_alias=True) for ra in recommended_actions]
 
     return response
 
@@ -482,9 +462,7 @@ def _attach_session_step_loop_metadata(action: str, response: dict) -> dict:
     return attach_loop_metadata(response, overwrite=False)
 
 
-def _resolve_specs_dir(
-    config: ServerConfig, workspace: Optional[str]
-) -> tuple[Optional[Path], Optional[dict]]:
+def _resolve_specs_dir(config: ServerConfig, workspace: Optional[str]) -> tuple[Optional[Path], Optional[dict]]:
     """Thin wrapper around the shared helper preserving the local call convention."""
     return resolve_specs_dir(config, workspace)
 
@@ -573,9 +551,7 @@ def _filter_hierarchy(
 def _pagination_warnings(total_count: int, has_more: bool) -> List[str]:
     warnings: List[str] = []
     if total_count > _TASK_WARNING_THRESHOLD:
-        warnings.append(
-            f"{total_count} results returned; consider using pagination to limit payload size."
-        )
+        warnings.append(f"{total_count} results returned; consider using pagination to limit payload size.")
     if has_more:
         warnings.append("Additional results available. Follow the cursor to continue.")
     return warnings
@@ -640,9 +616,12 @@ _VALID_NODE_TYPES = {"task", "verify", "phase", "subtask"}
 # Import write-lock helpers for autonomy session protection.
 try:
     from foundry_mcp.core.autonomy.write_lock import (
-        check_autonomy_write_lock as _check_autonomy_write_lock_impl,
         WriteLockStatus as _WriteLockStatus,
     )
+    from foundry_mcp.core.autonomy.write_lock import (
+        check_autonomy_write_lock as _check_autonomy_write_lock_impl,
+    )
+
     _WRITE_LOCK_AVAILABLE = True
 except ImportError:
     _check_autonomy_write_lock_impl = None  # type: ignore[misc,assignment]
@@ -687,18 +666,21 @@ def _check_autonomy_write_lock(
         allow_lock_bypass=allow_lock_bypass,
     )
 
+    assert _WriteLockStatus is not None
     if result.status == _WriteLockStatus.LOCKED:
-        return asdict(error_response(
-            result.message or "Autonomy write lock is active for this spec",
-            error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
-            error_type=ErrorType.CONFLICT,
-            request_id=request_id,
-            details={
-                "session_id": result.session_id,
-                "session_status": result.session_status,
-                "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
-            },
-        ))
+        return asdict(
+            error_response(
+                result.message or "Autonomy write lock is active for this spec",
+                error_code=ErrorCode.AUTONOMY_WRITE_LOCK_ACTIVE,
+                error_type=ErrorType.CONFLICT,
+                request_id=request_id,
+                details={
+                    "session_id": result.session_id,
+                    "session_status": result.session_status,
+                    "hint": "Use bypass_autonomy_lock=true with bypass_reason to override",
+                },
+            )
+        )
 
     # ALLOWED or BYPASSED — operation can proceed
     return None
@@ -706,22 +688,25 @@ def _check_autonomy_write_lock(
 
 def _workspace_path_error(workspace: str, reason: str, request_id: str) -> dict:
     """Return a validation error for an invalid workspace path."""
-    return asdict(error_response(
-        f"Invalid workspace path: {reason}",
-        error_code=ErrorCode.VALIDATION_ERROR,
-        error_type=ErrorType.VALIDATION,
-        request_id=request_id,
-        details={
-            "field": "workspace",
-            "reason": reason,
-            "path": workspace,
-            "hint": "Provide an absolute path without '..' components",
-        },
-    ))
+    return asdict(
+        error_response(
+            f"Invalid workspace path: {reason}",
+            error_code=ErrorCode.VALIDATION_ERROR,
+            error_type=ErrorType.VALIDATION,
+            request_id=request_id,
+            details={
+                "field": "workspace",
+                "reason": reason,
+                "path": workspace,
+                "hint": "Provide an absolute path without '..' components",
+            },
+        )
+    )
 
 
 def _validate_workspace(
-    workspace: str, request_id: str,
+    workspace: str,
+    request_id: str,
 ) -> Tuple[Optional[Path], Optional[dict]]:
     """Validate and canonicalize a workspace path, rejecting traversal attempts.
 
@@ -758,27 +743,28 @@ def _get_storage(
                 return err
         else:
             from foundry_mcp.core.authorization import validate_runner_path
+
             ws_path = validate_runner_path(workspace, require_within_workspace=False)
     else:
         ws_path = Path.cwd()
     return AutonomyStorage(workspace_path=ws_path)
 
 
-def _session_not_found_response(
-    action: str, request_id: str, spec_id: Optional[str] = None
-) -> dict:
+def _session_not_found_response(action: str, request_id: str, spec_id: Optional[str] = None) -> dict:
     """Return session not found error response."""
-    return asdict(error_response(
-        "No active session found",
-        error_code=ErrorCode.NO_ACTIVE_SESSION,
-        error_type=ErrorType.NOT_FOUND,
-        request_id=request_id,
-        details={
-            "action": action,
-            "spec_id": spec_id,
-            "hint": "Start a session with session-start action",
-        },
-    ))
+    return asdict(
+        error_response(
+            "No active session found",
+            error_code=ErrorCode.NO_ACTIVE_SESSION,
+            error_type=ErrorType.NOT_FOUND,
+            request_id=request_id,
+            details={
+                "action": action,
+                "spec_id": spec_id,
+                "hint": "Start a session with session-start action",
+            },
+        )
+    )
 
 
 def _resolve_session(
@@ -787,7 +773,7 @@ def _resolve_session(
     request_id: str,
     session_id: Optional[str] = None,
     spec_id: Optional[str] = None,
-) -> Tuple[Optional[Any], Optional[dict]]:
+) -> Tuple[Optional[AutonomousSessionState], Optional[dict]]:
     """Resolve a session by session_id, spec_id, or workspace scan.
 
     Per ADR: when session_id is omitted, find the single non-terminal session.
@@ -829,16 +815,18 @@ def _resolve_session(
         return None, _session_not_found_response(action, request_id)
 
     if result == ActiveSessionLookupResult.AMBIGUOUS:
-        return None, asdict(error_response(
-            "Multiple active sessions found. Provide spec_id or session_id to disambiguate.",
-            error_code=ErrorCode.AMBIGUOUS_ACTIVE_SESSION,
-            error_type=ErrorType.VALIDATION,
-            request_id=request_id,
-            details={
-                "action": action,
-                "hint": "Provide spec_id or session_id parameter",
-            },
-        ))
+        return None, asdict(
+            error_response(
+                "Multiple active sessions found. Provide spec_id or session_id to disambiguate.",
+                error_code=ErrorCode.AMBIGUOUS_ACTIVE_SESSION,
+                error_type=ErrorType.VALIDATION,
+                request_id=request_id,
+                details={
+                    "action": action,
+                    "hint": "Provide spec_id or session_id parameter",
+                },
+            )
+        )
 
     # FOUND
     if found_id is None:

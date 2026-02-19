@@ -4,15 +4,15 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 try:
     import tomllib
 except ImportError:
     import tomli as tomllib  # Python < 3.11 fallback
 
-from .provider_spec import LLMProviderType, DEFAULT_MODELS, API_KEY_ENV_VARS
 from ._paths import _default_config_search_paths
+from .provider_spec import API_KEY_ENV_VARS, DEFAULT_MODELS, LLMProviderType
 
 logger = logging.getLogger(__name__)
 
@@ -146,11 +146,9 @@ class LLMConfig:
             provider_str = data["provider"].lower()
             try:
                 config.provider = LLMProviderType(provider_str)
-            except ValueError:
+            except ValueError as e:
                 valid = [p.value for p in LLMProviderType]
-                raise ValueError(
-                    f"Invalid provider '{provider_str}'. Must be one of: {valid}"
-                )
+                raise ValueError(f"Invalid provider '{provider_str}'. Must be one of: {valid}") from e
 
         # Parse other fields
         if "api_key" in data:

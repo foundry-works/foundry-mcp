@@ -5,12 +5,12 @@ client ID population from request context.
 """
 
 import logging
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from foundry_mcp.core.context import get_correlation_id, get_client_id
+from foundry_mcp.core.context import get_client_id, get_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +35,7 @@ class AuditEvent:
 
     event_type: AuditEventType
     details: Dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     correlation_id: Optional[str] = None
     client_id: Optional[str] = None
     user_id: Optional[str] = None
@@ -83,9 +81,7 @@ class AuditLogger:
 
     def log(self, event: AuditEvent) -> None:
         """Log an audit event."""
-        self._logger.info(
-            f"AUDIT: {event.event_type.value}", extra={"audit": event.to_dict()}
-        )
+        self._logger.info(f"AUDIT: {event.event_type.value}", extra={"audit": event.to_dict()})
 
     def auth_success(self, client_id: Optional[str] = None, **details: Any) -> None:
         """Log successful authentication."""
@@ -129,9 +125,7 @@ class AuditLogger:
             )
         )
 
-    def resource_access(
-        self, resource_type: str, resource_id: str, action: str = "read", **details: Any
-    ) -> None:
+    def resource_access(self, resource_type: str, resource_id: str, action: str = "read", **details: Any) -> None:
         """Log resource access."""
         self.log(
             AuditEvent(

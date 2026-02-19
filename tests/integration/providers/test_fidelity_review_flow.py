@@ -20,7 +20,6 @@ from foundry_mcp.core.providers import (
     resolve_provider,
 )
 
-
 # =============================================================================
 # Test Fixtures
 # =============================================================================
@@ -244,14 +243,14 @@ class TestCrossProviderFidelityReview:
                 failures[provider_id] = str(e)
 
         # Report results
-        print(f"\nFidelity Review Structure Results:")
+        print("\nFidelity Review Structure Results:")
         for provider_id, data in results.items():
             compliant_type = type(data["compliant"]).__name__
             deviations_type = type(data.get("deviations", [])).__name__
             print(f"  {provider_id}: compliant={compliant_type}, deviations={deviations_type}")
 
         if failures:
-            print(f"\nProvider Failures:")
+            print("\nProvider Failures:")
             for provider_id, error in failures.items():
                 print(f"  {provider_id}: {error}")
 

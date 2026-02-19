@@ -50,7 +50,9 @@ def _write_minimal_unattended_spec(workspace: Path, spec_id: str) -> None:
     spec_path.write_text(json.dumps(spec_payload, indent=2), encoding="utf-8")
 
 
-def _build_invoke(config: ServerConfig, call_log: list[tuple[str, dict[str, Any]]]) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
+def _build_invoke(
+    config: ServerConfig, call_log: list[tuple[str, dict[str, Any]]]
+) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
     def _invoke(tool: str, payload: dict[str, Any]) -> dict[str, Any]:
         request_payload = dict(payload)
         call_log.append((tool, dict(request_payload)))
@@ -167,13 +169,8 @@ def test_foundry_implement_v2_completes_single_phase_in_unattended_posture(tmp_p
     assert packet.last_step_id is not None
 
     # Confirm runtime-truth preflight happened via capabilities + role preflight list.
+    assert any(tool == "server" and payload.get("action") == "capabilities" for tool, payload in call_log)
     assert any(
-        tool == "server" and payload.get("action") == "capabilities"
-        for tool, payload in call_log
-    )
-    assert any(
-        tool == "task"
-        and payload.get("action") == "session"
-        and payload.get("command") == "list"
+        tool == "task" and payload.get("action") == "session" and payload.get("command") == "list"
         for tool, payload in call_log
     )

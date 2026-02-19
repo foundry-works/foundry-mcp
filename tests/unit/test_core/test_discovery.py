@@ -383,10 +383,7 @@ class TestGetCapabilities:
         assert caps["capabilities"]["autonomy_sessions"] is True
         assert caps["capabilities"]["autonomy_fidelity_gates"] is True
         assert caps["capabilities"]["autonomy_gate_invariants"] is True
-        assert (
-            caps["runtime"]["autonomy"]["supported_by_binary"]["autonomy_sessions"]
-            is True
-        )
+        assert caps["runtime"]["autonomy"]["supported_by_binary"]["autonomy_sessions"] is True
         assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_sessions"] is True
         assert caps["runtime"]["autonomy"]["enabled_now"]["autonomy_fidelity_gates"] is True
 
@@ -430,6 +427,7 @@ class TestDeprecatedToolDecorator:
 
     def test_decorator_updates_docstring(self):
         """Should update function docstring."""
+
         @deprecated_tool(replacement="new_func", removal_version="2.0.0")
         def old_func():
             """Original docstring."""
@@ -441,6 +439,7 @@ class TestDeprecatedToolDecorator:
 
     def test_decorator_adds_warning_to_response(self):
         """Should add deprecation warning to response meta."""
+
         @deprecated_tool(replacement="new_func", removal_version="2.0.0")
         def old_func():
             return {"data": "test", "meta": {"version": "response-v2"}}
@@ -451,6 +450,7 @@ class TestDeprecatedToolDecorator:
 
     def test_decorator_creates_meta_if_missing(self):
         """Should create meta if not present."""
+
         @deprecated_tool(replacement="new_func", removal_version="2.0.0")
         def old_func():
             return {"data": "test"}
@@ -461,6 +461,7 @@ class TestDeprecatedToolDecorator:
 
     def test_is_deprecated_helper(self):
         """Should detect deprecated functions."""
+
         @deprecated_tool(replacement="new", removal_version="2.0.0")
         def deprecated_func():
             return {}
@@ -473,6 +474,7 @@ class TestDeprecatedToolDecorator:
 
     def test_get_deprecation_info(self):
         """Should return deprecation info."""
+
         @deprecated_tool(replacement="replacement_func", removal_version="3.0.0")
         def old_func():
             return {}
@@ -484,6 +486,7 @@ class TestDeprecatedToolDecorator:
 
     def test_get_deprecation_info_not_deprecated(self):
         """Should return None for non-deprecated functions."""
+
         def normal_func():
             return {}
 

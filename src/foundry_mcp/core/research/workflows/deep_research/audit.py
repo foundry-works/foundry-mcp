@@ -27,6 +27,9 @@ class AuditMixin:
     - self.memory: ResearchMemory (with base_path)
     """
 
+    config: Any
+    memory: Any
+
     def _audit_enabled(self) -> bool:
         """Return True if audit artifacts are enabled."""
         return bool(getattr(self.config, "deep_research_audit_artifacts", True))
@@ -83,15 +86,13 @@ class AuditMixin:
         # Handle nested findings array
         if "findings" in result and isinstance(result["findings"], list):
             result["findings"] = [
-                {**f, "content": None} if isinstance(f, dict) and "content" in f else f
-                for f in result["findings"]
+                {**f, "content": None} if isinstance(f, dict) and "content" in f else f for f in result["findings"]
             ]
 
         # Handle nested gaps array
         if "gaps" in result and isinstance(result["gaps"], list):
             result["gaps"] = [
-                {**g, "description": None} if isinstance(g, dict) and "description" in g else g
-                for g in result["gaps"]
+                {**g, "description": None} if isinstance(g, dict) and "description" in g else g for g in result["gaps"]
             ]
 
         return result

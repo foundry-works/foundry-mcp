@@ -53,9 +53,7 @@ class TestThinkDeepWorkflowExceptionHandling:
         workflow = ThinkDeepWorkflow(mock_config, mock_memory)
 
         # Mock _generate_initial_query to raise an exception
-        with patch.object(
-            workflow, "_generate_initial_query", side_effect=RuntimeError("Query generation failed")
-        ):
+        with patch.object(workflow, "_generate_initial_query", side_effect=RuntimeError("Query generation failed")):
             result = workflow.execute(topic="Test topic")
 
         # Should return error result, not raise exception

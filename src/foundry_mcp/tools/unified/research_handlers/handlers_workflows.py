@@ -12,13 +12,13 @@ from foundry_mcp.core.research.workflows import (
     IdeateWorkflow,
     ThinkDeepWorkflow,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.param_schema import AtLeastOne, Str, validate_payload
 
@@ -62,6 +62,7 @@ def _handle_chat(
     if err:
         return err
 
+    assert isinstance(prompt, str)
     config = _get_config()
     workflow = ChatWorkflow(config.research, _get_memory())
 
@@ -119,6 +120,7 @@ def _handle_consensus(
     if err:
         return err
 
+    assert isinstance(prompt, str)
     # Convert strategy string to enum (schema already validated choices)
     consensus_strategy = ConsensusStrategy(strategy) if strategy else ConsensusStrategy.SYNTHESIZE
 
@@ -174,8 +176,10 @@ def _handle_thinkdeep(
     """Handle thinkdeep action."""
     payload = {"topic": topic, "investigation_id": investigation_id}
     err = validate_payload(
-        payload, _THINKDEEP_SCHEMA,
-        tool_name="research", action="thinkdeep",
+        payload,
+        _THINKDEEP_SCHEMA,
+        tool_name="research",
+        action="thinkdeep",
         cross_field_rules=_THINKDEEP_CROSS_FIELD,
     )
     if err:
@@ -234,8 +238,10 @@ def _handle_ideate(
     """Handle ideate action."""
     payload = {"topic": topic, "ideation_id": ideation_id}
     err = validate_payload(
-        payload, _IDEATE_SCHEMA,
-        tool_name="research", action="ideate",
+        payload,
+        _IDEATE_SCHEMA,
+        tool_name="research",
+        action="ideate",
         cross_field_rules=_IDEATE_CROSS_FIELD,
     )
     if err:

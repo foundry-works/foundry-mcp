@@ -26,7 +26,6 @@ from typing import Any, Dict, List
 
 from foundry_mcp.core.prompts import PromptBuilder, PromptRegistry, PromptTemplate
 
-
 # =============================================================================
 # Response Schema for PLAN_REVIEW Templates
 # =============================================================================

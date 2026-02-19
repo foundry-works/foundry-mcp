@@ -157,20 +157,13 @@ def preflight_count(
     # Log validation result
     if is_final_fit:
         if valid:
-            logger.debug(
-                f"Final-fit validation passed: {estimated} tokens "
-                f"({result.usage_fraction:.1%} of budget)"
-            )
+            logger.debug(f"Final-fit validation passed: {estimated} tokens ({result.usage_fraction:.1%} of budget)")
         else:
             logger.warning(
-                f"Final-fit validation FAILED: {estimated} tokens exceeds "
-                f"remaining {remaining} by {overflow}"
+                f"Final-fit validation FAILED: {estimated} tokens exceeds remaining {remaining} by {overflow}"
             )
     else:
-        logger.debug(
-            f"Preflight {'passed' if valid else 'failed'}: "
-            f"{estimated}/{remaining} tokens"
-        )
+        logger.debug(f"Preflight {'passed' if valid else 'failed'}: {estimated}/{remaining} tokens")
 
     return result
 

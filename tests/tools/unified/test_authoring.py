@@ -6,8 +6,6 @@ instead of crashing the MCP server.
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestAuthoringDispatchExceptionHandling:
     """Tests for _dispatch_authoring_action exception handling."""
@@ -20,9 +18,7 @@ class TestAuthoringDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["spec-create"]
                 mock_router.dispatch.side_effect = RuntimeError("Database connection failed")
 
@@ -47,9 +43,7 @@ class TestAuthoringDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["spec-create"]
                 mock_router.dispatch.side_effect = RuntimeError()
 
@@ -74,9 +68,7 @@ class TestAuthoringDispatchExceptionHandling:
                 "foundry_mcp.tools.unified.common.get_server_role",
                 return_value="maintainer",
             ):
-                with patch(
-                    "foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER"
-                ) as mock_router:
+                with patch("foundry_mcp.tools.unified.authoring_handlers._AUTHORING_ROUTER") as mock_router:
                     mock_router.allowed_actions.return_value = ["spec-create"]
                     mock_router.dispatch.side_effect = ValueError("test error")
 

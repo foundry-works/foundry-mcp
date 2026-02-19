@@ -12,7 +12,7 @@ import json
 import logging
 import threading
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -427,10 +427,7 @@ class FileMetricsStore(MetricsStore):
                         # Apply label filters
                         if labels:
                             record_labels = record_dict.get("labels", {})
-                            if not all(
-                                record_labels.get(k) == v
-                                for k, v in labels.items()
-                            ):
+                            if not all(record_labels.get(k) == v for k, v in labels.items()):
                                 continue
 
                         # Time filters
@@ -470,14 +467,16 @@ class FileMetricsStore(MetricsStore):
                 if isinstance(label_keys, set):
                     label_keys = list(label_keys)
 
-                metrics_list.append({
-                    "metric_name": name,
-                    "count": data.get("count", 0),
-                    "first_seen": data.get("first_seen"),
-                    "last_seen": data.get("last_seen"),
-                    "metric_type": data.get("metric_type"),
-                    "label_keys": label_keys,
-                })
+                metrics_list.append(
+                    {
+                        "metric_name": name,
+                        "count": data.get("count", 0),
+                        "first_seen": data.get("first_seen"),
+                        "last_seen": data.get("last_seen"),
+                        "metric_type": data.get("metric_type"),
+                        "label_keys": label_keys,
+                    }
+                )
 
             # Sort by count descending
             metrics_list.sort(key=lambda x: x["count"], reverse=True)

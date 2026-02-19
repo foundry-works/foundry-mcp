@@ -5,13 +5,8 @@ Verifies that the server registers the unified 14-router tool surface.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.server import create_server
-
 
 _UNIFIED_TOOL_NAMES = {
     "health",

@@ -11,12 +11,12 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config.server import ServerConfig
-from foundry_mcp.core.spec import (
-    load_spec,
-    list_specs,
-    find_specs_directory,
-)
 from foundry_mcp.core.progress import get_progress_summary, list_phases
+from foundry_mcp.core.spec import (
+    find_specs_directory,
+    list_specs,
+    load_spec,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +42,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
     @mcp.prompt(
         description='{"desc": "Start a new feature spec with phases and tasks", "args": {"feature_name": "Name of feature", "description": "Optional description", "template": "basic|feature|bugfix"}, "returns": "Formatted prompt"}'
     )
-    def start_feature(
-        feature_name: str, description: Optional[str] = None, template: str = "feature"
-    ) -> str:
+    def start_feature(feature_name: str, description: Optional[str] = None, template: str = "feature") -> str:
         """
         Start a new feature implementation.
 
@@ -258,9 +256,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 ]
             )
 
-        prompt_parts.append(
-            "Please provide the test output or more details about the failure."
-        )
+        prompt_parts.append("Please provide the test output or more details about the failure.")
 
         return "\n".join(prompt_parts)
 
@@ -306,14 +302,10 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                     phase_info = next((p for p in phases if p["id"] == phase_id), None)
                 else:
                     # Find current in-progress phase
-                    phase_info = next(
-                        (p for p in phases if p["status"] == "in_progress"), None
-                    )
+                    phase_info = next((p for p in phases if p["status"] == "in_progress"), None)
                     if not phase_info:
                         # Find first pending phase
-                        phase_info = next(
-                            (p for p in phases if p["status"] == "pending"), None
-                        )
+                        phase_info = next((p for p in phases if p["status"] == "pending"), None)
 
         if spec_data and progress_info:
             prompt_parts.extend(
@@ -385,7 +377,7 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
                 '- `task(action="next")`: Find next task to work on',
                 '- `task(action="prepare")`: Get task context',
                 '- `task(action="complete")`: Mark task done with journal',
-                '- `pytest -x`: Run verification tests (CLI)',
+                "- `pytest -x`: Run verification tests (CLI)",
                 "",
                 "Ready to proceed? Let's review the remaining tasks.",
             ]
@@ -520,6 +512,4 @@ def register_workflow_prompts(mcp: FastMCP, config: ServerConfig) -> None:
 
         return "\n".join(prompt_parts)
 
-    logger.debug(
-        "Registered workflow prompts: start_feature, debug_test, complete_phase, review_spec"
-    )
+    logger.debug("Registered workflow prompts: start_feature, debug_test, complete_phase, review_spec")

@@ -237,11 +237,7 @@ def get_metrics_by_category(category: MetricCategory) -> Dict[str, MetricDefinit
     Returns:
         Dict of metrics in the specified category
     """
-    return {
-        name: defn
-        for name, defn in METRICS_CATALOG.items()
-        if defn.category == category
-    }
+    return {name: defn for name, defn in METRICS_CATALOG.items() if defn.category == category}
 
 
 def get_metric(name: str) -> Optional[MetricDefinition]:
@@ -281,7 +277,7 @@ def export_catalog_as_markdown(namespace: str = "foundry_mcp") -> str:
         lines.append(f"## {category.value.title()} Metrics")
         lines.append("")
 
-        for name, defn in sorted(category_metrics.items()):
+        for _name, defn in sorted(category_metrics.items()):
             full_name = defn.full_name(namespace)
             lines.append(f"### `{full_name}`")
             lines.append("")

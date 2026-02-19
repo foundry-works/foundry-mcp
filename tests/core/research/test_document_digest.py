@@ -16,13 +16,12 @@ import unicodedata
 import pytest
 from pydantic import ValidationError
 
-from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnippet
 from foundry_mcp.core.research.document_digest import (
     deserialize_payload,
     serialize_payload,
     validate_payload_dict,
 )
-
+from foundry_mcp.core.research.models.digest import DigestPayload, EvidenceSnippet
 
 # =============================================================================
 # Fixtures
@@ -272,7 +271,7 @@ class TestDigestPayloadValidPayloads:
     def test_max_evidence_snippets_10(self, valid_payload_data: dict):
         """Test evidence_snippets accepts exactly 10 items."""
         valid_payload_data["evidence_snippets"] = [
-            {"text": f"Evidence {i}", "locator": f"char:{i*10}-{i*10+9}", "relevance_score": 0.5}
+            {"text": f"Evidence {i}", "locator": f"char:{i * 10}-{i * 10 + 9}", "relevance_score": 0.5}
             for i in range(10)
         ]
         payload = DigestPayload.model_validate(valid_payload_data)
@@ -470,7 +469,7 @@ class TestSerializationRoundTrip:
 
         assert len(restored.evidence_snippets) == len(valid_payload.evidence_snippets)
         for original, restored_snippet in zip(
-            valid_payload.evidence_snippets, restored.evidence_snippets
+            valid_payload.evidence_snippets, restored.evidence_snippets, strict=False
         ):
             assert restored_snippet.text == original.text
             assert restored_snippet.locator == original.locator
@@ -629,9 +628,10 @@ class TestEvidenceScoringAlgorithm:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies for testing."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -790,9 +790,10 @@ class TestEvidenceLocatorOrdering:
     def test_locators_match_snippet_text_out_of_order(self):
         """Ensure locators remain valid even when relevance order differs."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -833,10 +834,11 @@ class TestDigestEvidenceToggle:
     async def test_include_evidence_false_skips_snippets(self):
         """Digest should omit evidence_snippets when include_evidence is False."""
         from unittest.mock import AsyncMock, MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
             DigestPolicy,
+            DocumentDigestor,
         )
         from foundry_mcp.core.research.summarization import (
             SummarizationLevel,
@@ -871,9 +873,7 @@ class TestDigestEvidenceToggle:
         assert result.success is True
         assert result.payload is not None
         assert result.payload.evidence_snippets == []
-        expected_chars = len(result.payload.summary) + sum(
-            len(kp) for kp in result.payload.key_points
-        )
+        expected_chars = len(result.payload.summary) + sum(len(kp) for kp in result.payload.key_points)
         assert result.payload.digest_chars == expected_chars
 
 
@@ -884,9 +884,10 @@ class TestExtractTerms:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -955,9 +956,10 @@ class TestScoreByPosition:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -1034,12 +1036,12 @@ class TestEligibilityOffPolicy:
     def digestor(self):
         """Create a DocumentDigestor with OFF policy."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
             DigestPolicy,
+            DocumentDigestor,
         )
-        from foundry_mcp.core.research.models.sources import SourceQuality
 
         mock_summarizer = MagicMock()
         mock_pdf_extractor = MagicMock()
@@ -1089,10 +1091,11 @@ class TestEligibilityAlwaysPolicy:
     def digestor(self):
         """Create a DocumentDigestor with ALWAYS policy."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
             DigestPolicy,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -1149,10 +1152,11 @@ class TestEligibilityAutoPolicy:
     def digestor(self):
         """Create a DocumentDigestor with AUTO policy."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
             DigestPolicy,
+            DocumentDigestor,
         )
         from foundry_mcp.core.research.models.sources import SourceQuality
 
@@ -1247,10 +1251,11 @@ class TestEligibilityCustomQualityThreshold:
     def test_auto_policy_low_threshold_accepts_low(self):
         """Test AUTO policy with LOW threshold accepts LOW quality."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
             DigestPolicy,
+            DocumentDigestor,
         )
         from foundry_mcp.core.research.models.sources import SourceQuality
 
@@ -1277,10 +1282,11 @@ class TestEligibilityCustomQualityThreshold:
     def test_auto_policy_high_threshold_rejects_medium(self):
         """Test AUTO policy with HIGH threshold rejects MEDIUM quality."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
             DigestPolicy,
+            DocumentDigestor,
         )
         from foundry_mcp.core.research.models.sources import SourceQuality
 
@@ -1315,9 +1321,10 @@ class TestCacheKeyGeneration:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -1377,9 +1384,9 @@ class TestCacheKeyGeneration:
         )
         parts = key.split(":")
         assert len(parts[3]) == 16  # content hash: 16 chars
-        assert len(parts[4]) == 8   # query hash: 8 chars
-        assert len(parts[5]) == 8   # config hash: 8 chars
-        assert len(parts[6]) == 8   # summarizer hash: 8 chars
+        assert len(parts[4]) == 8  # query hash: 8 chars
+        assert len(parts[5]) == 8  # config hash: 8 chars
+        assert len(parts[6]) == 8  # summarizer hash: 8 chars
 
     def test_cache_key_deterministic(self, digestor):
         """Test same inputs produce same cache key."""
@@ -1412,9 +1419,10 @@ class TestCacheKeyInvalidation:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -1484,7 +1492,7 @@ class TestCacheKeyInvalidation:
 
     def test_summarizer_change_invalidates(self):
         """Test different summarizer configs produce different cache keys."""
-        from foundry_mcp.core.research.document_digest import DocumentDigestor, DigestConfig
+        from foundry_mcp.core.research.document_digest import DigestConfig, DocumentDigestor
         from foundry_mcp.core.research.pdf_extractor import PDFExtractor
         from foundry_mcp.core.research.summarization import ContentSummarizer
 
@@ -1526,8 +1534,9 @@ class TestConfigHash:
 
     def test_config_hash_hex_only(self):
         """Test config hash contains only hex characters."""
-        from foundry_mcp.core.research.document_digest import DigestConfig
         import re
+
+        from foundry_mcp.core.research.document_digest import DigestConfig
 
         config = DigestConfig()
         assert re.match(r"^[0-9a-f]{16}$", config.compute_config_hash())
@@ -1616,9 +1625,10 @@ class TestQueryAndSourceHash:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -1818,9 +1828,10 @@ class TestCircuitBreaker:
     def digestor(self):
         """Create a DocumentDigestor with mock dependencies."""
         from unittest.mock import MagicMock
+
         from foundry_mcp.core.research.document_digest import (
-            DocumentDigestor,
             DigestConfig,
+            DocumentDigestor,
         )
 
         mock_summarizer = MagicMock()
@@ -1933,8 +1944,8 @@ class TestCircuitBreaker:
         """Test that cache reads are allowed when circuit breaker is open."""
         from foundry_mcp.core.research.document_digest import (
             DigestCache,
-            DigestResult,
             DigestPayload,
+            DigestResult,
         )
 
         # Set up a cached result
@@ -2183,9 +2194,7 @@ class TestContractSourceTextHash:
         """source_text_hash must match SHA256 of the canonical text."""
         raw_text = "Hello   world!  \n\n  Multiple   spaces."
         canonical = _canonicalize(raw_text)
-        expected_hash = "sha256:" + hashlib.sha256(
-            canonical.encode("utf-8")
-        ).hexdigest()
+        expected_hash = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
         payload = DigestPayload(
             query_hash="ab12cd34",
@@ -2198,9 +2207,7 @@ class TestContractSourceTextHash:
             source_text_hash=expected_hash,
         )
         # Verify the hash is verifiable against canonical text
-        verify_hash = "sha256:" + hashlib.sha256(
-            canonical.encode("utf-8")
-        ).hexdigest()
+        verify_hash = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         assert payload.source_text_hash == verify_hash
 
     def test_hash_changes_with_different_text(self):
@@ -2232,9 +2239,7 @@ class TestContractSourceTextHash:
         """Hash format is 'sha256:' followed by exactly 64 hex characters."""
         text = "Some content"
         canonical = _canonicalize(text)
-        hash_str = "sha256:" + hashlib.sha256(
-            canonical.encode("utf-8")
-        ).hexdigest()
+        hash_str = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         assert hash_str.startswith("sha256:")
         hex_part = hash_str[7:]
         assert len(hex_part) == 64
@@ -2326,9 +2331,7 @@ class TestContractLocatorVerification:
             parts = ev.locator.replace("char:", "").split("-")
             loc_start, loc_end = int(parts[0]), int(parts[1])
             extracted = source_text[loc_start:loc_end]
-            assert extracted == ev.text, (
-                f"Locator {ev.locator} extracted '{extracted}' but expected '{ev.text}'"
-            )
+            assert extracted == ev.text, f"Locator {ev.locator} extracted '{extracted}' but expected '{ev.text}'"
 
     def test_locator_offsets_are_non_negative(self):
         """Locator start and end offsets are non-negative integers."""

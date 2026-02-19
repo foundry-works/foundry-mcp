@@ -145,9 +145,7 @@ class ContextBudgetManager:
 
         return tokens
 
-    def _store_token_count_with_eviction(
-        self, source: ResearchSource, count: int
-    ) -> None:
+    def _store_token_count_with_eviction(self, source: ResearchSource, count: int) -> None:
         """Store token count in source cache with FIFO eviction.
 
         If the cache exceeds MAX_TOKEN_CACHE_ENTRIES, removes the oldest
@@ -309,9 +307,7 @@ class ContextBudgetManager:
                 else:
                     # No budget left - drop non-protected items
                     dropped_ids.append(item_id)
-                    warnings.append(
-                        f"Dropped item {item_id} (priority={item_priority}): no budget remaining"
-                    )
+                    warnings.append(f"Dropped item {item_id} (priority={item_priority}): no budget remaining")
                 continue
 
             if tokens <= remaining_budget:
@@ -343,10 +339,7 @@ class ContextBudgetManager:
                 )
                 remaining_budget = 0
                 total_allocated_tokens += allocated_tokens
-                warnings.append(
-                    f"Item {item_id} needs summarization: "
-                    f"{tokens} tokens -> {allocated_tokens} allocated"
-                )
+                warnings.append(f"Item {item_id} needs summarization: {tokens} tokens -> {allocated_tokens} allocated")
 
         # Calculate fidelity
         fidelity = self._calculate_fidelity(allocated_items, total_original_tokens)
@@ -431,7 +424,7 @@ class ContextBudgetManager:
         else:
             extra_per_item = 0
 
-        for idx, item, tokens in items_needing_more:
+        for _idx, item, tokens in items_needing_more:
             item_id = getattr(item, "id", str(id(item)))
             item_priority = getattr(item, "priority", 999)
             item_content = getattr(item, "content", "")
@@ -453,8 +446,7 @@ class ContextBudgetManager:
 
             if needs_summarization:
                 warnings.append(
-                    f"Item {item_id} needs summarization: "
-                    f"{tokens} tokens -> {allocated} allocated (equal share)"
+                    f"Item {item_id} needs summarization: {tokens} tokens -> {allocated} allocated (equal share)"
                 )
 
         # Re-sort by priority for consistent output
@@ -464,8 +456,7 @@ class ContextBudgetManager:
         fidelity = self._calculate_fidelity(allocated_items, total_original_tokens)
 
         logger.debug(
-            f"Equal-share allocation: {len(allocated_items)} items, "
-            f"base share={base_share}, fidelity={fidelity:.2%}"
+            f"Equal-share allocation: {len(allocated_items)} items, base share={base_share}, fidelity={fidelity:.2%}"
         )
 
         return AllocationResult(
@@ -558,8 +549,7 @@ class ContextBudgetManager:
 
             if allocated < tokens:
                 warnings.append(
-                    f"Item {item_id} compressed: {tokens} -> {allocated} tokens "
-                    f"({compression_ratio:.1%} of original)"
+                    f"Item {item_id} compressed: {tokens} -> {allocated} tokens ({compression_ratio:.1%} of original)"
                 )
 
         # Calculate fidelity

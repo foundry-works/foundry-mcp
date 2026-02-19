@@ -24,9 +24,7 @@ class TestLifecycleDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["archive"]
                 mock_router.dispatch.side_effect = RuntimeError("Lifecycle transition failed")
 
@@ -51,9 +49,7 @@ class TestLifecycleDispatchExceptionHandling:
             "foundry_mcp.tools.unified.common.get_server_role",
             return_value="maintainer",
         ):
-            with patch(
-                "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
-            ) as mock_router:
+            with patch("foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER") as mock_router:
                 mock_router.allowed_actions.return_value = ["archive"]
                 mock_router.dispatch.side_effect = RuntimeError()
 
@@ -78,9 +74,7 @@ class TestLifecycleDispatchExceptionHandling:
                 "foundry_mcp.tools.unified.common.get_server_role",
                 return_value="maintainer",
             ):
-                with patch(
-                    "foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER"
-                ) as mock_router:
+                with patch("foundry_mcp.tools.unified.lifecycle._LIFECYCLE_ROUTER") as mock_router:
                     mock_router.allowed_actions.return_value = ["archive"]
                     mock_router.dispatch.side_effect = ValueError("test error")
 
@@ -128,11 +122,10 @@ class TestLifecycleWriteLockWorkspaceNormalization:
         else:
             path = str(spec_file)
 
-        with patch(
-            "foundry_mcp.tools.unified.lifecycle._check_autonomy_write_lock"
-        ) as mock_lock, patch(
-            "foundry_mcp.tools.unified.lifecycle.move_spec"
-        ) as mock_move:
+        with (
+            patch("foundry_mcp.tools.unified.lifecycle._check_autonomy_write_lock") as mock_lock,
+            patch("foundry_mcp.tools.unified.lifecycle.move_spec") as mock_move,
+        ):
             mock_lock.return_value = None
             mock_move.return_value = MoveResult(
                 success=True,

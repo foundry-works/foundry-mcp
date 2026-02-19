@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from foundry_mcp.core.research.context_budget import AllocationResult
 from foundry_mcp.core.research.models.deep_research import DeepResearchState
@@ -28,11 +28,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     finalize_phase,
 )
 
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
-
 logger = logging.getLogger(__name__)
 
 
@@ -45,8 +40,16 @@ class SynthesisPhaseMixin:
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
     """
 
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     async def _execute_synthesis_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout: float,
@@ -130,9 +133,7 @@ class SynthesisPhaseMixin:
         # Store overall fidelity in metadata (content_fidelity is now per-item dict)
         state.dropped_content_ids = allocation_result.dropped_ids
         allocation_dict = allocation_result.to_dict()
-        allocation_dict["overall_fidelity_level"] = fidelity_level_from_score(
-            allocation_result.fidelity
-        )
+        allocation_dict["overall_fidelity_level"] = fidelity_level_from_score(allocation_result.fidelity)
         state.content_allocation_metadata = allocation_dict
 
         logger.info(
@@ -157,9 +158,7 @@ class SynthesisPhaseMixin:
         )
 
         if not valid:
-            logger.warning(
-                "Synthesis phase final-fit validation failed, proceeding with truncated prompts"
-            )
+            logger.warning("Synthesis phase final-fit validation failed, proceeding with truncated prompts")
 
         # Check for cancellation before making provider call
         self._check_cancellation(state)
@@ -236,7 +235,7 @@ class SynthesisPhaseMixin:
             },
         )
 
-    def _build_synthesis_system_prompt(self: DeepResearchWorkflow, state: DeepResearchState) -> str:
+    def _build_synthesis_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for report synthesis.
 
         Args:
@@ -296,7 +295,7 @@ Guidelines:
 IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
 
     def _build_synthesis_user_prompt(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         allocation_result: Optional[AllocationResult] = None,
     ) -> str:
@@ -331,7 +330,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         for category, findings in categorized.items():
             prompt_parts.append(f"### {category}")
             for f in findings:
-                confidence_label = f.confidence.value if hasattr(f.confidence, 'value') else str(f.confidence)
+                confidence_label = f.confidence.value if hasattr(f.confidence, "value") else str(f.confidence)
                 source_refs = ", ".join(f.source_ids) if f.source_ids else "no sources"
                 prompt_parts.append(f"- [{confidence_label.upper()}] {f.content}")
                 prompt_parts.append(f"  Sources: {source_refs}")
@@ -359,7 +358,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                 if not source:
                     continue
 
-                quality = source.quality.value if hasattr(source.quality, 'value') else str(source.quality)
+                quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
                 prompt_parts.append(f"- **{source.id}**: {source.title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
@@ -385,11 +384,13 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
             if allocation_result.dropped_ids:
                 dropped_sources = [sid for sid in allocation_result.dropped_ids if sid.startswith("src-")]
                 if dropped_sources:
-                    prompt_parts.append(f"\n*Note: {len(dropped_sources)} additional source(s) omitted for context limits*")
+                    prompt_parts.append(
+                        f"\n*Note: {len(dropped_sources)} additional source(s) omitted for context limits*"
+                    )
         else:
             # Fallback: use first 30 sources (legacy behavior)
             for source in state.sources[:30]:
-                quality = source.quality.value if hasattr(source.quality, 'value') else str(source.quality)
+                quality = source.quality.value if hasattr(source.quality, "value") else str(source.quality)
                 prompt_parts.append(f"- {source.id}: {source.title} [{quality}]")
                 if source.url:
                     prompt_parts.append(f"  URL: {source.url}")
@@ -397,21 +398,23 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         prompt_parts.append("")
 
         # Add synthesis instructions
-        prompt_parts.extend([
-            "## Instructions",
-            f"Generate a comprehensive research report addressing the query: '{state.original_query}'",
-            "",
-            f"This is iteration {state.iteration} of {state.max_iterations}.",
-            f"Total findings: {len(state.findings)}",
-            f"Total sources: {len(state.sources)}",
-            f"Unresolved gaps: {len(state.unresolved_gaps())}",
-            "",
-            "Create a well-structured markdown report following the format specified.",
-        ])
+        prompt_parts.extend(
+            [
+                "## Instructions",
+                f"Generate a comprehensive research report addressing the query: '{state.original_query}'",
+                "",
+                f"This is iteration {state.iteration} of {state.max_iterations}.",
+                f"Total findings: {len(state.findings)}",
+                f"Total sources: {len(state.sources)}",
+                f"Unresolved gaps: {len(state.unresolved_gaps())}",
+                "",
+                "Create a well-structured markdown report following the format specified.",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
-    def _extract_markdown_report(self: DeepResearchWorkflow, content: str) -> Optional[str]:
+    def _extract_markdown_report(self, content: str) -> Optional[str]:
         """Extract markdown report from LLM response.
 
         The response should be pure markdown, but this handles cases where
@@ -433,14 +436,14 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # Check for markdown code block wrapper
         if "```markdown" in content or "```md" in content:
             # Extract content between code blocks
-            pattern = r'```(?:markdown|md)?\s*([\s\S]*?)```'
+            pattern = r"```(?:markdown|md)?\s*([\s\S]*?)```"
             matches = re.findall(pattern, content)
             if matches:
                 return matches[0].strip()
 
         # Check for generic code block
         if "```" in content:
-            pattern = r'```\s*([\s\S]*?)```'
+            pattern = r"```\s*([\s\S]*?)```"
             matches = re.findall(pattern, content)
             for match in matches:
                 # Check if it looks like markdown (has headings)
@@ -448,7 +451,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
                     return match.strip()
 
         # Look for first heading and take everything from there
-        heading_match = re.search(r'^(#[^\n]+)', content, re.MULTILINE)
+        heading_match = re.search(r"^(#[^\n]+)", content, re.MULTILINE)
         if heading_match:
             start_pos = heading_match.start()
             return content[start_pos:].strip()
@@ -456,7 +459,7 @@ IMPORTANT: Return ONLY the markdown report, no preamble or meta-commentary."""
         # If nothing else works, return the trimmed content
         return content.strip() if len(content.strip()) > 50 else None
 
-    def _generate_empty_report(self: DeepResearchWorkflow, state: DeepResearchState) -> str:
+    def _generate_empty_report(self, state: DeepResearchState) -> str:
         """Generate a minimal report when no findings are available.
 
         Args:

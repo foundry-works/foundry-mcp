@@ -9,15 +9,14 @@ import click
 
 from foundry_mcp.cli.logging import cli_command, get_cli_logger
 from foundry_mcp.cli.output import emit_error, emit_success
+from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
-    handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
+    handle_keyboard_interrupt,
     with_sync_timeout,
 )
-from foundry_mcp.cli.registry import get_context
 
 logger = get_cli_logger()
-from foundry_mcp.core.spec import load_spec, find_spec_file, get_node
 from foundry_mcp.core.journal import (
     add_journal_entry,
     mark_blocked,
@@ -25,6 +24,7 @@ from foundry_mcp.core.journal import (
     unblock,
     update_task_status,
 )
+from foundry_mcp.core.spec import find_spec_file, get_node, load_spec
 from foundry_mcp.core.task import (
     check_dependencies,
     get_next_task,
@@ -98,8 +98,7 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
         all_tasks = [
             node
             for node in hierarchy.values()
-            if isinstance(node, dict)
-            and node.get("type") in ("task", "subtask", "verify")
+            if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
         ]
         completed = sum(1 for t in all_tasks if t.get("status") == "completed")
         pending = sum(1 for t in all_tasks if t.get("status") == "pending")
@@ -131,9 +130,7 @@ def next_task(ctx: click.Context, spec_id: str) -> None:
 @cli_command("prepare")
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Task preparation timed out")
-def prepare_task_cmd(
-    ctx: click.Context, spec_id: str, task_id: Optional[str] = None
-) -> None:
+def prepare_task_cmd(ctx: click.Context, spec_id: str, task_id: Optional[str] = None) -> None:
     """Prepare complete context for task implementation.
 
     SPEC_ID is the specification identifier.
@@ -183,9 +180,7 @@ def prepare_task_cmd(
 @tasks.command("info")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.option(
-    "--include-context/--no-context", default=True, help="Include task context."
-)
+@click.option("--include-context/--no-context", default=True, help="Include task context.")
 @click.pass_context
 @cli_command("info")
 @handle_keyboard_interrupt()
@@ -264,9 +259,7 @@ def task_info_cmd(
 @tasks.command("update-status")
 @click.argument("spec_id")
 @click.argument("task_id")
-@click.argument(
-    "status", type=click.Choice(["pending", "in_progress", "completed", "blocked"])
-)
+@click.argument("status", type=click.Choice(["pending", "in_progress", "completed", "blocked"]))
 @click.option("--note", "-n", help="Optional note about the status change.")
 @click.pass_context
 @cli_command("update-status")
@@ -800,8 +793,6 @@ def check_complete_cmd(
             "already_completed": False,
             "status": current_status,
             "blockers": blockers,
-            "message": "Ready to complete"
-            if can_complete
-            else f"{len(blockers)} blocker(s) found",
+            "message": "Ready to complete" if can_complete else f"{len(blockers)} blocker(s) found",
         }
     )

@@ -13,9 +13,7 @@ from foundry_mcp.core.validation.normalization import (
 from foundry_mcp.core.validation.stats import _recalculate_counts
 
 
-def get_fix_actions(
-    result: ValidationResult, spec_data: Dict[str, Any]
-) -> List[FixAction]:
+def get_fix_actions(result: ValidationResult, spec_data: Dict[str, Any]) -> List[FixAction]:
     """
     Generate fix actions from validation diagnostics.
 
@@ -42,7 +40,6 @@ def get_fix_actions(
     return actions
 
 
-
 def _build_date_fix(diag: Diagnostic, spec_data: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for date normalization."""
     field_name = diag.location
@@ -66,9 +63,7 @@ def _build_date_fix(diag: Diagnostic, spec_data: Dict[str, Any]) -> Optional[Fix
     )
 
 
-def _build_hierarchy_align_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_hierarchy_align_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for parent/child alignment."""
     # Parse node IDs from message
     match = re.search(r"'([^']+)' lists '([^']+)' as child", diag.message)
@@ -99,9 +94,7 @@ def _build_hierarchy_align_fix(
     )
 
 
-def _build_orphan_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_orphan_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for orphaned nodes."""
     match = re.search(r"not reachable from spec-root:\s*(.+)$", diag.message)
     if not match:
@@ -134,9 +127,7 @@ def _build_orphan_fix(
     )
 
 
-def _build_root_parent_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_root_parent_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for spec-root having non-null parent."""
 
     def apply(data: Dict[str, Any]) -> None:
@@ -156,9 +147,7 @@ def _build_root_parent_fix(
     )
 
 
-def _build_missing_fields_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_missing_fields_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for missing node fields."""
     node_id = diag.location
     if not node_id:
@@ -192,9 +181,7 @@ def _build_missing_fields_fix(
         if "children" not in node:
             node["children"] = []
         if "total_tasks" not in node:
-            node["total_tasks"] = (
-                1 if node.get("type") in {"task", "subtask", "verify"} else 0
-            )
+            node["total_tasks"] = 1 if node.get("type") in {"task", "subtask", "verify"} else 0
         if "completed_tasks" not in node:
             node["completed_tasks"] = 0
         if "metadata" not in node:
@@ -211,9 +198,7 @@ def _build_missing_fields_fix(
     )
 
 
-def _build_type_normalize_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_type_normalize_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for invalid node type."""
     node_id = diag.location
     if not node_id:
@@ -237,9 +222,7 @@ def _build_type_normalize_fix(
     )
 
 
-def _build_status_normalize_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_status_normalize_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for invalid status."""
     node_id = diag.location
     if not node_id:
@@ -263,9 +246,7 @@ def _build_status_normalize_fix(
     )
 
 
-def _build_title_generate_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_title_generate_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for empty title."""
     node_id = diag.location
     if not node_id:
@@ -289,9 +270,7 @@ def _build_title_generate_fix(
     )
 
 
-def _build_counts_fix(
-    diag: Diagnostic, spec_data: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_counts_fix(diag: Diagnostic, spec_data: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for task count issues."""
 
     def apply(data: Dict[str, Any]) -> None:
@@ -308,9 +287,7 @@ def _build_counts_fix(
     )
 
 
-def _build_bidirectional_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_bidirectional_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for bidirectional dependency inconsistency."""
     # Parse node IDs from message
     blocks_match = re.search(r"'([^']+)' blocks '([^']+)'", diag.message)
@@ -363,9 +340,7 @@ def _build_bidirectional_fix(
     )
 
 
-def _build_deps_structure_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_deps_structure_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for missing dependencies structure."""
     node_id = diag.location
     if not node_id:
@@ -390,9 +365,7 @@ def _build_deps_structure_fix(
     )
 
 
-def _build_verification_type_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_verification_type_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for missing verification type."""
     node_id = diag.location
     if not node_id:
@@ -418,9 +391,7 @@ def _build_verification_type_fix(
     )
 
 
-def _build_invalid_verification_type_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_invalid_verification_type_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for invalid verification type by mapping to canonical value."""
     node_id = diag.location
     if not node_id:
@@ -452,9 +423,7 @@ def _build_invalid_verification_type_fix(
 # It must be a real repo-relative path in the target workspace.
 
 
-def _build_task_category_fix(
-    diag: Diagnostic, hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_task_category_fix(diag: Diagnostic, hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build fix for invalid task category."""
     node_id = diag.location
     if not node_id:
@@ -505,17 +474,17 @@ _HIERARCHY_HANDLERS: Dict[str, Any] = {
 }
 
 # Codes that all route to _build_counts_fix(diag, spec_data):
-_COUNTS_CODES = frozenset({
-    "TOTAL_TASKS_MISMATCH",
-    "COMPLETED_TASKS_MISMATCH",
-    "COMPLETED_EXCEEDS_TOTAL",
-    "INVALID_LEAF_COUNT",
-})
+_COUNTS_CODES = frozenset(
+    {
+        "TOTAL_TASKS_MISMATCH",
+        "COMPLETED_TASKS_MISMATCH",
+        "COMPLETED_EXCEEDS_TOTAL",
+        "INVALID_LEAF_COUNT",
+    }
+)
 
 
-def _build_fix_action(
-    diag: Diagnostic, spec_data: Dict[str, Any], hierarchy: Dict[str, Any]
-) -> Optional[FixAction]:
+def _build_fix_action(diag: Diagnostic, spec_data: Dict[str, Any], hierarchy: Dict[str, Any]) -> Optional[FixAction]:
     """Build a fix action for a diagnostic."""
     code = diag.code
 

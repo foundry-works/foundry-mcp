@@ -7,16 +7,10 @@ Tests verify:
 4. Fidelity metadata accuracy in responses
 """
 
-import pytest
 from datetime import datetime, timezone
 
-from foundry_mcp.core.research.token_management import (
-    BudgetingMode,
-    ModelContextLimits,
-    TokenBudget,
-    get_effective_context,
-    preflight_count,
-)
+import pytest
+
 from foundry_mcp.core.research.context_budget import (
     AllocationStrategy,
     ContentItem,
@@ -27,7 +21,13 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchSource, SourceQuality
-
+from foundry_mcp.core.research.token_management import (
+    BudgetingMode,
+    ModelContextLimits,
+    TokenBudget,
+    get_effective_context,
+    preflight_count,
+)
 
 # =============================================================================
 # Fixtures
@@ -123,9 +123,7 @@ def mock_research_state(mock_sources) -> DeepResearchState:
 @pytest.fixture
 def fixed_token_manager() -> ContextBudgetManager:
     """Create a manager with fixed 4 chars/token estimation."""
-    return ContextBudgetManager(
-        token_estimator=lambda content: max(1, len(content) // 4)
-    )
+    return ContextBudgetManager(token_estimator=lambda content: max(1, len(content) // 4))
 
 
 # =============================================================================
@@ -136,9 +134,7 @@ def fixed_token_manager() -> ContextBudgetManager:
 class TestGracefulDegradationWithLowLimits:
     """Tests for graceful degradation under artificially low model limits."""
 
-    def test_degradation_drops_low_priority_first(
-        self, fixed_token_manager, mock_sources
-    ):
+    def test_degradation_drops_low_priority_first(self, fixed_token_manager, mock_sources):
         """Test that low-priority sources are dropped first under tight budget."""
         # Convert sources to content items (mimicking _allocate_source_budget)
         items = []
@@ -150,13 +146,15 @@ class TestGracefulDegradationWithLowLimits:
                 SourceQuality.LOW: 3,
             }
             priority = priority_map.get(source.quality, 3)
-            items.append(ContentItem(
-                id=source.id,
-                content=source.content or source.snippet or "",
-                priority=priority,
-                source_id=source.id,
-                protected=source.quality == SourceQuality.HIGH,
-            ))
+            items.append(
+                ContentItem(
+                    id=source.id,
+                    content=source.content or source.snippet or "",
+                    priority=priority,
+                    source_id=source.id,
+                    protected=source.quality == SourceQuality.HIGH,
+                )
+            )
 
         # Total: ~1550 tokens (500+400+300+200+150)
         # Budget: 1000 tokens - should drop low priority items
@@ -217,9 +215,7 @@ class TestGracefulDegradationWithLowLimits:
         )
 
         # Protected item must be allocated, not dropped
-        protected = next(
-            (i for i in result.items if i.id == "protected"), None
-        )
+        protected = next((i for i in result.items if i.id == "protected"), None)
         assert protected is not None
         assert "protected" not in result.dropped_ids
 
@@ -274,15 +270,10 @@ class TestMinimumItemGuardrails:
         for item in result.items:
             assert 0.45 <= item.allocation_ratio <= 0.55
 
-    def test_priority_first_with_many_small_items_preserves_more(
-        self, fixed_token_manager
-    ):
+    def test_priority_first_with_many_small_items_preserves_more(self, fixed_token_manager):
         """Test that having many small items allows more to be preserved."""
         # 6 small items instead of 3 large ones
-        items = [
-            ContentItem(id=f"item-{i}", content="X" * 200, priority=i + 1)
-            for i in range(6)
-        ]
+        items = [ContentItem(id=f"item-{i}", content="X" * 200, priority=i + 1) for i in range(6)]
 
         # Each item is 50 tokens, total 300 tokens
         # Budget of 200 should fit 4 items fully
@@ -307,13 +298,11 @@ class TestPhaseBudgetCalculations:
     def test_analysis_phase_budget_fraction(self, small_model_limits):
         """Test analysis phase uses 80% of effective context."""
         from foundry_mcp.core.research.workflows.deep_research import (
-            ANALYSIS_PHASE_BUDGET_FRACTION,
             ANALYSIS_OUTPUT_RESERVED,
+            ANALYSIS_PHASE_BUDGET_FRACTION,
         )
 
-        effective = get_effective_context(
-            small_model_limits, output_budget=ANALYSIS_OUTPUT_RESERVED
-        )
+        effective = get_effective_context(small_model_limits, output_budget=ANALYSIS_OUTPUT_RESERVED)
         phase_budget = int(effective * ANALYSIS_PHASE_BUDGET_FRACTION)
 
         # Should be 80% of 10K = 8K tokens
@@ -322,13 +311,11 @@ class TestPhaseBudgetCalculations:
     def test_synthesis_phase_budget_fraction(self, small_model_limits):
         """Test synthesis phase uses 85% of effective context."""
         from foundry_mcp.core.research.workflows.deep_research import (
-            SYNTHESIS_PHASE_BUDGET_FRACTION,
             SYNTHESIS_OUTPUT_RESERVED,
+            SYNTHESIS_PHASE_BUDGET_FRACTION,
         )
 
-        effective = get_effective_context(
-            small_model_limits, output_budget=SYNTHESIS_OUTPUT_RESERVED
-        )
+        effective = get_effective_context(small_model_limits, output_budget=SYNTHESIS_OUTPUT_RESERVED)
         phase_budget = int(effective * SYNTHESIS_PHASE_BUDGET_FRACTION)
 
         # Should be 85% of 10K = 8.5K tokens
@@ -337,13 +324,11 @@ class TestPhaseBudgetCalculations:
     def test_refinement_phase_budget_fraction(self, small_model_limits):
         """Test refinement phase uses 70% of effective context."""
         from foundry_mcp.core.research.workflows.deep_research import (
-            REFINEMENT_PHASE_BUDGET_FRACTION,
             REFINEMENT_OUTPUT_RESERVED,
+            REFINEMENT_PHASE_BUDGET_FRACTION,
         )
 
-        effective = get_effective_context(
-            small_model_limits, output_budget=REFINEMENT_OUTPUT_RESERVED
-        )
+        effective = get_effective_context(small_model_limits, output_budget=REFINEMENT_OUTPUT_RESERVED)
         phase_budget = int(effective * REFINEMENT_PHASE_BUDGET_FRACTION)
 
         # Should be 70% of 10K = 7K tokens
@@ -352,13 +337,11 @@ class TestPhaseBudgetCalculations:
     def test_tiny_limits_still_provide_usable_budget(self, tiny_model_limits):
         """Test that even tiny limits provide some usable budget."""
         from foundry_mcp.core.research.workflows.deep_research import (
-            ANALYSIS_PHASE_BUDGET_FRACTION,
             ANALYSIS_OUTPUT_RESERVED,
+            ANALYSIS_PHASE_BUDGET_FRACTION,
         )
 
-        effective = get_effective_context(
-            tiny_model_limits, output_budget=ANALYSIS_OUTPUT_RESERVED
-        )
+        effective = get_effective_context(tiny_model_limits, output_budget=ANALYSIS_OUTPUT_RESERVED)
         phase_budget = int(effective * ANALYSIS_PHASE_BUDGET_FRACTION)
 
         # 2000 * 0.80 = 1600 tokens
@@ -496,8 +479,8 @@ class TestCrossPhaseGracefulDegradation:
         """Calculate phase budgets for tiny model limits."""
         from foundry_mcp.core.research.workflows.deep_research import (
             ANALYSIS_PHASE_BUDGET_FRACTION,
-            SYNTHESIS_PHASE_BUDGET_FRACTION,
             REFINEMENT_PHASE_BUDGET_FRACTION,
+            SYNTHESIS_PHASE_BUDGET_FRACTION,
         )
 
         effective = get_effective_context(tiny_model_limits)
@@ -507,15 +490,10 @@ class TestCrossPhaseGracefulDegradation:
             "refinement": int(effective * REFINEMENT_PHASE_BUDGET_FRACTION),
         }
 
-    def test_analysis_phase_handles_budget_pressure(
-        self, fixed_token_manager, phase_budgets
-    ):
+    def test_analysis_phase_handles_budget_pressure(self, fixed_token_manager, phase_budgets):
         """Test analysis phase gracefully handles tight budget."""
         # Simulate sources that exceed analysis budget
-        items = [
-            ContentItem(id=f"src-{i}", content="X" * 800, priority=i + 1)
-            for i in range(5)
-        ]
+        items = [ContentItem(id=f"src-{i}", content="X" * 800, priority=i + 1) for i in range(5)]
         # Total: 1000 tokens (5 * 200)
 
         result = fixed_token_manager.allocate_budget(
@@ -528,15 +506,10 @@ class TestCrossPhaseGracefulDegradation:
         assert len(result.items) == 5
         assert result.fidelity == 1.0
 
-    def test_synthesis_phase_handles_budget_pressure(
-        self, fixed_token_manager, phase_budgets
-    ):
+    def test_synthesis_phase_handles_budget_pressure(self, fixed_token_manager, phase_budgets):
         """Test synthesis phase gracefully handles tight budget."""
         # Simulate findings that exceed synthesis budget
-        items = [
-            ContentItem(id=f"finding-{i}", content="X" * 1600, priority=1)
-            for i in range(5)
-        ]
+        items = [ContentItem(id=f"finding-{i}", content="X" * 1600, priority=1) for i in range(5)]
         # Total: 2000 tokens (5 * 400)
 
         result = fixed_token_manager.allocate_budget(
@@ -550,18 +523,13 @@ class TestCrossPhaseGracefulDegradation:
         # But we should have preserved high-priority content
         assert len(result.items) >= 3
 
-    def test_refinement_phase_most_constrained(
-        self, fixed_token_manager, phase_budgets
-    ):
+    def test_refinement_phase_most_constrained(self, fixed_token_manager, phase_budgets):
         """Test refinement phase has smallest budget (70%)."""
         assert phase_budgets["refinement"] < phase_budgets["analysis"]
         assert phase_budgets["refinement"] < phase_budgets["synthesis"]
 
         # With tighter budget, should drop/compress more aggressively
-        items = [
-            ContentItem(id=f"item-{i}", content="X" * 800, priority=i + 1)
-            for i in range(5)
-        ]
+        items = [ContentItem(id=f"item-{i}", content="X" * 800, priority=i + 1) for i in range(5)]
 
         result = fixed_token_manager.allocate_budget(
             items=items,
@@ -698,9 +666,7 @@ class TestPreflightValidationUnderPressure:
         budget = TokenBudget(total_budget=1000, safety_margin=0.0)
         content = "x" * 8000  # ~2000 tokens
 
-        result = preflight_count(
-            content, budget, warn_on_heuristic=False
-        )
+        result = preflight_count(content, budget, warn_on_heuristic=False)
 
         assert result.valid is False
         assert result.overflow_tokens > 0
@@ -717,9 +683,7 @@ class TestPreflightValidationUnderPressure:
         # Content just under effective budget
         content = "x" * 3000  # ~750 tokens
 
-        result = preflight_count(
-            content, budget, warn_on_heuristic=False
-        )
+        result = preflight_count(content, budget, warn_on_heuristic=False)
 
         assert result.valid is True
         assert result.estimated_tokens < budget.effective_budget()
@@ -729,9 +693,7 @@ class TestPreflightValidationUnderPressure:
         budget = TokenBudget(total_budget=1000, safety_margin=0.0)
         content = "x" * 400  # ~100 tokens
 
-        result = preflight_count(
-            content, budget, is_final_fit=True, warn_on_heuristic=False
-        )
+        result = preflight_count(content, budget, is_final_fit=True, warn_on_heuristic=False)
 
         assert result.is_final_fit is True
 
@@ -740,9 +702,7 @@ class TestPreflightValidationUnderPressure:
         budget = TokenBudget(total_budget=1000, safety_margin=0.0)
         content = "x" * 400  # ~100 tokens
 
-        result = preflight_count(
-            content, budget, warn_on_heuristic=False
-        )
+        result = preflight_count(content, budget, warn_on_heuristic=False)
 
         # 100 / 1000 = 0.1
         assert result.usage_fraction == 0.1

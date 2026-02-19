@@ -4,7 +4,6 @@ Integration tests for JSON minification in tool responses.
 Verifies that canonical_tool decorator produces TextContent with minified JSON.
 """
 
-import pytest
 from mcp.types import TextContent
 
 
@@ -32,6 +31,7 @@ class TestJsonMinification:
     def test_response_is_valid_json(self, mcp_server):
         """Response text should be valid parseable JSON."""
         import json
+
         tools = mcp_server._tool_manager._tools
         result = tools["spec"].fn(action="list", status="all")
         parsed = json.loads(result.text)
@@ -41,6 +41,7 @@ class TestJsonMinification:
     def test_minified_vs_pretty_size_difference(self, mcp_server):
         """Minified JSON should be smaller than pretty-printed."""
         import json
+
         tools = mcp_server._tool_manager._tools
         result = tools["spec"].fn(action="list", status="all")
 
@@ -49,6 +50,5 @@ class TestJsonMinification:
         minified = result.text
 
         assert len(minified) < len(pretty), (
-            f"Minified ({len(minified)} chars) should be smaller than "
-            f"pretty-printed ({len(pretty)} chars)"
+            f"Minified ({len(minified)} chars) should be smaller than pretty-printed ({len(pretty)} chars)"
         )

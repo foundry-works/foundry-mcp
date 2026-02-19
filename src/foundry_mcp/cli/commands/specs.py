@@ -16,13 +16,14 @@ from foundry_mcp.cli.output import emit_error, emit_success
 from foundry_mcp.cli.registry import get_context
 from foundry_mcp.cli.resilience import (
     FAST_TIMEOUT,
-    handle_keyboard_interrupt,
     MEDIUM_TIMEOUT,
+    handle_keyboard_interrupt,
     with_sync_timeout,
 )
 from foundry_mcp.core.journal import list_blocked_tasks
 from foundry_mcp.core.progress import list_phases as core_list_phases
-from foundry_mcp.core.spec import list_specs as core_list_specs, load_spec
+from foundry_mcp.core.spec import list_specs as core_list_specs
+from foundry_mcp.core.spec import load_spec
 
 logger = get_cli_logger()
 
@@ -66,8 +67,7 @@ def get_template_structure(template: str, category: str) -> Dict[str, Any]:
     """
     if template != "empty":
         raise ValueError(
-            f"Invalid template '{template}'. Only 'empty' template is supported. "
-            f"Use phase templates to add structure."
+            f"Invalid template '{template}'. Only 'empty' template is supported. Use phase templates to add structure."
         )
 
     return {
@@ -245,9 +245,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
 
         # Check for documentation
         docs_dir = specs_dir / ".human-readable"
-        analysis["documentation_available"] = docs_dir.is_dir() and any(
-            docs_dir.glob("*.md")
-        )
+        analysis["documentation_available"] = docs_dir.is_dir() and any(docs_dir.glob("*.md"))
 
         # Check for codebase docs
         codebase_json = target_dir / "docs" / "codebase.json"
@@ -258,9 +256,7 @@ def analyze(ctx: click.Context, directory: Optional[str] = None) -> None:
             "has_active_specs": folder_counts.get("active", 0) > 0,
             "has_pending_specs": folder_counts.get("pending", 0) > 0,
             "completion_rate": (
-                round(folder_counts.get("completed", 0) / total_specs * 100, 1)
-                if total_specs > 0
-                else 0
+                round(folder_counts.get("completed", 0) / total_specs * 100, 1) if total_specs > 0 else 0
             ),
         }
     else:
@@ -381,9 +377,7 @@ def create(
 
     # Count tasks
     task_count = sum(
-        1
-        for node in hierarchy.values()
-        if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
+        1 for node in hierarchy.values() if isinstance(node, dict) and node.get("type") in ("task", "subtask", "verify")
     )
 
     emit_success(
@@ -394,13 +388,7 @@ def create(
             "category": category,
             "name": name,
             "structure": {
-                "phases": len(
-                    [
-                        n
-                        for n in hierarchy.values()
-                        if isinstance(n, dict) and n.get("type") == "phase"
-                    ]
-                ),
+                "phases": len([n for n in hierarchy.values() if isinstance(n, dict) and n.get("type") == "phase"]),
                 "tasks": task_count,
             },
         }

@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Union
 
-
 # =============================================================================
 # Workflow Types
 # =============================================================================
@@ -223,9 +222,7 @@ class AgreementMetadata:
         return self.successful_providers >= 2
 
     @classmethod
-    def from_responses(
-        cls, responses: Sequence["ProviderResponse"]
-    ) -> "AgreementMetadata":
+    def from_responses(cls, responses: Sequence["ProviderResponse"]) -> "AgreementMetadata":
         """
         Create AgreementMetadata from a list of provider responses.
 

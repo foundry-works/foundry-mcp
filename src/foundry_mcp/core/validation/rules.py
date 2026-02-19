@@ -834,9 +834,7 @@ def _validate_metadata(
                     result.diagnostics.append(
                         Diagnostic(
                             code="INVALID_ACCEPTANCE_CRITERIA",
-                            message=(
-                                f"Task node '{node_id}' metadata.acceptance_criteria must be a list of strings"
-                            ),
+                            message=(f"Task node '{node_id}' metadata.acceptance_criteria must be a list of strings"),
                             severity="error",
                             category="metadata",
                             location=node_id,
@@ -857,18 +855,12 @@ def _validate_metadata(
                         )
                     )
                 else:
-                    invalid_items = [
-                        idx
-                        for idx, item in enumerate(acceptance_criteria)
-                        if not _nonempty_string(item)
-                    ]
+                    invalid_items = [idx for idx, item in enumerate(acceptance_criteria) if not _nonempty_string(item)]
                     if invalid_items:
                         result.diagnostics.append(
                             Diagnostic(
                                 code="INVALID_ACCEPTANCE_CRITERIA",
-                                message=(
-                                    f"Task node '{node_id}' has invalid acceptance_criteria entries"
-                                ),
+                                message=(f"Task node '{node_id}' has invalid acceptance_criteria entries"),
                                 severity="error",
                                 category="metadata",
                                 location=node_id,

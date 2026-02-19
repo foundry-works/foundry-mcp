@@ -124,8 +124,7 @@ def compare_schema_structure(actual: dict, expected: dict, path: str = "") -> li
 
         if type(actual_val) != type(expected_val):
             differences.append(
-                f"{key_path}: Type mismatch - "
-                f"got {type(actual_val).__name__}, expected {type(expected_val).__name__}"
+                f"{key_path}: Type mismatch - got {type(actual_val).__name__}, expected {type(expected_val).__name__}"
             )
         elif isinstance(actual_val, dict) and isinstance(expected_val, dict):
             differences.extend(compare_schema_structure(actual_val, expected_val, key_path))

@@ -21,14 +21,13 @@ from unittest.mock import patch
 import pytest
 
 from foundry_mcp.core.research.content_archive import (
+    ARCHIVE_READ_CORRUPT,
+    ARCHIVE_WRITE_FAILED,
+    DEFAULT_ARCHIVE_TTL_HOURS,
     ArchivedContent,
     ContentArchive,
     compute_content_hash,
-    DEFAULT_ARCHIVE_TTL_HOURS,
-    ARCHIVE_WRITE_FAILED,
-    ARCHIVE_READ_CORRUPT,
 )
-
 
 # =============================================================================
 # Test: ArchivedContent Serialization

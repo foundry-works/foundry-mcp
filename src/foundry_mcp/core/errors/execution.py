@@ -4,7 +4,7 @@ Moved from foundry_mcp.core.executor, foundry_mcp.tools.unified.router,
 and foundry_mcp.skills.foundry_implement_v2 for centralized error management.
 """
 
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 
 class ExecutorExhaustedError(Exception):

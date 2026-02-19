@@ -72,5 +72,3 @@ def test_review_list_tools_returns_envelope(test_config: ServerConfig):
     assert result["success"] is True
     assert "tools" in result["data"]
     assert "review_types" in result["data"]
-
-

@@ -26,7 +26,6 @@ import pytest
 from pydantic import ValidationError
 
 from foundry_mcp.core.autonomy.models.enums import (
-    FailureReason,
     GatePolicy,
     GateVerdict,
     PauseReason,
@@ -44,7 +43,6 @@ from foundry_mcp.core.autonomy.models.session_config import (
     SessionLimits,
     StopConditions,
 )
-from foundry_mcp.core.autonomy.models.state import AutonomousSessionState
 from foundry_mcp.core.autonomy.models.steps import LastStepIssued, LastStepResult
 from foundry_mcp.core.autonomy.models.verification import (
     PendingVerificationReceipt,
@@ -53,26 +51,23 @@ from foundry_mcp.core.autonomy.models.verification import (
 from foundry_mcp.core.autonomy.orchestrator import (
     ERROR_GATE_AUDIT_FAILURE,
     ERROR_GATE_INTEGRITY_CHECKSUM,
-    ERROR_HEARTBEAT_STALE,
     ERROR_INVALID_GATE_EVIDENCE,
-    ERROR_SPEC_REBASE_REQUIRED,
     ERROR_STEP_MISMATCH,
-    ERROR_STEP_PROOF_MISSING,
     ERROR_STEP_PROOF_MISMATCH,
+    ERROR_STEP_PROOF_MISSING,
     ERROR_STEP_RESULT_REQUIRED,
     ERROR_STEP_STALE,
     ERROR_VERIFICATION_RECEIPT_INVALID,
-    OrchestrationResult,
     StepOrchestrator,
 )
 from foundry_mcp.core.autonomy.spec_hash import compute_spec_structure_hash
 
 from .conftest import make_hierarchy_spec_data, make_session, make_spec_data
 
-
 # =============================================================================
 # Helpers
 # =============================================================================
+
 
 def _make_orchestrator(tmp_path: Path, spec_data: Optional[Dict[str, Any]] = None) -> StepOrchestrator:
     """Create orchestrator with a real spec file on disk."""
@@ -773,7 +768,9 @@ class TestRecordStepOutcome:
 
         orch._record_step_outcome(
             session,
-            _result(step_id="s1", step_type=StepType.EXECUTE_VERIFICATION, outcome=StepOutcome.SUCCESS, task_id="verify-1"),
+            _result(
+                step_id="s1", step_type=StepType.EXECUTE_VERIFICATION, outcome=StepOutcome.SUCCESS, task_id="verify-1"
+            ),
             datetime.now(timezone.utc),
         )
         assert "verify-1" in session.completed_task_ids
@@ -1076,7 +1073,10 @@ class TestFidelityCycleLimit:
         # Need to get past spec integrity + terminal checks
         # Test _check_pause_guards is not sufficient because fidelity cycle is step 9
         # But we can directly check the condition
-        assert session.counters.fidelity_review_cycles_in_active_phase >= session.limits.max_fidelity_review_cycles_per_phase
+        assert (
+            session.counters.fidelity_review_cycles_in_active_phase
+            >= session.limits.max_fidelity_review_cycles_per_phase
+        )
 
 
 # =============================================================================
@@ -1644,9 +1644,12 @@ class TestHandleGateEvidence:
         session = make_session(
             active_phase_id="phase-1",
             counters=SessionCounters(fidelity_review_cycles_in_active_phase=1),
-            phase_gates={"phase-1": PhaseGateRecord(
-                required=True, status=PhaseGateStatus.PENDING,
-            )},
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.PENDING,
+                )
+            },
         )
 
         # _record_step_outcome increments fidelity cycle counter on gate steps

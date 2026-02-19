@@ -20,11 +20,6 @@ from foundry_mcp.core.research.workflows.deep_research.phases._lifecycle import 
     finalize_phase,
 )
 
-if TYPE_CHECKING:
-    from foundry_mcp.core.research.workflows.deep_research.core import (
-        DeepResearchWorkflow,
-    )
-
 logger = logging.getLogger(__name__)
 
 
@@ -37,8 +32,16 @@ class PlanningPhaseMixin:
     - _execute_provider_async() (inherited from ResearchWorkflowBase)
     """
 
+    config: Any
+    memory: Any
+
+    if TYPE_CHECKING:
+
+        def _write_audit_event(self, *args: Any, **kwargs: Any) -> None: ...
+        def _check_cancellation(self, *args: Any, **kwargs: Any) -> None: ...
+
     async def _execute_planning_async(
-        self: DeepResearchWorkflow,
+        self,
         state: DeepResearchState,
         provider_id: Optional[str],
         timeout: float,
@@ -165,9 +168,7 @@ class PlanningPhaseMixin:
             },
         )
 
-    def _build_planning_system_prompt(
-        self: DeepResearchWorkflow, state: DeepResearchState
-    ) -> str:
+    def _build_planning_system_prompt(self, state: DeepResearchState) -> str:
         """Build system prompt for query decomposition.
 
         Args:
@@ -202,9 +203,7 @@ Guidelines:
 
 IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
-    def _build_planning_user_prompt(
-        self: DeepResearchWorkflow, state: DeepResearchState
-    ) -> str:
+    def _build_planning_user_prompt(self, state: DeepResearchState) -> str:
         """Build user prompt for query decomposition.
 
         Args:
@@ -232,7 +231,7 @@ Generate the research plan as JSON."""
         return prompt
 
     def _parse_planning_response(
-        self: DeepResearchWorkflow,
+        self,
         content: str,
         state: DeepResearchState,
     ) -> dict[str, Any]:
@@ -289,11 +288,13 @@ Generate the research plan as JSON."""
             if len(result["sub_queries"]) >= state.max_sub_queries:
                 break
 
-            result["sub_queries"].append({
-                "query": query,
-                "rationale": sq.get("rationale", ""),
-                "priority": min(max(int(sq.get("priority", i + 1)), 1), 10),
-            })
+            result["sub_queries"].append(
+                {
+                    "query": query,
+                    "rationale": sq.get("rationale", ""),
+                    "priority": min(max(int(sq.get("priority", i + 1)), 1), 10),
+                }
+            )
 
         # Mark success if we got at least one sub-query
         result["success"] = len(result["sub_queries"]) > 0

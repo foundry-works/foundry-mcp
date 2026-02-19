@@ -20,7 +20,7 @@ from foundry_mcp.core.errors.research import (
     SummarizationValidationError,
 )
 
-from .constants import CHARS_PER_TOKEN, MAX_RETRIES, RETRY_DELAY, DEFAULT_CHUNK_SIZE, CHUNK_OVERLAP
+from .constants import CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE, MAX_RETRIES, RETRY_DELAY
 
 
 class SummarizationLevel(str, Enum):
@@ -257,7 +257,7 @@ class SummarizationResult:
                 if point:
                     key_points.append(point)
             # Check for numbered lists (1., 2., etc.)
-            elif len(line) > 2 and line[0].isdigit() and line[1] in ".)" :
+            elif len(line) > 2 and line[0].isdigit() and line[1] in ".)":
                 point = line[2:].strip()
                 if point:
                     key_points.append(point)

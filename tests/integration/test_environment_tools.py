@@ -9,9 +9,8 @@ Tests:
 """
 
 import tempfile
-from pathlib import Path
 from dataclasses import asdict
-
+from pathlib import Path
 
 from foundry_mcp.core.responses.builders import (
     error_response,
@@ -351,8 +350,8 @@ class TestEndToEndWorkflow:
 
     def test_environment_verification_workflow(self):
         """Test environment verification correctly reports runtime info."""
-        import sys
         import shutil
+        import sys
 
         # Get actual runtime info
         python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"

@@ -12,8 +12,34 @@ Sub-modules:
 """
 
 from foundry_mcp.core.task._helpers import (
-    TASK_TYPES,
     REQUIREMENT_TYPES,
+    TASK_TYPES,
+)
+from foundry_mcp.core.task.batch import (
+    # Batch constants
+    BATCH_ALLOWED_STATUSES,
+    DEFAULT_MAX_MATCHES,
+    MAX_PATTERN_LENGTH,
+    # Batch functions
+    batch_update_tasks,
+)
+from foundry_mcp.core.task.mutations import (
+    # Also re-export CATEGORIES via mutations
+    CATEGORIES,
+    # Constants
+    COMPLEXITY_LEVELS,
+    DEPENDENCY_TYPES,
+    MAX_REQUIREMENTS_PER_TASK,
+    TASK_CATEGORIES,
+    VERIFICATION_TYPES,
+    # Mutation functions
+    add_task,
+    manage_task_dependency,
+    move_task,
+    remove_task,
+    update_estimate,
+    update_task_metadata,
+    update_task_requirements,
 )
 from foundry_mcp.core.task.queries import (
     check_dependencies,
@@ -25,32 +51,6 @@ from foundry_mcp.core.task.queries import (
     is_in_current_phase,
     is_unblocked,
     prepare_task,
-)
-from foundry_mcp.core.task.mutations import (
-    # Constants
-    COMPLEXITY_LEVELS,
-    DEPENDENCY_TYPES,
-    MAX_REQUIREMENTS_PER_TASK,
-    TASK_CATEGORIES,
-    VERIFICATION_TYPES,
-    # Also re-export CATEGORIES via mutations
-    CATEGORIES,
-    # Mutation functions
-    add_task,
-    manage_task_dependency,
-    move_task,
-    remove_task,
-    update_estimate,
-    update_task_metadata,
-    update_task_requirements,
-)
-from foundry_mcp.core.task.batch import (
-    # Batch constants
-    BATCH_ALLOWED_STATUSES,
-    DEFAULT_MAX_MATCHES,
-    MAX_PATTERN_LENGTH,
-    # Batch functions
-    batch_update_tasks,
 )
 
 __all__ = [

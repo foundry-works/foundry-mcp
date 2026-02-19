@@ -4,15 +4,15 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 try:
     import tomllib
 except ImportError:
     import tomli as tomllib  # Python < 3.11 fallback
 
-from .provider_spec import ProviderSpec
 from ._paths import _default_config_search_paths
+from .provider_spec import ProviderSpec
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +63,7 @@ class WorkflowConsultationConfig:
             raise ValueError(f"min_models must be at least 1, got {self.min_models}")
 
         if self.timeout_override is not None and self.timeout_override <= 0:
-            raise ValueError(
-                f"timeout_override must be positive if set, got {self.timeout_override}"
-            )
+            raise ValueError(f"timeout_override must be positive if set, got {self.timeout_override}")
 
         if self.default_review_type not in self.VALID_REVIEW_TYPES:
             raise ValueError(
@@ -298,9 +296,7 @@ class ConsultationConfig:
             if isinstance(workflows, dict):
                 for workflow_name, workflow_data in workflows.items():
                     if isinstance(workflow_data, dict):
-                        config.workflows[str(workflow_name)] = (
-                            WorkflowConsultationConfig.from_dict(workflow_data)
-                        )
+                        config.workflows[str(workflow_name)] = WorkflowConsultationConfig.from_dict(workflow_data)
                     else:
                         logger.warning(
                             f"Invalid workflow config format for '{workflow_name}' "

@@ -3,14 +3,14 @@
 from unittest.mock import patch
 
 from foundry_mcp.core.review import (
-    ReviewFinding,
+    LLM_REQUIRED_TYPES,
+    QUICK_REVIEW_TYPES,
     QuickReviewResult,
+    ReviewFinding,
     get_llm_status,
     prepare_review_context,
     quick_review,
     review_type_requires_llm,
-    QUICK_REVIEW_TYPES,
-    LLM_REQUIRED_TYPES,
 )
 
 
@@ -52,6 +52,7 @@ class TestGetLLMStatus:
         with patch.dict("sys.modules", {"foundry_mcp.core.llm_config": None}):
             # Force reimport
             import importlib
+
             from foundry_mcp.core import review
 
             importlib.reload(review)

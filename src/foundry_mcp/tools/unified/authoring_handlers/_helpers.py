@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from foundry_mcp.config.server import ServerConfig
 from foundry_mcp.core.observability import get_metrics
-from foundry_mcp.core.responses.types import ErrorCode
 from foundry_mcp.core.spec import list_assumptions, load_spec
 from foundry_mcp.tools.unified.common import (
     build_request_id,
@@ -53,9 +51,7 @@ def _request_id() -> str:
 _validation_error = make_validation_error_fn("authoring")
 
 
-def _resolve_specs_dir(
-    config: ServerConfig, path: Optional[str]
-) -> tuple[Optional[Path], Optional[dict]]:
+def _resolve_specs_dir(config: ServerConfig, path: Optional[str]) -> tuple[Optional[Path], Optional[dict]]:
     """Thin wrapper around the shared helper preserving the local call convention."""
     return resolve_specs_dir(config, path)
 
@@ -64,9 +60,7 @@ def _phase_exists(spec_id: str, specs_dir: Path, title: str) -> bool:
     try:
         spec_data = load_spec(spec_id, specs_dir)
     except Exception:  # pragma: no cover - defensive guard
-        logger.exception(
-            "Failed to inspect spec for duplicate phases", extra={"spec_id": spec_id}
-        )
+        logger.exception("Failed to inspect spec for duplicate phases", extra={"spec_id": spec_id})
         return False
 
     if not spec_data:

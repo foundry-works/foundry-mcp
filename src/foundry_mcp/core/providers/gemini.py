@@ -182,9 +182,7 @@ class GeminiProvider(ProviderContext):
             unsupported.append("attachments")
         if unsupported:
             # Log warning but continue - ignore unsupported parameters
-            logger.warning(
-                f"Gemini CLI ignoring unsupported parameters: {', '.join(unsupported)}"
-            )
+            logger.warning(f"Gemini CLI ignoring unsupported parameters: {', '.join(unsupported)}")
 
     def _build_prompt(self, request: ProviderRequest) -> str:
         # Build the system prompt with security warning
@@ -354,9 +352,7 @@ class GeminiProvider(ProviderContext):
 
         payload = self._parse_output(completed.stdout)
         content = str(payload.get("response") or payload.get("content") or "").strip()
-        reported_model = payload.get("model") or next(
-            iter((payload.get("stats") or {}).get("models") or {}), model
-        )
+        reported_model = payload.get("model") or next(iter((payload.get("stats") or {}).get("models") or {}), model)
         usage = self._extract_usage(payload)
 
         self._emit_stream_if_requested(content, stream=request.stream)

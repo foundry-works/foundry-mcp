@@ -653,9 +653,7 @@ class HealthManager:
                 details={
                     "unhealthy_count": len(unhealthy),
                     "degraded_count": len(degraded),
-                    "healthy_count": len(dependencies)
-                    - len(unhealthy)
-                    - len(degraded),
+                    "healthy_count": len(dependencies) - len(unhealthy) - len(degraded),
                 },
             )
 

@@ -19,9 +19,7 @@ class TestRunTmuxMissing:
     """Tests for error when tmux is not installed."""
 
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value=None)
-    def test_tmux_not_found_shows_error(
-        self, mock_which, cli_runner, temp_specs_dir
-    ):
+    def test_tmux_not_found_shows_error(self, mock_which, cli_runner, temp_specs_dir):
         """run returns clear error when tmux is not installed."""
         result = cli_runner.invoke(
             cli,
@@ -35,9 +33,7 @@ class TestRunTmuxMissing:
         assert "tmux" in data["error"]
 
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value=None)
-    def test_tmux_not_found_provides_remediation(
-        self, mock_which, cli_runner, temp_specs_dir
-    ):
+    def test_tmux_not_found_provides_remediation(self, mock_which, cli_runner, temp_specs_dir):
         """Error includes install instructions."""
         result = cli_runner.invoke(
             cli,
@@ -52,9 +48,7 @@ class TestRunSpecNotFound:
     """Tests for error when spec does not exist."""
 
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_error_when_spec_not_found(
-        self, mock_which, cli_runner, temp_specs_dir
-    ):
+    def test_error_when_spec_not_found(self, mock_which, cli_runner, temp_specs_dir):
         """run returns error for non-existent spec."""
         result = cli_runner.invoke(
             cli,
@@ -72,9 +66,7 @@ class TestRunDefaultOptions:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_creates_tmux_session_with_agent_command(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_creates_tmux_session_with_agent_command(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run creates tmux session with correct agent command."""
         # has-session returns 1 (no existing session)
         # new-session, split-window, select-pane succeed
@@ -108,9 +100,7 @@ class TestRunDefaultOptions:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_creates_watcher_pane_with_delay(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_creates_watcher_pane_with_delay(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run creates watcher pane with sleep delay."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),  # has-session
@@ -136,9 +126,7 @@ class TestRunDefaultOptions:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_default_layout_is_vertical(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_default_layout_is_vertical(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """Default layout uses vertical split (-v flag)."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),  # has-session
@@ -159,9 +147,7 @@ class TestRunDefaultOptions:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_selects_agent_pane_after_split(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_selects_agent_pane_after_split(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run selects the agent pane (pane 0) after splitting."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -187,12 +173,11 @@ class TestRunDefaultOptions:
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
     @patch.dict("os.environ", {}, clear=False)
-    def test_attaches_by_default(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_attaches_by_default(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run attaches to tmux session by default (no --detach, not in tmux)."""
         # Ensure TMUX is not set
         import os
+
         os.environ.pop("TMUX", None)
 
         mock_run.side_effect = [
@@ -219,9 +204,7 @@ class TestRunInsideTmux:
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
     @patch.dict("os.environ", {"TMUX": "/tmp/tmux-1000/default,12345,0"})
-    def test_uses_switch_client_when_in_tmux(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_uses_switch_client_when_in_tmux(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run uses switch-client instead of attach when already in tmux."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),  # has-session
@@ -243,9 +226,7 @@ class TestRunInsideTmux:
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
     @patch.dict("os.environ", {"TMUX": "/tmp/tmux-1000/default,12345,0"})
-    def test_action_is_switching_when_in_tmux(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_action_is_switching_when_in_tmux(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run emits action='switching' when already in tmux."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -268,9 +249,7 @@ class TestRunInsideTmux:
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
     @patch.dict("os.environ", {"TMUX": "/tmp/tmux-1000/default,12345,0"})
-    def test_detach_ignores_tmux_env(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_detach_ignores_tmux_env(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--detach still detaches normally even when inside tmux."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -295,9 +274,7 @@ class TestRunDetachMode:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_detach_skips_attach(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_detach_skips_attach(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--detach creates session but does not attach."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),  # has-session
@@ -317,9 +294,7 @@ class TestRunDetachMode:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_detach_shows_reattach_command(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_detach_shows_reattach_command(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--detach emits reattach command in response."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -344,9 +319,7 @@ class TestRunLayoutOption:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_horizontal_layout_uses_h_flag(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_horizontal_layout_uses_h_flag(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--layout horizontal uses -h split flag."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -358,8 +331,13 @@ class TestRunLayoutOption:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "run", "--layout", "horizontal", "--detach", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "run",
+                "--layout",
+                "horizontal",
+                "--detach",
+                "test-spec-001",
             ],
         )
 
@@ -370,9 +348,7 @@ class TestRunLayoutOption:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_vertical_layout_uses_v_flag(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_vertical_layout_uses_v_flag(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--layout vertical uses -v split flag."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -384,8 +360,13 @@ class TestRunLayoutOption:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "run", "--layout", "vertical", "--detach", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "run",
+                "--layout",
+                "vertical",
+                "--detach",
+                "test-spec-001",
             ],
         )
 
@@ -399,9 +380,7 @@ class TestRunPostureOption:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_supervised_posture_sets_env_var(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_supervised_posture_sets_env_var(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--posture supervised passes correct env var to agent command."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -413,8 +392,13 @@ class TestRunPostureOption:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "run", "--posture", "supervised", "--detach", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "run",
+                "--posture",
+                "supervised",
+                "--detach",
+                "test-spec-001",
             ],
         )
 
@@ -424,9 +408,7 @@ class TestRunPostureOption:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_supervised_posture_omits_skip_permissions(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_supervised_posture_omits_skip_permissions(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """--posture supervised does NOT include --dangerously-skip-permissions."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -438,8 +420,13 @@ class TestRunPostureOption:
         result = cli_runner.invoke(
             cli,
             [
-                "--specs-dir", str(temp_specs_dir),
-                "run", "--posture", "supervised", "--detach", "test-spec-001",
+                "--specs-dir",
+                str(temp_specs_dir),
+                "run",
+                "--posture",
+                "supervised",
+                "--detach",
+                "test-spec-001",
             ],
         )
 
@@ -449,9 +436,7 @@ class TestRunPostureOption:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_default_posture_is_unattended(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_default_posture_is_unattended(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """Default posture is unattended."""
         mock_run.side_effect = [
             SimpleNamespace(returncode=1, stdout="", stderr=""),
@@ -476,9 +461,7 @@ class TestRunShellEscaping:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_spec_id_is_shell_escaped_in_agent_cmd(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_spec_id_is_shell_escaped_in_agent_cmd(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """spec_id with shell metacharacters is escaped in agent command."""
         import shlex
 
@@ -494,6 +477,7 @@ class TestRunShellEscaping:
             "journal": [],
         }
         import json as _json
+
         (active_dir / f"{tricky_id}.json").write_text(_json.dumps(spec_data))
 
         mock_run.side_effect = [
@@ -519,9 +503,7 @@ class TestRunTmuxCleanup:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_kills_session_on_split_window_failure(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_kills_session_on_split_window_failure(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """If split-window fails, the created session is killed."""
         from subprocess import CalledProcessError
 
@@ -550,9 +532,7 @@ class TestRunSessionExists:
 
     @patch("foundry_mcp.cli.commands.run.subprocess.run")
     @patch("foundry_mcp.cli.commands.run.shutil.which", return_value="/usr/bin/tmux")
-    def test_error_when_session_exists(
-        self, mock_which, mock_run, cli_runner, temp_specs_dir
-    ):
+    def test_error_when_session_exists(self, mock_which, mock_run, cli_runner, temp_specs_dir):
         """run returns error if tmux session already exists."""
         # has-session returns 0 (session exists)
         mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")

@@ -23,7 +23,6 @@ import pytest
 
 from foundry_mcp.core.providers import detect_provider_availability
 
-
 # =============================================================================
 # Skip conditions
 # =============================================================================
@@ -220,6 +219,7 @@ class TestResearchRouterSmoke:
         )
 
         from unittest.mock import MagicMock
+
         mock_server_cfg = MagicMock()
         mock_server_cfg.research = research_cfg
         mock_server_cfg.get_research_dir.return_value = tmp_path
@@ -297,6 +297,7 @@ class TestResearchRouterConsensusSmoke:
         )
 
         from unittest.mock import MagicMock
+
         mock_server_cfg = MagicMock()
         mock_server_cfg.research = research_cfg
         mock_server_cfg.get_research_dir.return_value = tmp_path

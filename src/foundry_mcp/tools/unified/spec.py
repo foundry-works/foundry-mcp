@@ -15,6 +15,11 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP
 
 from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.core.journal import (
+    VALID_BLOCKER_TYPES,
+    VALID_ENTRY_TYPES,
+)
+from foundry_mcp.core.lifecycle import VALID_FOLDERS
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
 from foundry_mcp.core.pagination import (
@@ -23,17 +28,17 @@ from foundry_mcp.core.pagination import (
     encode_cursor,
     normalize_page_size,
 )
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
 )
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
+)
 from foundry_mcp.core.spec import (
-    TEMPLATES,
     TEMPLATE_DESCRIPTIONS,
+    TEMPLATES,
     check_spec_completeness,
     detect_duplicate_tasks,
     diff_specs,
@@ -45,25 +50,20 @@ from foundry_mcp.core.spec import (
     recalculate_actual_hours,
     recalculate_estimated_hours,
 )
-from foundry_mcp.tools.unified.common import (
-    dispatch_with_standard_errors,
-    resolve_specs_dir,
-)
+from foundry_mcp.core.validation.application import apply_fixes
 from foundry_mcp.core.validation.constants import (
     VALID_NODE_TYPES,
     VALID_STATUSES,
     VALID_TASK_CATEGORIES,
     VALID_VERIFICATION_TYPES,
 )
-from foundry_mcp.core.validation.application import apply_fixes
-from foundry_mcp.core.validation.stats import calculate_stats
 from foundry_mcp.core.validation.fixes import get_fix_actions
 from foundry_mcp.core.validation.rules import validate_spec
-from foundry_mcp.core.journal import (
-    VALID_BLOCKER_TYPES,
-    VALID_ENTRY_TYPES,
+from foundry_mcp.core.validation.stats import calculate_stats
+from foundry_mcp.tools.unified.common import (
+    dispatch_with_standard_errors,
+    resolve_specs_dir,
 )
-from foundry_mcp.core.lifecycle import VALID_FOLDERS
 from foundry_mcp.tools.unified.router import (
     ActionDefinition,
     ActionRouter,
@@ -76,9 +76,7 @@ _DEFAULT_PAGE_SIZE = 100
 _MAX_PAGE_SIZE = 1000
 
 
-def _resolve_specs_dir(
-    config: ServerConfig, workspace: Optional[str]
-) -> tuple[Optional[Path], Optional[dict]]:
+def _resolve_specs_dir(config: ServerConfig, workspace: Optional[str]) -> tuple[Optional[Path], Optional[dict]]:
     """Thin wrapper around the shared helper preserving the local call convention."""
     return resolve_specs_dir(config, workspace)
 
@@ -100,6 +98,7 @@ def _handle_find(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     spec_file = find_spec_file(spec_id, specs_dir)
     if spec_file:
@@ -135,6 +134,7 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     spec_data = load_spec(spec_id, specs_dir)
     if spec_data is None:
@@ -143,7 +143,7 @@ def _handle_get(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                 f"Spec not found: {spec_id}",
                 error_code=ErrorCode.NOT_FOUND,
                 error_type=ErrorType.NOT_FOUND,
-                remediation=f"Verify the spec_id exists. Use spec(action='list') to see available specs.",
+                remediation="Verify the spec_id exists. Use spec(action='list') to see available specs.",
                 details={"spec_id": spec_id},
             )
         )
@@ -163,10 +163,9 @@ def _handle_list(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
-    page_size = normalize_page_size(
-        limit, default=_DEFAULT_PAGE_SIZE, maximum=_MAX_PAGE_SIZE
-    )
+    page_size = normalize_page_size(limit, default=_DEFAULT_PAGE_SIZE, maximum=_MAX_PAGE_SIZE)
 
     start_after_id = None
     if cursor:
@@ -239,6 +238,7 @@ def _handle_validate(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     spec_data = load_spec(spec_id, specs_dir)
     if not spec_data:
@@ -305,9 +305,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
                 details={"field": "create_backup"},
             )
         )
-    create_backup = (
-        create_backup_value if isinstance(create_backup_value, bool) else True
-    )
+    create_backup = create_backup_value if isinstance(create_backup_value, bool) else True
 
     workspace = payload.get("workspace")
 
@@ -323,6 +321,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
@@ -361,9 +360,7 @@ def _handle_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             )
         )
 
-    report = apply_fixes(
-        actions, str(spec_path), dry_run=dry_run, create_backup=create_backup
-    )
+    report = apply_fixes(actions, str(spec_path), dry_run=dry_run, create_backup=create_backup)
 
     applied_actions = [
         {
@@ -411,6 +408,7 @@ def _handle_stats(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
@@ -484,6 +482,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     spec_path = find_spec_file(spec_id, specs_dir)
     if not spec_path:
@@ -520,9 +519,7 @@ def _handle_validate_fix(*, config: ServerConfig, payload: Dict[str, Any]) -> di
     if auto_fix and not result.is_valid:
         actions = get_fix_actions(result, spec_data)
         if actions:
-            report = apply_fixes(
-                actions, str(spec_path), dry_run=False, create_backup=True
-            )
+            report = apply_fixes(actions, str(spec_path), dry_run=False, create_backup=True)
             response_data["fixes_applied"] = len(report.applied_actions)
             response_data["backup_path"] = report.backup_path
 
@@ -589,9 +586,7 @@ def _handle_analyze(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         analysis_data["total_specs"] = sum(folder_counts.values())
 
         docs_dir = specs_dir / ".human-readable"
-        analysis_data["documentation_available"] = docs_dir.exists() and any(
-            docs_dir.glob("*.md")
-        )
+        analysis_data["documentation_available"] = docs_dir.exists() and any(docs_dir.glob("*.md"))
 
         codebase_json = ws_path / "docs" / "codebase.json"
         analysis_data["codebase_docs_available"] = codebase_json.exists()
@@ -737,10 +732,7 @@ def _handle_analyze_deps(*, config: ServerConfig, payload: Dict[str, Any]) -> di
 def _handle_schema(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Return schema information for all valid values in the spec system."""
     # Build templates with descriptions
-    templates_with_desc = [
-        {"name": t, "description": TEMPLATE_DESCRIPTIONS.get(t, "")}
-        for t in TEMPLATES
-    ]
+    templates_with_desc = [{"name": t, "description": TEMPLATE_DESCRIPTIONS.get(t, "")} for t in TEMPLATES]
     return asdict(
         success_response(
             templates=templates_with_desc,
@@ -776,6 +768,7 @@ def _handle_diff(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # If no target specified, diff against latest backup
     if not target:
@@ -848,11 +841,10 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     # Get backups with pagination
-    backups_result = list_spec_backups(
-        spec_id, specs_dir=specs_dir, cursor=cursor, limit=limit
-    )
+    backups_result = list_spec_backups(spec_id, specs_dir=specs_dir, cursor=cursor, limit=limit)
 
     # Get revision history from spec metadata
     spec_data = load_spec(spec_id, specs_dir)
@@ -866,22 +858,26 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
 
     # Add backups as history entries
     for backup in backups_result["backups"]:
-        history_entries.append({
-            "type": "backup",
-            "timestamp": backup["timestamp"],
-            "file_path": backup["file_path"],
-            "file_size_bytes": backup["file_size_bytes"],
-        })
+        history_entries.append(
+            {
+                "type": "backup",
+                "timestamp": backup["timestamp"],
+                "file_path": backup["file_path"],
+                "file_size_bytes": backup["file_size_bytes"],
+            }
+        )
 
     # Add revision history entries
     for rev in revision_history:
-        history_entries.append({
-            "type": "revision",
-            "timestamp": rev.get("date"),
-            "version": rev.get("version"),
-            "changes": rev.get("changes"),
-            "author": rev.get("author"),
-        })
+        history_entries.append(
+            {
+                "type": "revision",
+                "timestamp": rev.get("date"),
+                "version": rev.get("version"),
+                "changes": rev.get("changes"),
+                "author": rev.get("author"),
+            }
+        )
 
     return asdict(
         success_response(
@@ -894,9 +890,7 @@ def _handle_history(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     )
 
 
-def _handle_completeness_check(
-    *, config: ServerConfig, payload: Dict[str, Any]
-) -> dict:
+def _handle_completeness_check(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Check spec completeness and return a score (0-100)."""
     spec_id = payload.get("spec_id")
     if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
@@ -913,6 +907,7 @@ def _handle_completeness_check(
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     result, error = check_spec_completeness(spec_id, specs_dir=specs_dir)
     if error:
@@ -926,12 +921,11 @@ def _handle_completeness_check(
             )
         )
 
+    assert result is not None  # guaranteed when error is None
     return asdict(success_response(**result))
 
 
-def _handle_duplicate_detection(
-    *, config: ServerConfig, payload: Dict[str, Any]
-) -> dict:
+def _handle_duplicate_detection(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Detect duplicate or near-duplicate tasks in a spec."""
     spec_id = payload.get("spec_id")
     if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
@@ -962,6 +956,7 @@ def _handle_duplicate_detection(
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     result, error = detect_duplicate_tasks(
         spec_id,
@@ -981,12 +976,11 @@ def _handle_duplicate_detection(
             )
         )
 
+    assert result is not None  # guaranteed when error is None
     return asdict(success_response(**result))
 
 
-def _handle_recalculate_hours(
-    *, config: ServerConfig, payload: Dict[str, Any]
-) -> dict:
+def _handle_recalculate_hours(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Recalculate estimated_hours by aggregating from tasks up through hierarchy."""
     spec_id = payload.get("spec_id")
     if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
@@ -1005,6 +999,7 @@ def _handle_recalculate_hours(
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     result, error = recalculate_estimated_hours(
         spec_id,
@@ -1022,12 +1017,11 @@ def _handle_recalculate_hours(
             )
         )
 
+    assert result is not None  # guaranteed when error is None
     return asdict(success_response(**result))
 
 
-def _handle_recalculate_actual_hours(
-    *, config: ServerConfig, payload: Dict[str, Any]
-) -> dict:
+def _handle_recalculate_actual_hours(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Recalculate actual_hours by aggregating from tasks up through hierarchy."""
     spec_id = payload.get("spec_id")
     if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
@@ -1046,6 +1040,7 @@ def _handle_recalculate_actual_hours(
     specs_dir, specs_err = _resolve_specs_dir(config, workspace)
     if specs_err:
         return specs_err
+    assert specs_dir is not None  # guaranteed when specs_err is None
 
     result, error = recalculate_actual_hours(
         spec_id,
@@ -1063,6 +1058,7 @@ def _handle_recalculate_actual_hours(
             )
         )
 
+    assert result is not None  # guaranteed when error is None
     return asdict(success_response(**result))
 
 
@@ -1070,9 +1066,7 @@ _ACTIONS = [
     ActionDefinition(name="find", handler=_handle_find, summary="Find a spec by ID"),
     ActionDefinition(name="get", handler=_handle_get, summary="Get raw spec JSON (minified)"),
     ActionDefinition(name="list", handler=_handle_list, summary="List specs"),
-    ActionDefinition(
-        name="validate", handler=_handle_validate, summary="Validate a spec"
-    ),
+    ActionDefinition(name="validate", handler=_handle_validate, summary="Validate a spec"),
     ActionDefinition(name="fix", handler=_handle_fix, summary="Auto-fix a spec"),
     ActionDefinition(name="stats", handler=_handle_stats, summary="Get spec stats"),
     ActionDefinition(
@@ -1080,9 +1074,7 @@ _ACTIONS = [
         handler=_handle_validate_fix,
         summary="Validate and optionally auto-fix",
     ),
-    ActionDefinition(
-        name="analyze", handler=_handle_analyze, summary="Analyze spec directory"
-    ),
+    ActionDefinition(name="analyze", handler=_handle_analyze, summary="Analyze spec directory"),
     ActionDefinition(
         name="analyze-deps",
         handler=_handle_analyze_deps,
@@ -1128,12 +1120,8 @@ _ACTIONS = [
 _SPEC_ROUTER = ActionRouter(tool_name="spec", actions=_ACTIONS)
 
 
-def _dispatch_spec_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _SPEC_ROUTER, "spec", action, payload=payload, config=config
-    )
+def _dispatch_spec_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_SPEC_ROUTER, "spec", action, payload=payload, config=config)
 
 
 def register_unified_spec_tool(mcp: FastMCP, config: ServerConfig) -> None:

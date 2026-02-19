@@ -4,6 +4,10 @@ This package provides conversation threading, multi-model consensus,
 hypothesis-driven investigation, and creative brainstorming workflows.
 """
 
+from foundry_mcp.core.research.memory import (
+    FileStorageBackend,
+    ResearchMemory,
+)
 from foundry_mcp.core.research.models.consensus import (
     ConsensusConfig,
     ConsensusState,
@@ -29,10 +33,6 @@ from foundry_mcp.core.research.models.thinkdeep import (
     Hypothesis,
     InvestigationStep,
     ThinkDeepState,
-)
-from foundry_mcp.core.research.memory import (
-    FileStorageBackend,
-    ResearchMemory,
 )
 from foundry_mcp.core.research.workflows import (
     ChatWorkflow,

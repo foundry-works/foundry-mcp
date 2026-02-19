@@ -13,16 +13,16 @@ from typing import Any, Dict, List, Optional, cast
 
 from mcp.server.fastmcp import FastMCP
 
-from foundry_mcp.config.server import ServerConfig, _PACKAGE_VERSION
+from foundry_mcp.config.server import _PACKAGE_VERSION, ServerConfig
 from foundry_mcp.core.naming import canonical_tool
 from foundry_mcp.core.observability import audit_log, get_metrics, mcp_tool
-from foundry_mcp.core.responses.types import (
-    ErrorCode,
-    ErrorType,
-)
 from foundry_mcp.core.responses.builders import (
     error_response,
     success_response,
+)
+from foundry_mcp.core.responses.types import (
+    ErrorCode,
+    ErrorType,
 )
 from foundry_mcp.tools.unified.common import (
     build_request_id,
@@ -107,9 +107,7 @@ default_review_type = "full"
 # ---------------------------------------------------------------------------
 
 
-def _update_permissions(
-    settings_file: Path, preset: str, dry_run: bool
-) -> Dict[str, Any]:
+def _update_permissions(settings_file: Path, preset: str, dry_run: bool) -> Dict[str, Any]:
     """Update .claude/settings.local.json with additive permission merge."""
 
     changes: List[str] = []
@@ -146,9 +144,7 @@ def _update_permissions(
         with open(settings_file, "r") as handle:
             settings = cast(Dict[str, Any], json.load(handle))
     else:
-        settings = cast(
-            Dict[str, Any], {"permissions": {"allow": [], "deny": [], "ask": []}}
-        )
+        settings = cast(Dict[str, Any], {"permissions": {"allow": [], "deny": [], "ask": []}})
         changes.append(f"Created {settings_file}")
 
     permissions_cfg = settings.get("permissions")
@@ -314,13 +310,9 @@ def _handle_verify_toolchain(
 
         warnings: List[str] = []
         if include:
-            missing_optional = [
-                tool for tool, available in optional_status.items() if not available
-            ]
+            missing_optional = [tool for tool, available in optional_status.items() if not available]
             if missing_optional:
-                warnings.append(
-                    f"Optional tools not found: {', '.join(sorted(missing_optional))}"
-                )
+                warnings.append(f"Optional tools not found: {', '.join(sorted(missing_optional))}")
 
         if missing_required:
             _metrics.counter(metric_key, labels={"status": "missing_required"})
@@ -541,9 +533,7 @@ def _handle_detect_topology(
         if project_type == "unknown":
             warnings.append("Could not detect project type from standard marker files")
         if not specs_dir:
-            warnings.append(
-                "No specs directory found - run environment(action=init) to create one"
-            )
+            warnings.append("No specs directory found - run environment(action=init) to create one")
 
         _metrics.counter(metric_key, labels={"status": "success"})
         return asdict(
@@ -610,33 +600,39 @@ def _handle_detect_test_runner(
 
         for marker in python_primary:
             if (base_path / marker).exists():
-                detected_runners.append({
-                    "runner_name": "pytest",
-                    "project_type": "python",
-                    "confidence": "high",
-                    "reason": f"{marker} found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "pytest",
+                        "project_type": "python",
+                        "confidence": "high",
+                        "reason": f"{marker} found",
+                    }
+                )
                 break
         else:
             # Check secondary markers only if no primary found
             for marker in python_secondary:
                 if (base_path / marker).exists():
-                    detected_runners.append({
-                        "runner_name": "pytest",
-                        "project_type": "python",
-                        "confidence": "medium",
-                        "reason": f"{marker} found",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "pytest",
+                            "project_type": "python",
+                            "confidence": "medium",
+                            "reason": f"{marker} found",
+                        }
+                    )
                     break
 
         # Go detection
         if (base_path / "go.mod").exists():
-            detected_runners.append({
-                "runner_name": "go",
-                "project_type": "go",
-                "confidence": "high",
-                "reason": "go.mod found",
-            })
+            detected_runners.append(
+                {
+                    "runner_name": "go",
+                    "project_type": "go",
+                    "confidence": "high",
+                    "reason": "go.mod found",
+                }
+            )
 
         # Node detection - Jest takes precedence over npm
         jest_configs = [
@@ -650,12 +646,14 @@ def _handle_detect_test_runner(
         jest_detected = False
         for jest_config in jest_configs:
             if (base_path / jest_config).exists():
-                detected_runners.append({
-                    "runner_name": "jest",
-                    "project_type": "node",
-                    "confidence": "high",
-                    "reason": f"{jest_config} found",
-                })
+                detected_runners.append(
+                    {
+                        "runner_name": "jest",
+                        "project_type": "node",
+                        "confidence": "high",
+                        "reason": f"{jest_config} found",
+                    }
+                )
                 jest_detected = True
                 break
 
@@ -668,41 +666,45 @@ def _handle_detect_test_runner(
 
                 # Jest config in package.json takes precedence
                 if not jest_detected and "jest" in pkg:
-                    detected_runners.append({
-                        "runner_name": "jest",
-                        "project_type": "node",
-                        "confidence": "high",
-                        "reason": "jest key in package.json",
-                    })
+                    detected_runners.append(
+                        {
+                            "runner_name": "jest",
+                            "project_type": "node",
+                            "confidence": "high",
+                            "reason": "jest key in package.json",
+                        }
+                    )
                     jest_detected = True
 
                 # npm test script (only if jest not already detected)
                 if not jest_detected:
                     scripts = pkg.get("scripts", {})
                     if "test" in scripts:
-                        detected_runners.append({
-                            "runner_name": "npm",
-                            "project_type": "node",
-                            "confidence": "high",
-                            "reason": "test script in package.json",
-                        })
+                        detected_runners.append(
+                            {
+                                "runner_name": "npm",
+                                "project_type": "node",
+                                "confidence": "high",
+                                "reason": "test script in package.json",
+                            }
+                        )
             except (json.JSONDecodeError, OSError):
                 # If package.json is invalid, skip Node detection
                 pass
 
         # Rust detection - only if BOTH Cargo.toml and Makefile exist
         cargo_exists = (base_path / "Cargo.toml").exists()
-        makefile_exists = (base_path / "Makefile").exists() or (
-            base_path / "makefile"
-        ).exists()
+        makefile_exists = (base_path / "Makefile").exists() or (base_path / "makefile").exists()
 
         if cargo_exists and makefile_exists:
-            detected_runners.append({
-                "runner_name": "make",
-                "project_type": "rust",
-                "confidence": "medium",
-                "reason": "Cargo.toml + Makefile found",
-            })
+            detected_runners.append(
+                {
+                    "runner_name": "make",
+                    "project_type": "rust",
+                    "confidence": "medium",
+                    "reason": "Cargo.toml + Makefile found",
+                }
+            )
 
         # Determine recommended default based on precedence order from plan
         # Priority: python (1) > go (2) > jest (3) > npm (4) > make (5)
@@ -725,8 +727,7 @@ def _handle_detect_test_runner(
         warnings: List[str] = []
         if not detected_runners:
             warnings.append(
-                "No test runners detected. Configure [test] section manually in "
-                "foundry-mcp.toml if tests are needed."
+                "No test runners detected. Configure [test] section manually in foundry-mcp.toml if tests are needed."
             )
 
         _metrics.counter(metric_key, labels={"status": "success"})
@@ -859,9 +860,7 @@ def _handle_verify_environment(
                 issues.append("Node.js not found in PATH")
 
         if required_packages:
-            pkg_list = [
-                pkg.strip() for pkg in required_packages.split(",") if pkg.strip()
-            ]
+            pkg_list = [pkg.strip() for pkg in required_packages.split(",") if pkg.strip()]
             for pkg in pkg_list:
                 try:
                     __import__(pkg.replace("-", "_"))
@@ -972,9 +971,7 @@ def _handle_setup(
 
         claude_dir = base_path / ".claude"
         settings_file = claude_dir / "settings.local.json"
-        settings_result = _update_permissions(
-            settings_file, permissions_preset, dry_run
-        )
+        settings_result = _update_permissions(settings_file, permissions_preset, dry_run)
         changes.extend(settings_result["changes"])
 
         config_file = None
@@ -1069,6 +1066,7 @@ def _handle_get_config(
         path: Explicit path to config file (optional, overrides lookup hierarchy)
     """
     import os
+
     import tomllib
 
     request_id = _request_id()
@@ -1229,6 +1227,7 @@ def _handle_get_config(
 
         # If a specific key was requested, extract just that value
         if key is not None:
+            assert sections is not None
             section_name = sections[0]  # Already validated to be exactly one section
             section_data = result.get(section_name, {})
             if key not in section_data:
@@ -1319,12 +1318,8 @@ _ENVIRONMENT_ROUTER = ActionRouter(
 )
 
 
-def _dispatch_environment_action(
-    *, action: str, payload: Dict[str, Any], config: ServerConfig
-) -> dict:
-    return dispatch_with_standard_errors(
-        _ENVIRONMENT_ROUTER, "environment", action, config=config, **payload
-    )
+def _dispatch_environment_action(*, action: str, payload: Dict[str, Any], config: ServerConfig) -> dict:
+    return dispatch_with_standard_errors(_ENVIRONMENT_ROUTER, "environment", action, config=config, **payload)
 
 
 def register_unified_environment_tool(mcp: FastMCP, config: ServerConfig) -> None:
@@ -1361,9 +1356,7 @@ def register_unified_environment_tool(mcp: FastMCP, config: ServerConfig) -> Non
             "sections": sections,
             "key": key,
         }
-        return _dispatch_environment_action(
-            action=action, payload=payload, config=config
-        )
+        return _dispatch_environment_action(action=action, payload=payload, config=config)
 
     logger.debug("Registered unified environment tool")
 

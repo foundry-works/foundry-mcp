@@ -7,16 +7,16 @@ Query functions live in ``queries.py``; shared constants in ``_helpers.py``.
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from foundry_mcp.core.spec import (
     CATEGORIES,
-    load_spec,
-    save_spec,
     find_spec_file,
     find_specs_directory,
+    load_spec,
+    save_spec,
 )
-from foundry_mcp.core.task._helpers import TASK_TYPES, REQUIREMENT_TYPES, _get_phase_for_node
+from foundry_mcp.core.task._helpers import REQUIREMENT_TYPES, TASK_TYPES, _get_phase_for_node
 
 
 def _generate_task_id(parent_id: str, existing_children: List[str], task_type: str) -> str:
@@ -150,12 +150,18 @@ def add_task(
 
     # Validate research-specific parameters
     if task_type == "research":
-        from foundry_mcp.core.validation.constants import VALID_RESEARCH_TYPES, RESEARCH_BLOCKING_MODES
+        from foundry_mcp.core.validation.constants import RESEARCH_BLOCKING_MODES, VALID_RESEARCH_TYPES
 
         if research_type and research_type not in VALID_RESEARCH_TYPES:
-            return None, f"Invalid research_type '{research_type}'. Must be one of: {', '.join(sorted(VALID_RESEARCH_TYPES))}"
+            return (
+                None,
+                f"Invalid research_type '{research_type}'. Must be one of: {', '.join(sorted(VALID_RESEARCH_TYPES))}",
+            )
         if blocking_mode and blocking_mode not in RESEARCH_BLOCKING_MODES:
-            return None, f"Invalid blocking_mode '{blocking_mode}'. Must be one of: {', '.join(sorted(RESEARCH_BLOCKING_MODES))}"
+            return (
+                None,
+                f"Invalid blocking_mode '{blocking_mode}'. Must be one of: {', '.join(sorted(RESEARCH_BLOCKING_MODES))}",
+            )
 
     # Validate title
     if not title or not title.strip():
@@ -267,6 +273,8 @@ def add_task(
 # with callers that import from this module.
 from foundry_mcp.core.hierarchy_helpers import (  # noqa: F401
     collect_descendants as _collect_descendants,
+)
+from foundry_mcp.core.hierarchy_helpers import (
     count_tasks_in_subtree as _count_tasks_in_subtree,
 )
 
@@ -363,7 +371,7 @@ def remove_task(
     # Validate task type (can only remove task, subtask, verify)
     task_type = task.get("type")
     if task_type not in ("task", "subtask", "verify"):
-        hint = " Use `authoring action=\"phase-remove\"` instead." if task_type == "phase" else ""
+        hint = ' Use `authoring action="phase-remove"` instead.' if task_type == "phase" else ""
         return None, f"Cannot remove node type '{task_type}'. Only task, subtask, or verify nodes can be removed.{hint}"
 
     # Check for children
@@ -493,7 +501,10 @@ def update_estimate(
     # Validate task type (can only update task, subtask, verify)
     task_type = task.get("type")
     if task_type not in ("task", "subtask", "verify"):
-        return None, f"Cannot update estimates for node type '{task_type}'. Only task, subtask, or verify nodes can be updated."
+        return (
+            None,
+            f"Cannot update estimates for node type '{task_type}'. Only task, subtask, or verify nodes can be updated.",
+        )
 
     # Get or create metadata
     metadata = task.get("metadata")
@@ -756,7 +767,10 @@ def manage_task_dependency(
     if action == "add":
         # Check for circular dependencies
         if _would_create_circular_dependency(hierarchy, source_task_id, target_task_id, dependency_type):
-            return None, f"Cannot add dependency: would create circular reference between '{source_task_id}' and '{target_task_id}'"
+            return (
+                None,
+                f"Cannot add dependency: would create circular reference between '{source_task_id}' and '{target_task_id}'",
+            )
 
         # Check if dependency already exists
         if target_task_id in source_deps[dependency_type]:
@@ -991,7 +1005,10 @@ def update_task_metadata(
     if verification_type is not None:
         verification_type_lower = verification_type.lower().strip()
         if verification_type_lower not in VERIFICATION_TYPES:
-            return None, f"Invalid verification_type '{verification_type}'. Must be one of: {', '.join(VERIFICATION_TYPES)}"
+            return (
+                None,
+                f"Invalid verification_type '{verification_type}'. Must be one of: {', '.join(VERIFICATION_TYPES)}",
+            )
         updates["verification_type"] = verification_type_lower
 
     # Find specs directory
@@ -1020,7 +1037,10 @@ def update_task_metadata(
     # Validate task type (can only update task, subtask, verify)
     task_type = task.get("type")
     if task_type not in ("task", "subtask", "verify"):
-        return None, f"Cannot update metadata for node type '{task_type}'. Only task, subtask, or verify nodes can be updated."
+        return (
+            None,
+            f"Cannot update metadata for node type '{task_type}'. Only task, subtask, or verify nodes can be updated.",
+        )
 
     # Get or create metadata
     metadata = task.get("metadata")
@@ -1363,7 +1383,10 @@ def update_task_requirements(
             return None, "requirement_type must be a string"
         requirement_type = requirement_type.lower().strip()
         if requirement_type not in REQUIREMENT_TYPES:
-            return None, f"Invalid requirement_type '{requirement_type}'. Must be one of: {', '.join(REQUIREMENT_TYPES)}"
+            return (
+                None,
+                f"Invalid requirement_type '{requirement_type}'. Must be one of: {', '.join(REQUIREMENT_TYPES)}",
+            )
 
         if text is None:
             return None, "text is required for add action"
@@ -1404,7 +1427,10 @@ def update_task_requirements(
     # Validate task type (can only update task, subtask, verify)
     task_type = task.get("type")
     if task_type not in ("task", "subtask", "verify"):
-        return None, f"Cannot update requirements for node type '{task_type}'. Only task, subtask, or verify nodes can be updated."
+        return (
+            None,
+            f"Cannot update requirements for node type '{task_type}'. Only task, subtask, or verify nodes can be updated.",
+        )
 
     # Get or create metadata
     metadata = task.get("metadata")

@@ -14,15 +14,9 @@ class Idea(BaseModel):
 
     id: str = Field(default_factory=lambda: f"idea-{uuid4().hex[:8]}")
     content: str = Field(..., description="The idea content")
-    perspective: Optional[str] = Field(
-        default=None, description="Perspective that generated this idea"
-    )
-    score: Optional[float] = Field(
-        default=None, description="Score from 0-1 based on criteria"
-    )
-    cluster_id: Optional[str] = Field(
-        default=None, description="ID of cluster this idea belongs to"
-    )
+    perspective: Optional[str] = Field(default=None, description="Perspective that generated this idea")
+    score: Optional[float] = Field(default=None, description="Score from 0-1 based on criteria")
+    cluster_id: Optional[str] = Field(default=None, description="ID of cluster this idea belongs to")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     provider_id: Optional[str] = Field(default=None)
     model_used: Optional[str] = Field(default=None)
@@ -38,9 +32,7 @@ class IdeaCluster(BaseModel):
     idea_ids: list[str] = Field(default_factory=list, description="IDs of ideas in cluster")
     average_score: Optional[float] = Field(default=None)
     selected_for_elaboration: bool = Field(default=False)
-    elaboration: Optional[str] = Field(
-        default=None, description="Detailed elaboration if selected"
-    )
+    elaboration: Optional[str] = Field(default=None, description="Detailed elaboration if selected")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -51,14 +43,10 @@ class IdeationState(BaseModel):
     id: str = Field(default_factory=lambda: f"ideation-{uuid4().hex[:12]}")
     topic: str = Field(..., description="The topic being brainstormed")
     phase: IdeationPhase = Field(default=IdeationPhase.DIVERGENT)
-    perspectives: list[str] = Field(
-        default_factory=lambda: ["technical", "creative", "practical", "visionary"]
-    )
+    perspectives: list[str] = Field(default_factory=lambda: ["technical", "creative", "practical", "visionary"])
     ideas: list[Idea] = Field(default_factory=list)
     clusters: list[IdeaCluster] = Field(default_factory=list)
-    scoring_criteria: list[str] = Field(
-        default_factory=lambda: ["novelty", "feasibility", "impact"]
-    )
+    scoring_criteria: list[str] = Field(default_factory=lambda: ["novelty", "feasibility", "impact"])
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     system_prompt: Optional[str] = Field(default=None)

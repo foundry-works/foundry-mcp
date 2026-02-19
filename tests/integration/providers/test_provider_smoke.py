@@ -14,13 +14,9 @@ import pytest
 
 from foundry_mcp.core.providers import (
     ProviderHooks,
-    ProviderRequest,
-    ProviderResult,
-    ProviderStatus,
     detect_provider_availability,
     resolve_provider,
 )
-
 
 # =============================================================================
 # Provider Availability Tests (no API calls)
@@ -76,9 +72,7 @@ class TestProviderAvailability:
 class TestGeminiSmoke:
     """Smoke tests for Gemini provider."""
 
-    def test_gemini_simple_response(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_gemini_simple_response(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test gemini responds to a simple prompt."""
         provider = resolve_provider("gemini", hooks=ProviderHooks())
         request = provider_request_factory(simple_prompt, timeout=30.0)
@@ -88,9 +82,7 @@ class TestGeminiSmoke:
         validated = validate_provider_result(result)
         assert "PONG" in validated.content.upper(), f"Expected PONG in response: {validated.content}"
 
-    def test_gemini_with_model_override(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_gemini_with_model_override(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test gemini with explicit model selection."""
         provider = resolve_provider("gemini", hooks=ProviderHooks())
         # Use gemini-2.5-flash model explicitly
@@ -107,9 +99,7 @@ class TestGeminiSmoke:
 class TestCodexSmoke:
     """Smoke tests for Codex provider."""
 
-    def test_codex_simple_response(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_codex_simple_response(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test codex responds to a simple prompt."""
         provider = resolve_provider("codex", hooks=ProviderHooks())
         request = provider_request_factory(simple_prompt, timeout=30.0)
@@ -126,9 +116,7 @@ class TestCodexSmoke:
 class TestClaudeSmoke:
     """Smoke tests for Claude provider."""
 
-    def test_claude_simple_response(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_claude_simple_response(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test claude responds to a simple prompt."""
         provider = resolve_provider("claude", hooks=ProviderHooks())
         request = provider_request_factory(simple_prompt, model="haiku", timeout=30.0)
@@ -138,9 +126,7 @@ class TestClaudeSmoke:
         validated = validate_provider_result(result)
         assert "PONG" in validated.content.upper(), f"Expected PONG in response: {validated.content}"
 
-    def test_claude_with_haiku_model(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_claude_with_haiku_model(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test claude with haiku model."""
         provider = resolve_provider("claude", hooks=ProviderHooks())
         request = provider_request_factory(simple_prompt, model="haiku", timeout=30.0)
@@ -156,9 +142,7 @@ class TestClaudeSmoke:
 class TestCursorAgentSmoke:
     """Smoke tests for Cursor Agent provider."""
 
-    def test_cursor_agent_simple_response(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_cursor_agent_simple_response(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test cursor-agent responds to a simple prompt."""
         provider = resolve_provider("cursor-agent", hooks=ProviderHooks())
         request = provider_request_factory(simple_prompt, timeout=30.0)
@@ -175,9 +159,7 @@ class TestCursorAgentSmoke:
 class TestOpenCodeSmoke:
     """Smoke tests for OpenCode provider."""
 
-    def test_opencode_simple_response(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_opencode_simple_response(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test opencode responds to a simple prompt."""
         provider = resolve_provider("opencode", hooks=ProviderHooks())
         request = provider_request_factory(simple_prompt, timeout=30.0)
@@ -187,9 +169,7 @@ class TestOpenCodeSmoke:
         validated = validate_provider_result(result)
         assert "PONG" in validated.content.upper(), f"Expected PONG in response: {validated.content}"
 
-    def test_opencode_with_backend_routing(
-        self, simple_prompt, provider_request_factory, validate_provider_result
-    ):
+    def test_opencode_with_backend_routing(self, simple_prompt, provider_request_factory, validate_provider_result):
         """Test opencode with backend/model routing."""
         provider = resolve_provider("opencode", hooks=ProviderHooks())
         # Route through openai backend
@@ -236,13 +216,13 @@ class TestCrossProviderComparison:
                 failures[provider_id] = str(e)
 
         # Report results
-        print(f"\nProvider Results:")
+        print("\nProvider Results:")
         for provider_id, content in results.items():
             status = "PASS" if "PONG" in content.upper() else "FAIL"
             print(f"  {provider_id}: {status} - {content[:50]}...")
 
         if failures:
-            print(f"\nProvider Failures:")
+            print("\nProvider Failures:")
             for provider_id, error in failures.items():
                 print(f"  {provider_id}: {error}")
 

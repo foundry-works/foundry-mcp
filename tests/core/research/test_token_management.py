@@ -12,26 +12,25 @@ import warnings
 import pytest
 
 from foundry_mcp.core.research.token_management import (
+    _PROVIDER_TOKENIZERS,
+    _TIKTOKEN_AVAILABLE,
+    DEFAULT_MODEL_LIMITS,
     BudgetingMode,
     ModelContextLimits,
-    TokenBudget,
     PreflightResult,
+    TokenBudget,
     TokenCountEstimateWarning,
-    DEFAULT_MODEL_LIMITS,
-    get_model_limits,
-    get_effective_context,
-    get_provider_model_from_spec,
-    estimate_tokens,
+    _get_cached_encoding,
     clear_token_cache,
+    estimate_tokens,
     get_cache_stats,
-    register_provider_tokenizer,
+    get_effective_context,
+    get_model_limits,
+    get_provider_model_from_spec,
     preflight_count,
     preflight_count_multiple,
-    _PROVIDER_TOKENIZERS,
-    _get_cached_encoding,
-    _TIKTOKEN_AVAILABLE,
+    register_provider_tokenizer,
 )
-
 
 # =============================================================================
 # Test: Model Limits Resolution (get_model_limits)
@@ -303,6 +302,7 @@ class TestEstimateTokensFallbackChain:
 
     def test_provider_native_tokenizer(self):
         """Test provider-native tokenizer takes precedence."""
+
         def word_counter(content: str) -> int:
             return len(content.split())
 
@@ -316,6 +316,7 @@ class TestEstimateTokensFallbackChain:
 
     def test_provider_tokenizer_failure_falls_back(self):
         """Test failure in provider tokenizer falls back to heuristic."""
+
         def failing_tokenizer(_content: str) -> int:
             raise RuntimeError("Tokenizer failed")
 

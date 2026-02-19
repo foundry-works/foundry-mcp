@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -47,7 +47,7 @@ class RecommendedAction(BaseModel):
 
     action: str = Field(..., description="Recommended operation identifier")
     description: str = Field(..., description="Human-readable remediation guidance")
-    command: Optional[str] = Field(None, description="Canonical task command to run")
+    command: Optional[str] = Field(default=None, description="Canonical task command to run")
 
 
 class NextStep(BaseModel):
@@ -59,14 +59,10 @@ class NextStep(BaseModel):
     phase_id: Optional[str] = Field(None, description="Phase ID")
     task_title: Optional[str] = Field(None, description="Task title for implement_task")
     gate_attempt_id: Optional[str] = Field(None, description="Gate attempt ID for gate steps")
-    instructions: Optional[List[StepInstruction]] = Field(
-        None, description="Structured instructions for the step"
-    )
+    instructions: Optional[List[StepInstruction]] = Field(None, description="Structured instructions for the step")
     reason: Optional[PauseReason] = Field(None, description="Pause reason for pause steps")
     message: Optional[str] = Field(None, description="Human-readable message")
-    step_proof: Optional[str] = Field(
-        None, description="One-time proof token for this step (must match in report)"
-    )
+    step_proof: Optional[str] = Field(None, description="One-time proof token for this step (must match in report)")
 
 
 class ResumeContext(BaseModel):
@@ -82,9 +78,7 @@ class ResumeContext(BaseModel):
         max_length=10,
         description="Recently completed tasks (capped at 10)",
     )
-    completed_phases: List[CompletedPhaseSummary] = Field(
-        default_factory=list, description="Completed phases"
-    )
+    completed_phases: List[CompletedPhaseSummary] = Field(default_factory=list, description="Completed phases")
     pending_tasks_in_phase: List[PendingTaskSummary] = Field(
         default_factory=list, description="Pending tasks in active phase"
     )
@@ -101,7 +95,9 @@ class RebaseResultDetail(BaseModel):
     removed_phases: List[str] = Field(default_factory=list, description="Removed phase IDs")
     added_tasks: List[str] = Field(default_factory=list, description="Added task IDs")
     removed_tasks: List[str] = Field(default_factory=list, description="Removed task IDs")
-    completed_tasks_removed: Optional[int] = Field(None, description="Number of completed tasks removed when force=true")
+    completed_tasks_removed: Optional[int] = Field(
+        default=None, description="Number of completed tasks removed when force=true"
+    )
 
 
 class ActivePhaseProgress(BaseModel):
@@ -163,9 +159,7 @@ class SessionResponseData(BaseModel):
         None,
         description="Retry/error counters for active phase and tasks",
     )
-    session_signal: Optional[LoopSignal] = Field(
-        None, description="Derived loop summary for quick supervisor polling"
-    )
+    session_signal: Optional[LoopSignal] = Field(None, description="Derived loop summary for quick supervisor polling")
     resume_context: Optional[ResumeContext] = Field(None, description="Resume context if applicable")
     rebase_result: Optional[RebaseResultDetail] = Field(None, description="Rebase result if applicable")
 
@@ -178,21 +172,17 @@ class SessionStepResponseData(BaseModel):
     state_version: int = Field(..., description="Monotonic state version")
     next_step: Optional[NextStep] = Field(None, description="Next step to execute")
     # Gate invariant observability fields
-    required_phase_gates: Optional[List[str]] = Field(
-        None, description="IDs of required phase gates for this session"
-    )
-    satisfied_gates: Optional[List[str]] = Field(
-        None, description="IDs of gates that are passed or waived"
-    )
+    required_phase_gates: Optional[List[str]] = Field(None, description="IDs of required phase gates for this session")
+    satisfied_gates: Optional[List[str]] = Field(None, description="IDs of gates that are passed or waived")
     missing_required_gates: Optional[List[str]] = Field(
         None, description="IDs of required gates that are pending or failed"
     )
     loop_signal: Optional[LoopSignal] = Field(
-        None,
+        default=None,
         description="Normalized loop outcome used by supervisors to decide continue/stop/escalate",
     )
     recommended_actions: Optional[List[RecommendedAction]] = Field(
-        None, description="Actionable escalation guidance when loop_signal is non-success"
+        default=None, description="Actionable escalation guidance when loop_signal is non-success"
     )
 
 
@@ -202,12 +192,10 @@ class SessionSummary(BaseModel):
     session_id: str = Field(..., description="Session ID")
     spec_id: str = Field(..., description="Spec ID")
     status: SessionStatus = Field(..., description="Session status")
-    effective_status: Optional[SessionStatus] = Field(
-        None, description="Effective status (derived for stale sessions)"
-    )
+    effective_status: Optional[SessionStatus] = Field(None, description="Effective status (derived for stale sessions)")
     pause_reason: Optional[PauseReason] = Field(None, description="Why session is paused")
-    stale_reason: Optional[str] = Field(None, description="Staleness reason if applicable")
-    stale_detected_at: Optional[datetime] = Field(None, description="When staleness was detected")
+    stale_reason: Optional[str] = Field(default=None, description="Staleness reason if applicable")
+    stale_detected_at: Optional[datetime] = Field(default=None, description="When staleness was detected")
     created_at: datetime = Field(..., description="When session was created")
     updated_at: datetime = Field(..., description="When session was last updated")
     active_phase_id: Optional[str] = Field(None, description="Active phase ID")

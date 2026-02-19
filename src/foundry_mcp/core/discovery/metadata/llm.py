@@ -350,9 +350,7 @@ def get_llm_capabilities() -> Dict[str, Any]:
             "supported": True,
             "description": "Graceful degradation when LLM unavailable",
         },
-        "feature_flags": {
-            name: flag.to_dict() for name, flag in LLM_FEATURE_FLAGS.items()
-        },
+        "feature_flags": {name: flag.to_dict() for name, flag in LLM_FEATURE_FLAGS.items()},
     }
 
 

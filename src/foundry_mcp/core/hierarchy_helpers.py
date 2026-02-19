@@ -32,9 +32,7 @@ def collect_descendants(hierarchy: Dict[str, Any], node_id: str) -> List[str]:
     return descendants
 
 
-def count_tasks_in_subtree(
-    hierarchy: Dict[str, Any], node_ids: List[str]
-) -> Tuple[int, int]:
+def count_tasks_in_subtree(hierarchy: Dict[str, Any], node_ids: List[str]) -> Tuple[int, int]:
     """Count total and completed tasks in a list of nodes.
 
     Args:
@@ -60,9 +58,7 @@ def count_tasks_in_subtree(
     return total, completed
 
 
-def remove_dependency_references(
-    hierarchy: Dict[str, Any], removed_ids: List[str]
-) -> None:
+def remove_dependency_references(hierarchy: Dict[str, Any], removed_ids: List[str]) -> None:
     """Remove references to deleted nodes from all dependency lists.
 
     Args:

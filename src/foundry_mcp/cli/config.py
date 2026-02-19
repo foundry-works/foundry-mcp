@@ -7,7 +7,8 @@ shared foundry_mcp.config module and core spec utilities.
 from pathlib import Path
 from typing import Optional
 
-from foundry_mcp.config.server import ServerConfig, get_config as get_server_config
+from foundry_mcp.config.server import ServerConfig
+from foundry_mcp.config.server import get_config as get_server_config
 from foundry_mcp.core.spec import find_specs_directory
 
 
@@ -80,8 +81,7 @@ class CLIContext:
         specs = self.specs_dir
         if specs is None:
             raise FileNotFoundError(
-                "No specs directory found. "
-                "Use --specs-dir or set FOUNDRY_SPECS_DIR environment variable."
+                "No specs directory found. Use --specs-dir or set FOUNDRY_SPECS_DIR environment variable."
             )
         return specs
 

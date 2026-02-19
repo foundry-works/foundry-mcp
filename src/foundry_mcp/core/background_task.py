@@ -211,8 +211,7 @@ class BackgroundTask:
             # Phase 2: Check if thread is still alive
             if self.thread.is_alive():
                 logger.warning(
-                    "Thread %s did not stop cooperatively after %.1fs, "
-                    "cannot force kill in Python",
+                    "Thread %s did not stop cooperatively after %.1fs, cannot force kill in Python",
                     self.thread.name,
                     timeout,
                 )
@@ -238,9 +237,7 @@ class BackgroundTask:
 
             # Phase 2: Force cancel the task
             if not self.task.done():
-                logger.debug(
-                    "Cancellation phase 2 (forced): calling task.cancel() on asyncio task"
-                )
+                logger.debug("Cancellation phase 2 (forced): calling task.cancel() on asyncio task")
                 self.task.cancel()
 
             self.status = TaskStatus.CANCELLED

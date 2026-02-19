@@ -7,8 +7,7 @@
 import warnings as _warnings
 
 _warnings.warn(
-    "foundry_mcp.core.prometheus is deprecated, "
-    "use foundry_mcp.core.observability.prometheus instead",
+    "foundry_mcp.core.prometheus is deprecated, use foundry_mcp.core.observability.prometheus instead",
     DeprecationWarning,
     stacklevel=2,
 )

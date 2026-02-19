@@ -29,6 +29,7 @@ class CursorError(Exception):
 
 class LockAcquisitionError(Exception):
     """Raised when file lock cannot be acquired within timeout."""
+
     pass
 
 
@@ -49,9 +50,7 @@ class VersionConflictError(Exception):
         self.session_id = session_id
         self.expected_version = expected
         self.actual_version = actual
-        super().__init__(
-            f"Version conflict for session {session_id}: expected {expected}, on-disk {actual}"
-        )
+        super().__init__(f"Version conflict for session {session_id}: expected {expected}, on-disk {actual}")
 
 
 class SessionCorrupted(Exception):

@@ -121,8 +121,8 @@ class PrometheusConfig:
         return cls(
             enabled=enabled,
             port=port,
-            host=host,
-            namespace=namespace,
+            host=host or "0.0.0.0",
+            namespace=namespace or "foundry_mcp",
         )
 
 
@@ -258,9 +258,7 @@ class PrometheusExporter:
 
             self._initialized = True
 
-    def start_server(
-        self, port: Optional[int] = None, host: Optional[str] = None
-    ) -> bool:
+    def start_server(self, port: Optional[int] = None, host: Optional[str] = None) -> bool:
         """Start the HTTP server for /metrics endpoint.
 
         Args:
@@ -413,9 +411,7 @@ class PrometheusExporter:
         self._health_status.labels(check_type=check_type).set(status)
 
         if duration_seconds is not None:
-            self._health_check_duration.labels(check_type=check_type).observe(
-                duration_seconds
-            )
+            self._health_check_duration.labels(check_type=check_type).observe(duration_seconds)
 
     def record_dependency_health(
         self,
@@ -519,9 +515,7 @@ class timed_operation:
         # Automatically records duration
     """
 
-    def __init__(
-        self, tool_name: str, exporter: Optional[PrometheusExporter] = None
-    ) -> None:
+    def __init__(self, tool_name: str, exporter: Optional[PrometheusExporter] = None) -> None:
         self.tool_name = tool_name
         self.exporter = exporter or get_prometheus_exporter()
         self.start_time: Optional[float] = None
