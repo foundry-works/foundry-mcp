@@ -25,7 +25,7 @@ the workflow is organized, and how to use the CLI and MCP tools.
 
 | Doc | Description |
 |-----|-------------|
-| [SDD Philosophy](concepts/sdd-philosophy.md) | Why spec-driven development matters |
+| [Foundry Philosophy](concepts/foundry-philosophy.md) | Why spec-driven development matters |
 | [Spec Schema](concepts/spec-schema.md) | JSON structure of specification files |
 | [Response Envelope](concepts/response-envelope.md) | Standard response format for all tools |
 | [Deep Research Workflow](concepts/deep_research_workflow.md) | Multi-phase research workflow |
@@ -96,7 +96,7 @@ docs/
 ├── 07-troubleshooting.md       # Troubleshooting
 │
 ├── concepts/
-│   ├── sdd-philosophy.md       # SDD philosophy
+│   ├── foundry-philosophy.md   # Foundry philosophy
 │   ├── spec-schema.md          # Spec JSON structure
 │   ├── response-envelope.md    # Response format
 │   └── deep_research_workflow.md

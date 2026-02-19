@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 
 class TestVerifyToolchain:
-    """Tests for sdd_verify_toolchain function logic."""
+    """Tests for foundry_verify_toolchain function logic."""
 
     def test_check_tool_available(self):
         """Test that check_tool correctly identifies available tools."""
@@ -92,7 +92,7 @@ class TestVerifyToolchain:
 
 
 class TestInitWorkspace:
-    """Tests for sdd_init_workspace function logic."""
+    """Tests for foundry_init_workspace function logic."""
 
     def test_create_specs_directory_structure(self):
         """Test that workspace initialization creates correct directory structure."""
@@ -155,7 +155,7 @@ class TestInitWorkspace:
 
 
 class TestDetectTopology:
-    """Tests for sdd_detect_topology function logic."""
+    """Tests for foundry_detect_topology function logic."""
 
     def test_detect_python_project(self):
         """Test detection of Python project markers."""
@@ -246,7 +246,7 @@ class TestDetectTopology:
 
 
 class TestVerifyEnvironment:
-    """Tests for sdd_verify_environment function logic."""
+    """Tests for foundry_verify_environment function logic."""
 
     def test_python_version_check(self):
         """Test Python version detection."""
@@ -349,8 +349,8 @@ class TestVerifyEnvironment:
         assert len(result["data"]["issues"]) == 2
 
 
-class TestSddSetup:
-    """Tests for sdd_setup function logic."""
+class TestFoundrySetup:
+    """Tests for foundry_setup function logic."""
 
     def test_fresh_project_setup(self):
         """Test setup on a project with no existing config."""
@@ -977,10 +977,10 @@ class TestDiscoveryMetadata:
         from foundry_mcp.core.discovery.metadata import ENVIRONMENT_TOOL_METADATA
 
         expected_tools = [
-            "sdd-verify-toolchain",
-            "sdd-init-workspace",
-            "sdd-detect-topology",
-            "sdd-verify-environment",
+            "foundry-verify-toolchain",
+            "foundry-init-workspace",
+            "foundry-detect-topology",
+            "foundry-verify-environment",
         ]
 
         for tool_name in expected_tools:
@@ -1027,17 +1027,17 @@ class TestDiscoveryMetadata:
         """Test is_environment_tool helper function."""
         from foundry_mcp.core.discovery.metadata import is_environment_tool
 
-        assert is_environment_tool("sdd-verify-toolchain") is True
-        assert is_environment_tool("sdd-init-workspace") is True
+        assert is_environment_tool("foundry-verify-toolchain") is True
+        assert is_environment_tool("foundry-init-workspace") is True
         assert is_environment_tool("nonexistent_tool") is False
 
     def test_get_environment_tool_metadata(self):
         """Test get_environment_tool_metadata helper function."""
         from foundry_mcp.core.discovery.metadata import get_environment_tool_metadata
 
-        metadata = get_environment_tool_metadata("sdd-verify-toolchain")
+        metadata = get_environment_tool_metadata("foundry-verify-toolchain")
         assert metadata is not None
-        assert metadata.name == "sdd-verify-toolchain"
+        assert metadata.name == "foundry-verify-toolchain"
         assert metadata.category == "environment"
 
         assert get_environment_tool_metadata("nonexistent") is None

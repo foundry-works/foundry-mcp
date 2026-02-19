@@ -168,7 +168,7 @@ def add_task(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -342,7 +342,7 @@ def remove_task(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -472,7 +472,7 @@ def update_estimate(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -694,7 +694,7 @@ def manage_task_dependency(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -999,7 +999,7 @@ def update_task_metadata(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -1114,7 +1114,7 @@ def move_task(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.", []
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.", []
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -1383,7 +1383,7 @@ def update_task_requirements(
         specs_dir = find_specs_directory()
 
     if specs_dir is None:
-        return None, "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR."
+        return None, "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR."
 
     # Find and load the spec
     spec_path = find_spec_file(spec_id, specs_dir)

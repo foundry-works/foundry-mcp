@@ -1,4 +1,4 @@
-"""SDD CLI - Native command-line interface for Spec-Driven Development.
+"""Foundry CLI - Native command-line interface for Spec-Driven Development.
 
 This CLI provides JSON-only output designed for AI coding assistants.
 All commands emit structured JSON to stdout for reliable parsing.

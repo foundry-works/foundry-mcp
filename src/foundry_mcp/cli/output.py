@@ -1,4 +1,4 @@
-"""JSON output helpers for SDD CLI.
+"""JSON output helpers for Foundry CLI.
 
 This module provides the sole output mechanism for the CLI.
 The CLI is JSON-first and currently emits JSON envelopes only.

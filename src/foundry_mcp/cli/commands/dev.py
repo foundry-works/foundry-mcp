@@ -1,4 +1,4 @@
-"""Development utility commands for SDD CLI.
+"""Development utility commands for Foundry CLI.
 
 Provides commands for skills development including:
 - Documentation generation helpers

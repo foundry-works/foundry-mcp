@@ -350,21 +350,21 @@ class TestAddRevision:
             version="2.0",
             changelog="Major refactor",
             author="Test Author",
-            modified_by="sdd-cli",
+            modified_by="foundry-cli",
             review_triggered_by="/path/to/review.md",
             specs_dir=temp_specs_dir,
         )
 
         assert error is None
         assert result["author"] == "Test Author"
-        assert result["modified_by"] == "sdd-cli"
+        assert result["modified_by"] == "foundry-cli"
         assert result["review_triggered_by"] == "/path/to/review.md"
 
         # Verify persisted
         spec_data = load_spec("test-spec-001", temp_specs_dir)
         revision = spec_data["metadata"]["revision_history"][0]
         assert revision["author"] == "Test Author"
-        assert revision["modified_by"] == "sdd-cli"
+        assert revision["modified_by"] == "foundry-cli"
         assert revision["review_triggered_by"] == "/path/to/review.md"
 
     def test_add_multiple_revisions(self, temp_specs_dir, sample_spec):

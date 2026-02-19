@@ -34,7 +34,7 @@ Common issues and solutions for foundry-mcp.
    ```bash
    export FOUNDRY_MCP_SPECS_DIR=/path/to/specs
    # or
-   export SDD_SPECS_DIR=/path/to/specs
+   export FOUNDRY_SPECS_DIR=/path/to/specs
    ```
 
 3. Use the CLI option:
@@ -529,7 +529,7 @@ foundry-cli --help
 ```bash
 cat foundry-mcp.toml
 env | grep -i foundry
-env | grep -i sdd
+env | grep -i foundry
 ```
 
 ---

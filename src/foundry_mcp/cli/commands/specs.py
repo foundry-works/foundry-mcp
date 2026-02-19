@@ -1,4 +1,4 @@
-"""Spec management commands for SDD CLI.
+"""Spec management commands for Foundry CLI.
 
 Provides commands for creating, listing, and managing specifications.
 """
@@ -153,7 +153,7 @@ def template(
                 "Template name required for 'show' action",
                 code="MISSING_REQUIRED",
                 error_type="validation",
-                remediation="Provide a template name: sdd specs template show <template_name>",
+                remediation="Provide a template name: foundry specs template show <template_name>",
                 details={"required": "template_name"},
             )
 
@@ -316,8 +316,8 @@ def create(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
 
     # Ensure pending directory exists
@@ -413,9 +413,9 @@ def create(
 @handle_keyboard_interrupt()
 @with_sync_timeout(MEDIUM_TIMEOUT, "Schema export timed out")
 def schema_cmd(ctx: click.Context) -> None:
-    """Export the SDD spec JSON schema.
+    """Export the Foundry spec JSON schema.
 
-    Returns the complete JSON schema for SDD specification files,
+    Returns the complete JSON schema for Foundry specification files,
     useful for validation, IDE integration, and agent understanding.
     """
     from foundry_mcp.schemas import get_spec_schema
@@ -458,9 +458,9 @@ def find_specs_cmd(ctx: click.Context, status: str) -> None:
     Lists specs sorted by status (active first) and completion percentage.
 
     Examples:
-        sdd specs find
-        sdd specs find --status active
-        sdd specs find
+        foundry specs find
+        foundry specs find --status active
+        foundry specs find
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -470,8 +470,8 @@ def find_specs_cmd(ctx: click.Context, status: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -500,8 +500,8 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
     SPEC_ID is the specification identifier.
 
     Examples:
-        sdd specs list-phases my-spec
-        sdd list-phases my-spec
+        foundry specs list-phases my-spec
+        foundry list-phases my-spec
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -511,8 +511,8 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -523,7 +523,7 @@ def list_phases_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs find",
+            remediation="Verify the spec ID exists using: foundry specs find",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -562,10 +562,10 @@ def query_tasks_cmd(
     SPEC_ID is the specification identifier.
 
     Examples:
-        sdd specs query-tasks my-spec
-        sdd specs query-tasks my-spec --status pending
-        sdd specs query-tasks my-spec --parent phase-2
-        sdd query-tasks my-spec --status in_progress
+        foundry specs query-tasks my-spec
+        foundry specs query-tasks my-spec --status pending
+        foundry specs query-tasks my-spec --parent phase-2
+        foundry query-tasks my-spec --status in_progress
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -575,8 +575,8 @@ def query_tasks_cmd(
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -587,7 +587,7 @@ def query_tasks_cmd(
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs find",
+            remediation="Verify the spec ID exists using: foundry specs find",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return
@@ -647,8 +647,8 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
     Returns tasks with status='blocked' and their blocker information.
 
     Examples:
-        sdd specs list-blockers my-spec
-        sdd list-blockers my-spec
+        foundry specs list-blockers my-spec
+        foundry list-blockers my-spec
     """
     cli_ctx = get_context(ctx)
     specs_dir = cli_ctx.specs_dir
@@ -658,8 +658,8 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
             "No specs directory found",
             code="VALIDATION_ERROR",
             error_type="validation",
-            remediation="Use --specs-dir option or set SDD_SPECS_DIR environment variable",
-            details={"hint": "Use --specs-dir or set SDD_SPECS_DIR"},
+            remediation="Use --specs-dir option or set FOUNDRY_SPECS_DIR environment variable",
+            details={"hint": "Use --specs-dir or set FOUNDRY_SPECS_DIR"},
         )
         return
 
@@ -670,7 +670,7 @@ def list_blockers_cmd(ctx: click.Context, spec_id: str) -> None:
             f"Specification not found: {spec_id}",
             code="SPEC_NOT_FOUND",
             error_type="not_found",
-            remediation="Verify the spec ID exists using: sdd specs find",
+            remediation="Verify the spec ID exists using: foundry specs find",
             details={"spec_id": spec_id, "specs_dir": str(specs_dir)},
         )
         return

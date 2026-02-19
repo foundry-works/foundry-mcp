@@ -2,17 +2,17 @@
 
 For a shorter overview, see [Core Concepts](../02-core-concepts.md).
 
-## What is SDD?
+## What is Spec-Driven Development?
 
-Spec-Driven Development (SDD) is a documentation-first methodology where machine-readable specifications serve as the single source of truth for software development. Unlike traditional approaches where documentation follows (or never arrives), SDD requires structured specifications *before* implementation begins.
+Spec-Driven Development is a documentation-first methodology where machine-readable specifications serve as the single source of truth for software development. Unlike traditional approaches where documentation follows (or never arrives), it requires structured specifications *before* implementation begins.
 
-The core insight: **specifications are contracts designed for AI coding assistants**, not just human readers. By encoding requirements, tasks, dependencies, and decisions in structured JSON, SDD enables AI tools to autonomously discover work, track progress, and maintain alignment between intention and implementation.
+The core insight: **specifications are contracts designed for AI coding assistants**, not just human readers. By encoding requirements, tasks, dependencies, and decisions in structured JSON, Foundry enables AI tools to autonomously discover work, track progress, and maintain alignment between intention and implementation.
 
-Think of SDD as "documentation-first for the AI age."
+Think of it as "documentation-first for the AI age."
 
 ---
 
-## The Problem SDD Solves
+## The Problem Spec-Driven Development Solves
 
 Traditional development suffers from several persistent problems:
 
@@ -24,7 +24,7 @@ Traditional development suffers from several persistent problems:
 
 **Lost decision rationale.** Six months later, no one remembers *why* a particular approach was chosen. The code shows *what* was built, but not the alternatives considered or trade-offs accepted.
 
-SDD addresses these problems by making specifications the authoritative source—structured, versioned, and designed for both human understanding and machine consumption.
+Spec-driven development addresses these problems by making specifications the authoritative source—structured, versioned, and designed for both human understanding and machine consumption.
 
 ---
 
@@ -44,7 +44,7 @@ Specs are JSON-first, structured for LLM consumption. This means:
 
 ### 3. Progressive task discovery
 
-Rather than presenting an AI assistant with a massive backlog, SDD enables *progressive discovery*: "What's the next actionable task given the current state?" The spec answers this question automatically based on task status, dependencies, and phase order.
+Rather than presenting an AI assistant with a massive backlog, Foundry enables *progressive discovery*: "What's the next actionable task given the current state?" The spec answers this question automatically based on task status, dependencies, and phase order.
 
 ### 4. Decision traceability
 
@@ -62,9 +62,9 @@ Every phase has explicit verification criteria. "Done" isn't a feeling—it's a 
 
 ---
 
-## How SDD Differs from Traditional Approaches
+## How Spec-Driven Development Differs from Traditional Approaches
 
-| Aspect | Traditional | SDD |
+| Aspect | Traditional | Foundry |
 |--------|-------------|-----|
 | Primary consumer | Humans | AI coding assistants |
 | Format | Prose, markdown, wikis | Machine-readable JSON |
@@ -76,9 +76,9 @@ Every phase has explicit verification criteria. "Done" isn't a feeling—it's a 
 
 ---
 
-## The SDD Workflow
+## The Foundry Workflow
 
-SDD follows a lifecycle that moves specifications through distinct phases:
+Foundry follows a lifecycle that moves specifications through distinct phases:
 
 ### 1. Plan
 Create a specification with phases, tasks, subtasks, and assumptions. Define dependencies between tasks. Capture constraints and requirements. The spec lives in `specs/pending/` until ready.
@@ -104,7 +104,7 @@ If a spec is abandoned, superseded by another spec, or deprioritized, archive it
 
 ## Why AI-Native Matters
 
-SDD's AI-native design unlocks capabilities that prose documentation cannot provide:
+Foundry's AI-native design unlocks capabilities that prose documentation cannot provide:
 
 **Token efficiency.** Context windows are limited. Structured JSON specs convey maximum information in minimum tokens, leaving room for code and conversation.
 
@@ -118,9 +118,9 @@ SDD's AI-native design unlocks capabilities that prose documentation cannot prov
 
 ---
 
-## When to Use SDD
+## When to Use Spec-Driven Development
 
-SDD adds value when:
+Spec-driven development adds value when:
 
 - **Multi-step features** require coordination across files, systems, or time
 - **Design-first thinking** would prevent costly rework
@@ -130,15 +130,15 @@ SDD adds value when:
 
 ---
 
-## When NOT to Use SDD
+## When NOT to Use Spec-Driven Development
 
-SDD adds overhead that isn't always justified:
+Spec-driven development adds overhead that isn't always justified:
 
 - **Trivial changes** — A typo fix doesn't need a spec
 - **Exploratory prototyping** — Spec *after* you've learned what works, not before
 - **Emergency hotfixes** — Fix first, document retroactively if needed
 
-The goal is pragmatic adoption, not dogmatic process. Use SDD where it adds value; skip it where it doesn't.
+The goal is pragmatic adoption, not dogmatic process. Use spec-driven development where it adds value; skip it where it doesn't.
 
 ---
 

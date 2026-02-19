@@ -1,4 +1,4 @@
-"""Session management commands for SDD CLI.
+"""Session management commands for Foundry CLI.
 
 Provides commands for session tracking, context limits, and consultation monitoring.
 """
@@ -141,7 +141,7 @@ def show_limits_cmd(ctx: click.Context) -> None:
         emit_success(
             {
                 "active": False,
-                "message": "No active session. Use 'sdd session start' to begin.",
+                "message": "No active session. Use 'foundry session start' to begin.",
                 "default_limits": {
                     "max_consultations": tracker._default_limits.max_consultations,
                     "max_context_tokens": tracker._default_limits.max_context_tokens,
@@ -206,7 +206,7 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
     # Known CLI capabilities
     capabilities = {
         "json_output": True,  # All output is JSON
-        "spec_driven": True,  # SDD methodology supported
+        "spec_driven": True,  # Foundry methodology supported
         "session_tracking": True,  # Session/context tracking
         "rate_limiting": True,  # Rate limiting built-in
     }
@@ -226,7 +226,7 @@ def session_capabilities_cmd(ctx: click.Context) -> None:
 def get_work_mode() -> str:
     """Get the configured work mode from environment.
 
-    Work mode controls how sdd-next executes tasks:
+    Work mode controls how foundry tasks next executes tasks:
     - "single": Execute one task at a time, pause for approval
     - "autonomous": Execute all tasks in a phase without pausing
 
@@ -358,16 +358,16 @@ def context_cmd(
     """Check current context usage percentage (Claude Code only).
 
     Completes the two-step context tracking contract:
-    1. Run 'sdd session generate-marker' to get a marker
-    2. Run 'sdd session context --session-marker <marker>' to check usage
+    1. Run 'foundry session generate-marker' to get a marker
+    2. Run 'foundry session context --session-marker <marker>' to check usage
 
     The session marker is logged to the transcript and used to calculate
     context percentage by analyzing conversation length.
 
     Example:
-        sdd session generate-marker
+        foundry session generate-marker
         # Returns: SESSION_MARKER_ABCD1234
-        sdd session context --session-marker SESSION_MARKER_ABCD1234
+        foundry session context --session-marker SESSION_MARKER_ABCD1234
         # Returns: {"context_percentage_used": 45}
     """
     # Validate marker format
@@ -376,7 +376,7 @@ def context_cmd(
             "Invalid session marker format",
             code="INVALID_MARKER",
             error_type="validation",
-            remediation="Use a marker from 'sdd session generate-marker'",
+            remediation="Use a marker from 'foundry session generate-marker'",
             details={"provided_marker": session_marker},
         )
         return
@@ -424,8 +424,8 @@ def context_cmd(
             code="TRANSCRIPT_NOT_FOUND",
             error_type="not_found",
             remediation=(
-                "Ensure you run 'sdd session generate-marker' first, then wait for "
-                "the marker to be logged before running 'sdd session context'."
+                "Ensure you run 'foundry session generate-marker' first, then wait for "
+                "the marker to be logged before running 'foundry session context'."
             ),
             details={
                 "session_marker": session_marker,
@@ -454,7 +454,7 @@ def context_cmd(
     if check_limits:
         if context_percentage >= 85:
             recommendations.append(
-                "Context at or above 85%. Consider '/clear' and '/sdd-begin'."
+                "Context at or above 85%. Consider '/clear' and '/foundry-begin'."
             )
         elif context_percentage >= 70:
             recommendations.append("Context above 70%. Monitor usage closely.")

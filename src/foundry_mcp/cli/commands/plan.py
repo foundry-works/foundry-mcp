@@ -1,4 +1,4 @@
-"""Plan review commands for SDD CLI.
+"""Plan review commands for Foundry CLI.
 
 Provides commands for reviewing markdown implementation plans
 before converting them to formal JSON specifications.
@@ -179,11 +179,11 @@ def plan_review_cmd(
 
     Examples:
 
-        sdd plan review ./PLAN.md
+        foundry plan review ./PLAN.md
 
-        sdd plan review ./PLAN.md --type security
+        foundry plan review ./PLAN.md --type security
 
-        sdd plan review ./PLAN.md --ai-provider gemini
+        foundry plan review ./PLAN.md --ai-provider gemini
     """
     # Get default review_type from config if not provided
     if review_type is None:
@@ -489,9 +489,9 @@ def plan_create_cmd(
 
     Examples:
 
-        sdd plan create "Add user authentication"
+        foundry plan create "Add user authentication"
 
-        sdd plan create "Refactor database layer" --template simple
+        foundry plan create "Refactor database layer" --template simple
     """
     start_time = time.perf_counter()
 
@@ -574,7 +574,7 @@ def plan_list_cmd(ctx: click.Context) -> None:
 
     Examples:
 
-        sdd plan list
+        foundry plan list
     """
     start_time = time.perf_counter()
 

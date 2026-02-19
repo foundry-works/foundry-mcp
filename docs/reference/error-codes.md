@@ -68,7 +68,7 @@ When an operation fails, the response includes:
 | `TASK_NOT_FOUND` | not_found | Task ID not found in spec | Use `tasks list` to see available tasks |
 | `PHASE_NOT_FOUND` | not_found | Phase ID not found in spec | Check phase IDs in the spec |
 | `TEMPLATE_NOT_FOUND` | not_found | Template doesn't exist | Use `template list` to see available templates |
-| `WORKSPACE_NOT_FOUND` | not_found | Workspace/specs directory not found | Set `--specs-dir` or `SDD_SPECS_DIR` |
+| `WORKSPACE_NOT_FOUND` | not_found | Workspace/specs directory not found | Set `--specs-dir` or `FOUNDRY_SPECS_DIR` |
 | `JOURNAL_NOT_FOUND` | not_found | Journal entry not found | Check journal entry ID |
 | `BACKUP_NOT_FOUND` | not_found | Backup file not found | Use `history` action to see available backups |
 

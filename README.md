@@ -228,7 +228,7 @@ The server advertises its capabilities, feature flags, and response contract so 
 
 | Guide | Description |
 |-------|-------------|
-| [SDD Philosophy](docs/concepts/sdd-philosophy.md) | Why spec-driven development matters |
+| [Foundry Philosophy](docs/concepts/foundry-philosophy.md) | Why spec-driven development matters |
 | [Response Envelope](docs/concepts/response-envelope.md) | Standardized response format |
 | [Spec Schema](docs/concepts/spec-schema.md) | Spec file structure and fields |
 | [LLM Configuration](docs/guides/llm-configuration.md) | Provider setup and fallbacks |

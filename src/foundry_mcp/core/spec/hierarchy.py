@@ -229,7 +229,7 @@ def add_phase(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -464,7 +464,7 @@ def add_phase_bulk(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     spec_path = find_spec_file(spec_id, specs_dir)
@@ -757,7 +757,7 @@ def remove_phase(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -972,7 +972,7 @@ def move_phase(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec
@@ -1328,7 +1328,7 @@ def update_phase_metadata(
     if specs_dir is None:
         return (
             None,
-            "No specs directory found. Use specs_dir parameter or set SDD_SPECS_DIR.",
+            "No specs directory found. Use specs_dir parameter or set FOUNDRY_SPECS_DIR.",
         )
 
     # Find and load the spec

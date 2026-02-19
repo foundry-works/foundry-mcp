@@ -943,7 +943,7 @@ Environment variables:
 | Variable | Description |
 |----------|-------------|
 | `FOUNDRY_MCP_SPECS_DIR` | Default specs directory path |
-| `SDD_SPECS_DIR` | Alternative specs directory variable |
+| `FOUNDRY_SPECS_DIR` | Alternative specs directory variable (backward compat) |
 | `FOUNDRY_MCP_LOG_LEVEL` | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
 ---

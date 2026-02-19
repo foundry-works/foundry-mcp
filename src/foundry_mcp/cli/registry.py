@@ -1,4 +1,4 @@
-"""Command registry for SDD CLI.
+"""Command registry for Foundry CLI.
 
 Centralized registration of all command groups.
 Commands are organized by domain (specs, tasks, journal, etc.).
@@ -67,9 +67,12 @@ def register_all_commands(cli: click.Group) -> None:
         modify_group,
         plan_group,
         review_group,
+        run_cmd,
         session,
         specs,
+        stop_cmd,
         tasks,
+        watch_cmd,
         validate_group,
     )
 
@@ -85,6 +88,9 @@ def register_all_commands(cli: click.Group) -> None:
     cli.add_command(dev_group)
     cli.add_command(plan_group)
     cli.add_command(audit)
+    cli.add_command(run_cmd)
+    cli.add_command(stop_cmd)
+    cli.add_command(watch_cmd)
 
     # Placeholder: version command for testing the scaffold
     @cli.command("version")

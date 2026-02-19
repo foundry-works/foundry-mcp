@@ -1,4 +1,4 @@
-"""Unit tests for SDD CLI core commands.
+"""Unit tests for Foundry CLI core commands.
 
 Tests cover:
 - Validation commands (check, fix, stats, report, analyze-deps)
@@ -71,7 +71,7 @@ def temp_specs_dir(tmp_path):
 
 
 class TestValidateCheckCommand:
-    """Tests for sdd validate check command."""
+    """Tests for foundryvalidate check command."""
 
     def test_validate_check_success(self, cli_runner, temp_specs_dir):
         """validate check returns valid JSON for valid spec."""
@@ -98,7 +98,7 @@ class TestValidateCheckCommand:
 
 
 class TestValidateStatsCommand:
-    """Tests for sdd validate stats command."""
+    """Tests for foundryvalidate stats command."""
 
     def test_validate_stats_returns_metrics(self, cli_runner, temp_specs_dir):
         """validate stats returns specification metrics."""
@@ -115,7 +115,7 @@ class TestValidateStatsCommand:
 
 
 class TestValidateReportCommand:
-    """Tests for sdd validate report command."""
+    """Tests for foundryvalidate report command."""
 
     def test_validate_report_all_sections(self, cli_runner, temp_specs_dir):
         """validate report includes all sections by default."""
@@ -151,7 +151,7 @@ class TestValidateReportCommand:
 
 
 class TestValidateAnalyzeDepsCommand:
-    """Tests for sdd validate analyze-deps command."""
+    """Tests for foundryvalidate analyze-deps command."""
 
     def test_analyze_deps_returns_dependency_info(self, cli_runner, temp_specs_dir):
         """analyze-deps returns dependency analysis."""
@@ -193,7 +193,7 @@ class TestValidateAnalyzeDepsCommand:
 
 
 class TestTasksNextCommand:
-    """Tests for sdd tasks next command."""
+    """Tests for foundrytasks next command."""
 
     def test_tasks_next_finds_task(self, cli_runner, temp_specs_dir):
         """tasks next finds the next actionable task."""
@@ -221,7 +221,7 @@ class TestTasksNextCommand:
 
 
 class TestSessionCommands:
-    """Tests for sdd session commands."""
+    """Tests for foundrysession commands."""
 
     def test_session_start(self, cli_runner, temp_specs_dir):
         """session start creates a new session."""
@@ -488,7 +488,7 @@ class TestSchemaCommands:
 
 
 class TestLifecycleCommands:
-    """Tests for sdd lifecycle commands."""
+    """Tests for foundrylifecycle commands."""
 
     def test_lifecycle_state(self, cli_runner, temp_specs_dir):
         """lifecycle state returns spec lifecycle info."""
@@ -503,7 +503,7 @@ class TestLifecycleCommands:
 
 
 class TestReviewCommands:
-    """Tests for sdd review commands."""
+    """Tests for foundryreview commands."""
 
     def test_review_tools_lists_tools(self, cli_runner, temp_specs_dir):
         """review tools returns tool list with availability."""
@@ -557,7 +557,7 @@ class TestReviewCommands:
 
 
 class TestModifyCommands:
-    """Tests for sdd modify commands."""
+    """Tests for foundrymodify commands."""
 
     def test_modify_group_exists(self, cli_runner, temp_specs_dir):
         """modify group is available."""
@@ -591,7 +591,7 @@ class TestModifyCommands:
 
 
 class TestDevCommands:
-    """Tests for sdd dev commands."""
+    """Tests for foundrydev commands."""
 
     def test_dev_group_exists(self, cli_runner, temp_specs_dir):
         """dev group is available with expected subcommands."""
@@ -646,7 +646,7 @@ class TestCLIJsonOutput:
 
 
 class TestTasksCompleteCommand:
-    """Tests for sdd tasks complete command."""
+    """Tests for foundrytasks complete command."""
 
     def test_tasks_complete_updates_status(self, cli_runner, temp_specs_dir):
         """tasks complete marks a task as completed and journals the note."""

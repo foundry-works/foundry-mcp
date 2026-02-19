@@ -1,4 +1,4 @@
-"""Unit tests for SDD CLI runtime components.
+"""Unit tests for Foundry CLI runtime components.
 
 Tests cover:
 - Configuration and context management
