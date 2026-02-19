@@ -776,9 +776,9 @@ class StepOrchestrator(StepEmitterMixin):
                 if session.write_lock_enforced:
                     self._persist_task_completion_to_spec(session, result.task_id)
 
-        # Record gate result and increment fidelity cycle counter (ADR step 3)
+        # Record gate result (cycle counter now incremented in _handle_gate_evidence
+        # so that agent-initiated gates during ADDRESS_FIDELITY_FEEDBACK also count)
         if result.step_type == StepType.RUN_FIDELITY_GATE and result.gate_attempt_id:
-            session.counters.fidelity_review_cycles_in_active_phase += 1
             self._record_gate_outcome(session, result, now)
 
         # Write journal entry (best-effort)

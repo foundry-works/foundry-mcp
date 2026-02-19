@@ -1595,6 +1595,8 @@ class TestHandleGateEvidence:
         result = orch._handle_gate_evidence(session, spec_data, now)
         assert result.success is True
         assert result.next_step.type == StepType.ADDRESS_FIDELITY_FEEDBACK
+        # Counter incremented on failed gate evaluation
+        assert session.counters.fidelity_review_cycles_in_active_phase == 1
 
     def test_gate_failed_no_auto_retry_pauses(self, tmp_path):
         orch = _make_orchestrator(tmp_path)
@@ -1616,6 +1618,8 @@ class TestHandleGateEvidence:
         result = orch._handle_gate_evidence(session, spec_data, now)
         assert result.session.status == SessionStatus.PAUSED
         assert result.session.pause_reason == PauseReason.GATE_FAILED
+        # Counter incremented even when pausing (tracks evaluation attempts)
+        assert session.counters.fidelity_review_cycles_in_active_phase == 1
 
     def test_manual_policy_always_pauses_for_review(self, tmp_path):
         orch = _make_orchestrator(tmp_path)
@@ -1637,8 +1641,12 @@ class TestHandleGateEvidence:
         assert result.session.status == SessionStatus.PAUSED
         assert result.session.pause_reason == PauseReason.GATE_REVIEW_REQUIRED
 
-    def test_fidelity_cycle_incremented_in_record_step_outcome(self, tmp_path):
-        """Fidelity cycle counter is incremented in _record_step_outcome (step 3), not _handle_gate_evidence."""
+    def test_record_step_outcome_does_not_increment_fidelity_counter(self, tmp_path):
+        """Fidelity cycle counter is NOT incremented in _record_step_outcome.
+
+        The counter now increments in _handle_gate_evidence so that both
+        orchestrator-issued and agent-initiated gates count toward the limit.
+        """
         orch = _make_orchestrator(tmp_path)
         now = datetime.now(timezone.utc)
         session = make_session(
@@ -1652,7 +1660,6 @@ class TestHandleGateEvidence:
             },
         )
 
-        # _record_step_outcome increments fidelity cycle counter on gate steps
         orch._record_step_outcome(
             session,
             _result(
@@ -1665,7 +1672,8 @@ class TestHandleGateEvidence:
             ),
             now,
         )
-        assert session.counters.fidelity_review_cycles_in_active_phase == 2
+        # Counter unchanged — increment now happens in _handle_gate_evidence
+        assert session.counters.fidelity_review_cycles_in_active_phase == 1
 
 
 # =============================================================================

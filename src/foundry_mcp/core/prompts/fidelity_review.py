@@ -280,7 +280,17 @@ Rules:
 - Keep arrays as arrays (use `[]` when a section has nothing to report)
 - Populate `issues` and `recommendations` with key takeaways
 - Feel free to include additional keys if needed, but never omit the ones above
-- Severity levels for deviations: critical, high, medium, low""",
+- Severity levels for deviations: critical, high, medium, low
+
+Verdict criteria (use these strictly):
+- "pass": All spec requirements are implemented correctly. Medium/low-severity
+  suggestions (documentation, style, minor quality concerns) do NOT warrant
+  "partial" or "fail".
+- "partial": Implementation has one or more HIGH-severity deviations from the spec.
+- "fail": Implementation has CRITICAL-severity deviations or fundamentally misses
+  spec requirements.
+- "unknown": Insufficient information to evaluate (e.g., no code artifacts
+  provided, or spec requirements too ambiguous to map to implementation).""",
     required_context=[
         "spec_id",
         "spec_title",
@@ -502,7 +512,7 @@ Your task is to consolidate diverse perspectives into actionable consensus while
 Guidelines:
 - Attribute findings to specific models using the identified_by field
 - Merge similar deviations, noting which models identified each
-- Resolve verdict disagreements using majority vote or escalate to "partial" on conflict
+- Resolve verdict disagreements using majority vote; if tied, derive verdict from deviation severities
 - Preserve unique insights from each model
 - Output valid JSON matching the required schema exactly
 - Do NOT focus on ownership, responsibility, or team assignment concerns
@@ -523,8 +533,12 @@ Guidelines:
 1. **Verdict Consensus:**
    - Count votes for each verdict (pass/fail/partial/unknown)
    - Use majority vote for final verdict
-   - If tied or conflicted, use "partial" and note disagreement
-   - Record agreement_level: "strong" (all agree), "moderate" (majority agrees), "weak" (slight majority), "conflicted" (tied/split)
+   - If tied: derive verdict from deviation severities across ALL reviews:
+     * No critical or high-severity deviations in any review -> "pass"
+     * Any high-severity deviations -> "partial"
+     * Any critical-severity deviations -> "fail"
+   - Record agreement_level: "strong" (all agree), "moderate" (majority agrees),
+     "weak" (slight majority), "conflicted" (tied/split)
 
 2. **Deviation Merging:**
    - Group similar deviations across models by description

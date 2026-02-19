@@ -817,6 +817,8 @@ class TestAutoRetryCycleCap:
         # Should pause instead of auto-retrying
         assert result.session.status == SessionStatus.PAUSED
         assert result.session.pause_reason == PauseReason.GATE_FAILED
+        # Counter still incremented (tracks failed evaluations)
+        assert session.counters.fidelity_review_cycles_in_active_phase == 4
 
     def test_auto_retry_allowed_below_cap(self, tmp_path):
         """Auto-retry schedules address_fidelity_feedback when below cap."""
@@ -845,6 +847,8 @@ class TestAutoRetryCycleCap:
         assert result.success is True
         assert result.next_step is not None
         assert result.next_step.type == StepType.ADDRESS_FIDELITY_FEEDBACK
+        # Counter incremented from 1 to 2 on failed gate evaluation
+        assert session.counters.fidelity_review_cycles_in_active_phase == 2
 
 
 # =============================================================================

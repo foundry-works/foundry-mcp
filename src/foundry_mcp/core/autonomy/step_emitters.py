@@ -685,7 +685,11 @@ class StepEmitterMixin:
                 f"Verdict: {evidence.verdict.value}. Acknowledge to continue.",
             )
 
-        # Gate failed - check auto-retry setting and cycle cap (ADR line 675)
+        # Gate failed — increment cycle counter here so that both orchestrator-issued
+        # gates AND agent-initiated gates (called during address_fidelity_feedback)
+        # count toward the per-phase limit.
+        session.counters.fidelity_review_cycles_in_active_phase += 1
+
         if (
             session.stop_conditions.auto_retry_fidelity_gate
             and session.counters.fidelity_review_cycles_in_active_phase

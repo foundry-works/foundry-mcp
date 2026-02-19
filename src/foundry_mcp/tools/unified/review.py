@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections import Counter
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,7 @@ from foundry_mcp.core.ai_consultation import (
     ConsultationRequest,
     ConsultationResult,
     ConsultationWorkflow,
+    ProviderResponse,
 )
 from foundry_mcp.core.llm_config.consultation import get_consultation_config, load_consultation_config
 from foundry_mcp.core.naming import canonical_tool
@@ -528,6 +530,150 @@ def _format_fidelity_markdown(
     return "\n".join(lines)
 
 
+def _try_tiebreaker_review(
+    *,
+    orchestrator: ConsultationOrchestrator,
+    successful_responses: List[ProviderResponse],
+    all_responses: List[ProviderResponse],
+    request: ConsultationRequest,
+    failed_providers: List[Dict[str, Any]],
+) -> tuple:
+    """Detect split verdicts and invoke an unused provider as tiebreaker.
+
+    When two reviewers disagree on the verdict, this attempts to bring in
+    a third reviewer to break the tie before synthesis.
+
+    Args:
+        orchestrator: The consultation orchestrator for provider calls.
+        successful_responses: Responses with success=True and non-empty content.
+        all_responses: All responses from the initial consensus round (including
+            failures). Used to determine which providers were already consulted,
+            so that failed providers are also excluded — if a provider failed the
+            initial round it is unlikely to succeed as a tiebreaker.
+        request: The original consultation request (context is reused).
+        failed_providers: Mutable list; tiebreaker failures are appended here.
+
+    Returns:
+        (successful_responses, successful_provider_ids) — the responses list may
+        have one additional entry if a tiebreaker succeeded.
+    """
+    if len(successful_responses) < 2:
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    individual_verdicts: List[tuple] = []
+    unparseable_providers: List[str] = []
+    for resp in successful_responses:
+        resp_parsed = _parse_json_content(resp.content)
+        if resp_parsed and "verdict" in resp_parsed:
+            individual_verdicts.append((resp.provider_id, resp_parsed["verdict"]))
+        else:
+            unparseable_providers.append(resp.provider_id)
+
+    if unparseable_providers:
+        logger.warning(
+            "Could not parse verdict from providers: %s — excluded from split detection",
+            unparseable_providers,
+        )
+
+    verdict_values = [v for _, v in individual_verdicts]
+    verdicts_split = len(individual_verdicts) >= 2 and len(set(verdict_values)) > 1
+
+    if not verdicts_split:
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    # If one verdict already holds a strict majority, synthesis can resolve via
+    # majority vote — no need to spend time and cost on an extra reviewer.
+    verdict_counts = Counter(verdict_values)
+    majority_threshold = len(individual_verdicts) / 2
+    has_majority = any(count > majority_threshold for count in verdict_counts.values())
+    if has_majority:
+        logger.info(
+            "Split verdict detected (%s) but majority exists — "
+            "skipping tiebreaker, synthesis will use majority vote",
+            verdict_values,
+        )
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    # Exclude all providers from the initial round (both successful and failed)
+    # so we get a genuinely fresh perspective for the tiebreaker.
+    used_provider_ids = {r.provider_id for r in all_responses}
+    all_available = orchestrator.get_available_providers()
+    tiebreaker_candidates = [
+        pid for pid in all_available if pid not in used_provider_ids
+    ]
+
+    if not tiebreaker_candidates:
+        logger.info(
+            "Split verdict detected (%s) but no unused providers available "
+            "for tiebreaker — falling back to severity-based synthesis resolution",
+            verdict_values,
+        )
+        return successful_responses, [r.provider_id for r in successful_responses]
+
+    logger.info(
+        "Split verdict detected (%s), trying tiebreaker from %d candidates",
+        verdict_values, len(tiebreaker_candidates),
+    )
+
+    tiebreaker_response: Optional[ProviderResponse] = None
+    for tiebreaker_pid in tiebreaker_candidates:
+        logger.info("Attempting tiebreaker with provider: %s", tiebreaker_pid)
+
+        tiebreaker_request = ConsultationRequest(
+            workflow=ConsultationWorkflow.FIDELITY_REVIEW,
+            prompt_id="FIDELITY_REVIEW_V1",
+            context=request.context,
+            provider_id=tiebreaker_pid,
+        )
+
+        try:
+            # Bypass cache to ensure a fresh, independent evaluation
+            tiebreaker_outcome = orchestrator.consult(
+                tiebreaker_request, use_cache=False
+            )
+        except Exception as e:
+            logger.warning("Tiebreaker provider %s failed: %s", tiebreaker_pid, e)
+            failed_providers.append(
+                {"provider_id": tiebreaker_pid, "error": str(e)}
+            )
+            continue
+
+        if isinstance(tiebreaker_outcome, ConsultationResult):
+            if tiebreaker_outcome.success and tiebreaker_outcome.content.strip():
+                tiebreaker_response = ProviderResponse.from_result(tiebreaker_outcome)
+        elif isinstance(tiebreaker_outcome, ConsensusResult):
+            for cr in tiebreaker_outcome.responses:
+                if cr.success and cr.content.strip():
+                    tiebreaker_response = cr
+                    break
+
+        if tiebreaker_response is not None:
+            successful_responses.append(tiebreaker_response)
+            logger.info(
+                "Tiebreaker provider %s succeeded, synthesis will use %d reviews",
+                tiebreaker_response.provider_id, len(successful_responses),
+            )
+            break
+
+        failed_providers.append(
+            {"provider_id": tiebreaker_pid, "error": "no usable content"}
+        )
+        logger.warning(
+            "Tiebreaker provider %s returned no usable content, "
+            "trying next candidate",
+            tiebreaker_pid,
+        )
+
+    if tiebreaker_response is None:
+        logger.warning(
+            "All %d tiebreaker candidates exhausted, "
+            "proceeding with %d-reviewer synthesis",
+            len(tiebreaker_candidates), len(successful_responses),
+        )
+
+    return successful_responses, [r.provider_id for r in successful_responses]
+
+
 def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Best-effort fidelity review.
 
@@ -739,6 +885,15 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         # Filter for truly successful responses (success=True AND non-empty content)
         successful_responses = [r for r in result.responses if r.success and r.content.strip()]
         successful_providers = [r.provider_id for r in successful_responses]
+
+        # Try to resolve split verdicts with a tiebreaker reviewer
+        successful_responses, successful_providers = _try_tiebreaker_review(
+            orchestrator=orchestrator,
+            successful_responses=successful_responses,
+            all_responses=result.responses,
+            request=request,
+            failed_providers=failed_providers,
+        )
 
         if len(successful_responses) >= 2:
             # Multi-model mode: run synthesis to consolidate reviews
