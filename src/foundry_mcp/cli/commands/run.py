@@ -133,8 +133,12 @@ def run_cmd(
     if posture == "unattended":
         agent_cmd += " --dangerously-skip-permissions"
 
-    # Build watcher command (delay to let the agent start first)
-    watcher_cmd = f"sleep 5 && foundry watch {safe_spec_id}"
+    # Build watcher command — wait for the agent to boot and create a session,
+    # then launch the dashboard. If it fails, remain-on-exit keeps the error visible.
+    watcher_cmd = (
+        f"echo 'Waiting for agent to start...' && sleep 15 && "
+        f"foundry watch {safe_spec_id}"
+    )
 
     # Split direction flag: -v = vertical (top/bottom), -h = horizontal (side-by-side)
     split_flag = "-v" if layout == "vertical" else "-h"
@@ -149,6 +153,14 @@ def run_cmd(
             text=True,
         )
         session_created = True
+
+        # Keep panes visible on exit so errors aren't silently swallowed
+        subprocess.run(
+            ["tmux", "set-option", "-t", session_name, "remain-on-exit", "on"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
         # Split window for watcher pane
         subprocess.run(
