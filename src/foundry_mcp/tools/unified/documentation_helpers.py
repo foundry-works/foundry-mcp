@@ -33,7 +33,8 @@ def _build_spec_requirements(
             if ac and isinstance(ac, list):
                 lines.append("- **Acceptance Criteria:**")
                 for criterion in ac:
-                    lines.append(f"  - {criterion}")
+                    if isinstance(criterion, str) and criterion.strip():
+                        lines.append(f"  - {criterion}")
     elif phase_id:
         phase = _find_phase(spec_data, phase_id)
         if phase:
@@ -49,7 +50,8 @@ def _build_spec_requirements(
                     ac = child.get("metadata", {}).get("acceptance_criteria")
                     if ac and isinstance(ac, list):
                         for criterion in ac:
-                            lines.append(f"    - AC: {criterion}")
+                            if isinstance(criterion, str) and criterion.strip():
+                                lines.append(f"    - AC: {criterion}")
     else:
         lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
         if spec_data.get("description"):

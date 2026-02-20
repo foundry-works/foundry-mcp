@@ -906,7 +906,7 @@ class StepEmitterMixin:
             gate_attempt_id=None,
             instructions=instructions,
             reason=None,
-            message=f"Implement task '{task_title}'. {_OUTCOME_HINT}",
+            message=f"Implement task '{task_title or task_id}'. {_OUTCOME_HINT}",
             step_proof=step_proof,
         )
 
@@ -999,7 +999,7 @@ class StepEmitterMixin:
             gate_attempt_id=None,
             instructions=instructions,
             reason=None,
-            message=f"Execute verification '{task_title}'. {_OUTCOME_HINT}",
+            message=f"Execute verification '{task_title or task_id}'. {_OUTCOME_HINT}",
             step_proof=step_proof,
         )
 
