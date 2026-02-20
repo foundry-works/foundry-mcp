@@ -5,11 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.12.0b26] - 2026-02-20
+## [0.12.0b27] - 2026-02-20
 
 ### Fixed
 
 - **Fidelity gate false positives from missing task descriptions**: `_build_spec_requirements()` now includes `metadata.description` in task-scoped reviews and renders child `description`, `details`, and `file_path` in phase-scoped reviews, giving AI reviewers full context to evaluate implementation fidelity.
+- **Fidelity gate missing task category and phase context**: Task-scoped and phase-scoped reviews now include `task_category` (e.g. implementation, research, investigation). Phase-scoped reviews now include the phase `description` and `purpose`.
 
 ## [0.12.0b24] - 2026-02-19
 
