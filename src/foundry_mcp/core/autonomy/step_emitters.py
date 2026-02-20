@@ -1149,8 +1149,7 @@ class StepEmitterMixin:
                 tool="task",
                 action="session-step-next",
                 description=(
-                    "Report remediation progress and request a gate retry "
-                    "(step_type=address_fidelity_feedback)"
+                    "Report remediation progress and request a gate retry (step_type=address_fidelity_feedback)"
                 ),
             ),
         ]

@@ -561,9 +561,9 @@ class OpenAIProvider(LLMProvider):
         if "rate_limit" in error_str.lower() or error_type == "RateLimitError":
             # Try to extract retry-after
             retry_after = None
-            if hasattr(error, "response"):
-                response = error.response
-                retry_after = getattr(response.headers, "get", lambda x: None)("retry-after")
+            resp = getattr(error, "response", None)
+            if resp is not None:
+                retry_after = getattr(resp.headers, "get", lambda x: None)("retry-after")
                 if retry_after:
                     try:
                         retry_after = float(retry_after)
@@ -893,9 +893,9 @@ class AnthropicProvider(LLMProvider):
 
         if "rate_limit" in error_str.lower() or error_type == "RateLimitError":
             retry_after = None
-            if hasattr(error, "response") and getattr(error, "response", None):
-                response = error.response
-                retry_after_str = response.headers.get("retry-after")
+            resp = getattr(error, "response", None)
+            if resp is not None:
+                retry_after_str = resp.headers.get("retry-after")
                 if retry_after_str:
                     try:
                         retry_after = float(retry_after_str)

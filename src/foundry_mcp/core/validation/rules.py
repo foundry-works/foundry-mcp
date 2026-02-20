@@ -668,6 +668,7 @@ def _validate_metadata(
     result: ValidationResult,
 ) -> None:
     """Validate type-specific metadata requirements."""
+
     def _nonempty_string(value: Any) -> bool:
         return isinstance(value, str) and bool(value.strip())
 

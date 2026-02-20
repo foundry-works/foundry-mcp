@@ -1553,13 +1553,20 @@ class TestCreateStepHelpers:
         now = datetime.now(timezone.utc)
 
         implement = orch._create_implement_task_step(
-            session, {"id": "task-1", "title": "Task 1"}, make_spec_data(), now,
+            session,
+            {"id": "task-1", "title": "Task 1"},
+            make_spec_data(),
+            now,
         )
         verification = orch._create_verification_step(
-            session, {"id": "verify-1", "title": "Verify 1"}, now,
+            session,
+            {"id": "verify-1", "title": "Verify 1"},
+            now,
         )
         gate = orch._create_fidelity_gate_step(
-            session, {"id": "phase-1", "title": "Phase 1"}, now,
+            session,
+            {"id": "phase-1", "title": "Phase 1"},
+            now,
         )
         evidence = PendingGateEvidence(
             gate_attempt_id="gate-001",
@@ -1589,7 +1596,9 @@ class TestCreateStepHelpers:
         now = datetime.now(timezone.utc)
 
         gate_result = orch._create_fidelity_gate_step(
-            session, {"id": "phase-1", "title": "Phase 1"}, now,
+            session,
+            {"id": "phase-1", "title": "Phase 1"},
+            now,
         )
         gate_instructions = gate_result.next_step.instructions
         review_desc = gate_instructions[0].description

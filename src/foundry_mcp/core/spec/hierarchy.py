@@ -22,8 +22,6 @@ from foundry_mcp.core.spec.io import (
 )
 
 
-
-
 def _normalize_acceptance_criteria(value: Any) -> Optional[List[str]]:
     if value is None:
         return None

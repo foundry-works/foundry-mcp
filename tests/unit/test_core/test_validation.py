@@ -55,7 +55,12 @@ def valid_spec():
                 "children": [],
                 "total_tasks": 1,
                 "completed_tasks": 0,
-                "metadata": {"task_category": "implementation", "file_path": "test.py", "acceptance_criteria": ["Task works correctly"], "description": "Implement the test task"},
+                "metadata": {
+                    "task_category": "implementation",
+                    "file_path": "test.py",
+                    "acceptance_criteria": ["Task works correctly"],
+                    "description": "Implement the test task",
+                },
                 "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
             },
         },
@@ -269,7 +274,15 @@ class TestValidateSpec:
         result, error = add_phase_bulk(
             spec_id="simple-spec-001",
             phase_title="Phase 1",
-            tasks=[{"title": "Task without AC", "type": "task", "task_category": "implementation", "file_path": "foo.py", "description": "A task"}],
+            tasks=[
+                {
+                    "title": "Task without AC",
+                    "type": "task",
+                    "task_category": "implementation",
+                    "file_path": "foo.py",
+                    "description": "A task",
+                }
+            ],
             specs_dir=specs_dir,
         )
         assert result is None

@@ -784,10 +784,7 @@ class StepOrchestrator(StepEmitterMixin):
         # Clear stale gate evidence after successful fidelity feedback.
         # On SUCCESS the remediation is accepted and the evidence is consumed;
         # on FAILURE the evidence is preserved so the gate can re-evaluate.
-        if (
-            result.step_type == StepType.ADDRESS_FIDELITY_FEEDBACK
-            and result.outcome == StepOutcome.SUCCESS
-        ):
+        if result.step_type == StepType.ADDRESS_FIDELITY_FEEDBACK and result.outcome == StepOutcome.SUCCESS:
             session.pending_gate_evidence = None
 
         # Write journal entry (best-effort)
