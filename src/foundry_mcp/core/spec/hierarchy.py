@@ -22,22 +22,6 @@ from foundry_mcp.core.spec.io import (
 )
 
 
-def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
-    """Check if spec requires rich task fields based on explicit complexity metadata."""
-    metadata = spec_data.get("metadata", {})
-    if not isinstance(metadata, dict):
-        return False
-
-    # Only check explicit complexity metadata (template no longer indicates complexity)
-    complexity = metadata.get("complexity")
-    if isinstance(complexity, str) and complexity.strip().lower() in {
-        "medium",
-        "complex",
-        "high",
-    }:
-        return True
-
-    return False
 
 
 def _normalize_acceptance_criteria(value: Any) -> Optional[List[str]]:
@@ -463,8 +447,6 @@ def add_phase_bulk(
     if spec_data is None:
         return None, f"Failed to load specification '{spec_id}'"
 
-    requires_rich_tasks = _requires_rich_task_fields(spec_data)
-
     hierarchy = spec_data.get("hierarchy", {})
     spec_root = hierarchy.get("spec-root")
 
@@ -576,7 +558,7 @@ def add_phase_bulk(
         desc_field, desc_value = _extract_description(task_def)
         if desc_field and desc_value is not None:
             task_metadata[desc_field] = desc_value
-        elif requires_rich_tasks and task_type == "task":
+        elif task_type == "task":
             return None, f"Task '{task_title}' missing description"
 
         # Apply file_path
@@ -600,14 +582,13 @@ def add_phase_bulk(
             acceptance_criteria = _normalize_acceptance_criteria(raw_acceptance)
             if acceptance_criteria is not None:
                 task_metadata["acceptance_criteria"] = acceptance_criteria
-            if requires_rich_tasks:
-                if raw_acceptance is None:
-                    return None, f"Task '{task_title}' missing acceptance_criteria"
-                if not acceptance_criteria:
-                    return (
-                        None,
-                        f"Task '{task_title}' acceptance_criteria must include at least one entry",
-                    )
+            if raw_acceptance is None:
+                return None, f"Task '{task_title}' missing acceptance_criteria"
+            if not acceptance_criteria:
+                return (
+                    None,
+                    f"Task '{task_title}' acceptance_criteria must include at least one entry",
+                )
 
             # Apply task_category from defaults if not specified
             category = task_def.get("task_category") or task_def.get("category")
@@ -621,7 +602,7 @@ def add_phase_bulk(
                         f"Task '{task_title}' has invalid task_category '{category}'",
                     )
                 task_metadata["task_category"] = normalized_category
-            if requires_rich_tasks and normalized_category is None:
+            if normalized_category is None:
                 return None, f"Task '{task_title}' missing task_category"
 
             if normalized_category in {"implementation", "refactoring"}:

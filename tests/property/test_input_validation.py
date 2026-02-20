@@ -77,6 +77,7 @@ def minimal_valid_spec(draw):
         "spec_id": spec_id,
         "generated": "2025-01-01T00:00:00Z",
         "last_updated": "2025-01-01T00:00:00Z",
+        "metadata": {"mission": "Property test spec"},
         "hierarchy": {
             "spec-root": {
                 "type": "spec",
@@ -257,7 +258,12 @@ class TestValidSpecProperties:
                 "children": [],
                 "total_tasks": 1,
                 "completed_tasks": 0,
-                "metadata": {},
+                "metadata": {
+                    "task_category": "implementation",
+                    "file_path": f"{child_id}.py",
+                    "description": f"Implement {child_id}",
+                    "acceptance_criteria": [f"{child_id} works correctly"],
+                },
             }
             spec["hierarchy"]["spec-root"]["children"].append(child_id)
 

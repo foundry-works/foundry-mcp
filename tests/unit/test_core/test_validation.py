@@ -35,6 +35,7 @@ def valid_spec():
         "spec_id": "test-spec-2025-01-01-001",
         "generated": "2025-01-01T00:00:00Z",
         "last_updated": "2025-01-01T00:00:00Z",
+        "metadata": {"mission": "Validate core spec handling"},
         "hierarchy": {
             "spec-root": {
                 "type": "spec",
@@ -54,7 +55,7 @@ def valid_spec():
                 "children": [],
                 "total_tasks": 1,
                 "completed_tasks": 0,
-                "metadata": {"task_category": "implementation", "file_path": "test.py"},
+                "metadata": {"task_category": "implementation", "file_path": "test.py", "acceptance_criteria": ["Task works correctly"], "description": "Implement the test task"},
                 "dependencies": {"blocks": [], "blocked_by": [], "depends": []},
             },
         },
@@ -209,33 +210,70 @@ class TestValidateSpec:
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_VERIFICATION_TYPE" in codes
 
-    def test_missing_mission_for_medium_spec(self, medium_spec):
-        """Test that medium specs require a mission."""
-        medium_spec["metadata"]["mission"] = ""
-        result = validate_spec(medium_spec)
+    def test_missing_mission(self, valid_spec):
+        """Test that all specs require a mission."""
+        valid_spec["metadata"]["mission"] = ""
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_MISSION" in codes
 
-    def test_missing_task_category_for_medium_spec(self, medium_spec):
-        """Test that medium specs require task_category on tasks."""
-        del medium_spec["hierarchy"]["task-1"]["metadata"]["task_category"]
-        result = validate_spec(medium_spec)
+    def test_missing_task_category(self, valid_spec):
+        """Test that all specs require task_category on tasks."""
+        del valid_spec["hierarchy"]["task-1"]["metadata"]["task_category"]
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_TASK_CATEGORY" in codes
 
-    def test_missing_task_description_for_medium_spec(self, medium_spec):
-        """Test that medium specs require descriptions on tasks."""
-        del medium_spec["hierarchy"]["task-1"]["metadata"]["description"]
-        result = validate_spec(medium_spec)
+    def test_missing_task_description(self, valid_spec):
+        """Test that all specs require descriptions on tasks."""
+        del valid_spec["hierarchy"]["task-1"]["metadata"]["description"]
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_TASK_DESCRIPTION" in codes
 
-    def test_missing_acceptance_criteria_for_medium_spec(self, medium_spec):
-        """Test that medium specs require acceptance criteria on tasks."""
-        del medium_spec["hierarchy"]["task-1"]["metadata"]["acceptance_criteria"]
-        result = validate_spec(medium_spec)
+    def test_missing_acceptance_criteria(self, valid_spec):
+        """Test that all specs require acceptance criteria on tasks."""
+        del valid_spec["hierarchy"]["task-1"]["metadata"]["acceptance_criteria"]
+        result = validate_spec(valid_spec)
         codes = [d.code for d in result.diagnostics]
         assert "MISSING_ACCEPTANCE_CRITERIA" in codes
+
+    def test_add_phase_bulk_rejects_missing_acceptance_criteria_regardless_of_complexity(self, tmp_path):
+        """add_phase_bulk rejects tasks without acceptance_criteria for any spec complexity."""
+        import json
+
+        from foundry_mcp.core.spec.hierarchy import add_phase_bulk
+
+        specs_dir = tmp_path / "specs"
+        active_dir = specs_dir / "active"
+        active_dir.mkdir(parents=True)
+        spec_data = {
+            "spec_id": "simple-spec-001",
+            "generated": "2025-01-01T00:00:00Z",
+            "last_updated": "2025-01-01T00:00:00Z",
+            "hierarchy": {
+                "spec-root": {
+                    "type": "spec",
+                    "title": "Simple Spec",
+                    "status": "pending",
+                    "parent": None,
+                    "children": [],
+                    "total_tasks": 0,
+                    "completed_tasks": 0,
+                    "metadata": {},
+                },
+            },
+        }
+        (active_dir / "simple-spec-001.json").write_text(json.dumps(spec_data))
+
+        result, error = add_phase_bulk(
+            spec_id="simple-spec-001",
+            phase_title="Phase 1",
+            tasks=[{"title": "Task without AC", "type": "task", "task_category": "implementation", "file_path": "foo.py", "description": "A task"}],
+            specs_dir=specs_dir,
+        )
+        assert result is None
+        assert "missing acceptance_criteria" in error
 
     def test_orphaned_node_detected(self, valid_spec):
         """Test that orphaned nodes are detected."""

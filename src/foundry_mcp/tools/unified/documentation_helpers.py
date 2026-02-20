@@ -29,6 +29,11 @@ def _build_spec_requirements(
                     lines.append(f"  - {detail}")
             if task.get("metadata", {}).get("file_path"):
                 lines.append(f"- **Expected file:** {task['metadata']['file_path']}")
+            ac = task.get("metadata", {}).get("acceptance_criteria")
+            if ac and isinstance(ac, list):
+                lines.append("- **Acceptance Criteria:**")
+                for criterion in ac:
+                    lines.append(f"  - {criterion}")
     elif phase_id:
         phase = _find_phase(spec_data, phase_id)
         if phase:
@@ -41,6 +46,10 @@ def _build_spec_requirements(
                     if exclude_fidelity_verify and _is_fidelity_verify_node(child):
                         continue
                     lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
+                    ac = child.get("metadata", {}).get("acceptance_criteria")
+                    if ac and isinstance(ac, list):
+                        for criterion in ac:
+                            lines.append(f"    - AC: {criterion}")
     else:
         lines.append(f"### Specification: {spec_data.get('title', 'Unknown')}")
         if spec_data.get("description"):

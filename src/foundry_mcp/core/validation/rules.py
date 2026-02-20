@@ -26,24 +26,6 @@ from foundry_mcp.core.validation.normalization import (
 )
 
 
-def _requires_rich_task_fields(spec_data: Dict[str, Any]) -> bool:
-    """Check if spec requires rich task fields based on explicit complexity metadata."""
-    metadata = spec_data.get("metadata", {})
-    if not isinstance(metadata, dict):
-        return False
-
-    # Only check explicit complexity metadata (template no longer indicates complexity)
-    complexity = metadata.get("complexity")
-    if isinstance(complexity, str) and complexity.strip().lower() in {
-        "medium",
-        "complex",
-        "high",
-    }:
-        return True
-
-    return False
-
-
 def validate_spec(spec_data: Dict[str, Any]) -> ValidationResult:
     """
     Validate a spec file and return structured diagnostics.
@@ -73,7 +55,7 @@ def validate_spec(spec_data: Dict[str, Any]) -> ValidationResult:
         _validate_nodes(hierarchy, result)
         _validate_task_counts(hierarchy, result)
         _validate_dependencies(hierarchy, result)
-        _validate_metadata(spec_data, hierarchy, result)
+        _validate_metadata(hierarchy, result)
 
     # Count diagnostics by severity
     for diag in result.diagnostics:
@@ -239,21 +221,20 @@ def _validate_structure(spec_data: Dict[str, Any], result: ValidationResult) -> 
                 )
             )
 
-    if _requires_rich_task_fields(spec_data):
-        metadata = spec_data.get("metadata", {})
-        mission = metadata.get("mission") if isinstance(metadata, dict) else None
-        if not isinstance(mission, str) or not mission.strip():
-            result.diagnostics.append(
-                Diagnostic(
-                    code="MISSING_MISSION",
-                    message="Spec metadata.mission is required when complexity is medium/complex/high",
-                    severity="error",
-                    category="metadata",
-                    location="metadata.mission",
-                    suggested_fix="Set metadata.mission to a concise goal statement",
-                    auto_fixable=False,
-                )
+    metadata = spec_data.get("metadata", {})
+    mission = metadata.get("mission") if isinstance(metadata, dict) else None
+    if not isinstance(mission, str) or not mission.strip():
+        result.diagnostics.append(
+            Diagnostic(
+                code="MISSING_MISSION",
+                message="Spec metadata.mission is required",
+                severity="error",
+                category="metadata",
+                location="metadata.mission",
+                suggested_fix="Set metadata.mission to a concise goal statement",
+                auto_fixable=False,
             )
+        )
 
     # Check hierarchy is dict
     hierarchy = spec_data.get("hierarchy")
@@ -683,13 +664,10 @@ def _validate_dependencies(hierarchy: Dict[str, Any], result: ValidationResult) 
 
 
 def _validate_metadata(
-    spec_data: Dict[str, Any],
     hierarchy: Dict[str, Any],
     result: ValidationResult,
 ) -> None:
     """Validate type-specific metadata requirements."""
-    requires_rich_tasks = _requires_rich_task_fields(spec_data)
-
     def _nonempty_string(value: Any) -> bool:
         return isinstance(value, str) and bool(value.strip())
 
@@ -790,7 +768,7 @@ def _validate_metadata(
                     )
                 )
 
-            if requires_rich_tasks and task_category is None:
+            if task_category is None:
                 result.diagnostics.append(
                     Diagnostic(
                         code="MISSING_TASK_CATEGORY",
@@ -803,7 +781,7 @@ def _validate_metadata(
                     )
                 )
 
-            if requires_rich_tasks and not _has_description(metadata):
+            if not _has_description(metadata):
                 result.diagnostics.append(
                     Diagnostic(
                         code="MISSING_TASK_DESCRIPTION",
@@ -816,58 +794,57 @@ def _validate_metadata(
                     )
                 )
 
-            if requires_rich_tasks:
-                acceptance_criteria = metadata.get("acceptance_criteria")
-                if acceptance_criteria is None:
-                    result.diagnostics.append(
-                        Diagnostic(
-                            code="MISSING_ACCEPTANCE_CRITERIA",
-                            message=f"Task node '{node_id}' missing metadata.acceptance_criteria",
-                            severity="error",
-                            category="metadata",
-                            location=node_id,
-                            suggested_fix="Provide a non-empty acceptance_criteria list",
-                            auto_fixable=False,
-                        )
+            acceptance_criteria = metadata.get("acceptance_criteria")
+            if acceptance_criteria is None:
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="MISSING_ACCEPTANCE_CRITERIA",
+                        message=f"Task node '{node_id}' missing metadata.acceptance_criteria",
+                        severity="error",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Provide a non-empty acceptance_criteria list",
+                        auto_fixable=False,
                     )
-                elif not isinstance(acceptance_criteria, list):
+                )
+            elif not isinstance(acceptance_criteria, list):
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="INVALID_ACCEPTANCE_CRITERIA",
+                        message=(f"Task node '{node_id}' metadata.acceptance_criteria must be a list of strings"),
+                        severity="error",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Provide acceptance_criteria as an array of strings",
+                        auto_fixable=False,
+                    )
+                )
+            elif not acceptance_criteria:
+                result.diagnostics.append(
+                    Diagnostic(
+                        code="MISSING_ACCEPTANCE_CRITERIA",
+                        message=f"Task node '{node_id}' must include at least one acceptance criterion",
+                        severity="error",
+                        category="metadata",
+                        location=node_id,
+                        suggested_fix="Add at least one acceptance criterion",
+                        auto_fixable=False,
+                    )
+                )
+            else:
+                invalid_items = [idx for idx, item in enumerate(acceptance_criteria) if not _nonempty_string(item)]
+                if invalid_items:
                     result.diagnostics.append(
                         Diagnostic(
                             code="INVALID_ACCEPTANCE_CRITERIA",
-                            message=(f"Task node '{node_id}' metadata.acceptance_criteria must be a list of strings"),
+                            message=(f"Task node '{node_id}' has invalid acceptance_criteria entries"),
                             severity="error",
                             category="metadata",
                             location=node_id,
-                            suggested_fix="Provide acceptance_criteria as an array of strings",
+                            suggested_fix="Ensure acceptance_criteria contains non-empty strings",
                             auto_fixable=False,
                         )
                     )
-                elif not acceptance_criteria:
-                    result.diagnostics.append(
-                        Diagnostic(
-                            code="MISSING_ACCEPTANCE_CRITERIA",
-                            message=f"Task node '{node_id}' must include at least one acceptance criterion",
-                            severity="error",
-                            category="metadata",
-                            location=node_id,
-                            suggested_fix="Add at least one acceptance criterion",
-                            auto_fixable=False,
-                        )
-                    )
-                else:
-                    invalid_items = [idx for idx, item in enumerate(acceptance_criteria) if not _nonempty_string(item)]
-                    if invalid_items:
-                        result.diagnostics.append(
-                            Diagnostic(
-                                code="INVALID_ACCEPTANCE_CRITERIA",
-                                message=(f"Task node '{node_id}' has invalid acceptance_criteria entries"),
-                                severity="error",
-                                category="metadata",
-                                location=node_id,
-                                suggested_fix="Ensure acceptance_criteria contains non-empty strings",
-                                auto_fixable=False,
-                            )
-                        )
 
             category_for_file_path = task_category
             # file_path required for implementation and refactoring.
