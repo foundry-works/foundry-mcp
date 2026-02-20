@@ -23,6 +23,10 @@ def _make_spec_data():
                 "type": "phase",
                 "title": "Phase One",
                 "status": "in_progress",
+                "metadata": {
+                    "description": "Initial implementation of core features",
+                    "purpose": "Establish the foundation module",
+                },
                 "children": ["task-1", "verify-fidelity-1"],
             },
             "task-1": {
@@ -32,6 +36,7 @@ def _make_spec_data():
                 "status": "in_progress",
                 "metadata": {
                     "description": "Create the greet() function in feature module",
+                    "task_category": "implementation",
                     "file_path": "src/feature.py",
                     "details": ["Add the feature"],
                 },
@@ -167,11 +172,47 @@ class TestBuildSpecRequirements:
         spec = _make_spec_data()
         spec["hierarchy"]["task-1"]["metadata"] = {}
         spec["hierarchy"]["verify-fidelity-1"]["metadata"] = {}
+        del spec["hierarchy"]["phase-1"]["metadata"]
         result = _build_spec_requirements(spec, None, "phase-1")
         assert "task-1" in result
         assert "Description:" not in result
         assert "Detail:" not in result
         assert "File:" not in result
+        assert "Category:" not in result
+        assert "Purpose:" not in result
+
+    def test_task_scope_includes_category(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, "task-1", None)
+        assert "Category:** implementation" in result
+
+    def test_task_scope_no_category_is_graceful(self):
+        spec = _make_spec_data()
+        del spec["hierarchy"]["task-1"]["metadata"]["task_category"]
+        result = _build_spec_requirements(spec, "task-1", None)
+        assert "Category" not in result
+
+    def test_phase_scope_includes_child_category(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "Category: implementation" in result
+
+    def test_phase_scope_includes_phase_description(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "Initial implementation of core features" in result
+
+    def test_phase_scope_includes_phase_purpose(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "Establish the foundation module" in result
+
+    def test_phase_scope_no_phase_metadata_is_graceful(self):
+        spec = _make_spec_data()
+        del spec["hierarchy"]["phase-1"]["metadata"]
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "Phase One" in result
+        assert "Purpose:" not in result
 
 
 # ---------------------------------------------------------------------------

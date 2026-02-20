@@ -23,6 +23,8 @@ def _build_spec_requirements(
                 return "*Task excluded from review context (fidelity-verify node)*"
             lines.append(f"### Task: {task.get('title', task_id)}")
             lines.append(f"- **Status:** {task.get('status', 'unknown')}")
+            if task.get("metadata", {}).get("task_category"):
+                lines.append(f"- **Category:** {task['metadata']['task_category']}")
             if task.get("metadata", {}).get("description"):
                 lines.append(f"- **Description:** {task['metadata']['description']}")
             if task.get("metadata", {}).get("details"):
@@ -42,6 +44,10 @@ def _build_spec_requirements(
         if phase:
             lines.append(f"### Phase: {phase.get('title', phase_id)}")
             lines.append(f"- **Status:** {phase.get('status', 'unknown')}")
+            if phase.get("metadata", {}).get("description"):
+                lines.append(f"- **Description:** {phase['metadata']['description']}")
+            if phase.get("metadata", {}).get("purpose"):
+                lines.append(f"- **Purpose:** {phase['metadata']['purpose']}")
             child_nodes = _get_child_nodes(spec_data, phase)
             if child_nodes:
                 lines.append("- **Tasks:**")
@@ -49,6 +55,9 @@ def _build_spec_requirements(
                     if exclude_fidelity_verify and _is_fidelity_verify_node(child):
                         continue
                     lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
+                    child_cat = child.get("metadata", {}).get("task_category")
+                    if child_cat:
+                        lines.append(f"    - Category: {child_cat}")
                     child_desc = child.get("metadata", {}).get("description")
                     if child_desc:
                         lines.append(f"    - Description: {child_desc}")
