@@ -29,7 +29,6 @@ from foundry_mcp.core.spec.hierarchy import (  # noqa: F401 — re-exports
     _generate_phase_id,
     _normalize_acceptance_criteria,
     _remove_dependency_references,
-    _requires_rich_task_fields,
     add_phase,
     add_phase_bulk,
     get_node,

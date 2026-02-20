@@ -368,12 +368,25 @@ class TestDryRun:
 
 
 class TestSuccess:
+    def _valid_task(self, **overrides):
+        """Return a fully valid task definition with required fields."""
+        task = {
+            "type": "task",
+            "title": "Task 1",
+            "description": "Implement the task",
+            "task_category": "implementation",
+            "file_path": "src/task.py",
+            "acceptance_criteria": ["Task works correctly"],
+        }
+        task.update(overrides)
+        return task
+
     def test_create_phase_with_tasks(self, authoring_tool, test_specs_dir):
         result = authoring_tool(
             action="phase-add-bulk",
             spec_id="bulk-test-spec-001",
             phase={"title": "New Phase", "description": "Desc"},
-            tasks=[{"type": "task", "title": "Task 1"}],
+            tasks=[self._valid_task()],
         )
         assert result["success"] is True
         assert result["data"]["dry_run"] is False
@@ -388,7 +401,7 @@ class TestSuccess:
             action="phase-add-bulk",
             spec_id="bulk-test-spec-001",
             phase={"title": "Full", "description": "D", "purpose": "P", "estimated_hours": 5.0},
-            tasks=[{"type": "task", "title": "T", "estimated_hours": 2.0}],
+            tasks=[self._valid_task(title="T", estimated_hours=2.0)],
             position=0,
             link_previous=False,
         )
@@ -399,7 +412,7 @@ class TestSuccess:
             action="phase-add-bulk",
             spec_id="bulk-test-spec-001",
             phase={"title": "P"},
-            tasks=[{"type": "task", "title": "T"}],
+            tasks=[self._valid_task(title="T")],
         )
         assert result["success"] is True
         assert "telemetry" in result["meta"]

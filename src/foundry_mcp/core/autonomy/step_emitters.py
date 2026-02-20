@@ -96,6 +96,9 @@ ERROR_VERIFICATION_RECEIPT_INVALID = "VERIFICATION_RECEIPT_INVALID"
 ERROR_GATE_INTEGRITY_CHECKSUM = "GATE_INTEGRITY_CHECKSUM"
 ERROR_GATE_AUDIT_FAILURE = "GATE_AUDIT_FAILURE"
 
+# Step-message hint telling the runner which outcome values are valid.
+_OUTCOME_HINT = 'When reporting this step, use outcome: "success", "failure", or "skipped".'
+
 
 # =============================================================================
 # Orchestration Result Types
@@ -903,7 +906,7 @@ class StepEmitterMixin:
             gate_attempt_id=None,
             instructions=instructions,
             reason=None,
-            message=None,
+            message=f"Implement task '{task_title or task_id}'. {_OUTCOME_HINT}",
             step_proof=step_proof,
         )
 
@@ -996,7 +999,7 @@ class StepEmitterMixin:
             gate_attempt_id=None,
             instructions=instructions,
             reason=None,
-            message=None,
+            message=f"Execute verification '{task_title or task_id}'. {_OUTCOME_HINT}",
             step_proof=step_proof,
         )
 
@@ -1061,12 +1064,19 @@ class StepEmitterMixin:
             StepInstruction(
                 tool="review",
                 action="fidelity-gate",
-                description=f"Run fidelity review for phase {phase_title}",
+                description=(
+                    f"Run fidelity review for phase {phase_title} "
+                    f"(spec_id={session.spec_id}, phase_id={phase_id}, "
+                    f"session_id={session.id}, step_id={step_id})"
+                ),
             ),
             StepInstruction(
                 tool="task",
                 action="session-step-next",
-                description="Report gate outcome and request the next step",
+                description=(
+                    f"Report gate outcome and request the next step "
+                    f"(step_type=run_fidelity_gate, gate_attempt_id={gate_attempt_id})"
+                ),
             ),
         ]
 
@@ -1079,7 +1089,7 @@ class StepEmitterMixin:
             gate_attempt_id=gate_attempt_id,
             instructions=instructions,
             reason=None,
-            message=None,
+            message=f"Run fidelity gate for phase '{phase_title}'. {_OUTCOME_HINT}",
             step_proof=step_proof,
         )
 
@@ -1125,7 +1135,10 @@ class StepEmitterMixin:
             StepInstruction(
                 tool="review",
                 action="fidelity",
-                description="Inspect phase fidelity findings before remediation",
+                description=(
+                    f"Inspect phase fidelity findings before remediation "
+                    f"(spec_id={session.spec_id}, phase_id={evidence.phase_id})"
+                ),
             ),
             StepInstruction(
                 tool="task",
@@ -1135,7 +1148,9 @@ class StepEmitterMixin:
             StepInstruction(
                 tool="task",
                 action="session-step-next",
-                description="Report remediation progress and request a gate retry",
+                description=(
+                    "Report remediation progress and request a gate retry (step_type=address_fidelity_feedback)"
+                ),
             ),
         ]
 
@@ -1148,7 +1163,7 @@ class StepEmitterMixin:
             gate_attempt_id=evidence.gate_attempt_id,
             instructions=instructions,
             reason=None,
-            message=None,
+            message=f"Address fidelity feedback for phase {evidence.phase_id}. {_OUTCOME_HINT}",
             step_proof=step_proof,
         )
 

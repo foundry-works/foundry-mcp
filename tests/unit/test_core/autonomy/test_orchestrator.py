@@ -1546,6 +1546,87 @@ class TestCreateStepHelpers:
             assert instruction.tool in allowed_actions
             assert instruction.action in allowed_actions[instruction.tool]
 
+    def test_step_message_includes_outcome_hint(self, tmp_path):
+        """All action step types include outcome values in the message field."""
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(active_phase_id="phase-1")
+        now = datetime.now(timezone.utc)
+
+        implement = orch._create_implement_task_step(
+            session,
+            {"id": "task-1", "title": "Task 1"},
+            make_spec_data(),
+            now,
+        )
+        verification = orch._create_verification_step(
+            session,
+            {"id": "verify-1", "title": "Verify 1"},
+            now,
+        )
+        gate = orch._create_fidelity_gate_step(
+            session,
+            {"id": "phase-1", "title": "Phase 1"},
+            now,
+        )
+        evidence = PendingGateEvidence(
+            gate_attempt_id="gate-001",
+            step_id="s1",
+            phase_id="phase-1",
+            verdict=GateVerdict.FAIL,
+            issued_at=now,
+        )
+        feedback = orch._create_fidelity_feedback_step(session, evidence, now)
+
+        for label, result in [
+            ("implement", implement),
+            ("verification", verification),
+            ("gate", gate),
+            ("feedback", feedback),
+        ]:
+            msg = result.next_step.message
+            assert msg is not None, f"{label} step should have a non-None message"
+            assert "success" in msg, f"{label} message missing 'success'"
+            assert "failure" in msg, f"{label} message missing 'failure'"
+            assert "skipped" in msg, f"{label} message missing 'skipped'"
+
+    def test_fidelity_gate_instruction_includes_required_params(self, tmp_path):
+        """Fidelity gate/feedback instruction descriptions include required param values."""
+        orch = _make_orchestrator(tmp_path)
+        session = make_session(active_phase_id="phase-1")
+        now = datetime.now(timezone.utc)
+
+        gate_result = orch._create_fidelity_gate_step(
+            session,
+            {"id": "phase-1", "title": "Phase 1"},
+            now,
+        )
+        gate_instructions = gate_result.next_step.instructions
+        review_desc = gate_instructions[0].description
+        assert "spec_id=" in review_desc
+        assert "phase_id=phase-1" in review_desc
+        assert f"session_id={session.id}" in review_desc
+        assert "step_id=" in review_desc
+
+        report_desc = gate_instructions[1].description
+        assert "step_type=run_fidelity_gate" in report_desc
+        assert "gate_attempt_id=" in report_desc
+
+        evidence = PendingGateEvidence(
+            gate_attempt_id="gate-001",
+            step_id="s1",
+            phase_id="phase-1",
+            verdict=GateVerdict.FAIL,
+            issued_at=now,
+        )
+        feedback_result = orch._create_fidelity_feedback_step(session, evidence, now)
+        fb_instructions = feedback_result.next_step.instructions
+        fb_review_desc = fb_instructions[0].description
+        assert "spec_id=" in fb_review_desc
+        assert "phase_id=phase-1" in fb_review_desc
+
+        fb_report_desc = fb_instructions[2].description
+        assert "step_type=address_fidelity_feedback" in fb_report_desc
+
 
 # =============================================================================
 # Gate Evidence Handling (steps 13-14)
@@ -1674,6 +1755,136 @@ class TestHandleGateEvidence:
         )
         # Counter unchanged — increment now happens in _handle_gate_evidence
         assert session.counters.fidelity_review_cycles_in_active_phase == 1
+
+
+# =============================================================================
+# Fidelity Gate Evidence Clearing
+# =============================================================================
+
+
+class TestFidelityGateEvidenceClearing:
+    """Verify pending_gate_evidence is cleared on successful fidelity feedback."""
+
+    def test_pending_gate_evidence_cleared_on_successful_feedback(self, tmp_path):
+        """_record_step_outcome clears evidence when ADDRESS_FIDELITY_FEEDBACK succeeds."""
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        evidence = PendingGateEvidence(
+            gate_attempt_id="gate-001",
+            step_id="s1",
+            phase_id="phase-1",
+            verdict=GateVerdict.FAIL,
+            issued_at=now,
+        )
+        session = make_session(
+            active_phase_id="phase-1",
+            pending_gate_evidence=evidence,
+        )
+
+        orch._record_step_outcome(
+            session,
+            _result(
+                step_id="s2",
+                step_type=StepType.ADDRESS_FIDELITY_FEEDBACK,
+                outcome=StepOutcome.SUCCESS,
+                task_id=None,
+                phase_id="phase-1",
+            ),
+            now,
+        )
+        assert session.pending_gate_evidence is None
+
+    def test_pending_gate_evidence_preserved_on_failed_feedback(self, tmp_path):
+        """_record_step_outcome does NOT clear evidence when feedback fails."""
+        orch = _make_orchestrator(tmp_path)
+        now = datetime.now(timezone.utc)
+        evidence = PendingGateEvidence(
+            gate_attempt_id="gate-001",
+            step_id="s1",
+            phase_id="phase-1",
+            verdict=GateVerdict.FAIL,
+            issued_at=now,
+        )
+        session = make_session(
+            active_phase_id="phase-1",
+            pending_gate_evidence=evidence,
+        )
+
+        orch._record_step_outcome(
+            session,
+            _result(
+                step_id="s2",
+                step_type=StepType.ADDRESS_FIDELITY_FEEDBACK,
+                outcome=StepOutcome.FAILURE,
+                task_id=None,
+                phase_id="phase-1",
+            ),
+            now,
+        )
+        assert session.pending_gate_evidence is evidence
+
+    def test_full_fidelity_cycle_gate_fail_feedback_gate_retry(self, tmp_path):
+        """End-to-end: gate fail -> feedback success -> next step is RUN_FIDELITY_GATE.
+
+        After ADDRESS_FIDELITY_FEEDBACK succeeds, evidence is cleared and
+        _determine_next_step re-issues the fidelity gate instead of looping
+        back into _handle_gate_evidence or pausing.
+        """
+        spec_data = make_spec_data(
+            phases=[
+                {
+                    "id": "phase-1",
+                    "title": "Phase 1",
+                    "sequence_index": 0,
+                    "tasks": [
+                        {"id": "task-1", "title": "Task 1", "type": "task", "status": "completed"},
+                        {"id": "verify-1", "title": "Verify 1", "type": "verify", "status": "completed"},
+                    ],
+                },
+            ],
+        )
+        orch = _make_orchestrator(tmp_path, spec_data=spec_data)
+        now = datetime.now(timezone.utc)
+
+        evidence = PendingGateEvidence(
+            gate_attempt_id="gate-001",
+            step_id="s1",
+            phase_id="phase-1",
+            verdict=GateVerdict.FAIL,
+            issued_at=now,
+        )
+        session = make_session(
+            active_phase_id="phase-1",
+            pending_gate_evidence=evidence,
+            completed_task_ids=["task-1", "verify-1"],
+            phase_gates={
+                "phase-1": PhaseGateRecord(
+                    required=True,
+                    status=PhaseGateStatus.FAILED,
+                )
+            },
+            stop_conditions=StopConditions(auto_retry_fidelity_gate=True),
+        )
+
+        # Simulate successful feedback clearing the evidence
+        orch._record_step_outcome(
+            session,
+            _result(
+                step_id="s2",
+                step_type=StepType.ADDRESS_FIDELITY_FEEDBACK,
+                outcome=StepOutcome.SUCCESS,
+                task_id=None,
+                phase_id="phase-1",
+            ),
+            now,
+        )
+        assert session.pending_gate_evidence is None
+
+        # With evidence cleared, _determine_next_step should re-issue the gate
+        result = orch._determine_next_step(session, spec_data, now)
+        assert result.success is True
+        assert result.next_step is not None
+        assert result.next_step.type == StepType.RUN_FIDELITY_GATE
 
 
 # =============================================================================
