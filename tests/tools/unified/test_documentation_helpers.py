@@ -31,6 +31,7 @@ def _make_spec_data():
                 "title": "Implement feature",
                 "status": "in_progress",
                 "metadata": {
+                    "description": "Create the greet() function in feature module",
                     "file_path": "src/feature.py",
                     "details": ["Add the feature"],
                 },
@@ -134,6 +135,43 @@ class TestBuildSpecRequirements:
         spec = _make_spec_data()
         result = _build_spec_requirements(spec, "task-1", None, exclude_fidelity_verify=True)
         assert "Implement feature" in result
+
+    def test_task_scope_includes_description(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, "task-1", None)
+        assert "Create the greet() function in feature module" in result
+
+    def test_task_scope_no_description_is_graceful(self):
+        spec = _make_spec_data()
+        del spec["hierarchy"]["task-1"]["metadata"]["description"]
+        result = _build_spec_requirements(spec, "task-1", None)
+        assert "Implement feature" in result
+        assert "Description" not in result
+
+    def test_phase_scope_includes_child_description(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "Description: Create the greet() function" in result
+
+    def test_phase_scope_includes_child_details(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "Detail: Add the feature" in result
+
+    def test_phase_scope_includes_child_file_path(self):
+        spec = _make_spec_data()
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "File: src/feature.py" in result
+
+    def test_phase_scope_missing_metadata_is_graceful(self):
+        spec = _make_spec_data()
+        spec["hierarchy"]["task-1"]["metadata"] = {}
+        spec["hierarchy"]["verify-fidelity-1"]["metadata"] = {}
+        result = _build_spec_requirements(spec, None, "phase-1")
+        assert "task-1" in result
+        assert "Description:" not in result
+        assert "Detail:" not in result
+        assert "File:" not in result
 
 
 # ---------------------------------------------------------------------------

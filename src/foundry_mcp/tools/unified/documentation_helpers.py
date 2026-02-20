@@ -23,6 +23,8 @@ def _build_spec_requirements(
                 return "*Task excluded from review context (fidelity-verify node)*"
             lines.append(f"### Task: {task.get('title', task_id)}")
             lines.append(f"- **Status:** {task.get('status', 'unknown')}")
+            if task.get("metadata", {}).get("description"):
+                lines.append(f"- **Description:** {task['metadata']['description']}")
             if task.get("metadata", {}).get("details"):
                 lines.append("- **Details:**")
                 for detail in task["metadata"]["details"]:
@@ -47,6 +49,16 @@ def _build_spec_requirements(
                     if exclude_fidelity_verify and _is_fidelity_verify_node(child):
                         continue
                     lines.append(f"  - {child.get('id', 'unknown')}: {child.get('title', 'Unknown task')}")
+                    child_desc = child.get("metadata", {}).get("description")
+                    if child_desc:
+                        lines.append(f"    - Description: {child_desc}")
+                    child_details = child.get("metadata", {}).get("details")
+                    if child_details and isinstance(child_details, list):
+                        for detail in child_details:
+                            lines.append(f"    - Detail: {detail}")
+                    child_fp = child.get("metadata", {}).get("file_path")
+                    if child_fp:
+                        lines.append(f"    - File: {child_fp}")
                     ac = child.get("metadata", {}).get("acceptance_criteria")
                     if ac and isinstance(ac, list):
                         for criterion in ac:
