@@ -28,6 +28,7 @@ jobs:
     outputs:
       is_beta: ${{ steps.check.outputs.is_beta }}
       version: ${{ steps.check.outputs.version }}
+      already_published: ${{ steps.check.outputs.already_published }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,9 +53,19 @@ jobs:
             echo "⚠️ Not a beta version: $VERSION"
           fi
 
+          # Check if this version already exists on PyPI
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/foundry-mcp/$VERSION/json")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "already_published=true" >> $GITHUB_OUTPUT
+            echo "⏭️ Version $VERSION already exists on PyPI — skipping publish"
+          else
+            echo "already_published=false" >> $GITHUB_OUTPUT
+            echo "✅ Version $VERSION not yet on PyPI"
+          fi
+
   publish:
     needs: validate
-    if: needs.validate.outputs.is_beta == 'true'
+    if: needs.validate.outputs.is_beta == 'true' && needs.validate.outputs.already_published != 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -116,11 +127,15 @@ jobs:
 
   notify-skip:
     needs: validate
-    if: needs.validate.outputs.is_beta != 'true'
+    if: needs.validate.outputs.is_beta != 'true' || needs.validate.outputs.already_published == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Skip notification
         run: |
-          echo "⏭️ Skipping publish - version ${{ needs.validate.outputs.version }} is not a beta version"
-          echo "Beta versions must contain: a, alpha, b, beta, dev, or rc"
-          echo "Example: 0.9.0b1, 0.9.0.beta1, 0.9.0a1, 0.9.0rc1"
+          if [ "${{ needs.validate.outputs.already_published }}" = "true" ]; then
+            echo "⏭️ Skipping publish - version ${{ needs.validate.outputs.version }} already exists on PyPI"
+          else
+            echo "⏭️ Skipping publish - version ${{ needs.validate.outputs.version }} is not a beta version"
+            echo "Beta versions must contain: a, alpha, b, beta, dev, or rc"
+            echo "Example: 0.9.0b1, 0.9.0.beta1, 0.9.0a1, 0.9.0rc1"
+          fi
