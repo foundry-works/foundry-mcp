@@ -90,6 +90,11 @@ class ResearchConfig:
     deep_research_allow_clarification: bool = True
     deep_research_clarification_provider: Optional[str] = None  # Uses default_provider if not set
 
+    # Deep research LLM-driven supervisor reflection
+    deep_research_enable_reflection: bool = False  # Master switch for LLM reflection at phase boundaries
+    deep_research_reflection_provider: Optional[str] = None  # Uses default_provider if not set
+    deep_research_reflection_timeout: float = 60.0  # Timeout per reflection call (seconds)
+
     # Deep research configuration
     deep_research_max_iterations: int = 3
     deep_research_max_sub_queries: int = 5
@@ -270,6 +275,10 @@ class ResearchConfig:
             # Deep research clarification phase
             deep_research_allow_clarification=_parse_bool(data.get("deep_research_allow_clarification", True)),
             deep_research_clarification_provider=data.get("deep_research_clarification_provider"),
+            # Deep research LLM-driven reflection
+            deep_research_enable_reflection=_parse_bool(data.get("deep_research_enable_reflection", False)),
+            deep_research_reflection_provider=data.get("deep_research_reflection_provider"),
+            deep_research_reflection_timeout=float(data.get("deep_research_reflection_timeout", 60.0)),
             # Deep research configuration
             deep_research_max_iterations=int(data.get("deep_research_max_iterations", 3)),
             deep_research_max_sub_queries=int(data.get("deep_research_max_sub_queries", 5)),
@@ -717,6 +726,21 @@ class ResearchConfig:
             "refinement": self.deep_research_refinement_providers,
         }
         return phase_fallbacks.get(phase.lower(), [])
+
+    def get_reflection_provider(self) -> str:
+        """Get LLM provider ID for supervisor reflection calls.
+
+        Returns the reflection-specific provider if configured, otherwise
+        falls back to default_provider.
+
+        Returns:
+            Provider ID for reflection calls
+        """
+        if self.deep_research_reflection_provider:
+            provider_id, _ = _parse_provider_spec(self.deep_research_reflection_provider)
+            return provider_id
+        provider_id, _ = _parse_provider_spec(self.default_provider)
+        return provider_id
 
     def get_digest_provider(self, analysis_provider: Optional[str] = None) -> str:
         """Get LLM provider ID for document digest operations.

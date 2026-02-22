@@ -2,10 +2,12 @@
 
 Contains agent roles, decision tracking, supervisor hooks for workflow
 event injection, and the orchestrator that coordinates phase transitions.
+Includes optional LLM-driven reflection at phase boundaries.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -98,6 +100,39 @@ class AgentDecision:
             "inputs": self.inputs,
             "outputs": self.outputs,
             "timestamp": self.timestamp.isoformat(),
+        }
+
+
+@dataclass
+class ReflectionDecision:
+    """Result of an LLM-driven reflection at a phase boundary.
+
+    Captures the LLM's quality assessment and proceed/adjust recommendation
+    so the supervisor can make informed decisions about workflow continuation.
+    """
+
+    quality_assessment: str  # LLM's assessment of phase output quality
+    proceed: bool  # Whether to proceed to the next phase
+    adjustments: list[str] = dataclass_field(default_factory=list)  # Suggested adjustments
+    rationale: str = ""  # Why the LLM made this recommendation
+    phase: str = ""  # Phase that was evaluated
+    provider_id: Optional[str] = None  # Provider used for reflection
+    model_used: Optional[str] = None  # Model used for reflection
+    tokens_used: int = 0  # Tokens consumed by reflection call
+    duration_ms: float = 0.0  # Duration of reflection call
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "quality_assessment": self.quality_assessment,
+            "proceed": self.proceed,
+            "adjustments": self.adjustments,
+            "rationale": self.rationale,
+            "phase": self.phase,
+            "provider_id": self.provider_id,
+            "model_used": self.model_used,
+            "tokens_used": self.tokens_used,
+            "duration_ms": self.duration_ms,
         }
 
 
@@ -469,6 +504,274 @@ class SupervisorOrchestrator:
 
         state.metadata["agent_decisions"].extend([d.to_dict() for d in self._decisions])
         self._decisions.clear()
+
+    async def async_think_pause(
+        self,
+        state: DeepResearchState,
+        phase: DeepResearchPhase,
+        *,
+        workflow: Any = None,
+    ) -> ReflectionDecision:
+        """Execute LLM-driven reflection at a phase boundary.
+
+        Sends the phase results and state summary to a fast model, which
+        assesses quality and recommends whether to proceed or adjust.
+
+        Args:
+            state: Current research state (after phase execution)
+            phase: The phase that just completed
+            workflow: The DeepResearchWorkflow instance (provides config, _execute_provider_async)
+
+        Returns:
+            ReflectionDecision with LLM assessment
+        """
+        if workflow is None:
+            logger.warning("async_think_pause called without workflow instance, returning proceed=True")
+            return ReflectionDecision(
+                quality_assessment="No workflow context available",
+                proceed=True,
+                rationale="Skipped reflection: no workflow instance provided",
+                phase=phase.value,
+            )
+
+        import time
+
+        reflection_prompt = self._build_reflection_llm_prompt(state, phase)
+        system_prompt = self._build_reflection_system_prompt()
+
+        provider_id = workflow.config.get_reflection_provider()
+        timeout = workflow.config.deep_research_reflection_timeout
+
+        start_time = time.perf_counter()
+
+        try:
+            result = await workflow._execute_provider_async(
+                prompt=reflection_prompt,
+                provider_id=provider_id,
+                model=None,
+                system_prompt=system_prompt,
+                timeout=timeout,
+                temperature=0.2,  # Low temperature for analytical assessment
+                phase="reflection",
+                fallback_providers=[],
+                max_retries=1,
+                retry_delay=2.0,
+            )
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            logger.warning(
+                "Reflection LLM call failed for phase %s: %s. Proceeding with heuristic fallback.",
+                phase.value,
+                exc,
+            )
+            return ReflectionDecision(
+                quality_assessment="Reflection call failed",
+                proceed=True,
+                rationale=f"LLM reflection error: {exc}. Falling back to heuristic.",
+                phase=phase.value,
+                duration_ms=duration_ms,
+            )
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+
+        if not result.success:
+            logger.warning(
+                "Reflection LLM returned failure for phase %s: %s. Using heuristic fallback.",
+                phase.value,
+                result.error,
+            )
+            return ReflectionDecision(
+                quality_assessment="Reflection call returned failure",
+                proceed=True,
+                rationale=f"LLM reflection failed: {result.error}. Falling back to heuristic.",
+                phase=phase.value,
+                provider_id=result.provider_id,
+                model_used=result.model_used,
+                duration_ms=duration_ms,
+            )
+
+        decision = self._parse_reflection_response(
+            result.content,
+            phase=phase,
+            provider_id=result.provider_id,
+            model_used=result.model_used,
+            tokens_used=result.tokens_used or 0,
+            duration_ms=duration_ms,
+        )
+
+        # Record the reflection as an agent decision for traceability
+        self._decisions.append(
+            AgentDecision(
+                agent=AgentRole.SUPERVISOR,
+                action=f"reflect_{phase.value}",
+                rationale=decision.rationale,
+                inputs={"phase": phase.value, "reflection_prompt_length": len(reflection_prompt)},
+                outputs=decision.to_dict(),
+            )
+        )
+
+        return decision
+
+    def _build_reflection_system_prompt(self) -> str:
+        """Build system prompt for LLM reflection calls."""
+        return """You are a research quality supervisor. Your task is to evaluate the quality of a completed research phase and recommend whether to proceed.
+
+Respond with valid JSON in this exact structure:
+{
+    "quality_assessment": "Brief assessment of the phase output quality",
+    "proceed": true/false,
+    "adjustments": ["Optional suggestion 1", "Optional suggestion 2"],
+    "rationale": "Why you recommend proceeding or not"
+}
+
+Rules:
+- Set "proceed" to true if the phase produced usable output, even if imperfect
+- Set "proceed" to false only if the output is fundamentally insufficient
+- Keep adjustments practical and actionable (max 3)
+- Be pragmatic: minor quality issues should not block progress
+- Consider the research phase context when evaluating quality
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
+
+    def _build_reflection_llm_prompt(
+        self,
+        state: DeepResearchState,
+        phase: DeepResearchPhase,
+    ) -> str:
+        """Build the user prompt for LLM reflection, summarizing phase output.
+
+        Args:
+            state: Current research state
+            phase: Phase that just completed
+
+        Returns:
+            Reflection prompt string with phase-specific context
+        """
+        base = (
+            f"Research query: {state.original_query}\n"
+            f"Phase just completed: {phase.value}\n"
+            f"Iteration: {state.iteration}/{state.max_iterations}\n"
+        )
+
+        if phase == DeepResearchPhase.CLARIFICATION:
+            has_constraints = bool(state.clarification_constraints)
+            base += (
+                f"\nConstraints inferred: {has_constraints}\n"
+                f"Constraint keys: {list(state.clarification_constraints.keys()) if has_constraints else '(none)'}\n"
+            )
+
+        elif phase == DeepResearchPhase.PLANNING:
+            base += (
+                f"\nSub-queries generated: {len(state.sub_queries)}\n"
+                f"Sub-queries: {[q.query for q in state.sub_queries[:5]]}\n"
+                f"Research brief available: {state.research_brief is not None}\n"
+            )
+
+        elif phase == DeepResearchPhase.GATHERING:
+            base += (
+                f"\nSources collected: {len(state.sources)}\n"
+                f"Source quality distribution: "
+                f"HIGH={len([s for s in state.sources if s.quality == SourceQuality.HIGH])}, "
+                f"MEDIUM={len([s for s in state.sources if s.quality == SourceQuality.MEDIUM])}, "
+                f"LOW={len([s for s in state.sources if s.quality == SourceQuality.LOW])}\n"
+            )
+
+        elif phase == DeepResearchPhase.ANALYSIS:
+            high_conf = len([f for f in state.findings if f.confidence == ConfidenceLevel.HIGH])
+            base += (
+                f"\nFindings extracted: {len(state.findings)}\n"
+                f"High confidence findings: {high_conf}\n"
+                f"Gaps identified: {len(state.gaps)}\n"
+            )
+
+        elif phase == DeepResearchPhase.SYNTHESIS:
+            report_length = len(state.report) if state.report else 0
+            base += (
+                f"\nReport generated: {state.report is not None}\n"
+                f"Report length: {report_length} chars\n"
+                f"Unresolved gaps: {len(state.unresolved_gaps())}\n"
+            )
+
+        elif phase == DeepResearchPhase.REFINEMENT:
+            resolved = len([g for g in state.gaps if g.resolved])
+            base += (
+                f"\nGaps resolved: {resolved}/{len(state.gaps)}\n"
+                f"Can iterate more: {state.iteration < state.max_iterations}\n"
+            )
+
+        base += "\nEvaluate: Is the output quality sufficient to proceed to the next phase?"
+        return base
+
+    def _parse_reflection_response(
+        self,
+        content: str,
+        *,
+        phase: DeepResearchPhase,
+        provider_id: Optional[str] = None,
+        model_used: Optional[str] = None,
+        tokens_used: int = 0,
+        duration_ms: float = 0.0,
+    ) -> ReflectionDecision:
+        """Parse LLM reflection response into a ReflectionDecision.
+
+        Falls back to proceed=True on parse failures.
+
+        Args:
+            content: Raw LLM response
+            phase: Phase that was evaluated
+            provider_id: Provider used
+            model_used: Model used
+            tokens_used: Tokens consumed
+            duration_ms: Call duration
+
+        Returns:
+            ReflectionDecision
+        """
+        from foundry_mcp.core.research.workflows.deep_research._helpers import extract_json
+
+        default = ReflectionDecision(
+            quality_assessment="Unable to parse reflection response",
+            proceed=True,
+            rationale="Defaulting to proceed due to parse failure",
+            phase=phase.value,
+            provider_id=provider_id,
+            model_used=model_used,
+            tokens_used=tokens_used,
+            duration_ms=duration_ms,
+        )
+
+        if not content:
+            return default
+
+        json_str = extract_json(content)
+        if not json_str:
+            logger.warning("No JSON found in reflection response for phase %s", phase.value)
+            return default
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse reflection JSON for phase %s: %s", phase.value, e)
+            return default
+
+        adjustments_raw = data.get("adjustments", [])
+        adjustments = (
+            [str(a) for a in adjustments_raw[:3] if a]
+            if isinstance(adjustments_raw, list)
+            else []
+        )
+
+        return ReflectionDecision(
+            quality_assessment=str(data.get("quality_assessment", "")),
+            proceed=bool(data.get("proceed", True)),
+            adjustments=adjustments,
+            rationale=str(data.get("rationale", "")),
+            phase=phase.value,
+            provider_id=provider_id,
+            model_used=model_used,
+            tokens_used=tokens_used,
+            duration_ms=duration_ms,
+        )
 
     def get_reflection_prompt(self, state: DeepResearchState, phase: DeepResearchPhase) -> str:
         """Generate a reflection prompt for the supervisor think pause.

@@ -68,6 +68,77 @@ class WorkflowExecutionMixin:
         async def _execute_extract_followup_async(self, *args: Any, **kwargs: Any) -> Any: ...
         async def _execute_digest_step_async(self, *args: Any, **kwargs: Any) -> Any: ...
 
+    async def _maybe_reflect(
+        self,
+        state: DeepResearchState,
+        phase: DeepResearchPhase,
+    ) -> None:
+        """Run LLM-driven reflection if enabled in config.
+
+        Called after a phase completes successfully. Logs the reflection
+        decision and records it in state audit trail. Does not block
+        workflow progression in v1 (proceed is always respected, but
+        adjustments are logged for observability).
+
+        Args:
+            state: Current research state
+            phase: Phase that just completed
+        """
+        if not getattr(self.config, "deep_research_enable_reflection", False):
+            return
+
+        try:
+            decision = await self.orchestrator.async_think_pause(
+                state=state,
+                phase=phase,
+                workflow=self,
+            )
+
+            self._write_audit_event(
+                state,
+                "reflection_complete",
+                data={
+                    "phase": phase.value,
+                    "proceed": decision.proceed,
+                    "quality_assessment": decision.quality_assessment,
+                    "adjustments": decision.adjustments,
+                    "rationale": decision.rationale,
+                    "provider_id": decision.provider_id,
+                    "model_used": decision.model_used,
+                    "tokens_used": decision.tokens_used,
+                    "duration_ms": decision.duration_ms,
+                },
+            )
+
+            if decision.tokens_used:
+                state.total_tokens_used += decision.tokens_used
+
+            if not decision.proceed:
+                logger.warning(
+                    "Reflection recommends NOT proceeding after phase %s (research %s): %s. "
+                    "Logging adjustments but continuing in v1.",
+                    phase.value,
+                    state.id,
+                    decision.rationale,
+                )
+                for adj in decision.adjustments:
+                    logger.info("  Suggested adjustment: %s", adj)
+            else:
+                logger.info(
+                    "Reflection: phase %s quality OK (research %s): %s",
+                    phase.value,
+                    state.id,
+                    decision.quality_assessment[:100],
+                )
+
+        except Exception as exc:
+            logger.warning(
+                "Reflection failed for phase %s (research %s): %s. Continuing without reflection.",
+                phase.value,
+                state.id,
+                exc,
+            )
+
     def _check_cancellation(self, state: DeepResearchState) -> None:
         """Check if cancellation has been requested for this research session.
 
@@ -181,6 +252,7 @@ class WorkflowExecutionMixin:
                 )
                 if err:
                     return err
+                await self._maybe_reflect(state, DeepResearchPhase.CLARIFICATION)
 
             if state.phase == DeepResearchPhase.PLANNING:
                 err = await self._run_phase(
@@ -194,6 +266,7 @@ class WorkflowExecutionMixin:
                 )
                 if err:
                     return err
+                await self._maybe_reflect(state, DeepResearchPhase.PLANNING)
 
             if state.phase == DeepResearchPhase.GATHERING:
                 # Mark the current iteration as in progress (for cancellation handling)
@@ -210,6 +283,8 @@ class WorkflowExecutionMixin:
                 )
                 if err:
                     return err
+
+                await self._maybe_reflect(state, DeepResearchPhase.GATHERING)
 
                 # Optional: Execute extract follow-up to expand URL content
                 if self.config.tavily_extract_in_deep_research:
@@ -266,6 +341,7 @@ class WorkflowExecutionMixin:
                 )
                 if err:
                     return err
+                await self._maybe_reflect(state, DeepResearchPhase.ANALYSIS)
 
             if state.phase == DeepResearchPhase.SYNTHESIS:
                 err = await self._run_phase(
@@ -287,6 +363,7 @@ class WorkflowExecutionMixin:
                     self.orchestrator.decide_iteration(state)
                     prompt = self.orchestrator.get_reflection_prompt(state, DeepResearchPhase.SYNTHESIS)
                     self.hooks.think_pause(state, prompt)
+                    await self._maybe_reflect(state, DeepResearchPhase.SYNTHESIS)
                     self.orchestrator.record_to_state(state)
                 except Exception as exc:
                     logger.exception(
