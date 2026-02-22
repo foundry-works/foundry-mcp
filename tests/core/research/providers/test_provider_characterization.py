@@ -3,7 +3,7 @@
 Captures the current error classification, Retry-After parsing, timeout/cancellation
 propagation, API key resolution, and client lifecycle invariants across all 5
 HTTP-backed research providers. These snapshots ensure behavioral parity after
-the shared-utility extraction in Phase 5.
+the shared-utility extraction.
 """
 
 import httpx
@@ -17,11 +17,11 @@ from foundry_mcp.core.research.providers.base import (
 from foundry_mcp.core.research.providers.resilience import (
     ErrorType,
 )
+from foundry_mcp.core.research.providers.shared import parse_retry_after
 
 # Re-export from conftest for use in this file's test methods
 from tests.core.research.providers.conftest import (
     FACTORY_MAP,
-    PROVIDERS,
     make_mock_response,
 )
 from tests.core.research.providers.conftest import (
@@ -173,74 +173,51 @@ class TestGoogleSpecificErrorClassification:
 
 
 class TestRetryAfterParsing:
-    """Verify Retry-After header is parsed uniformly across providers."""
+    """Verify Retry-After header parsing via shared utility.
 
-    @pytest.mark.parametrize(
-        "provider_name",
-        PROVIDERS,
-    )
-    def test_numeric_retry_after_parsed(self, provider_name):
+    After Phase 4a, providers delegate to the shared ``parse_retry_after``
+    utility.  These tests confirm the centralized implementation handles
+    all edge cases correctly.
+    """
+
+    def test_numeric_retry_after_parsed(self):
         """Numeric Retry-After header is parsed as float seconds."""
-        provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
             status_code=429,
             headers={"Retry-After": "30"},
             text="Rate limited",
             json_data={"error": "rate limited"},
         )
-        result = provider._parse_retry_after(response)
+        assert parse_retry_after(response) == 30.0
 
-        assert result == 30.0
-
-    @pytest.mark.parametrize(
-        "provider_name",
-        PROVIDERS,
-    )
-    def test_float_retry_after_parsed(self, provider_name):
+    def test_float_retry_after_parsed(self):
         """Float Retry-After header is parsed correctly."""
-        provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
             status_code=429,
             headers={"Retry-After": "1.5"},
             text="Rate limited",
             json_data={"error": "rate limited"},
         )
-        result = provider._parse_retry_after(response)
+        assert parse_retry_after(response) == 1.5
 
-        assert result == 1.5
-
-    @pytest.mark.parametrize(
-        "provider_name",
-        PROVIDERS,
-    )
-    def test_missing_retry_after_returns_none(self, provider_name):
+    def test_missing_retry_after_returns_none(self):
         """Missing Retry-After header returns None."""
-        provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
             status_code=429,
             text="Rate limited",
             json_data={"error": "rate limited"},
         )
-        result = provider._parse_retry_after(response)
+        assert parse_retry_after(response) is None
 
-        assert result is None
-
-    @pytest.mark.parametrize(
-        "provider_name",
-        PROVIDERS,
-    )
-    def test_invalid_retry_after_returns_none(self, provider_name):
+    def test_invalid_retry_after_returns_none(self):
         """Non-numeric Retry-After header returns None (silent failure)."""
-        provider = FACTORY_MAP[provider_name]()
         response = make_mock_response(
             status_code=429,
             headers={"Retry-After": "not-a-number"},
             text="Rate limited",
             json_data={"error": "rate limited"},
         )
-        result = provider._parse_retry_after(response)
-
-        assert result is None
+        assert parse_retry_after(response) is None
 
 
 # ===================================================================
@@ -451,12 +428,8 @@ class TestClientLifecycleInvariants:
         assert rate_limit is None or isinstance(rate_limit, (int, float))
 
     def test_has_classify_error_method(self, provider):
-        """All providers implement classify_error."""
+        """All providers implement classify_error (inherited or overridden)."""
         assert callable(getattr(provider, "classify_error", None))
-
-    def test_has_parse_retry_after_method(self, provider):
-        """All providers implement _parse_retry_after."""
-        assert callable(getattr(provider, "_parse_retry_after", None))
 
 
 # ===================================================================

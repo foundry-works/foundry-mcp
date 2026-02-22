@@ -277,6 +277,40 @@ def extract_domain(url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+def extract_status_code(error_message: str) -> Optional[int]:
+    """Extract an HTTP status code from an error message string.
+
+    Looks for patterns like ``"HTTP 503"``, ``"API error 429:"``, or bare
+    ``"500"`` / ``"502"`` / ``"503"`` / ``"504"`` status codes.
+
+    Args:
+        error_message: Error message that may contain an HTTP status code.
+
+    Returns:
+        The extracted status code as an ``int``, or ``None`` if none found.
+    """
+    if not error_message:
+        return None
+    match = re.search(r"\b([1-5]\d{2})\b", error_message)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+# Default resilience behaviour for each ErrorType.
+# Mapping: ErrorType -> (retryable, trips_breaker)
+_ERROR_TYPE_DEFAULTS: dict[str, tuple[bool, bool]] = {
+    "rate_limit": (True, False),
+    "quota_exceeded": (True, False),
+    "server_error": (True, True),
+    "timeout": (True, True),
+    "network": (True, True),
+    "authentication": (False, False),
+    "invalid_request": (False, False),
+    "unknown": (False, True),
+}
+
+
 def classify_http_error(
     error: Exception,
     provider_name: str,

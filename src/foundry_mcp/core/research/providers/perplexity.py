@@ -24,7 +24,7 @@ import logging
 import os
 from dataclasses import replace
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import httpx
 
@@ -39,13 +39,12 @@ from foundry_mcp.core.research.providers.base import (
     SearchResult,
 )
 from foundry_mcp.core.research.providers.resilience import (
-    ErrorClassification,
+    ErrorType,
     ProviderResilienceConfig,
     get_provider_config,
 )
 from foundry_mcp.core.research.providers.shared import (
     check_provider_health,
-    classify_http_error,
     create_resilience_executor,
     extract_domain,
     extract_error_message,
@@ -195,6 +194,10 @@ class PerplexitySearchProvider(SearchProvider):
             recency_filter="week",
         )
     """
+
+    ERROR_CLASSIFIERS: ClassVar[dict[int, ErrorType]] = {
+        429: ErrorType.RATE_LIMIT,
+    }
 
     def __init__(
         self,
@@ -432,18 +435,6 @@ class PerplexitySearchProvider(SearchProvider):
         )
         return await executor(make_request, timeout=self._timeout)
 
-    def _parse_retry_after(self, response: httpx.Response) -> Optional[float]:
-        """Parse Retry-After header. Delegates to shared utility."""
-        return parse_retry_after(response)
-
-    def _parse_date(self, date_str: Optional[str]) -> Optional[datetime]:
-        """Parse date string. Delegates to shared utility."""
-        return parse_iso_date(date_str)
-
-    def _extract_domain(self, url: str) -> Optional[str]:
-        """Extract domain from URL. Delegates to shared utility."""
-        return extract_domain(url)
-
     def _parse_response(
         self,
         data: dict[str, Any],
@@ -514,6 +505,3 @@ class PerplexitySearchProvider(SearchProvider):
             test_func=lambda: self.search("test", max_results=1),
         )
 
-    def classify_error(self, error: Exception) -> ErrorClassification:
-        """Classify an error for resilience decisions."""
-        return classify_http_error(error, "perplexity")

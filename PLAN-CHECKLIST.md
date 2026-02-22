@@ -144,33 +144,47 @@
 ## Phase 4: Provider Boilerplate Consolidation
 
 ### 4a. Extract shared utilities
-- [ ] Consolidate `parse_retry_after()` (5 copies → 1 in `shared.py`)
-- [ ] Update all 5 provider imports for `parse_retry_after`
-- [ ] Consolidate `extract_domain()` (3 copies → 1 in `shared.py`)
-- [ ] Update all 3 provider imports for `extract_domain`
-- [ ] Consolidate `parse_iso_date()` (5 copies → 1 in `shared.py`)
-- [ ] Update all 5 provider imports for `parse_iso_date`
-- [ ] Consolidate validation error classification (4 copies → `classify_http_error()` factory)
-- [ ] Update all 4 provider imports for classification
-- [ ] Delete all inline copies after import verification
+- [x] Consolidate `parse_retry_after()` (5 copies → 1 in `shared.py`)
+- [x] Update all 5 provider imports for `parse_retry_after`
+- [x] Consolidate `extract_domain()` (3 copies → 1 in `shared.py`)
+- [x] Update all 3 provider imports for `extract_domain`
+- [x] Consolidate `parse_iso_date()` (5 copies → 1 in `shared.py`)
+- [x] Update all 5 provider imports for `parse_iso_date`
+- [x] Consolidate validation error classification (4 copies → `classify_http_error()` factory)
+- [x] Update all 4 provider imports for classification
+- [x] Delete all inline copies after import verification
+- [x] Remove dead `_parse_retry_after()` wrappers from all 5 providers
+- [x] Remove dead `_parse_date()` wrappers from google, perplexity (keep semantic_scholar — adds `extra_formats`)
+- [x] Remove dead `_extract_domain()` wrapper from perplexity; inline in tavily_extract
+- [x] Update `test_provider_characterization.py` — remove `_parse_retry_after` references
+- [x] Update `test_perplexity.py` — use shared functions instead of removed wrappers
 
 ### 4b. Provider-specific error classifier registry
-- [ ] Add `ERROR_CLASSIFIERS: dict[int, ErrorType]` class variable to `SearchProvider`
-- [ ] Update default `classify_error()` to check registry before generic fallback
-- [ ] Google: register 403-quota, 429-rate-limit classifiers
-- [ ] Perplexity: register 429-rate-limit classifier
-- [ ] SemanticScholar: register 504-gateway classifier
-- [ ] Verify Tavily + TavilyExtract work with defaults (no custom classifiers needed)
+- [x] Add `ERROR_CLASSIFIERS: ClassVar[dict[int, ErrorType]]` class variable to `SearchProvider`
+- [x] Add `extract_status_code()` helper to `shared.py`
+- [x] Add `_ERROR_TYPE_DEFAULTS` mapping to `shared.py`
+- [x] Update default `classify_error()` to check registry then delegate to `classify_http_error`
+- [x] Google: register 403-quota, 429-rate-limit classifiers (keeps custom `classify_error` override for `RateLimitError` quota detection)
+- [x] Perplexity: register 429-rate-limit classifier, remove `classify_error` override
+- [x] SemanticScholar: register 504-gateway classifier, remove `classify_error` override
+- [x] Tavily: remove `classify_error` override (uses base default, empty registry)
+- [x] TavilyExtract: keep `classify_error` (standalone class, not a `SearchProvider` subclass)
+- [x] Verify Tavily + TavilyExtract work with defaults (no custom classifiers needed)
 
 ### 4c. Tests
-- [ ] Create `tests/core/research/providers/test_shared_utils.py`
-- [ ] Test `parse_retry_after()`: valid header, missing header, malformed header
-- [ ] Test `extract_domain()`: standard URL, subdomain, unicode, malformed
-- [ ] Test `parse_iso_date()`: ISO format, timezone-aware, malformed, None
-- [ ] Test `classify_http_error()`: known codes, unknown codes, edge cases
-- [ ] Update `test_error_classification.py` — registry-based classifiers work
-- [ ] Test providers without custom classifiers use defaults correctly
-- [ ] Run: `pytest tests/core/research/ -v`
+- [x] Create `tests/core/research/providers/test_shared_utils.py`
+- [x] Test `parse_retry_after()`: valid header, missing header, malformed header, zero, large, RFC date
+- [x] Test `extract_domain()`: standard URL, subdomain, unicode, IP address, malformed
+- [x] Test `parse_iso_date()`: ISO format, timezone-aware, malformed, None, year-only with extra_formats
+- [x] Test `extract_status_code()`: standard format, API error, bare code, no code, edge cases
+- [x] Test `ERROR_CLASSIFIERS` registry: all providers have expected entries
+- [x] Test registry matches status codes in `SearchProviderError` messages
+- [x] Test registry falls through for unregistered codes
+- [x] Test providers without custom classifiers use defaults correctly
+- [x] Test all providers classify auth/timeout errors consistently
+- [x] Run: `pytest tests/core/research/providers/ -v` (579 passed)
+- [x] Fix ruff lint issues (unused imports in `base.py`, `ErrorClassification` annotation in `tavily_extract.py`, import sorting in test)
+- [x] Run: `pytest tests/core/research/ -v` (1381 passed, 6 skipped)
 
 ---
 

@@ -35,7 +35,7 @@ Example usage:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from foundry_mcp.core.research.models.sources import (
     ResearchSource,
@@ -45,6 +45,7 @@ from foundry_mcp.core.research.models.sources import (
 
 if TYPE_CHECKING:
     from foundry_mcp.core.research.providers.resilience import ErrorClassification
+    from foundry_mcp.core.research.providers.resilience.models import ErrorType
 
 
 @dataclass(frozen=True)
@@ -119,7 +120,8 @@ class SearchProvider(ABC):
     - Implement get_provider_name() to return a unique identifier
     - Implement search() to execute queries against the provider
     - Optionally override rate_limit property for rate limiting config
-    - Optionally override classify_error() for provider-specific error handling
+    - Optionally set ERROR_CLASSIFIERS for provider-specific error handling
+    - Optionally override classify_error() for complex classification logic
 
     Resilience Integration:
         Providers are wrapped by `execute_with_resilience()` when called from
@@ -134,13 +136,29 @@ class SearchProvider(ABC):
         - `trips_breaker=True`: Error counts toward circuit breaker threshold
         - `error_type`: Categorizes error for metrics and logging
 
-        Override `classify_error()` in subclasses to customize error handling
-        based on provider-specific HTTP status codes or error responses.
+        For simple status-code-based classification, set ``ERROR_CLASSIFIERS``
+        as a class variable mapping HTTP status codes to ``ErrorType`` values.
+        For complex logic (e.g. Google's 403 quota detection), override
+        ``classify_error()`` directly.
 
     Example:
         provider = TavilySearchProvider(api_key="...")
         sources = await provider.search("machine learning trends", max_results=5)
     """
+
+    #: Override in subclasses to register provider-specific HTTP status code
+    #: to ErrorType mappings.  The default ``classify_error()`` checks this
+    #: registry for ``SearchProviderError`` instances before falling back to
+    #: the generic ``classify_http_error()`` logic.
+    #:
+    #: Example::
+    #:
+    #:     class MyProvider(SearchProvider):
+    #:         ERROR_CLASSIFIERS: ClassVar[dict[int, ErrorType]] = {
+    #:             403: ErrorType.QUOTA_EXCEEDED,
+    #:             429: ErrorType.RATE_LIMIT,
+    #:         }
+    ERROR_CLASSIFIERS: ClassVar[dict[int, "ErrorType"]] = {}
 
     @abstractmethod
     def get_provider_name(self) -> str:
@@ -205,21 +223,27 @@ class SearchProvider(ABC):
     def classify_error(self, error: Exception) -> "ErrorClassification":
         """Classify an error for resilience decisions.
 
-        This hook is called by `execute_with_resilience()` to determine how
+        This hook is called by ``execute_with_resilience()`` to determine how
         to handle provider errors. The classification drives:
-        - Retry behavior: `retryable=True` triggers exponential backoff retry
-        - Circuit breaker: `trips_breaker=True` increments failure count
-        - Metrics: `error_type` is recorded for observability
 
-        Default implementation handles common patterns:
-        - AuthenticationError: Not retryable, doesn't trip breaker
-        - RateLimitError: Retryable with backoff_seconds, doesn't trip breaker
+        - Retry behavior: ``retryable=True`` triggers exponential backoff retry
+        - Circuit breaker: ``trips_breaker=True`` increments failure count
+        - Metrics: ``error_type`` is recorded for observability
+
+        The default implementation checks :attr:`ERROR_CLASSIFIERS` for
+        ``SearchProviderError`` instances whose message contains a matching
+        HTTP status code, then falls back to the shared
+        ``classify_http_error()`` logic which handles common patterns:
+
+        - ``AuthenticationError``: Not retryable, doesn't trip breaker
+        - ``RateLimitError``: Retryable with backoff_seconds, doesn't trip breaker
         - 5xx errors: Retryable, trips breaker
         - Timeouts: Retryable, trips breaker
         - Network errors: Retryable, trips breaker
 
-        Override in subclasses for provider-specific error classification,
-        e.g., to handle custom error codes or parse API error responses.
+        Override in subclasses only when classification requires logic that
+        cannot be expressed via the ``ERROR_CLASSIFIERS`` registry (e.g.
+        Google's 403 quota detection which inspects error message content).
 
         Args:
             error: The exception to classify
@@ -227,48 +251,36 @@ class SearchProvider(ABC):
         Returns:
             ErrorClassification with retryable, trips_breaker, and error_type
         """
-        # Import here to avoid circular imports
         from foundry_mcp.core.research.providers.resilience import (
             ErrorClassification,
-            ErrorType,
+        )
+        from foundry_mcp.core.research.providers.shared import (
+            _ERROR_TYPE_DEFAULTS,
+            classify_http_error,
+            extract_status_code,
         )
 
-        # Check for our custom exception types first
-        if isinstance(error, AuthenticationError):
-            return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.AUTHENTICATION)
-        if isinstance(error, RateLimitError):
-            return ErrorClassification(
-                retryable=True,
-                trips_breaker=False,
-                backoff_seconds=error.retry_after,
-                error_type=ErrorType.RATE_LIMIT,
-            )
-        if isinstance(error, SearchProviderError):
-            error_str = str(error).lower()
-            if any(code in error_str for code in ["500", "502", "503", "504"]):
-                return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.SERVER_ERROR)
-            if "400" in error_str:
-                return ErrorClassification(retryable=False, trips_breaker=False, error_type=ErrorType.INVALID_REQUEST)
-            return ErrorClassification(
-                retryable=error.retryable,
-                trips_breaker=error.retryable,
-                error_type=ErrorType.UNKNOWN,
-            )
+        # 1. Check ERROR_CLASSIFIERS registry for SearchProviderError
+        if self.ERROR_CLASSIFIERS and isinstance(error, SearchProviderError):
+            code = extract_status_code(str(error))
+            if code is not None and code in self.ERROR_CLASSIFIERS:
+                error_type = self.ERROR_CLASSIFIERS[code]
+                retryable, trips_breaker = _ERROR_TYPE_DEFAULTS.get(
+                    error_type.value, (False, True)
+                )
+                return ErrorClassification(
+                    retryable=retryable,
+                    trips_breaker=trips_breaker,
+                    error_type=error_type,
+                )
 
-        # Check for httpx exceptions (common in HTTP providers)
-        error_type_name = type(error).__name__.lower()
-        if "timeout" in error_type_name:
-            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.TIMEOUT)
-        if "request" in error_type_name or "connection" in error_type_name:
-            return ErrorClassification(retryable=True, trips_breaker=True, error_type=ErrorType.NETWORK)
-
-        # Default: not retryable, trips breaker
-        return ErrorClassification(retryable=False, trips_breaker=True, error_type=ErrorType.UNKNOWN)
+        # 2. Fall back to shared generic classification
+        return classify_http_error(error, self.get_provider_name())
 
 
 # Error classes (canonical definitions in foundry_mcp.core.errors.search)
 from foundry_mcp.core.errors.search import (  # noqa: E402
-    AuthenticationError,
-    RateLimitError,
+    AuthenticationError,  # noqa: F401  # re-exported
+    RateLimitError,  # noqa: F401  # re-exported
     SearchProviderError,
 )
