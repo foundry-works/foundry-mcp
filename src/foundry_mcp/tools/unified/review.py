@@ -52,7 +52,9 @@ from foundry_mcp.tools.unified.router import (
 from .documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
+    _build_spec_overview,
     _build_spec_requirements,
+    _build_subsequent_phases,
     _build_test_results,
 )
 from .review_helpers import (
@@ -817,6 +819,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     review_path: Optional[str] = None
 
     spec_requirements = _build_spec_requirements(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
+    spec_overview = _build_spec_overview(spec_data)
     implementation_artifacts = _build_implementation_artifacts(
         spec_data,
         task_id,
@@ -831,6 +834,7 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
         _build_test_results(spec_data, task_id, phase_id, exclude_fidelity_verify=True) if include_tests else ""
     )
     journal_entries = _build_journal_entries(spec_data, task_id, phase_id, exclude_fidelity_verify=True)
+    subsequent_phases = _build_subsequent_phases(spec_data, phase_id)
 
     preferred_providers = ai_tools if isinstance(ai_tools, list) else []
     first_provider = preferred_providers[0] if preferred_providers else None
@@ -858,10 +862,12 @@ def _handle_fidelity(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
             "spec_title": spec_data.get("title", spec_id),
             "spec_description": spec_data.get("description", ""),
             "review_scope": scope,
+            "spec_overview": spec_overview,
             "spec_requirements": spec_requirements,
             "implementation_artifacts": implementation_artifacts,
             "test_results": test_results,
             "journal_entries": journal_entries,
+            "subsequent_phases": subsequent_phases,
         },
         provider_id=first_provider,
         model=model,

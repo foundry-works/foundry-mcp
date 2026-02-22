@@ -294,15 +294,6 @@ def add_phase(
     total_tasks = spec_root.get("total_tasks", 0)
     spec_root["total_tasks"] = total_tasks + phase_task_total
 
-    # Update spec-level estimated hours if provided
-    if estimated_hours is not None:
-        spec_metadata = spec_data.setdefault("metadata", {})
-        current_hours = spec_metadata.get("estimated_hours")
-        if isinstance(current_hours, (int, float)):
-            spec_metadata["estimated_hours"] = current_hours + estimated_hours
-        else:
-            spec_metadata["estimated_hours"] = estimated_hours
-
     saved = save_spec(spec_id, spec_data, specs_dir)
     if not saved:
         return None, "Failed to save specification"
@@ -648,15 +639,6 @@ def add_phase_bulk(
     # Update spec-root total_tasks
     total_tasks = spec_root.get("total_tasks", 0)
     spec_root["total_tasks"] = total_tasks + phase_node["total_tasks"]
-
-    # Update spec-level estimated hours if provided
-    if phase_estimated_hours is not None:
-        spec_metadata = spec_data.setdefault("metadata", {})
-        current_hours = spec_metadata.get("estimated_hours")
-        if isinstance(current_hours, (int, float)):
-            spec_metadata["estimated_hours"] = current_hours + phase_estimated_hours
-        else:
-            spec_metadata["estimated_hours"] = phase_estimated_hours
 
     # Save spec atomically
     saved = save_spec(spec_id, spec_data, specs_dir)
@@ -1404,13 +1386,12 @@ def recalculate_estimated_hours(
     specs_dir=None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    Recalculate estimated_hours by aggregating from tasks up through the hierarchy.
+    Recalculate estimated_hours by aggregating from tasks up through phases.
 
-    Performs full hierarchy rollup:
+    Performs phase-level rollup:
     1. For each phase: sums estimated_hours from all task/subtask/verify descendants
     2. Updates each phase's metadata.estimated_hours with the calculated sum
-    3. Sums all phase estimates to get the spec total
-    4. Updates spec metadata.estimated_hours with the calculated sum
+    3. Reports the spec total (sum of all phases) without storing it in spec metadata
 
     Args:
         spec_id: Specification ID to recalculate.
@@ -1419,7 +1400,7 @@ def recalculate_estimated_hours(
 
     Returns:
         Tuple of (result_dict, error_message).
-        On success: ({"spec_id": ..., "phases": [...], "spec_level": {...}, ...}, None)
+        On success: ({"spec_id": ..., "phases": [...], "spec_total": float, ...}, None)
         On failure: (None, "error message")
     """
     # Validate spec_id
@@ -1501,31 +1482,15 @@ def recalculate_estimated_hours(
         # Add to spec total
         spec_total_calculated += calculated_hours
 
-    # Get spec-level previous value
-    spec_metadata = spec_data.get("metadata", {})
-    spec_previous = spec_metadata.get("estimated_hours")
-    spec_prev_value = float(spec_previous) if isinstance(spec_previous, (int, float)) else 0.0
-    spec_delta = spec_total_calculated - spec_prev_value
-
-    # Update spec metadata
-    if "metadata" not in spec_data:
-        spec_data["metadata"] = {}
-    spec_data["metadata"]["estimated_hours"] = spec_total_calculated
-
     # Build result
     result: Dict[str, Any] = {
         "spec_id": spec_id,
         "dry_run": dry_run,
-        "spec_level": {
-            "previous": spec_previous,
-            "calculated": spec_total_calculated,
-            "delta": spec_delta,
-        },
+        "spec_total": spec_total_calculated,
         "phases": phase_results,
         "summary": {
             "total_phases": len(phase_results),
             "phases_changed": sum(1 for p in phase_results if p["delta"] != 0),
-            "spec_changed": spec_delta != 0,
         },
     }
 

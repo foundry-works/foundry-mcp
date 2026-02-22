@@ -1,9 +1,11 @@
-"""Tests for exclude_fidelity_verify filtering in documentation_helpers."""
+"""Tests for documentation_helpers including fidelity-verify filtering, limit removal, and new context builders."""
 
 from foundry_mcp.tools.unified.documentation_helpers import (
     _build_implementation_artifacts,
     _build_journal_entries,
+    _build_spec_overview,
     _build_spec_requirements,
+    _build_subsequent_phases,
     _build_test_results,
     _is_fidelity_verify_node,
 )
@@ -73,6 +75,105 @@ def _make_spec_data():
                 "timestamp": "2025-01-03T00:00:00Z",
                 "content": "All tests passed",
                 "metadata": {"phase_id": "phase-1"},
+            },
+        ],
+    }
+
+
+def _make_multi_phase_spec():
+    """Build a spec with 3 phases and a spec-root for subsequent-phase testing."""
+    return {
+        "title": "Multi-Phase Spec",
+        "description": "A spec with multiple phases",
+        "mission": "Deliver the project",
+        "category": "feature",
+        "complexity": "high",
+        "status": "in_progress",
+        "progress": {"percentage": 33},
+        "objectives": ["Build phase 1", "Build phase 2"],
+        "assumptions": [
+            {"text": "Python 3.10+"},
+            "No external deps",
+        ],
+        "hierarchy": {
+            "spec-root": {
+                "id": "spec-root",
+                "type": "root",
+                "children": ["phase-1", "phase-2", "phase-3"],
+            },
+            "phase-1": {
+                "id": "phase-1",
+                "type": "phase",
+                "title": "Foundation",
+                "status": "completed",
+                "children": ["task-1a"],
+            },
+            "phase-2": {
+                "id": "phase-2",
+                "type": "phase",
+                "title": "Core Features",
+                "status": "in_progress",
+                "description": "Build the core",
+                "children": ["task-2a", "task-2b"],
+            },
+            "phase-3": {
+                "id": "phase-3",
+                "type": "phase",
+                "title": "Polish",
+                "status": "pending",
+                "purpose": "Final polish and docs",
+                "children": ["task-3a"],
+            },
+            "task-1a": {
+                "id": "task-1a",
+                "type": "task",
+                "title": "Setup project",
+                "status": "completed",
+                "metadata": {"file_path": "setup.py"},
+            },
+            "task-2a": {
+                "id": "task-2a",
+                "type": "task",
+                "title": "Implement API",
+                "status": "in_progress",
+                "metadata": {"file_path": "src/api.py"},
+            },
+            "task-2b": {
+                "id": "task-2b",
+                "type": "task",
+                "title": "Implement CLI",
+                "status": "pending",
+                "metadata": {"file_path": "src/cli.py"},
+            },
+            "task-3a": {
+                "id": "task-3a",
+                "type": "task",
+                "title": "Write docs",
+                "status": "pending",
+                "metadata": {"file_path": "docs/README.md"},
+            },
+        },
+        "journal": [
+            {
+                "task_id": "task-1a",
+                "title": "Setup test results",
+                "entry_type": "note",
+                "timestamp": "2025-01-01T00:00:00Z",
+                "content": "Setup done",
+            },
+            {
+                "task_id": "task-2a",
+                "title": "API test verification",
+                "entry_type": "note",
+                "timestamp": "2025-01-02T00:00:00Z",
+                "content": "API tests pass",
+            },
+            {
+                "task_id": "task-2a",
+                "title": "API implementation note",
+                "entry_type": "progress",
+                "timestamp": "2025-01-03T00:00:00Z",
+                "content": "Endpoints added",
             },
         ],
     }
@@ -214,6 +315,17 @@ class TestBuildSpecRequirements:
         assert "Phase One" in result
         assert "Purpose:" not in result
 
+    def test_all_assumptions_shown(self):
+        """Verify that all assumptions are included (no [:5] cap)."""
+        spec = {
+            "title": "Big Spec",
+            "assumptions": [f"Assumption {i}" for i in range(10)],
+            "hierarchy": {},
+        }
+        result = _build_spec_requirements(spec, None, None)
+        for i in range(10):
+            assert f"Assumption {i}" in result
+
 
 # ---------------------------------------------------------------------------
 # _build_implementation_artifacts
@@ -245,6 +357,41 @@ class TestBuildImplementationArtifacts:
         assert "src/feature.py" in result
         assert "src/fidelity_only.py" not in result
 
+    def test_outputs_path_listing_not_file_contents(self):
+        """Artifacts should list paths with markers, not inline file contents."""
+        spec = _make_spec_data()
+        result = _build_implementation_artifacts(spec, None, "phase-1", None, False, "main")
+        # Should be a bullet list, not a code block
+        assert "```" not in result
+        assert "- [" in result
+        assert "`src/feature.py`" in result
+
+    def test_no_file_cap(self):
+        """All files should be listed, not just the first 5."""
+        spec = {
+            "title": "Many Files",
+            "hierarchy": {
+                "phase-1": {
+                    "id": "phase-1",
+                    "type": "phase",
+                    "title": "Phase",
+                    "children": [f"task-{i}" for i in range(10)],
+                },
+                **{
+                    f"task-{i}": {
+                        "id": f"task-{i}",
+                        "type": "task",
+                        "title": f"Task {i}",
+                        "metadata": {"file_path": f"src/file_{i}.py"},
+                    }
+                    for i in range(10)
+                },
+            },
+        }
+        result = _build_implementation_artifacts(spec, None, "phase-1", None, False, "main")
+        for i in range(10):
+            assert f"src/file_{i}.py" in result
+
 
 # ---------------------------------------------------------------------------
 # _build_test_results
@@ -263,12 +410,59 @@ class TestBuildTestResults:
         result = _build_test_results(spec, None, "phase-1", exclude_fidelity_verify=True)
         assert "Fidelity verification" not in result
 
-    def test_no_filtering_without_phase(self):
-        """Without a phase_id, exclude flag has no effect on the broad journal."""
-        spec = _make_spec_data()
-        result = _build_test_results(spec, None, None, exclude_fidelity_verify=True)
-        # Fidelity entry still present since no phase scoping
-        assert "Fidelity verification" in result
+    def test_scopes_to_phase_tasks(self):
+        """When phase_id is set, only entries from phase tasks are included."""
+        spec = _make_multi_phase_spec()
+        result = _build_test_results(spec, None, "phase-2")
+        assert "API test verification" in result
+        # phase-1 entry should not be included
+        assert "Setup test" not in result
+
+    def test_scopes_to_task(self):
+        """When task_id is set, only entries from that task are included."""
+        spec = _make_multi_phase_spec()
+        result = _build_test_results(spec, "task-2a", None)
+        assert "API test verification" in result
+        assert "Setup test" not in result
+
+    def test_no_limit_on_entries(self):
+        """All matching entries should be returned, not just last 3."""
+        spec = {
+            "title": "Many Tests",
+            "hierarchy": {},
+            "journal": [
+                {
+                    "task_id": f"t-{i}",
+                    "title": f"Test run {i} verification",
+                    "entry_type": "note",
+                    "timestamp": f"2025-01-{i+1:02d}T00:00:00Z",
+                    "content": f"Result {i}",
+                }
+                for i in range(10)
+            ],
+        }
+        result = _build_test_results(spec, None, None)
+        for i in range(10):
+            assert f"Test run {i} verification" in result
+
+    def test_no_content_truncation(self):
+        """Content should not be truncated at 500 chars."""
+        long_content = "x" * 1000
+        spec = {
+            "title": "Long Content",
+            "hierarchy": {},
+            "journal": [
+                {
+                    "title": "Test verification",
+                    "entry_type": "note",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    "content": long_content,
+                }
+            ],
+        }
+        result = _build_test_results(spec, None, None)
+        assert long_content in result
+        assert "..." not in result
 
 
 # ---------------------------------------------------------------------------
@@ -308,3 +502,147 @@ class TestBuildJournalEntries:
         spec = _make_spec_data()
         result = _build_journal_entries(spec, "task-1", None, exclude_fidelity_verify=True)
         assert "Implemented feature" in result
+
+    def test_no_limit_on_entries(self):
+        """All journal entries should be returned, not just last 5."""
+        spec = {
+            "title": "Many Entries",
+            "hierarchy": {},
+            "journal": [
+                {
+                    "title": f"Entry {i}",
+                    "entry_type": "note",
+                    "timestamp": f"2025-01-{i+1:02d}T00:00:00Z",
+                    "content": f"Content {i}",
+                }
+                for i in range(10)
+            ],
+        }
+        result = _build_journal_entries(spec, None, None)
+        assert "10 journal entries found" in result
+        for i in range(10):
+            assert f"Entry {i}" in result
+
+    def test_no_content_truncation(self):
+        """Content should not be truncated at 500 chars."""
+        long_content = "y" * 1000
+        spec = {
+            "title": "Long Content",
+            "hierarchy": {},
+            "journal": [
+                {
+                    "title": "Big entry",
+                    "entry_type": "note",
+                    "timestamp": "2025-01-01T00:00:00Z",
+                    "content": long_content,
+                }
+            ],
+        }
+        result = _build_journal_entries(spec, None, None)
+        assert long_content in result
+        assert "..." not in result
+
+
+# ---------------------------------------------------------------------------
+# _build_spec_overview
+# ---------------------------------------------------------------------------
+
+
+class TestBuildSpecOverview:
+    def test_basic_fields(self):
+        spec = _make_multi_phase_spec()
+        result = _build_spec_overview(spec)
+        assert "Multi-Phase Spec" in result
+        assert "A spec with multiple phases" in result
+        assert "Deliver the project" in result
+        assert "feature" in result
+        assert "high" in result
+        assert "in_progress" in result
+        assert "33%" in result
+
+    def test_objectives(self):
+        spec = _make_multi_phase_spec()
+        result = _build_spec_overview(spec)
+        assert "Build phase 1" in result
+        assert "Build phase 2" in result
+
+    def test_assumptions(self):
+        spec = _make_multi_phase_spec()
+        result = _build_spec_overview(spec)
+        assert "Python 3.10+" in result
+        assert "No external deps" in result
+
+    def test_metadata_fallback(self):
+        """Should fall back to metadata dict for fields not at top level."""
+        spec = {
+            "title": "Top Title",
+            "metadata": {
+                "mission": "Meta mission",
+                "category": "refactor",
+            },
+            "hierarchy": {},
+        }
+        result = _build_spec_overview(spec)
+        assert "Top Title" in result
+        assert "Meta mission" in result
+        assert "refactor" in result
+
+    def test_empty_spec(self):
+        result = _build_spec_overview({"hierarchy": {}})
+        assert "Unknown" in result
+
+
+# ---------------------------------------------------------------------------
+# _build_subsequent_phases
+# ---------------------------------------------------------------------------
+
+
+class TestBuildSubsequentPhases:
+    def test_lists_phases_after_current(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, "phase-1")
+        assert "not yet expected to be implemented" in result
+        assert "Core Features" in result
+        assert "Polish" in result
+        assert "Implement API" in result
+        assert "Write docs" in result
+
+    def test_last_phase_returns_empty(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, "phase-3")
+        assert result == ""
+
+    def test_middle_phase_only_shows_later(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, "phase-2")
+        assert "Polish" in result
+        assert "Foundation" not in result
+        assert "Core Features" not in result
+
+    def test_no_phase_id_returns_empty(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, None)
+        assert result == ""
+
+    def test_unknown_phase_id_returns_empty(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, "nonexistent")
+        assert result == ""
+
+    def test_no_spec_root_returns_empty(self):
+        spec = {"hierarchy": {"phase-1": {"type": "phase", "title": "P1"}}}
+        result = _build_subsequent_phases(spec, "phase-1")
+        assert result == ""
+
+    def test_includes_description_and_purpose(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, "phase-1")
+        # phase-2 has "description", phase-3 has "purpose"
+        assert "Build the core" in result
+        assert "Final polish and docs" in result
+
+    def test_includes_task_count(self):
+        spec = _make_multi_phase_spec()
+        result = _build_subsequent_phases(spec, "phase-1")
+        assert "Tasks (2)" in result  # phase-2 has 2 tasks
+        assert "Tasks (1)" in result  # phase-3 has 1 task

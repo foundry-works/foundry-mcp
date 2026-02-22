@@ -39,11 +39,7 @@ FRONTMATTER_KEYS = (
     "description",
     "mission",
     "objectives",
-    "complexity",
-    "estimated_hours",
-    "owner",
     "status",
-    "category",
     "progress_percentage",
     "current_phase",
 )

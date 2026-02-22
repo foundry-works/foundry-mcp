@@ -353,11 +353,14 @@ class TestFidelityReviewPromptBuilder:
         assert "test-spec-001" in result
         assert "Implementation Fidelity Review" in result
 
-    def test_fidelity_has_six_sections(self):
-        """FIDELITY_REVIEW_V1 metadata includes 6 sections."""
+    def test_fidelity_has_eight_sections(self):
+        """FIDELITY_REVIEW_V1 metadata includes 8 sections."""
         sections = FIDELITY_REVIEW_V1.metadata.get("sections", [])
-        assert len(sections) == 6
+        assert len(sections) == 8
         assert "Context" in sections
+        assert "Spec Overview" in sections
+        assert "Implementation File Paths" in sections
+        assert "Subsequent Phases" in sections
         assert "Review Questions" in sections
 
     def test_severity_keywords_defined(self):

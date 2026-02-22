@@ -228,6 +228,10 @@ CRITICAL CONSTRAINTS:
 - Do NOT focus on ownership, responsibility, or team assignment concerns
 - Avoid feedback like "who owns", "who verifies", "who is responsible for"
 - Focus on technical requirements and verification steps themselves, not who performs them
+- Implementation File Paths lists the files relevant to this review (not their contents).
+  Use file paths to understand project structure and scope.
+- Subsequent Phases (if present) describe work planned for later phases.
+  Do NOT penalize the implementation for features listed in subsequent phases.
 
 Focus on:
 1. Requirement alignment - Does implementation match spec?
@@ -244,19 +248,25 @@ Focus on:
 {spec_description}
 **Review Scope:** {review_scope}
 
-## 2. Specification Requirements
+## 2. Spec Overview
+{spec_overview}
+
+## 3. Specification Requirements
 {spec_requirements}
 
-## 3. Implementation Artifacts
+## 4. Implementation File Paths
 {implementation_artifacts}
 
-## 4. Test Results
+## 5. Test Results
 {test_results}
 
-## 5. Journal Entries
+## 6. Journal Entries
 {journal_entries}
 
-## 6. Review Questions
+## 7. Subsequent Phases
+{subsequent_phases}
+
+## 8. Review Questions
 
 Please evaluate the implementation against the specification:
 
@@ -300,8 +310,10 @@ Verdict criteria (use these strictly):
     ],
     optional_context=[
         "spec_description",
+        "spec_overview",
         "test_results",
         "journal_entries",
+        "subsequent_phases",
         "response_schema",
     ],
     metadata={
@@ -310,10 +322,12 @@ Verdict criteria (use these strictly):
         "category": "implementation",
         "sections": [
             "Context",
+            "Spec Overview",
             "Specification Requirements",
-            "Implementation Artifacts",
+            "Implementation File Paths",
             "Test Results",
             "Journal Entries",
+            "Subsequent Phases",
             "Review Questions",
         ],
         "output_format": "json",
@@ -654,10 +668,14 @@ class FidelityReviewPromptBuilder(PromptBuilder):
             # Add empty defaults for optional fields
             if "spec_description" not in render_context:
                 render_context["spec_description"] = ""
+            if "spec_overview" not in render_context:
+                render_context["spec_overview"] = ""
             if "test_results" not in render_context:
                 render_context["test_results"] = "*No test results available*"
             if "journal_entries" not in render_context:
                 render_context["journal_entries"] = "*No journal entries found*"
+            if "subsequent_phases" not in render_context:
+                render_context["subsequent_phases"] = ""
 
             return template.render(render_context)
 

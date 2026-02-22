@@ -370,11 +370,6 @@ def generate_spec_data(
     # Fill in the title
     hierarchy["spec-root"]["title"] = name
 
-    # Calculate estimated hours from hierarchy
-    estimated_hours = sum(
-        node.get("metadata", {}).get("estimated_hours", 0) for node in hierarchy.values() if isinstance(node, dict)
-    )
-
     spec_data = {
         "spec_id": spec_id,
         "title": name,
@@ -384,12 +379,7 @@ def generate_spec_data(
             "description": "",
             "mission": mission.strip() if isinstance(mission, str) else "",
             "objectives": [],
-            "complexity": "low",  # Complexity set via explicit metadata, not template
-            "estimated_hours": estimated_hours,
             "assumptions": [],
-            "owner": "",
-            "category": category,
-            "template": template,
         },
         "progress_percentage": 0,
         "status": "pending",

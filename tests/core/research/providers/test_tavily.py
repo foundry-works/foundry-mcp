@@ -507,10 +507,20 @@ class TestResponseParsing:
 class TestErrorHandling:
     """Tests for error handling."""
 
+    @pytest.fixture(autouse=True)
+    def reset_resilience(self):
+        from foundry_mcp.core.research.providers.resilience import (
+            reset_resilience_manager_for_testing,
+        )
+
+        reset_resilience_manager_for_testing()
+        yield
+        reset_resilience_manager_for_testing()
+
     @pytest.fixture
     def provider(self):
-        """Create provider instance for tests."""
-        return TavilySearchProvider(api_key="tvly-test-key")
+        """Create provider with short timeout so retry budget stays within test timeout."""
+        return TavilySearchProvider(api_key="tvly-test-key", timeout=2.0, max_retries=1)
 
     @pytest.mark.asyncio
     async def test_authentication_error_on_401(self, provider):

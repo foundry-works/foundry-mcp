@@ -188,7 +188,6 @@ class TestAddPhase:
             "spec_id": spec_id,
             "title": "Test Spec",
             "metadata": {
-                "estimated_hours": 5,
                 "status": "pending",
             },
             "hierarchy": {
@@ -254,7 +253,7 @@ class TestAddPhase:
         assert hierarchy["verify-2-2"]["dependencies"]["blocked_by"] == ["verify-2-1"]
         assert hierarchy["phase-1"]["dependencies"]["blocks"] == ["phase-2"]
         assert hierarchy["phase-2"]["dependencies"]["blocked_by"] == ["phase-1"]
-        assert spec["metadata"]["estimated_hours"] == 8
+        # Phase-level estimated_hours preserved; spec-level no longer stored
 
     def test_add_phase_inserts_at_custom_position_without_link(self, temp_specs_dir):
         """add_phase should support insertion at specific index without linking."""
@@ -477,15 +476,15 @@ class TestUpdateFrontmatter:
 
     def test_update_frontmatter_with_previous_value(self, temp_specs_dir, sample_spec):
         """Should return previous value when updating existing field."""
-        sample_spec["metadata"]["owner"] = "Original Owner"
+        sample_spec["metadata"]["mission"] = "Original Mission"
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter("test-spec-001", key="owner", value="New Owner", specs_dir=temp_specs_dir)
+        result, error = update_frontmatter("test-spec-001", key="mission", value="New Mission", specs_dir=temp_specs_dir)
 
         assert error is None
-        assert result["previous_value"] == "Original Owner"
-        assert result["value"] == "New Owner"
+        assert result["previous_value"] == "Original Mission"
+        assert result["value"] == "New Mission"
 
     def test_update_frontmatter_top_level_sync(self, temp_specs_dir, sample_spec):
         """Should sync title/status to top-level fields."""
@@ -505,13 +504,13 @@ class TestUpdateFrontmatter:
         spec_file = temp_specs_dir / "active" / "test-spec-001.json"
         spec_file.write_text(json.dumps(sample_spec))
 
-        result, error = update_frontmatter("test-spec-001", key="estimated_hours", value=42, specs_dir=temp_specs_dir)
+        result, error = update_frontmatter("test-spec-001", key="progress_percentage", value=42, specs_dir=temp_specs_dir)
 
         assert error is None
         assert result["value"] == 42
 
         spec_data = load_spec("test-spec-001", temp_specs_dir)
-        assert spec_data["metadata"]["estimated_hours"] == 42
+        assert spec_data["progress_percentage"] == 42
 
     def test_update_frontmatter_list_value(self, temp_specs_dir, sample_spec):
         """Should handle list values for objectives."""
@@ -1663,9 +1662,7 @@ class TestRecalculateEstimatedHours:
             "title": "Test Hours Spec",
             "generated": "2026-01-01T00:00:00Z",
             "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {
-                "estimated_hours": 0,  # Intentionally stale
-            },
+            "metadata": {},
             "progress_percentage": 0,
             "status": "pending",
             "current_phase": "phase-1",
@@ -1768,14 +1765,12 @@ class TestRecalculateEstimatedHours:
         assert phase2["previous"] == 10  # Was stale
         assert phase2["delta"] == -6.5  # 3.5 - 10
 
-        # Spec level: 3.5 + 3.5 = 7.0
-        assert result["spec_level"]["calculated"] == 7.0
-        assert result["spec_level"]["previous"] == 0
-        assert result["spec_level"]["delta"] == 7.0
+        # Spec total: 3.5 + 3.5 = 7.0
+        assert result["spec_total"] == 7.0
 
-        # Verify saved
+        # Verify phase-level saved (spec-level not stored)
         spec = load_spec("test-hours", temp_specs_dir)
-        assert spec["metadata"]["estimated_hours"] == 7.0
+        assert "estimated_hours" not in spec.get("metadata", {})
         assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 3.5
         assert spec["hierarchy"]["phase-2"]["metadata"]["estimated_hours"] == 3.5
 
@@ -1788,11 +1783,10 @@ class TestRecalculateEstimatedHours:
         assert error is None
         assert result["dry_run"] is True
         assert "message" in result
-        assert result["spec_level"]["calculated"] == 7.0
+        assert result["spec_total"] == 7.0
 
-        # Verify NOT saved
+        # Verify NOT saved (phase-level unchanged)
         spec = load_spec("test-hours", temp_specs_dir)
-        assert spec["metadata"]["estimated_hours"] == 0  # Unchanged
         assert "estimated_hours" not in spec["hierarchy"]["phase-1"]["metadata"]
 
     def test_recalculate_empty_spec(self, temp_specs_dir):
@@ -1802,7 +1796,7 @@ class TestRecalculateEstimatedHours:
             "title": "Empty Spec",
             "generated": "2026-01-01T00:00:00Z",
             "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {"estimated_hours": 5},  # Should become 0
+            "metadata": {},
             "progress_percentage": 0,
             "status": "pending",
             "current_phase": None,
@@ -1826,8 +1820,7 @@ class TestRecalculateEstimatedHours:
         result, error = recalculate_estimated_hours("empty-spec", specs_dir=temp_specs_dir)
 
         assert error is None
-        assert result["spec_level"]["calculated"] == 0.0
-        assert result["spec_level"]["previous"] == 5
+        assert result["spec_total"] == 0.0
         assert result["phases"] == []
         assert result["summary"]["total_phases"] == 0
 
@@ -1895,7 +1888,7 @@ class TestRecalculateEstimatedHours:
         # Only task-1-2 has estimate
         assert result["phases"][0]["calculated"] == 2.0
         assert result["phases"][0]["task_count"] == 2
-        assert result["spec_level"]["calculated"] == 2.0
+        assert result["spec_total"] == 2.0
 
     def test_recalculate_spec_not_found(self, temp_specs_dir):
         """Should return error for non-existent spec."""

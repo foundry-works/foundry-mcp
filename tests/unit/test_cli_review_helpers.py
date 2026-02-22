@@ -62,7 +62,7 @@ def test_build_spec_requirements_lists_children(keyed_spec_data):
 
 
 def test_build_implementation_artifacts_reads_phase_files(keyed_spec_data, tmp_path, monkeypatch):
-    """_build_implementation_artifacts should resolve child file paths by ID."""
+    """_build_implementation_artifacts should list child file paths (not contents)."""
     project_root = tmp_path / "project"
     (project_root / "src").mkdir(parents=True)
     file_path = project_root / "src" / "task_one.py"
@@ -80,11 +80,14 @@ def test_build_implementation_artifacts_reads_phase_files(keyed_spec_data, tmp_p
     )
 
     assert "src/task_one.py" in output
-    assert "print('cli')" in output
+    assert "src/task_two.py" in output
+    # File paths are listed with existence markers, not file contents
+    assert "[+]" in output  # task_one.py exists
+    assert "[-]" in output  # task_two.py does not exist
 
 
 def test_build_implementation_artifacts_full_spec_review(keyed_spec_data, tmp_path, monkeypatch):
-    """_build_implementation_artifacts should collect all task files for full spec review."""
+    """_build_implementation_artifacts should list all task files for full spec review."""
     project_root = tmp_path / "project"
     (project_root / "src").mkdir(parents=True)
     (project_root / "src" / "task_one.py").write_text("# task one", encoding="utf-8")
@@ -102,11 +105,10 @@ def test_build_implementation_artifacts_full_spec_review(keyed_spec_data, tmp_pa
         base_branch="main",
     )
 
-    # Should include files from all tasks in the spec
+    # Should list paths from all tasks (not contents)
     assert "src/task_one.py" in output
     assert "src/task_two.py" in output
-    assert "# task one" in output
-    assert "# task two" in output
+    assert "[+]" in output  # Both files exist
 
 
 def test_build_implementation_artifacts_full_spec_review_no_artifacts():

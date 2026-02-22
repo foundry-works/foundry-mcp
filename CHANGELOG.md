@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0b28] - 2026-02-21
+
+### Fixed
+
+- **Fidelity gate false positives from future-phase requirements**: Added spec overview and subsequent phases context to fidelity reviews so reviewers no longer penalize implementations for features planned in later phases.
+- **Fidelity review context truncation**: Removed arbitrary caps on assumptions (was 5), file paths (was 5), test results (was 3), and journal entries (was 5) — reviewers now see full context.
+- **Implementation artifacts bloating review context**: Replaced inline file content rendering with compact file-path listing (`[+]`/`[-]` existence markers), dramatically reducing token usage.
+- **Test/journal scoping in fidelity reviews**: Test results and journal entries are now properly scoped to the task or phase under review instead of returning unscoped entries.
+
+### Changed
+
+- **Spec metadata simplified**: Removed `complexity`, `estimated_hours`, `owner`, and `category` from spec-level frontmatter and template defaults. `recalculate_estimated_hours` now reports spec totals without storing them in spec metadata.
+
 ## [0.12.0b27] - 2026-02-20
 
 ### Fixed

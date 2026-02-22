@@ -1,8 +1,9 @@
-"""Tests for fidelity review prompt improvements and tiebreaker logic.
+"""Tests for fidelity review prompt improvements, context enrichment, and tiebreaker logic.
 
 Phase 1: Verifies that verdict criteria and severity-based synthesis resolution
 are present in the prompt templates.
 Phase 2: Verifies tiebreaker reviewer invocation on split verdicts.
+Phase 3: Verifies new spec_overview and subsequent_phases context sections.
 """
 
 import json
@@ -19,6 +20,7 @@ from foundry_mcp.core.ai_consultation import (
 from foundry_mcp.core.prompts.fidelity_review import (
     FIDELITY_REVIEW_V1,
     FIDELITY_SYNTHESIS_PROMPT_V1,
+    FidelityReviewPromptBuilder,
 )
 
 
@@ -123,9 +125,11 @@ def _run_fidelity(tmp_path, mock_orch):
         patch(f"{_MODULE}.find_spec_file", return_value=str(specs_dir / "test.yaml")),
         patch(f"{_MODULE}.load_spec", return_value={"title": "Test", "description": "Test"}),
         patch(f"{_MODULE}._build_spec_requirements", return_value="reqs"),
+        patch(f"{_MODULE}._build_spec_overview", return_value="overview"),
         patch(f"{_MODULE}._build_implementation_artifacts", return_value="artifacts"),
         patch(f"{_MODULE}._build_test_results", return_value="tests"),
         patch(f"{_MODULE}._build_journal_entries", return_value="journal"),
+        patch(f"{_MODULE}._build_subsequent_phases", return_value="subsequent"),
         patch(f"{_MODULE}.load_consultation_config"),
         patch(f"{_MODULE}.ConsultationOrchestrator", return_value=mock_orch),
         patch(f"{_MODULE}.is_prompt_injection", return_value=False),
@@ -420,3 +424,102 @@ class TestTiebreakerInvocation:
         assert mock_orch.consult.call_count == 3
         synthesis_req = mock_orch.consult.call_args_list[2].args[0]
         assert synthesis_req.context["num_models"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Prompt template context enrichment tests
+# ---------------------------------------------------------------------------
+
+
+class TestPromptTemplateSections:
+    """Verify the FIDELITY_REVIEW_V1 template has new sections."""
+
+    def test_template_has_spec_overview_section(self):
+        assert "## 2. Spec Overview" in FIDELITY_REVIEW_V1.user_template
+
+    def test_template_has_spec_overview_placeholder(self):
+        assert "{spec_overview}" in FIDELITY_REVIEW_V1.user_template
+
+    def test_template_has_implementation_file_paths_section(self):
+        assert "## 4. Implementation File Paths" in FIDELITY_REVIEW_V1.user_template
+
+    def test_template_has_subsequent_phases_section(self):
+        assert "## 7. Subsequent Phases" in FIDELITY_REVIEW_V1.user_template
+
+    def test_template_has_subsequent_phases_placeholder(self):
+        assert "{subsequent_phases}" in FIDELITY_REVIEW_V1.user_template
+
+    def test_system_prompt_mentions_file_paths(self):
+        assert "Implementation File Paths" in FIDELITY_REVIEW_V1.system_prompt
+
+    def test_system_prompt_mentions_subsequent_phases(self):
+        assert "Subsequent Phases" in FIDELITY_REVIEW_V1.system_prompt
+        assert "Do NOT penalize" in FIDELITY_REVIEW_V1.system_prompt
+
+    def test_optional_context_includes_new_fields(self):
+        assert "spec_overview" in FIDELITY_REVIEW_V1.optional_context
+        assert "subsequent_phases" in FIDELITY_REVIEW_V1.optional_context
+
+    def test_metadata_sections_updated(self):
+        sections = FIDELITY_REVIEW_V1.metadata["sections"]
+        assert "Spec Overview" in sections
+        assert "Implementation File Paths" in sections
+        assert "Subsequent Phases" in sections
+
+
+class TestPromptBuilderDefaults:
+    """Verify the builder provides empty defaults for new optional fields."""
+
+    def test_builder_defaults_spec_overview(self):
+        builder = FidelityReviewPromptBuilder()
+        result = builder.build(
+            "FIDELITY_REVIEW_V1",
+            {
+                "spec_id": "test",
+                "spec_title": "Test",
+                "review_scope": "spec",
+                "spec_requirements": "reqs",
+                "implementation_artifacts": "artifacts",
+            },
+        )
+        # Should render without error — defaults filled in
+        assert "test" in result
+
+    def test_builder_passes_spec_overview(self):
+        builder = FidelityReviewPromptBuilder()
+        result = builder.build(
+            "FIDELITY_REVIEW_V1",
+            {
+                "spec_id": "test",
+                "spec_title": "Test",
+                "review_scope": "spec",
+                "spec_requirements": "reqs",
+                "implementation_artifacts": "artifacts",
+                "spec_overview": "MY OVERVIEW",
+                "subsequent_phases": "MY PHASES",
+            },
+        )
+        assert "MY OVERVIEW" in result
+        assert "MY PHASES" in result
+
+
+class TestHandlerContextWiring:
+    """Verify _handle_fidelity passes new context keys to the consultation request."""
+
+    def test_context_includes_spec_overview_and_subsequent_phases(self, tmp_path):
+        mock_orch = MagicMock()
+        mock_orch.is_available.return_value = True
+        mock_orch.consult.return_value = ConsultationResult(
+            workflow=ConsultationWorkflow.FIDELITY_REVIEW,
+            content=json.dumps({"verdict": "pass", "deviations": [], "summary": "ok"}),
+            provider_id="provider-a",
+            model_used="provider-a-model",
+        )
+
+        _run_fidelity(tmp_path, mock_orch)
+
+        req = mock_orch.consult.call_args_list[0].args[0]
+        assert "spec_overview" in req.context
+        assert req.context["spec_overview"] == "overview"
+        assert "subsequent_phases" in req.context
+        assert req.context["subsequent_phases"] == "subsequent"

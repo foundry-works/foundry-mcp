@@ -79,7 +79,7 @@ def _build_spec_requirements(
             lines.append(f"- **Description:** {spec_data['description']}")
         if spec_data.get("assumptions"):
             lines.append("- **Assumptions:**")
-            for assumption in spec_data["assumptions"][:5]:
+            for assumption in spec_data["assumptions"]:
                 if isinstance(assumption, dict):
                     lines.append(f"  - {assumption.get('text', str(assumption))}")
                 else:
@@ -197,24 +197,11 @@ def _build_implementation_artifacts(
                 lines.append(f"*Incremental review: {len(file_paths)} changed files since {base_branch}*\n")
         except Exception:
             lines.append(f"*Warning: Could not get git diff from {base_branch}*\n")
-    for file_path in file_paths[:5]:
+    for file_path in file_paths:
         path = _resolve_path(file_path, workspace_root)
-        if path.exists():
-            try:
-                content = path.read_text(encoding="utf-8")
-                if len(content) > 10_000:
-                    content = content[:10_000] + "\n... [truncated] ..."
-                file_type = path.suffix.lstrip(".") or "text"
-                lines.append(f"### File: `{file_path}`")
-                lines.append(f"```{file_type}")
-                lines.append(content)
-                lines.append("```\n")
-            except Exception as exc:
-                lines.append(f"### File: `{file_path}`")
-                lines.append(f"*Error reading file: {exc}*\n")
-        else:
-            lines.append(f"### File: `{file_path}`")
-            lines.append("*File not found*\n")
+        exists = path.exists()
+        marker = "+" if exists else "-"
+        lines.append(f"- [{marker}] `{file_path}`")
     if not lines:
         lines.append("*No implementation artifacts available*")
     return "\n".join(lines)
@@ -227,12 +214,32 @@ def _build_test_results(
     exclude_fidelity_verify: bool = False,
 ) -> str:
     journal = spec_data.get("journal", [])
-    if exclude_fidelity_verify and phase_id:
+    # Scope to task first
+    if task_id:
+        if exclude_fidelity_verify:
+            task = _find_task(spec_data, task_id)
+            if task and _is_fidelity_verify_node(task):
+                return "*No test results available*"
+        journal = [e for e in journal if e.get("task_id") == task_id]
+    elif phase_id:
         phase = _find_phase(spec_data, phase_id)
         if phase:
             children = _get_child_nodes(spec_data, phase)
-            excluded_ids = {c["id"] for c in children if "id" in c and _is_fidelity_verify_node(c)}
-            journal = [e for e in journal if e.get("task_id") not in excluded_ids]
+            if exclude_fidelity_verify:
+                children = [c for c in children if not _is_fidelity_verify_node(c)]
+            phase_task_ids = {c["id"] for c in children if "id" in c}
+            journal = [
+                entry
+                for entry in journal
+                if entry.get("task_id") in phase_task_ids
+                or (not entry.get("task_id") and entry.get("metadata", {}).get("phase_id") == phase_id)
+            ]
+    elif exclude_fidelity_verify:
+        # Full spec scope — exclude entries from fidelity-verify nodes
+        hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+        excluded_ids = {nid for nid, n in hierarchy_nodes.items() if _is_fidelity_verify_node(n)}
+        journal = [e for e in journal if e.get("task_id") not in excluded_ids]
+    # Then apply keyword filter
     test_entries = [
         entry
         for entry in journal
@@ -241,14 +248,11 @@ def _build_test_results(
         or "verification" in entry.get("title", "").lower()
     ]
     if test_entries:
-        lines = ["*Recent test-related journal entries:*"]
-        for entry in test_entries[-3:]:
+        lines = [f"*{len(test_entries)} test-related journal entries:*"]
+        for entry in test_entries:
             lines.append(f"- **{entry.get('title', 'Unknown')}** ({entry.get('timestamp', 'unknown')})")
             if entry.get("content"):
-                content = entry["content"][:500]
-                if len(entry["content"]) > 500:
-                    content += "..."
-                lines.append(f"  {content}")
+                lines.append(f"  {entry['content']}")
         return "\n".join(lines)
     return "*No test results available*"
 
@@ -283,17 +287,130 @@ def _build_journal_entries(
             ]
     if journal:
         lines = [f"*{len(journal)} journal entries found:*"]
-        for entry in journal[-5:]:
+        for entry in journal:
             entry_type = entry.get("entry_type", "note")
             timestamp = entry.get("timestamp", "unknown")[:10] if entry.get("timestamp") else "unknown"
             lines.append(f"- **[{entry_type}]** {entry.get('title', 'Untitled')} ({timestamp})")
             if entry.get("content"):
-                content = entry["content"][:500]
-                if len(entry["content"]) > 500:
-                    content += "..."
-                lines.append(f"  {content}")
+                lines.append(f"  {entry['content']}")
         return "\n".join(lines)
     return "*No journal entries found*"
+
+
+def _build_spec_overview(spec_data: Dict[str, Any]) -> str:
+    """Build a spec-level overview section for fidelity review context."""
+    lines: list[str] = []
+    metadata = spec_data.get("metadata", {})
+    title = spec_data.get("title") or metadata.get("title", "Unknown")
+    lines.append(f"### Specification Overview: {title}")
+
+    description = spec_data.get("description") or metadata.get("description")
+    if description:
+        lines.append(f"- **Description:** {description}")
+
+    mission = spec_data.get("mission") or metadata.get("mission")
+    if mission:
+        lines.append(f"- **Mission:** {mission}")
+
+    category = spec_data.get("category") or metadata.get("category")
+    if category:
+        lines.append(f"- **Category:** {category}")
+
+    complexity = spec_data.get("complexity") or metadata.get("complexity")
+    if complexity:
+        lines.append(f"- **Complexity:** {complexity}")
+
+    status = spec_data.get("status") or metadata.get("status")
+    if status:
+        lines.append(f"- **Status:** {status}")
+
+    progress = spec_data.get("progress") or metadata.get("progress")
+    if progress:
+        if isinstance(progress, dict):
+            pct = progress.get("percentage", progress.get("percent"))
+            if pct is not None:
+                lines.append(f"- **Progress:** {pct}%")
+        else:
+            lines.append(f"- **Progress:** {progress}")
+
+    objectives = spec_data.get("objectives") or metadata.get("objectives")
+    if objectives and isinstance(objectives, list):
+        lines.append("- **Objectives:**")
+        for obj in objectives:
+            if isinstance(obj, dict):
+                lines.append(f"  - {obj.get('text', obj.get('title', str(obj)))}")
+            else:
+                lines.append(f"  - {obj}")
+
+    assumptions = spec_data.get("assumptions") or metadata.get("assumptions")
+    if assumptions and isinstance(assumptions, list):
+        lines.append("- **Assumptions:**")
+        for assumption in assumptions:
+            if isinstance(assumption, dict):
+                lines.append(f"  - {assumption.get('text', str(assumption))}")
+            else:
+                lines.append(f"  - {assumption}")
+
+    return "\n".join(lines) if lines else "*No spec overview available*"
+
+
+def _build_subsequent_phases(
+    spec_data: Dict[str, Any],
+    phase_id: Optional[str],
+) -> str:
+    """Build a section listing phases after the current one.
+
+    This gives reviewers visibility into upcoming work so they don't
+    penalize the implementation for features planned in later phases.
+    """
+    if not phase_id:
+        return ""
+
+    hierarchy = spec_data.get("hierarchy", {})
+    spec_root = hierarchy.get("spec-root", {})
+    phase_order = spec_root.get("children", [])
+
+    if not phase_order:
+        return ""
+
+    try:
+        current_idx = phase_order.index(phase_id)
+    except ValueError:
+        return ""
+
+    subsequent_ids = phase_order[current_idx + 1 :]
+    if not subsequent_ids:
+        return ""
+
+    hierarchy_nodes = _get_hierarchy_nodes(spec_data)
+    lines: list[str] = [
+        "*The following phases are planned but not yet expected to be implemented:*",
+        "",
+    ]
+
+    for sid in subsequent_ids:
+        phase_node = hierarchy_nodes.get(sid)
+        if not phase_node:
+            continue
+        title = phase_node.get("title", sid)
+        status = phase_node.get("status", "unknown")
+        lines.append(f"### {title} (`{sid}`)")
+        lines.append(f"- **Status:** {status}")
+
+        desc = phase_node.get("description") or phase_node.get("purpose")
+        if desc:
+            lines.append(f"- **Description:** {desc}")
+
+        children = phase_node.get("children", [])
+        if children:
+            lines.append(f"- **Tasks ({len(children)}):**")
+            for child_id in children:
+                child_node = hierarchy_nodes.get(child_id, {})
+                child_title = child_node.get("title", child_id)
+                lines.append(f"  - {child_title}")
+        lines.append("")
+
+    return "\n".join(lines) if len(lines) > 2 else ""
 
 
 def _find_task(spec_data: Dict[str, Any], task_id: str) -> Optional[Dict[str, Any]]:
