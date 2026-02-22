@@ -4,8 +4,12 @@ Provides creative ideation capabilities with multi-perspective generation,
 idea clustering, scoring, and elaboration phases.
 """
 
+import json
 import logging
+import re
 from typing import Any, Optional
+
+from pydantic import BaseModel, Field
 
 from foundry_mcp.config.research import ResearchConfig
 from foundry_mcp.core.research.memory import ResearchMemory
@@ -18,6 +22,31 @@ from foundry_mcp.core.research.models.ideation import (
 from foundry_mcp.core.research.workflows.base import ResearchWorkflowBase, WorkflowResult
 
 logger = logging.getLogger(__name__)
+
+
+# --- Structured output models for LLM response parsing ---
+
+
+class IdeaOutput(BaseModel):
+    """A single idea from divergent generation."""
+
+    content: str = Field(..., description="The idea description")
+
+
+class ClusterOutput(BaseModel):
+    """A cluster of related ideas."""
+
+    name: str = Field(..., description="Short cluster name (2-4 words)")
+    description: str = Field(default="", description="Brief cluster description")
+    idea_numbers: list[int] = Field(default_factory=list, description="1-based idea numbers in this cluster")
+
+
+class ScoreOutput(BaseModel):
+    """Score for a single idea."""
+
+    idea_number: int = Field(..., description="1-based idea number")
+    score: float = Field(..., ge=0.0, le=1.0, description="Score from 0.0 to 1.0")
+    justification: str = Field(default="", description="Brief justification")
 
 
 class IdeateWorkflow(ResearchWorkflowBase):
@@ -160,6 +189,7 @@ class IdeateWorkflow(ResearchWorkflowBase):
         perspectives_to_use = [perspective] if perspective else state.perspectives
 
         all_ideas = []
+        parse_methods = []
         for persp in perspectives_to_use:
             prompt = self._build_generation_prompt(state.topic, persp)
             result = self._execute_provider(
@@ -170,7 +200,8 @@ class IdeateWorkflow(ResearchWorkflowBase):
 
             if result.success:
                 # Parse ideas from response
-                ideas = self._parse_ideas(result.content, persp, result.provider_id, result.model_used)
+                ideas, parse_method = self._parse_ideas(result.content, persp, result.provider_id, result.model_used)
+                parse_methods.append(parse_method)
                 for idea in ideas:
                     state.ideas.append(idea)
                     all_ideas.append(idea)
@@ -187,12 +218,18 @@ class IdeateWorkflow(ResearchWorkflowBase):
         for i, idea in enumerate(all_ideas, 1):
             content += f"{i}. [{idea.perspective}] {idea.content}\n"
 
+        json_count = sum(1 for m in parse_methods if m == "json")
+        fallback_count = len(parse_methods) - json_count
+
         return WorkflowResult(
             success=True,
             content=content,
             metadata={
                 "ideas_generated": len(all_ideas),
                 "perspectives_used": perspectives_to_use,
+                "parse_method": "json" if fallback_count == 0 else ("mixed" if json_count > 0 else "fallback_regex"),
+                "parse_json_count": json_count,
+                "parse_fallback_count": fallback_count,
             },
         )
 
@@ -223,15 +260,18 @@ class IdeateWorkflow(ResearchWorkflowBase):
 
 {ideas_text}
 
-For each cluster, provide:
-1. A short name (2-4 words)
-2. A brief description
-3. The idea numbers that belong to it
+Your response MUST be valid JSON with this structure:
+{{
+    "clusters": [
+        {{
+            "name": "Short name (2-4 words)",
+            "description": "Brief description of the cluster theme",
+            "idea_numbers": [1, 2, 3]
+        }}
+    ]
+}}
 
-Format as:
-CLUSTER: [name]
-DESCRIPTION: [description]
-IDEAS: [comma-separated numbers]"""
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         result = self._execute_provider(
             prompt=prompt,
@@ -243,7 +283,7 @@ IDEAS: [comma-separated numbers]"""
             return result
 
         # Parse clusters from response
-        clusters = self._parse_clusters(result.content, state)
+        clusters, parse_method = self._parse_clusters(result.content, state)
 
         # Update state
         state.clusters = clusters
@@ -258,7 +298,7 @@ IDEAS: [comma-separated numbers]"""
         return WorkflowResult(
             success=True,
             content=content,
-            metadata={"clusters_created": len(clusters)},
+            metadata={"clusters_created": len(clusters), "parse_method": parse_method},
         )
 
     def _score_ideas(
@@ -290,8 +330,18 @@ IDEAS: [comma-separated numbers]"""
 Ideas:
 {ideas_text}
 
-Provide an overall score (average of criteria) for each idea.
-Format: [idea number]: [score] - [brief justification]"""
+Your response MUST be valid JSON with this structure:
+{{
+    "scores": [
+        {{
+            "idea_number": 1,
+            "score": 0.8,
+            "justification": "Brief justification for the score"
+        }}
+    ]
+}}
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
         result = self._execute_provider(
             prompt=prompt,
@@ -303,7 +353,7 @@ Format: [idea number]: [score] - [brief justification]"""
             return result
 
         # Parse scores from response
-        self._parse_scores(result.content, state)
+        score_parse_method = self._parse_scores(result.content, state)
 
         # Update cluster scores
         for cluster in state.clusters:
@@ -324,7 +374,7 @@ Format: [idea number]: [score] - [brief justification]"""
         return WorkflowResult(
             success=True,
             content=content,
-            metadata={"ideas_scored": len(scored_ideas)},
+            metadata={"ideas_scored": len(scored_ideas), "parse_method": score_parse_method},
         )
 
     def _select_clusters(
@@ -497,8 +547,14 @@ Provide:
 
 Approach this from a {perspective} perspective. Think freely and don't self-censor.
 
-For each idea, provide a single sentence description.
-Format: One idea per line, starting with a dash (-)"""
+Your response MUST be valid JSON with this structure:
+{{
+    "ideas": [
+        {{"content": "A single sentence description of the idea"}}
+    ]
+}}
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting or extra text."""
 
     def _build_ideation_system_prompt(self) -> str:
         """Build system prompt for ideation.
@@ -515,8 +571,8 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
         perspective: str,
         provider_id: Optional[str],
         model_used: Optional[str],
-    ) -> list[Idea]:
-        """Parse ideas from response.
+    ) -> tuple[list[Idea], str]:
+        """Parse ideas from response. Tries JSON first, falls back to line parsing.
 
         Args:
             response: Provider response
@@ -525,8 +581,50 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
             model_used: Model used
 
         Returns:
-            List of parsed ideas
+            Tuple of (list of parsed ideas, parse method used)
         """
+        ideas = self._try_parse_ideas_json(response, perspective, provider_id, model_used)
+        if ideas is not None:
+            return ideas, "json"
+
+        logger.warning("Ideate: JSON parse failed for ideas, falling back to line parsing")
+        return self._parse_ideas_fallback(response, perspective, provider_id, model_used), "fallback_regex"
+
+    def _try_parse_ideas_json(
+        self,
+        response: str,
+        perspective: str,
+        provider_id: Optional[str],
+        model_used: Optional[str],
+    ) -> list[Idea] | None:
+        """Attempt to parse ideas from JSON response."""
+        json_str = self._extract_json(response)
+        if json_str is None:
+            return None
+
+        try:
+            data = json.loads(json_str)
+            raw_ideas = data.get("ideas", [])
+            if not isinstance(raw_ideas, list):
+                return None
+            parsed = [IdeaOutput.model_validate(item) for item in raw_ideas]
+            return [
+                Idea(content=p.content, perspective=perspective, provider_id=provider_id, model_used=model_used)
+                for p in parsed
+                if p.content.strip()
+            ]
+        except Exception as exc:
+            logger.debug("Ideate ideas JSON parse failed: %s", exc)
+            return None
+
+    @staticmethod
+    def _parse_ideas_fallback(
+        response: str,
+        perspective: str,
+        provider_id: Optional[str],
+        model_used: Optional[str],
+    ) -> list[Idea]:
+        """Original line-based idea parsing (fallback)."""
         ideas = []
         for line in response.split("\n"):
             line = line.strip()
@@ -534,34 +632,68 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
                 content = line[1:].strip()
                 if content:
                     ideas.append(
-                        Idea(
-                            content=content,
-                            perspective=perspective,
-                            provider_id=provider_id,
-                            model_used=model_used,
-                        )
+                        Idea(content=content, perspective=perspective, provider_id=provider_id, model_used=model_used)
                     )
         return ideas
 
-    def _parse_clusters(self, response: str, state: IdeationState) -> list[IdeaCluster]:
-        """Parse clusters from response.
+    def _parse_clusters(self, response: str, state: IdeationState) -> tuple[list[IdeaCluster], str]:
+        """Parse clusters from response. Tries JSON first, falls back to keyword parsing.
 
         Args:
             response: Provider response
             state: Ideation state
 
         Returns:
-            List of parsed clusters
+            Tuple of (list of parsed clusters, parse method used)
         """
+        clusters = self._try_parse_clusters_json(response, state)
+        if clusters is not None:
+            return clusters, "json"
+
+        logger.warning("Ideate: JSON parse failed for clusters, falling back to keyword parsing")
+        return self._parse_clusters_fallback(response, state), "fallback_regex"
+
+    def _try_parse_clusters_json(self, response: str, state: IdeationState) -> list[IdeaCluster] | None:
+        """Attempt to parse clusters from JSON response."""
+        json_str = self._extract_json(response)
+        if json_str is None:
+            return None
+
+        try:
+            data = json.loads(json_str)
+            raw_clusters = data.get("clusters", [])
+            if not isinstance(raw_clusters, list):
+                return None
+            parsed = [ClusterOutput.model_validate(item) for item in raw_clusters]
+
+            clusters = []
+            for p in parsed:
+                cluster = IdeaCluster(name=p.name, description=p.description or None)
+                idea_ids = []
+                for num in p.idea_numbers:
+                    idx = num - 1
+                    if 0 <= idx < len(state.ideas):
+                        idea_id = state.ideas[idx].id
+                        idea_ids.append(idea_id)
+                        state.ideas[idx].cluster_id = idea_id
+                cluster.idea_ids = idea_ids
+                clusters.append(cluster)
+            return clusters
+        except Exception as exc:
+            logger.debug("Ideate clusters JSON parse failed: %s", exc)
+            return None
+
+    @staticmethod
+    def _parse_clusters_fallback(response: str, state: IdeationState) -> list[IdeaCluster]:
+        """Original keyword-based cluster parsing (fallback)."""
         clusters = []
         current_name = None
         current_desc = None
-        current_ideas = []
+        current_ideas: list[str] = []
 
         for line in response.split("\n"):
             line = line.strip()
             if line.upper().startswith("CLUSTER:"):
-                # Save previous cluster if exists
                 if current_name:
                     cluster = IdeaCluster(name=current_name, description=current_desc)
                     cluster.idea_ids = current_ideas
@@ -572,7 +704,6 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
             elif line.upper().startswith("DESCRIPTION:"):
                 current_desc = line.split(":", 1)[1].strip()
             elif line.upper().startswith("IDEAS:"):
-                # Parse idea numbers
                 nums_str = line.split(":", 1)[1].strip()
                 for num in nums_str.replace(",", " ").split():
                     try:
@@ -584,7 +715,6 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
                     except ValueError:
                         continue
 
-        # Save last cluster
         if current_name:
             cluster = IdeaCluster(name=current_name, description=current_desc)
             cluster.idea_ids = current_ideas
@@ -592,13 +722,46 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
 
         return clusters
 
-    def _parse_scores(self, response: str, state: IdeationState) -> None:
-        """Parse scores from response and update ideas.
+    def _parse_scores(self, response: str, state: IdeationState) -> str:
+        """Parse scores from response and update ideas. Tries JSON first, falls back.
 
         Args:
             response: Provider response
             state: Ideation state
+
+        Returns:
+            Parse method used: "json" or "fallback_regex"
         """
+        if self._try_parse_scores_json(response, state):
+            return "json"
+
+        logger.warning("Ideate: JSON parse failed for scores, falling back to line parsing")
+        self._parse_scores_fallback(response, state)
+        return "fallback_regex"
+
+    def _try_parse_scores_json(self, response: str, state: IdeationState) -> bool:
+        """Attempt to parse scores from JSON response. Returns True on success."""
+        json_str = self._extract_json(response)
+        if json_str is None:
+            return False
+
+        try:
+            data = json.loads(json_str)
+            raw_scores = data.get("scores", [])
+            if not isinstance(raw_scores, list):
+                return False
+            parsed = [ScoreOutput.model_validate(item) for item in raw_scores]
+            for p in parsed:
+                if 0 < p.idea_number <= len(state.ideas):
+                    state.ideas[p.idea_number - 1].score = p.score
+            return True
+        except Exception as exc:
+            logger.debug("Ideate scores JSON parse failed: %s", exc)
+            return False
+
+    @staticmethod
+    def _parse_scores_fallback(response: str, state: IdeationState) -> None:
+        """Original line-based score parsing (fallback)."""
         for line in response.split("\n"):
             line = line.strip()
             if ":" in line:
@@ -606,13 +769,36 @@ Focus on quantity and variety - the evaluation comes later. Be bold and think ou
                     parts = line.split(":")
                     num = int(parts[0].strip().rstrip("."))
                     score_part = parts[1].strip()
-                    # Extract score (handle "0.8 - justification" format)
                     score_str = score_part.split()[0].split("-")[0].strip()
                     score = float(score_str)
                     if 0 <= score <= 1 and 0 < num <= len(state.ideas):
                         state.ideas[num - 1].score = score
                 except (ValueError, IndexError):
                     continue
+
+    @staticmethod
+    def _extract_json(content: str) -> str | None:
+        """Extract JSON object from content that may contain other text."""
+        # Try code blocks first
+        for match in re.findall(r"```(?:json)?\s*([\s\S]*?)```", content):
+            match = match.strip()
+            if match.startswith("{"):
+                return match
+
+        # Try raw JSON object
+        brace_start = content.find("{")
+        if brace_start == -1:
+            return None
+
+        depth = 0
+        for i, char in enumerate(content[brace_start:], brace_start):
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return content[brace_start : i + 1]
+        return None
 
     def get_ideation(self, ideation_id: str) -> Optional[dict[str, Any]]:
         """Get full ideation details.

@@ -303,5 +303,6 @@ class AnalysisPhaseMixin(DigestStepMixin, AnalysisPromptsMixin, AnalysisParsingM
                 "finding_count": len(parsed["findings"]),
                 "gap_count": len(parsed["gaps"]),
                 "source_count": len(state.sources),
+                "parse_method": parsed.get("parse_method"),
             },
         )

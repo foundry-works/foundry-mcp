@@ -41,43 +41,43 @@
 ## Phase 1: Structured Output for Response Parsing
 
 ### 1a. ThinkDeep structured output
-- [ ] Define `HypothesisUpdate` Pydantic model with `hypothesis`, `evidence: list[EvidenceItem]`
-- [ ] Define `EvidenceItem` with `text`, `strength: Literal["strong", "moderate", "weak"]`, `source`
-- [ ] Update ThinkDeep system prompt to request JSON conforming to schema
-- [ ] Replace keyword matching in `_update_hypotheses_from_response()` (lines 251–301) with JSON parse
-- [ ] Add Pydantic validation with clear error messages
-- [ ] Add fallback: JSON parse failure → current keyword extraction + warning log
-- [ ] Update confidence scoring to use `evidence.strength` instead of fixed-step bumping
-- [ ] Add `parse_method` to result metadata ("json" | "fallback_keyword")
+- [x] Define `HypothesisUpdate` Pydantic model with `hypothesis`, `evidence: list[EvidenceItem]`
+- [x] Define `EvidenceItem` with `text`, `strength: Literal["strong", "moderate", "weak"]`, `source`
+- [x] Update ThinkDeep system prompt to request JSON conforming to schema
+- [x] Replace keyword matching in `_update_hypotheses_from_response()` (lines 251–301) with JSON parse
+- [x] Add Pydantic validation with clear error messages
+- [x] Add fallback: JSON parse failure → current keyword extraction + warning log
+- [x] Update confidence scoring to use `evidence.strength` instead of fixed-step bumping
+- [x] Add `parse_method` to result metadata ("json" | "fallback_keyword")
 
 ### 1b. Ideate structured output
-- [ ] Define `IdeaOutput` Pydantic model
-- [ ] Define `ClusterOutput` Pydantic model
-- [ ] Define `ScoreOutput` Pydantic model
-- [ ] Update divergent phase system prompt → JSON
-- [ ] Update clustering phase system prompt → JSON
-- [ ] Update scoring phase system prompt → JSON
-- [ ] Replace `_parse_ideas()` (lines 512–545) with JSON parse + validation
-- [ ] Replace `_parse_clusters()` (lines 546–594) with JSON parse + validation
-- [ ] Replace `_parse_scores()` (lines 595–616) with JSON parse + validation
-- [ ] Add fallback: JSON failure → current regex + warning log
-- [ ] Add parse success/failure count to workflow result metadata
+- [x] Define `IdeaOutput` Pydantic model
+- [x] Define `ClusterOutput` Pydantic model
+- [x] Define `ScoreOutput` Pydantic model
+- [x] Update divergent phase system prompt → JSON
+- [x] Update clustering phase system prompt → JSON
+- [x] Update scoring phase system prompt → JSON
+- [x] Replace `_parse_ideas()` (lines 512–545) with JSON parse + validation
+- [x] Replace `_parse_clusters()` (lines 546–594) with JSON parse + validation
+- [x] Replace `_parse_scores()` (lines 595–616) with JSON parse + validation
+- [x] Add fallback: JSON failure → current regex + warning log
+- [x] Add parse success/failure count to workflow result metadata
 
 ### 1c. Deep Research analysis structured output
-- [ ] Define `AnalysisFinding` Pydantic model with `claim`, `evidence`, `confidence`, `source_urls`
-- [ ] Update analysis prompt in `_analysis_prompts.py` to request JSON array
-- [ ] Replace markdown parsing in `_analysis_parsing.py` with JSON parse + validation
-- [ ] Add fallback to current markdown parsing + warning log
-- [ ] Surface `parse_method` in phase metadata
+- [x] Define `AnalysisFinding` Pydantic model with `claim`, `evidence`, `confidence`, `source_urls`
+- [x] Update analysis prompt in `_analysis_prompts.py` to request JSON array
+- [x] Replace markdown parsing in `_analysis_parsing.py` with JSON parse + validation
+- [x] Add fallback to current markdown parsing + warning log
+- [x] Surface `parse_method` in phase metadata
 
 ### 1d. Update tests for structured output
-- [ ] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (ThinkDeep)
-- [ ] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (Ideate)
-- [ ] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (DeepResearch)
-- [ ] Test malformed JSON triggers fallback + logs warning
-- [ ] Test Pydantic validation catches missing required fields
-- [ ] Test `parse_method` metadata correctly set in all workflows
-- [ ] Run: `pytest tests/core/research/ -v`
+- [x] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (ThinkDeep)
+- [x] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (Ideate)
+- [x] Update `test_parse_edge_cases.py` — valid JSON parsed correctly (DeepResearch)
+- [x] Test malformed JSON triggers fallback + logs warning
+- [x] Test Pydantic validation catches missing required fields
+- [x] Test `parse_method` metadata correctly set in all workflows
+- [x] Run: `pytest tests/core/research/ -v`
 
 ---
 
