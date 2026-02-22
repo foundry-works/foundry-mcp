@@ -16,7 +16,13 @@ from foundry_mcp.core.research.models.deep_research import (
     DeepResearchState,
 )
 from foundry_mcp.core.research.models.sources import ResearchMode
-from foundry_mcp.core.research.workflows.base import WorkflowResult
+from foundry_mcp.core.research.workflows.base import MAX_PROMPT_LENGTH, WorkflowResult
+from foundry_mcp.core.research.workflows.deep_research._constants import (
+    MAX_CONCURRENT_PROVIDERS,
+    MAX_ITERATIONS,
+    MAX_SOURCES_PER_QUERY,
+    MAX_SUB_QUERIES,
+)
 from foundry_mcp.core.research.workflows.deep_research.infrastructure import (
     _active_research_sessions,
     _active_sessions_lock,
@@ -73,6 +79,36 @@ class ActionHandlersMixin:
                 success=False,
                 content="",
                 error="Query is required to start research",
+            )
+
+        # Input bounds validation
+        violations: list[str] = []
+        if len(query) > MAX_PROMPT_LENGTH:
+            violations.append(
+                f"query length {len(query)} exceeds maximum {MAX_PROMPT_LENGTH} characters"
+            )
+        if max_iterations > MAX_ITERATIONS:
+            violations.append(
+                f"max_iterations {max_iterations} exceeds maximum {MAX_ITERATIONS}"
+            )
+        if max_sub_queries > MAX_SUB_QUERIES:
+            violations.append(
+                f"max_sub_queries {max_sub_queries} exceeds maximum {MAX_SUB_QUERIES}"
+            )
+        if max_sources_per_query > MAX_SOURCES_PER_QUERY:
+            violations.append(
+                f"max_sources_per_query {max_sources_per_query} exceeds maximum {MAX_SOURCES_PER_QUERY}"
+            )
+        if max_concurrent > MAX_CONCURRENT_PROVIDERS:
+            violations.append(
+                f"max_concurrent {max_concurrent} exceeds maximum {MAX_CONCURRENT_PROVIDERS}"
+            )
+        if violations:
+            return WorkflowResult(
+                success=False,
+                content="",
+                error=f"Input validation failed: {'; '.join(violations)}",
+                metadata={"validation_errors": violations},
             )
 
         # Resolve per-phase providers and models from config

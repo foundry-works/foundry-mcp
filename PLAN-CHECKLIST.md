@@ -84,32 +84,32 @@
 ## Phase 2: Input Validation & Timeout Fix
 
 ### 2a. Input bounds validation
-- [ ] Define validation constants (`MAX_PROMPT_LENGTH`, `MAX_ITERATIONS`, `MAX_SUB_QUERIES`, `MAX_SOURCES_PER_QUERY`, `MAX_CONCURRENT_PROVIDERS`)
-- [ ] Add prompt length validation in base workflow entry point
-- [ ] Add `max_iterations` validation in deep research `start()` handler
-- [ ] Add `max_sub_queries` validation in deep research `start()` handler
-- [ ] Add `max_sources_per_query` validation in deep research `start()` handler
-- [ ] Return clear error envelope on bound violation (not exception)
+- [x] Define validation constants (`MAX_PROMPT_LENGTH`, `MAX_ITERATIONS`, `MAX_SUB_QUERIES`, `MAX_SOURCES_PER_QUERY`, `MAX_CONCURRENT_PROVIDERS`)
+- [x] Add prompt length validation in base workflow entry point
+- [x] Add `max_iterations` validation in deep research `start()` handler
+- [x] Add `max_sub_queries` validation in deep research `start()` handler
+- [x] Add `max_sources_per_query` validation in deep research `start()` handler
+- [x] Return clear error envelope on bound violation (not exception)
 
 ### 2b. Deadline-based timeout
-- [ ] Compute `deadline = time.monotonic() + timeout_seconds` at `_execute_provider_async` entry
-- [ ] Pass `remaining = max(0, deadline - time.monotonic())` to primary provider attempt
-- [ ] Pass remaining budget to each fallback attempt
-- [ ] Skip fallback if `remaining <= 0`, return timeout error with elapsed duration
-- [ ] Log actual wall-clock vs. configured timeout in result metadata
-- [ ] Update all callers that pass timeout values
+- [x] Compute `deadline = time.monotonic() + timeout_seconds` at `_execute_provider_async` entry
+- [x] Pass `remaining = max(0, deadline - time.monotonic())` to primary provider attempt
+- [x] Pass remaining budget to each fallback attempt
+- [x] Skip fallback if `remaining <= 0`, return timeout error with elapsed duration
+- [x] Log actual wall-clock vs. configured timeout in result metadata
+- [x] Update all callers that pass timeout values
 
 ### 2c. Tests for bounds and deadline
-- [ ] Create `tests/core/research/workflows/test_input_validation.py`
-- [ ] Test prompt at `MAX_PROMPT_LENGTH` → accepted
-- [ ] Test prompt over `MAX_PROMPT_LENGTH` → clear error
-- [ ] Test `max_iterations` at limit → accepted
-- [ ] Test `max_iterations` over limit → clear error
-- [ ] Test `max_sub_queries` over limit → clear error
-- [ ] Update `test_timeout_fallback.py` — deadline caps total duration (was failing, now passes)
-- [ ] Test deadline: primary consumes 280s of 300s budget → fallback gets 20s
-- [ ] Test deadline: primary consumes full budget → fallback skipped
-- [ ] Run: `pytest tests/core/research/ -v`
+- [x] Create `tests/core/research/workflows/test_input_validation.py`
+- [x] Test prompt at `MAX_PROMPT_LENGTH` → accepted
+- [x] Test prompt over `MAX_PROMPT_LENGTH` → clear error
+- [x] Test `max_iterations` at limit → accepted
+- [x] Test `max_iterations` over limit → clear error
+- [x] Test `max_sub_queries` over limit → clear error
+- [x] Update `test_timeout_fallback.py` — deadline caps total duration (was failing, now passes)
+- [x] Test deadline: primary consumes 280s of 300s budget → fallback gets 20s
+- [x] Test deadline: primary consumes full budget → fallback skipped
+- [x] Run: `pytest tests/core/research/ -v`
 
 ---
 

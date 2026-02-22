@@ -1,5 +1,11 @@
 """Budget allocation and validation constants for deep research."""
 
+# Input bounds validation constants
+MAX_ITERATIONS = 10  # Maximum refinement iterations
+MAX_SUB_QUERIES = 20  # Maximum sub-queries per research session
+MAX_SOURCES_PER_QUERY = 50  # Maximum sources per sub-query
+MAX_CONCURRENT_PROVIDERS = 10  # Maximum concurrent provider operations
+
 # Budget allocation constants
 ANALYSIS_PHASE_BUDGET_FRACTION = 0.80  # 80% of effective context for analysis
 ANALYSIS_OUTPUT_RESERVED = 4000  # Reserve tokens for findings/gaps JSON output
