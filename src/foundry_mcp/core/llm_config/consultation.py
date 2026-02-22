@@ -28,11 +28,9 @@ class WorkflowConsultationConfig:
         [consultation.workflows.fidelity_review]
         min_models = 2
         timeout_override = 600.0
-        default_review_type = "full"
 
         [consultation.workflows.plan_review]
         min_models = 3
-        default_review_type = "full"
 
     Attributes:
         min_models: Minimum number of models required for consensus (default: 1).
@@ -41,17 +39,10 @@ class WorkflowConsultationConfig:
         timeout_override: Optional timeout override in seconds. When set,
                           overrides the default_timeout from ConsultationConfig
                           for this specific workflow.
-        default_review_type: Default review type for this workflow (default: "full").
-                             Valid values: "quick", "full", "security", "feasibility".
-                             Used when no explicit review_type is provided in requests.
     """
 
     min_models: int = 1
     timeout_override: Optional[float] = None
-    default_review_type: str = "full"
-
-    # Valid review types
-    VALID_REVIEW_TYPES = {"quick", "full", "security", "feasibility"}
 
     def validate(self) -> None:
         """Validate the workflow consultation configuration.
@@ -64,12 +55,6 @@ class WorkflowConsultationConfig:
 
         if self.timeout_override is not None and self.timeout_override <= 0:
             raise ValueError(f"timeout_override must be positive if set, got {self.timeout_override}")
-
-        if self.default_review_type not in self.VALID_REVIEW_TYPES:
-            raise ValueError(
-                f"default_review_type must be one of {sorted(self.VALID_REVIEW_TYPES)}, "
-                f"got '{self.default_review_type}'"
-            )
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WorkflowConsultationConfig":
@@ -90,9 +75,6 @@ class WorkflowConsultationConfig:
             value = data["timeout_override"]
             if value is not None:
                 config.timeout_override = float(value)
-
-        if "default_review_type" in data:
-            config.default_review_type = str(data["default_review_type"]).lower()
 
         return config
 

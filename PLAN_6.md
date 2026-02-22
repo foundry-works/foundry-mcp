@@ -1,7 +1,7 @@
 # Plan 6: Spec Review Enhancement — Diff Against the Plan
 
 **Decision:** "Spec Review Should Diff Against the Plan"
-**Dependencies:** Plan 4 (plan linkage), Plan 5 (plan template alignment)
+**Dependencies:** Plan 4 (plan linkage — complete), Plan 5 (plan template alignment — complete)
 **Risk:** Medium — changes how spec review works; the review becomes comparative rather than standalone
 
 ---
@@ -14,34 +14,68 @@ This closes the traceability loop: Plan → Plan Review → Spec → Spec Review
 
 ---
 
+## Key Design Decisions
+
+### Review type routing: auto-enhance, not new type
+
+The existing `review_type` values are `["quick", "full", "security", "feasibility"]`. Plan comparison is **not** a new review type — it's an automatic enhancement of the `"full"` review when `plan_content` is available. This means:
+
+- `review(action="spec", review_type="full")` on a spec with `plan_path` → uses `SPEC_REVIEW_VS_PLAN_V1`
+- `review(action="spec", review_type="full")` on a spec without `plan_path` → uses `PLAN_REVIEW_FULL_V1` (unchanged)
+- `review(action="spec", review_type="security|feasibility")` → unchanged regardless of plan_path
+
+No new review_type string needed. No API surface change.
+
+### Response format: JSON schema (like fidelity reviews)
+
+Current spec reviews use **markdown-format** responses (via `_RESPONSE_SCHEMA` in `plan_review.py`). Fidelity reviews use **structured JSON** schemas. The plan-comparison review produces structured comparison data (coverage counts, alignment statuses) that maps naturally to JSON. We adopt the JSON pattern here.
+
+When `plan_content` is absent and we fall back to `PLAN_REVIEW_FULL_V1`, the existing markdown response format is preserved — no change to the fallback path.
+
+### ConsultationWorkflow: reuse `PLAN_REVIEW`
+
+The `ConsultationRequest` currently uses `ConsultationWorkflow.PLAN_REVIEW` for spec reviews. We reuse this same workflow enum — the `prompt_id` field (`SPEC_REVIEW_VS_PLAN_V1` vs `PLAN_REVIEW_FULL_V1`) already differentiates the template. No new workflow enum needed. Caching keys include `prompt_id`, so cache isolation is automatic.
+
+### Naming convention note
+
+Existing naming is already inconsistent: `PLAN_REVIEW_FULL_V1` reviews **specs** (not plans), while `MARKDOWN_PLAN_REVIEW_FULL_V1` reviews **markdown plans**. The new `SPEC_REVIEW_VS_PLAN_V1` is more descriptive. Renaming existing prompts is out of scope for this plan.
+
+---
+
 ## Scope
 
-### 1. Load plan content during spec review
+### 1. Reuse `_build_plan_context()` from Plan 4
+
+Plan 4 already created `_build_plan_context(spec_data, workspace_root)` in `documentation_helpers.py` (lines 407-441). This function:
+- Reads `metadata.plan_path` from spec data
+- Resolves the path relative to workspace root
+- Returns formatted plan content (or empty string if file missing/unreadable)
+
+It's already wired into the **fidelity** review flow (review.py lines 824, 868). We reuse this same function for spec review — no new file-loading logic needed.
 
 **File: `src/foundry_mcp/tools/unified/review.py`**
-- `_handle_spec_review()` (lines 96-234): After loading the spec, check for `metadata.plan_path`. If present and file exists, read the plan content. If absent, fall back to standalone review (backward compat).
+- `_handle_spec_review()` (lines 97-235): After loading the spec, call `_build_plan_context(spec_data, workspace_root)` to get plan content. Pass it through to `_run_ai_review()`.
 
 **File: `src/foundry_mcp/tools/unified/review_helpers.py`**
-- `_run_ai_review()` (lines 115-320): Update the context passed to `ConsultationRequest` to include `plan_content` when available:
+- `_run_ai_review()` (lines 115-320): Accept optional `plan_content` parameter. Add to `ConsultationRequest` context:
   ```python
   context = {
-      "spec_content": spec_content,
+      "spec_content": json.dumps(spec_data, indent=2),
       "spec_id": spec_id,
-      "title": title,
+      "title": context.title,
       "review_type": review_type,
       "plan_content": plan_content,  # NEW — None if no plan_path
   }
   ```
+- When `review_type == "full"` and `plan_content` is truthy, override template selection to `SPEC_REVIEW_VS_PLAN_V1` instead of `PLAN_REVIEW_FULL_V1`.
 
-### 2. Update spec review prompt for plan comparison
+### 2. Create spec-vs-plan review prompt
 
-**File: `src/foundry_mcp/core/prompts/plan_review.py`** (or a new `spec_review.py` prompt file)
+**File: `src/foundry_mcp/core/prompts/spec_review.py`** (new file)
 
-The current spec review uses `PLAN_REVIEW_FULL_V1` template (mapped at lines 43-47 of review_helpers.py). This needs a new prompt variant or an updated prompt that handles both cases.
-
-**Option A (recommended):** Create a new prompt template `SPEC_REVIEW_VS_PLAN_V1` that:
+Create `SPEC_REVIEW_VS_PLAN_V1` prompt template that:
 1. Receives both `spec_content` (JSON) and `plan_content` (markdown)
-2. Evaluates the seven comparison dimensions from the decision:
+2. Evaluates seven comparison dimensions:
    - **Coverage** — Every phase, task, and verification step in the plan has a corresponding spec node
    - **Fidelity** — Spec tasks match the plan's intent (semantic alignment, not string matching)
    - **Success criteria mapping** — Plan's success criteria reflected in `metadata.success_criteria` and/or task `acceptance_criteria`
@@ -49,16 +83,15 @@ The current spec review uses `PLAN_REVIEW_FULL_V1` template (mapped at lines 43-
    - **Risks preserved** — Plan's risk table reflected in `metadata.risks`
    - **Open questions preserved** — Plan's open questions in `metadata.open_questions`
    - **Undocumented additions** — Anything in spec not traceable to plan (flagged, not necessarily wrong)
+3. Returns structured JSON response (see section 3 below)
 
-**Option B:** Modify `PLAN_REVIEW_FULL_V1` to conditionally include plan comparison when `plan_content` is provided. This is messier — a dedicated prompt is cleaner.
+The prompt should emphasize **semantic alignment** — markdown prose and JSON will never match syntactically. The LLM compares meaning, not strings.
 
-**Prompt routing:**
-- If `plan_content` is available → use `SPEC_REVIEW_VS_PLAN_V1`
-- If no plan → fall back to existing `PLAN_REVIEW_FULL_V1` (standalone review)
+Include a `SpecReviewPromptBuilder` class following the pattern in `plan_review.py` (`PlanReviewPromptBuilder`) and `fidelity_review.py` (`FidelityReviewPromptBuilder`).
 
-### 3. Update response schema for plan-comparison review
+### 3. Response schema for plan-comparison review
 
-The response should capture comparison-specific findings:
+Structured JSON response (follows fidelity review pattern):
 
 ```json
 {
@@ -89,19 +122,30 @@ The response should capture comparison-specific findings:
 }
 ```
 
-### 4. Store spec review results
+Define this as `SPEC_VS_PLAN_RESPONSE_SCHEMA` in the new `spec_review.py` prompt file, following the pattern of `FIDELITY_RESPONSE_SCHEMA` in `fidelity_review.py`.
+
+### 4. Update template mapping
+
+**File: `src/foundry_mcp/tools/unified/review_helpers.py`**
+- Add `"spec-vs-plan"` → `"SPEC_REVIEW_VS_PLAN_V1"` to `_REVIEW_TYPE_TO_TEMPLATE` mapping (used internally, not exposed as a user-facing review_type).
+- Update `_run_ai_review()` to select the `"spec-vs-plan"` key when `review_type == "full"` and `plan_content` is truthy.
+
+**File: `src/foundry_mcp/core/prompts/spec_review.py`**
+- Register `SPEC_REVIEW_VS_PLAN_V1` in a `SPEC_REVIEW_TEMPLATES` dict.
+- Export via the prompt builder class for discovery.
+
+### 5. Store spec review results (new for spec reviews)
+
+Currently, only fidelity reviews persist results to disk (`.fidelity-reviews/` directory). This plan adds persistence for spec reviews — a new behavior.
 
 **File: `src/foundry_mcp/tools/unified/review.py`**
-- After spec review completes, write the review to `specs/.plan-reviews/{spec_id}-spec-review.md` (or similar)
-- Store the path in a predictable location that the skill workflow can reference
+- After `_run_ai_review()` returns for a plan-comparison review, write the result to `specs/.spec-reviews/{spec_id}-spec-review.md`.
+- Include: timestamp, review type, verdict, full comparison output.
+- Return the review file path in the response `data.review_path`.
 
-**File: `src/foundry_mcp/tools/unified/review_helpers.py`**
-- Add review result persistence — write to disk with timestamp and review type
+Follow the persistence pattern from fidelity review (`_handle_fidelity()` lines ~1020-1060) for consistency.
 
-### 5. Update spec review invocation to pass plan
-
-**File: `src/foundry_mcp/tools/unified/review_helpers.py`**
-- `prepare_review_context()` (called around line 141-148): When reviewing a spec, resolve and load `plan_path` from spec metadata. Handle gracefully if file doesn't exist (warn, fall back to standalone review).
+**Standalone reviews (no plan_path) do NOT get persisted** — this matches current behavior and avoids scope creep.
 
 ### 6. What the review should NOT do
 
@@ -114,7 +158,8 @@ Per the decision:
 
 ## Design Notes
 
-- **Backward compatibility.** Old specs without `plan_path` get the existing standalone review. No degradation. The plan-comparison review is additive — it only activates when plan_path is present.
+- **Backward compatibility.** Old specs without `plan_path` get the existing standalone review. No degradation. The plan-comparison review is additive — it only activates when `plan_path` is present and the file exists.
 - **Semantic vs syntactic comparison.** The LLM compares meaning, not strings. A plan task "implement OAuth2 with PKCE" should match a spec task with similar description, even if the wording differs. The prompt must emphasize semantic alignment.
 - **"Undocumented additions" are not errors.** The spec may contain things not in the plan (e.g., LLM added error handling tasks). These should be flagged for review, not auto-rejected. The concern is silent omissions, not reasonable additions.
-- **Review caching.** If `consultation_cache` is True (default), the same spec+plan pair shouldn't trigger a new LLM call if already reviewed. The existing caching in the consultation orchestrator handles this.
+- **Review caching.** `ConsultationWorkflow.PLAN_REVIEW` is reused; cache keys include `prompt_id`, so `SPEC_REVIEW_VS_PLAN_V1` and `PLAN_REVIEW_FULL_V1` cache independently. If `consultation_cache` is True (default), the same spec+plan pair won't trigger a duplicate LLM call.
+- **Persistence scope.** Only plan-comparison reviews (with plan_path) are persisted to disk. Standalone reviews retain current behavior (no disk write). This keeps the change minimal.

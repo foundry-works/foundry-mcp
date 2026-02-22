@@ -496,7 +496,6 @@ LLM-assisted review workflows.
 | `phase_id` | string | Varies | - | Phase ID (required for phase-scoped fidelity runs) |
 | `session_id` | string | Varies | - | Session ID (required for `fidelity-gate`) |
 | `step_id` | string | Varies | - | Session step ID from `task(action=session-step-next)` (required for `fidelity-gate`) |
-| `review_type` | string | No | `full` | Review type (`quick`, `full`, `security`, `feasibility`) |
 | `ai_provider` | string | No | - | AI provider to use |
 | `ai_timeout` | number | No | 360 | Consultation timeout |
 | `consultation_cache` | boolean | No | `true` | Use consultation cache |
@@ -505,12 +504,14 @@ LLM-assisted review workflows.
 ### Examples
 
 ```json
-{"action": "spec", "spec_id": "my-spec", "review_type": "security"}
+{"action": "spec", "spec_id": "my-spec"}
 {"action": "fidelity", "spec_id": "my-spec", "task_id": "task-1-2"}
 {"action": "fidelity-gate", "spec_id": "my-spec", "phase_id": "phase-1", "session_id": "session_01", "step_id": "step_01"}
 ```
 
 **CLI equivalent:** `foundry-cli review spec`
+
+**Plan-enhanced reviews:** When the spec has `metadata.plan_path` pointing to a readable markdown plan, the review automatically enhances to a spec-vs-plan comparison. This evaluates 7 dimensions: coverage, fidelity, success criteria mapping, constraints preserved, risks preserved, open questions preserved, and undocumented additions. The response is structured JSON with a verdict of `aligned`, `deviation`, or `incomplete`. Results are persisted to `specs/.spec-reviews/{spec_id}-spec-review.md` and the path is returned in `review_path`. Specs without `plan_path` continue to receive the standalone full review (backward compatible).
 
 ---
 

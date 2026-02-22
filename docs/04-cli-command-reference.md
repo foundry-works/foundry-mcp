@@ -574,17 +574,12 @@ foundry-cli plan create <NAME> [OPTIONS]
 |----------|----------|-------------|
 | `NAME` | Yes | Human-readable plan name |
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--template` | choice | `detailed` | Plan template (`simple`, `detailed`) |
-
-Creates a plan file in `specs/.plans/` with the specified template.
+Creates a plan file in `specs/.plans/` using the standard template.
 
 **Example:**
 
 ```bash
 foundry-cli plan create "Add user authentication"
-foundry-cli plan create "Refactor database layer" --template simple
 ```
 
 **MCP equivalent:** `plan` tool with `action=create`
@@ -625,19 +620,17 @@ foundry-cli plan review <PLAN_PATH> [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--type` | choice | `full` | Review type (`quick`, `full`, `security`, `feasibility`) |
 | `--ai-provider` | string | - | Explicit AI provider selection (e.g., `gemini`, `cursor-agent`) |
 | `--ai-timeout` | float | 360 | AI consultation timeout in seconds |
 | `--no-consultation-cache` | flag | false | Bypass AI consultation cache |
 | `--dry-run` | flag | false | Show what would be reviewed without executing |
 
-Writes review output to `specs/.plan-reviews/<plan-name>-<review-type>.md`.
+Writes review output to `specs/.plan-reviews/<plan-name>-review.md`.
 
 **Example:**
 
 ```bash
 foundry-cli plan review ./PLAN.md
-foundry-cli plan review ./PLAN.md --type security
 foundry-cli plan review ./PLAN.md --ai-provider gemini
 ```
 
@@ -663,7 +656,6 @@ foundry-cli review spec <SPEC_ID> [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--type` | choice | `full` | Review type (`quick`, `full`, `security`, `feasibility`) |
 | `--tools` | string | - | Comma-separated list of review tools (LLM types only) |
 | `--model` | string | - | LLM model to use for review |
 | `--ai-provider` | string | - | Explicit AI provider selection |
@@ -675,8 +667,7 @@ foundry-cli review spec <SPEC_ID> [OPTIONS]
 
 ```bash
 foundry-cli review spec my-spec
-foundry-cli review spec my-spec --type quick
-foundry-cli review spec my-spec --type security --ai-provider gemini
+foundry-cli review spec my-spec --ai-provider gemini
 ```
 
 **MCP equivalent:** `review` tool with `action=spec`
