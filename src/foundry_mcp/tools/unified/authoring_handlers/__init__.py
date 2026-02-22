@@ -166,7 +166,6 @@ def register_unified_authoring_tool(mcp: FastMCP, config: ServerConfig) -> None:
         title: Optional[str] = None,
         description: Optional[str] = None,
         purpose: Optional[str] = None,
-        estimated_hours: Optional[float] = None,
         position: Optional[int] = None,
         link_previous: bool = True,
         phase_id: Optional[str] = None,

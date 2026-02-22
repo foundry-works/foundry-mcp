@@ -201,7 +201,6 @@ class TestCheckSpecCompleteness:
         assert "titles" in categories  # Empty phase title
         assert "descriptions" in categories  # Missing description
         assert "file_paths" in categories  # Missing file_path for impl task
-        assert "estimates" in categories  # Missing estimated_hours
 
     def test_category_scores(self, temp_specs_dir, incomplete_spec):
         """Category scores should reflect completion."""

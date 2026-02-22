@@ -34,7 +34,6 @@ from foundry_mcp.core.spec.hierarchy import (  # noqa: F401 — re-exports
     get_node,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
     remove_phase,
     update_node,
     update_phase_metadata,

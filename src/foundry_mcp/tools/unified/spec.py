@@ -48,7 +48,6 @@ from foundry_mcp.core.spec import (
     list_specs,
     load_spec,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
 )
 from foundry_mcp.core.validation.application import apply_fixes
 from foundry_mcp.core.validation.constants import (
@@ -980,47 +979,6 @@ def _handle_duplicate_detection(*, config: ServerConfig, payload: Dict[str, Any]
     return asdict(success_response(**result))
 
 
-def _handle_recalculate_hours(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
-    """Recalculate estimated_hours by aggregating from tasks up through hierarchy."""
-    spec_id = payload.get("spec_id")
-    if not spec_id or not isinstance(spec_id, str) or not spec_id.strip():
-        return asdict(
-            error_response(
-                "spec_id is required for recalculate-hours action",
-                error_code=ErrorCode.MISSING_REQUIRED,
-                error_type=ErrorType.VALIDATION,
-                remediation="Provide the spec_id to recalculate hours for",
-            )
-        )
-
-    workspace = payload.get("workspace")
-    dry_run = payload.get("dry_run", False)
-
-    specs_dir, specs_err = _resolve_specs_dir(config, workspace)
-    if specs_err:
-        return specs_err
-    assert specs_dir is not None  # guaranteed when specs_err is None
-
-    result, error = recalculate_estimated_hours(
-        spec_id,
-        dry_run=dry_run,
-        specs_dir=specs_dir,
-    )
-    if error:
-        return asdict(
-            error_response(
-                error,
-                error_code=ErrorCode.SPEC_NOT_FOUND,
-                error_type=ErrorType.NOT_FOUND,
-                remediation='Verify the spec ID exists using spec(action="list").',
-                details={"spec_id": spec_id},
-            )
-        )
-
-    assert result is not None  # guaranteed when error is None
-    return asdict(success_response(**result))
-
-
 def _handle_recalculate_actual_hours(*, config: ServerConfig, payload: Dict[str, Any]) -> dict:
     """Recalculate actual_hours by aggregating from tasks up through hierarchy."""
     spec_id = payload.get("spec_id")
@@ -1104,11 +1062,6 @@ _ACTIONS = [
         name="duplicate-detection",
         handler=_handle_duplicate_detection,
         summary="Detect duplicate or near-duplicate tasks",
-    ),
-    ActionDefinition(
-        name="recalculate-hours",
-        handler=_handle_recalculate_hours,
-        summary="Recalculate estimated_hours from task/phase hierarchy",
     ),
     ActionDefinition(
         name="recalculate-actual-hours",

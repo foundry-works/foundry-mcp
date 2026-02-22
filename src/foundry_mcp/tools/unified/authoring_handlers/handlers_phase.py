@@ -51,7 +51,6 @@ _PHASE_ADD_SCHEMA = {
     ),
     "description": Str(),
     "purpose": Str(),
-    "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
     "position": Num(integer_only=True, min_val=0),
     "link_previous": Bool(default=True),
     "dry_run": Bool(default=False),
@@ -65,7 +64,6 @@ _PHASE_UPDATE_METADATA_SCHEMA = {
     "phase_id": Str(
         required=True, error_code=ErrorCode.MISSING_REQUIRED, remediation="Pass the phase identifier (e.g., 'phase-1')"
     ),
-    "estimated_hours": Num(min_val=0, remediation="Set hours to zero or greater"),
     "description": Str(),
     "purpose": Str(),
     "dry_run": Bool(default=False),
@@ -118,7 +116,6 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
     title = payload["title"]
     description = payload.get("description")
     purpose = payload.get("purpose")
-    estimated_hours = payload.get("estimated_hours")
     position = payload.get("position")
     link_previous = payload["link_previous"]
     dry_run = payload["dry_run"]
@@ -168,7 +165,6 @@ def _handle_phase_add(*, config: ServerConfig, **payload: Any) -> dict:
             title=title,
             description=description,
             purpose=purpose,
-            estimated_hours=estimated_hours,
             position=position,
             link_previous=link_previous,
             specs_dir=specs_dir,
@@ -236,9 +232,9 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
         request_id=request_id,
         cross_field_rules=[
             AtLeastOne(
-                fields=("estimated_hours", "description", "purpose"),
+                fields=("description", "purpose"),
                 error_code=ErrorCode.VALIDATION_ERROR,
-                remediation="Include estimated_hours, description, or purpose",
+                remediation="Include description or purpose",
             ),
         ],
     )
@@ -247,7 +243,6 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
 
     spec_id = payload["spec_id"]
     phase_id = payload["phase_id"]
-    estimated_hours = payload.get("estimated_hours")
     description = payload.get("description")
     purpose = payload.get("purpose")
     dry_run = payload["dry_run"]
@@ -274,7 +269,6 @@ def _handle_phase_update_metadata(*, config: ServerConfig, **payload: Any) -> di
         result, error = update_phase_metadata(
             spec_id=spec_id,
             phase_id=phase_id,
-            estimated_hours=estimated_hours,
             description=description,
             purpose=purpose,
             dry_run=dry_run,
@@ -433,23 +427,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
                 code=ErrorCode.MISSING_REQUIRED,
             )
 
-        est_hours = task_def.get("estimated_hours")
-        if est_hours is not None:
-            if isinstance(est_hours, bool) or not isinstance(est_hours, (int, float)):
-                return _validation_error(
-                    field=f"tasks[{idx}].estimated_hours",
-                    action=action,
-                    message="estimated_hours must be a number",
-                    request_id=request_id,
-                )
-            if est_hours < 0:
-                return _validation_error(
-                    field=f"tasks[{idx}].estimated_hours",
-                    action=action,
-                    message="estimated_hours must be non-negative",
-                    request_id=request_id,
-                )
-
         # Validate research-specific parameters when type is "research"
         if task_type == "research":
             blocking_mode = task_def.get("blocking_mode")
@@ -499,25 +476,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             message="Purpose must be a string",
             request_id=request_id,
         )
-
-    estimated_hours = phase_obj.get("estimated_hours")
-    if estimated_hours is not None:
-        if isinstance(estimated_hours, bool) or not isinstance(estimated_hours, (int, float)):
-            return _validation_error(
-                field="phase.estimated_hours",
-                action=action,
-                message="Provide a numeric value",
-                request_id=request_id,
-            )
-        if estimated_hours < 0:
-            return _validation_error(
-                field="phase.estimated_hours",
-                action=action,
-                message="Value must be non-negative",
-                remediation="Set hours to zero or greater",
-                request_id=request_id,
-            )
-        estimated_hours = float(estimated_hours)
 
     # Handle metadata_defaults from both top-level and phase object
     # Top-level serves as base, phase-level overrides
@@ -596,7 +554,6 @@ def _handle_phase_add_bulk(*, config: ServerConfig, **payload: Any) -> dict:
             tasks=tasks,
             phase_description=description,
             phase_purpose=purpose,
-            phase_estimated_hours=estimated_hours,
             metadata_defaults=metadata_defaults,
             position=position,
             link_previous=link_previous,
@@ -716,31 +673,26 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
                 "name": "planning",
                 "description": "Requirements gathering and initial planning phase",
                 "tasks": 2,
-                "estimated_hours": 4,
             },
             {
                 "name": "implementation",
                 "description": "Core development and feature implementation phase",
                 "tasks": 2,
-                "estimated_hours": 8,
             },
             {
                 "name": "testing",
                 "description": "Comprehensive testing and quality assurance phase",
                 "tasks": 2,
-                "estimated_hours": 6,
             },
             {
                 "name": "security",
                 "description": "Security audit and hardening phase",
                 "tasks": 2,
-                "estimated_hours": 6,
             },
             {
                 "name": "documentation",
                 "description": "Technical documentation and knowledge capture phase",
                 "tasks": 2,
-                "estimated_hours": 4,
             },
         ]
         data["total_count"] = len(data["templates"])
@@ -757,7 +709,6 @@ def _handle_phase_template(*, config: ServerConfig, **payload: Any) -> dict:
                 "title": template_struct["title"],
                 "description": template_struct["description"],
                 "purpose": template_struct["purpose"],
-                "estimated_hours": template_struct["estimated_hours"],
                 "tasks": template_struct["tasks"],
                 "includes_verification": template_struct["includes_verification"],
             }

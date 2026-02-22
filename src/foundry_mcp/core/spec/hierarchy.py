@@ -2,7 +2,7 @@
 Hierarchy operations for SDD spec nodes.
 
 Functions for traversing and mutating the spec hierarchy: get/update nodes,
-add/remove/move phases, recalculate hours, and update phase metadata.
+add/remove/move phases, recalculate actual hours, and update phase metadata.
 
 Imports ``io`` (for find/load/save) and ``_constants`` only.
 """
@@ -169,7 +169,6 @@ def add_phase(
     title: str,
     description: Optional[str] = None,
     purpose: Optional[str] = None,
-    estimated_hours: Optional[float] = None,
     position: Optional[int] = None,
     link_previous: bool = True,
     specs_dir=None,
@@ -182,7 +181,6 @@ def add_phase(
         title: Phase title.
         description: Optional phase description.
         purpose: Optional purpose/goal metadata string.
-        estimated_hours: Optional estimated hours for the phase.
         position: Optional zero-based insertion index in spec-root children.
         link_previous: Whether to automatically block on the previous phase when appending.
         specs_dir: Specs directory override.
@@ -195,9 +193,6 @@ def add_phase(
 
     if not title or not title.strip():
         return None, "Phase title is required"
-
-    if estimated_hours is not None and estimated_hours < 0:
-        return None, "estimated_hours must be non-negative"
 
     title = title.strip()
 
@@ -242,8 +237,6 @@ def add_phase(
     }
     if description:
         metadata["description"] = description.strip()
-    if estimated_hours is not None:
-        metadata["estimated_hours"] = estimated_hours
 
     phase_node = {
         "type": "phase",
@@ -316,11 +309,11 @@ def add_phase_bulk(
     tasks: List[Dict[str, Any]],
     phase_description: Optional[str] = None,
     phase_purpose: Optional[str] = None,
-    phase_estimated_hours: Optional[float] = None,
     metadata_defaults: Optional[Dict[str, Any]] = None,
     position: Optional[int] = None,
     link_previous: bool = True,
     specs_dir=None,
+    **_kwargs: Any,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Add a new phase with pre-defined tasks in a single atomic operation.
@@ -339,13 +332,11 @@ def add_phase_bulk(
             - acceptance_criteria: Optional list of acceptance criteria
             - task_category: Optional task category
             - file_path: Optional associated file path
-            - estimated_hours: Optional time estimate
             - verification_type: Optional verification type for verify tasks
         phase_description: Optional phase description.
         phase_purpose: Optional purpose/goal metadata string.
-        phase_estimated_hours: Optional estimated hours for the phase.
         metadata_defaults: Optional defaults applied to tasks missing explicit values.
-            Supported keys: task_category, category, acceptance_criteria, estimated_hours
+            Supported keys: task_category, category, acceptance_criteria
         position: Optional zero-based insertion index in spec-root children.
         link_previous: Whether to automatically block on the previous phase.
         specs_dir: Specs directory override.
@@ -365,18 +356,11 @@ def add_phase_bulk(
     if not tasks or not isinstance(tasks, list) or len(tasks) == 0:
         return None, "At least one task definition is required"
 
-    if phase_estimated_hours is not None and phase_estimated_hours < 0:
-        return None, "phase_estimated_hours must be non-negative"
-
     phase_title = phase_title.strip()
     defaults = metadata_defaults or {}
 
     # Validate metadata_defaults values
     if defaults:
-        default_est_hours = defaults.get("estimated_hours")
-        if default_est_hours is not None:
-            if not isinstance(default_est_hours, (int, float)) or default_est_hours < 0:
-                return None, "metadata_defaults.estimated_hours must be a non-negative number"
         default_category = defaults.get("task_category")
         if default_category is None:
             default_category = defaults.get("category")
@@ -402,11 +386,6 @@ def add_phase_bulk(
         task_title = task_def.get("title")
         if not task_title or not isinstance(task_title, str) or not task_title.strip():
             return None, f"Task at index {idx} must have a non-empty title"
-
-        est_hours = task_def.get("estimated_hours")
-        if est_hours is not None:
-            if not isinstance(est_hours, (int, float)) or est_hours < 0:
-                return None, f"Task at index {idx} has invalid estimated_hours"
 
         task_category = task_def.get("task_category")
         if task_category is not None and not isinstance(task_category, str):
@@ -462,8 +441,6 @@ def add_phase_bulk(
     }
     if phase_description:
         phase_metadata["description"] = phase_description.strip()
-    if phase_estimated_hours is not None:
-        phase_metadata["estimated_hours"] = phase_estimated_hours
 
     # Create phase node (without children initially)
     phase_node = {
@@ -554,13 +531,6 @@ def add_phase_bulk(
         file_path = task_def.get("file_path")
         if file_path and isinstance(file_path, str):
             task_metadata["file_path"] = file_path.strip()
-
-        # Apply estimated_hours (task-level overrides defaults)
-        est_hours = task_def.get("estimated_hours")
-        if est_hours is not None:
-            task_metadata["estimated_hours"] = float(est_hours)
-        elif defaults.get("estimated_hours") is not None:
-            task_metadata["estimated_hours"] = float(defaults["estimated_hours"])
 
         normalized_category = None
         if task_type == "task":
@@ -1238,22 +1208,21 @@ def update_phase_metadata(
     spec_id: str,
     phase_id: str,
     *,
-    estimated_hours: Optional[float] = None,
     description: Optional[str] = None,
     purpose: Optional[str] = None,
     dry_run: bool = False,
     specs_dir=None,
+    **_kwargs: Any,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
     Update metadata fields of a phase in a specification.
 
-    Allows updating phase-level metadata such as estimated_hours, description,
-    and purpose. Tracks previous values for audit purposes.
+    Allows updating phase-level metadata such as description and purpose.
+    Tracks previous values for audit purposes.
 
     Args:
         spec_id: Specification ID containing the phase.
         phase_id: Phase ID to update (e.g., "phase-1").
-        estimated_hours: New estimated hours value (must be >= 0 if provided).
         description: New description text for the phase.
         purpose: New purpose text for the phase.
         dry_run: If True, validate and return preview without saving changes.
@@ -1272,17 +1241,10 @@ def update_phase_metadata(
     if not phase_id or not phase_id.strip():
         return None, "Phase ID is required"
 
-    # Validate estimated_hours if provided
-    if estimated_hours is not None:
-        if not isinstance(estimated_hours, (int, float)):
-            return None, "estimated_hours must be a number"
-        if estimated_hours < 0:
-            return None, "estimated_hours must be >= 0"
-
     # Check that at least one field is being updated
-    has_update = any(v is not None for v in [estimated_hours, description, purpose])
+    has_update = any(v is not None for v in [description, purpose])
     if not has_update:
-        return None, "At least one field (estimated_hours, description, purpose) must be provided"
+        return None, "At least one field (description, purpose) must be provided"
 
     # Find specs directory
     if specs_dir is None:
@@ -1324,17 +1286,6 @@ def update_phase_metadata(
     # Track updates with previous values
     updates: List[Dict[str, Any]] = []
 
-    if estimated_hours is not None:
-        previous = phase_metadata.get("estimated_hours")
-        phase_metadata["estimated_hours"] = estimated_hours
-        updates.append(
-            {
-                "field": "estimated_hours",
-                "previous_value": previous,
-                "new_value": estimated_hours,
-            }
-        )
-
     if description is not None:
         description = description.strip() if description else description
         previous = phase_metadata.get("description")
@@ -1373,132 +1324,6 @@ def update_phase_metadata(
         return result, None
 
     # Save the spec
-    saved = save_spec(spec_id, spec_data, specs_dir)
-    if not saved:
-        return None, "Failed to save specification"
-
-    return result, None
-
-
-def recalculate_estimated_hours(
-    spec_id: str,
-    dry_run: bool = False,
-    specs_dir=None,
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """
-    Recalculate estimated_hours by aggregating from tasks up through phases.
-
-    Performs phase-level rollup:
-    1. For each phase: sums estimated_hours from all task/subtask/verify descendants
-    2. Updates each phase's metadata.estimated_hours with the calculated sum
-    3. Reports the spec total (sum of all phases) without storing it in spec metadata
-
-    Args:
-        spec_id: Specification ID to recalculate.
-        dry_run: If True, return report without saving changes.
-        specs_dir: Path to specs directory (auto-detected if not provided).
-
-    Returns:
-        Tuple of (result_dict, error_message).
-        On success: ({"spec_id": ..., "phases": [...], "spec_total": float, ...}, None)
-        On failure: (None, "error message")
-    """
-    # Validate spec_id
-    if not spec_id or not spec_id.strip():
-        return None, "Specification ID is required"
-
-    # Find specs directory
-    if specs_dir is None:
-        specs_dir = find_specs_directory()
-
-    if specs_dir is None:
-        return None, "Could not find specs directory"
-
-    # Load spec
-    spec_data = load_spec(spec_id, specs_dir)
-    if spec_data is None:
-        return None, f"Specification '{spec_id}' not found"
-
-    hierarchy = spec_data.get("hierarchy", {})
-    spec_root = hierarchy.get("spec-root")
-    if not spec_root:
-        return None, "Invalid spec: missing spec-root"
-
-    # Get phase children from spec-root
-    phase_ids = spec_root.get("children", [])
-
-    # Track results for each phase
-    phase_results: List[Dict[str, Any]] = []
-    spec_total_calculated = 0.0
-
-    for phase_id in phase_ids:
-        phase = hierarchy.get(phase_id)
-        if not phase or phase.get("type") != "phase":
-            continue
-
-        phase_metadata = phase.get("metadata", {})
-        previous_hours = phase_metadata.get("estimated_hours")
-
-        # Collect all descendants of this phase
-        descendants = _collect_descendants(hierarchy, phase_id)
-
-        # Sum estimated_hours from task/subtask/verify nodes
-        task_count = 0
-        calculated_hours = 0.0
-
-        for desc_id in descendants:
-            desc_node = hierarchy.get(desc_id)
-            if not desc_node:
-                continue
-
-            desc_type = desc_node.get("type")
-            if desc_type in ("task", "subtask", "verify"):
-                task_count += 1
-                desc_metadata = desc_node.get("metadata", {})
-                est = desc_metadata.get("estimated_hours")
-                if isinstance(est, (int, float)) and est >= 0:
-                    calculated_hours += float(est)
-
-        # Calculate delta
-        prev_value = float(previous_hours) if isinstance(previous_hours, (int, float)) else 0.0
-        delta = calculated_hours - prev_value
-
-        phase_results.append(
-            {
-                "phase_id": phase_id,
-                "title": phase.get("title", ""),
-                "previous": previous_hours,
-                "calculated": calculated_hours,
-                "delta": delta,
-                "task_count": task_count,
-            }
-        )
-
-        # Update phase metadata (will be saved if not dry_run)
-        if "metadata" not in phase:
-            phase["metadata"] = {}
-        phase["metadata"]["estimated_hours"] = calculated_hours
-
-        # Add to spec total
-        spec_total_calculated += calculated_hours
-
-    # Build result
-    result: Dict[str, Any] = {
-        "spec_id": spec_id,
-        "dry_run": dry_run,
-        "spec_total": spec_total_calculated,
-        "phases": phase_results,
-        "summary": {
-            "total_phases": len(phase_results),
-            "phases_changed": sum(1 for p in phase_results if p["delta"] != 0),
-        },
-    }
-
-    if dry_run:
-        result["message"] = "Dry run - changes not saved"
-        return result, None
-
-    # Save spec
     saved = save_spec(spec_id, spec_data, specs_dir)
     if not saved:
         return None, "Failed to save specification"

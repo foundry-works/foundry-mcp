@@ -18,7 +18,6 @@ from foundry_mcp.core.spec import (
     load_spec,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
     remove_phase,
     update_frontmatter,
     update_node,
@@ -230,7 +229,6 @@ class TestAddPhase:
             title="Implementation",
             description="Async orchestrator",
             purpose="Core work",
-            estimated_hours=3,
             specs_dir=temp_specs_dir,
         )
 
@@ -247,13 +245,11 @@ class TestAddPhase:
 
         phase_two = hierarchy["phase-2"]
         assert phase_two["metadata"]["description"] == "Async orchestrator"
-        assert phase_two["metadata"]["estimated_hours"] == 3
         assert phase_two["children"] == ["verify-2-1", "verify-2-2"]
         assert hierarchy["verify-2-1"]["parent"] == "phase-2"
         assert hierarchy["verify-2-2"]["dependencies"]["blocked_by"] == ["verify-2-1"]
         assert hierarchy["phase-1"]["dependencies"]["blocks"] == ["phase-2"]
         assert hierarchy["phase-2"]["dependencies"]["blocked_by"] == ["phase-1"]
-        # Phase-level estimated_hours preserved; spec-level no longer stored
 
     def test_add_phase_inserts_at_custom_position_without_link(self, temp_specs_dir):
         """add_phase should support insertion at specific index without linking."""
@@ -286,18 +282,6 @@ class TestAddPhase:
         result, error = add_phase(spec_id="", title="New")
         assert result is None
         assert error == "Specification ID is required"
-
-        # Negative estimated hours
-        spec_id = "phase-spec-invalid"
-        self._write_spec(temp_specs_dir, spec_id)
-        result, error = add_phase(
-            spec_id=spec_id,
-            title="Negative",
-            estimated_hours=-1,
-            specs_dir=temp_specs_dir,
-        )
-        assert result is None
-        assert error == "estimated_hours must be non-negative"
 
 
 class TestAddRevision:
@@ -1090,7 +1074,6 @@ class TestPhaseTemplates:
 
         assert result["template_name"] == "planning"
         assert result["title"] == "Planning & Discovery"
-        assert result["estimated_hours"] == 4
         assert result["includes_verification"] is True
         assert len(result["tasks"]) == 2
         assert result["tasks"][0]["title"] == "Define requirements"
@@ -1102,7 +1085,6 @@ class TestPhaseTemplates:
 
         assert result["template_name"] == "implementation"
         assert result["title"] == "Implementation"
-        assert result["estimated_hours"] == 8
         assert len(result["tasks"]) == 2
         assert result["tasks"][0]["title"] == "Implement core functionality"
 
@@ -1112,7 +1094,6 @@ class TestPhaseTemplates:
 
         assert result["template_name"] == "testing"
         assert result["title"] == "Testing & Validation"
-        assert result["estimated_hours"] == 6
         assert len(result["tasks"]) == 2
         # Testing tasks should have investigation category
         assert result["tasks"][0]["task_category"] == "investigation"
@@ -1123,7 +1104,6 @@ class TestPhaseTemplates:
 
         assert result["template_name"] == "security"
         assert result["title"] == "Security Review"
-        assert result["estimated_hours"] == 6
         assert len(result["tasks"]) == 2
 
     def test_get_phase_template_structure_documentation(self):
@@ -1132,7 +1112,6 @@ class TestPhaseTemplates:
 
         assert result["template_name"] == "documentation"
         assert result["title"] == "Documentation"
-        assert result["estimated_hours"] == 4
         assert len(result["tasks"]) == 2
         # Documentation tasks should have research category
         assert result["tasks"][0]["task_category"] == "research"
@@ -1159,7 +1138,6 @@ class TestPhaseTemplates:
             "title",
             "description",
             "purpose",
-            "estimated_hours",
             "tasks",
             "includes_verification",
             "template_name",
@@ -1652,259 +1630,6 @@ class TestMovePhase:
         assert children == ["phase-1", "phase-2", "phase-3"]  # Unchanged
 
 
-class TestRecalculateEstimatedHours:
-    """Tests for recalculate_estimated_hours function."""
-
-    def _create_spec_with_estimates(self, specs_dir, spec_id="test-hours"):
-        """Create a spec with tasks that have estimated_hours."""
-        spec_data = {
-            "spec_id": spec_id,
-            "title": "Test Hours Spec",
-            "generated": "2026-01-01T00:00:00Z",
-            "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {},
-            "progress_percentage": 0,
-            "status": "pending",
-            "current_phase": "phase-1",
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "Test Hours Spec",
-                    "status": "pending",
-                    "parent": None,
-                    "children": ["phase-1", "phase-2"],
-                    "total_tasks": 4,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-                "phase-1": {
-                    "type": "phase",
-                    "title": "Phase One",
-                    "status": "pending",
-                    "parent": "spec-root",
-                    "children": ["task-1-1", "task-1-2"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {},  # No estimated_hours set
-                },
-                "task-1-1": {
-                    "type": "task",
-                    "title": "Task 1.1",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 2.0},
-                },
-                "task-1-2": {
-                    "type": "task",
-                    "title": "Task 1.2",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 1.5},
-                },
-                "phase-2": {
-                    "type": "phase",
-                    "title": "Phase Two",
-                    "status": "pending",
-                    "parent": "spec-root",
-                    "children": ["task-2-1", "verify-2-1"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 10},  # Stale value
-                },
-                "task-2-1": {
-                    "type": "task",
-                    "title": "Task 2.1",
-                    "status": "pending",
-                    "parent": "phase-2",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 3.0},
-                },
-                "verify-2-1": {
-                    "type": "verify",
-                    "title": "Verify 2.1",
-                    "status": "pending",
-                    "parent": "phase-2",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 0.5},
-                },
-            },
-            "journal": [],
-        }
-        spec_file = specs_dir / "pending" / f"{spec_id}.json"
-        spec_file.write_text(json.dumps(spec_data))
-        return spec_data
-
-    def test_recalculate_basic(self, temp_specs_dir):
-        """Test basic recalculation of estimated hours."""
-        self._create_spec_with_estimates(temp_specs_dir)
-
-        result, error = recalculate_estimated_hours("test-hours", specs_dir=temp_specs_dir)
-
-        assert error is None
-        assert result is not None
-        assert result["spec_id"] == "test-hours"
-
-        # Phase 1: 2.0 + 1.5 = 3.5
-        phase1 = next(p for p in result["phases"] if p["phase_id"] == "phase-1")
-        assert phase1["calculated"] == 3.5
-        assert phase1["task_count"] == 2
-
-        # Phase 2: 3.0 + 0.5 = 3.5
-        phase2 = next(p for p in result["phases"] if p["phase_id"] == "phase-2")
-        assert phase2["calculated"] == 3.5
-        assert phase2["previous"] == 10  # Was stale
-        assert phase2["delta"] == -6.5  # 3.5 - 10
-
-        # Spec total: 3.5 + 3.5 = 7.0
-        assert result["spec_total"] == 7.0
-
-        # Verify phase-level saved (spec-level not stored)
-        spec = load_spec("test-hours", temp_specs_dir)
-        assert "estimated_hours" not in spec.get("metadata", {})
-        assert spec["hierarchy"]["phase-1"]["metadata"]["estimated_hours"] == 3.5
-        assert spec["hierarchy"]["phase-2"]["metadata"]["estimated_hours"] == 3.5
-
-    def test_recalculate_dry_run(self, temp_specs_dir):
-        """Dry run should return report without saving changes."""
-        self._create_spec_with_estimates(temp_specs_dir)
-
-        result, error = recalculate_estimated_hours("test-hours", dry_run=True, specs_dir=temp_specs_dir)
-
-        assert error is None
-        assert result["dry_run"] is True
-        assert "message" in result
-        assert result["spec_total"] == 7.0
-
-        # Verify NOT saved (phase-level unchanged)
-        spec = load_spec("test-hours", temp_specs_dir)
-        assert "estimated_hours" not in spec["hierarchy"]["phase-1"]["metadata"]
-
-    def test_recalculate_empty_spec(self, temp_specs_dir):
-        """Empty spec with no phases should handle gracefully."""
-        spec_data = {
-            "spec_id": "empty-spec",
-            "title": "Empty Spec",
-            "generated": "2026-01-01T00:00:00Z",
-            "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {},
-            "progress_percentage": 0,
-            "status": "pending",
-            "current_phase": None,
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "Empty Spec",
-                    "status": "pending",
-                    "parent": None,
-                    "children": [],
-                    "total_tasks": 0,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-            },
-            "journal": [],
-        }
-        spec_file = temp_specs_dir / "pending" / "empty-spec.json"
-        spec_file.write_text(json.dumps(spec_data))
-
-        result, error = recalculate_estimated_hours("empty-spec", specs_dir=temp_specs_dir)
-
-        assert error is None
-        assert result["spec_total"] == 0.0
-        assert result["phases"] == []
-        assert result["summary"]["total_phases"] == 0
-
-    def test_recalculate_no_estimates(self, temp_specs_dir):
-        """Tasks without estimates should be treated as 0."""
-        spec_data = {
-            "spec_id": "no-estimates",
-            "title": "No Estimates",
-            "generated": "2026-01-01T00:00:00Z",
-            "last_updated": "2026-01-01T00:00:00Z",
-            "metadata": {},
-            "progress_percentage": 0,
-            "status": "pending",
-            "current_phase": "phase-1",
-            "hierarchy": {
-                "spec-root": {
-                    "type": "spec",
-                    "title": "No Estimates",
-                    "status": "pending",
-                    "parent": None,
-                    "children": ["phase-1"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-                "phase-1": {
-                    "type": "phase",
-                    "title": "Phase One",
-                    "status": "pending",
-                    "parent": "spec-root",
-                    "children": ["task-1-1", "task-1-2"],
-                    "total_tasks": 2,
-                    "completed_tasks": 0,
-                    "metadata": {},
-                },
-                "task-1-1": {
-                    "type": "task",
-                    "title": "Task without estimate",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {},  # No estimated_hours
-                },
-                "task-1-2": {
-                    "type": "task",
-                    "title": "Task with estimate",
-                    "status": "pending",
-                    "parent": "phase-1",
-                    "children": [],
-                    "total_tasks": 1,
-                    "completed_tasks": 0,
-                    "metadata": {"estimated_hours": 2.0},
-                },
-            },
-            "journal": [],
-        }
-        spec_file = temp_specs_dir / "pending" / "no-estimates.json"
-        spec_file.write_text(json.dumps(spec_data))
-
-        result, error = recalculate_estimated_hours("no-estimates", specs_dir=temp_specs_dir)
-
-        assert error is None
-        # Only task-1-2 has estimate
-        assert result["phases"][0]["calculated"] == 2.0
-        assert result["phases"][0]["task_count"] == 2
-        assert result["spec_total"] == 2.0
-
-    def test_recalculate_spec_not_found(self, temp_specs_dir):
-        """Should return error for non-existent spec."""
-        result, error = recalculate_estimated_hours("nonexistent-spec", specs_dir=temp_specs_dir)
-
-        assert result is None
-        assert error is not None
-        assert "not found" in error.lower()
-
-    def test_recalculate_missing_spec_id(self, temp_specs_dir):
-        """Should return error when spec_id is missing."""
-        result, error = recalculate_estimated_hours("", specs_dir=temp_specs_dir)
-
-        assert result is None
-        assert error is not None
-        assert "required" in error.lower()
 
 
 class TestRecalculateActualHours:

@@ -42,7 +42,6 @@ from foundry_mcp.core.spec.hierarchy import (
     get_node,
     move_phase,
     recalculate_actual_hours,
-    recalculate_estimated_hours,
     remove_phase,
     update_node,
     update_phase_metadata,
@@ -128,7 +127,6 @@ __all__ = [
     "check_spec_completeness",
     "detect_duplicate_tasks",
     "recalculate_actual_hours",
-    "recalculate_estimated_hours",
     # Find and replace
     "find_replace_in_spec",
 ]

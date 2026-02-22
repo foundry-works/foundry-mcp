@@ -87,8 +87,7 @@ def get_phase_template_structure(template: str, category: str = "implementation"
         - title: Phase title
         - description: Phase description
         - purpose: Phase purpose for metadata
-        - estimated_hours: Total estimated hours
-        - tasks: List of task definitions (title, description, category, estimated_hours)
+        - tasks: List of task definitions (title, description, category)
         - includes_verification: Always True (verification auto-added)
     """
     templates: Dict[str, Dict[str, Any]] = {
@@ -96,7 +95,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
             "title": "Planning & Discovery",
             "description": "Requirements gathering, analysis, and initial planning",
             "purpose": "Define scope, requirements, and acceptance criteria",
-            "estimated_hours": 4,
             "tasks": [
                 {
                     "title": "Define requirements",
@@ -105,7 +103,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Requirements are documented and reviewed",
                     ],
-                    "estimated_hours": 2,
                 },
                 {
                     "title": "Design solution approach",
@@ -114,7 +111,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Solution approach and key decisions are documented",
                     ],
-                    "estimated_hours": 2,
                 },
             ],
         },
@@ -122,7 +118,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
             "title": "Implementation",
             "description": "Core development and feature implementation",
             "purpose": "Build the primary functionality",
-            "estimated_hours": 8,
             "tasks": [
                 {
                     "title": "Implement core functionality",
@@ -131,7 +126,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Core functionality is implemented and verified",
                     ],
-                    "estimated_hours": 6,
                 },
                 {
                     "title": "Add error handling",
@@ -140,7 +134,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Error handling covers expected edge cases",
                     ],
-                    "estimated_hours": 2,
                 },
             ],
         },
@@ -148,7 +141,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
             "title": "Testing & Validation",
             "description": "Comprehensive testing and quality assurance",
             "purpose": "Ensure code quality and correctness",
-            "estimated_hours": 6,
             "tasks": [
                 {
                     "title": "Write unit tests",
@@ -157,7 +149,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Unit tests cover primary logic paths",
                     ],
-                    "estimated_hours": 3,
                 },
                 {
                     "title": "Write integration tests",
@@ -166,7 +157,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Integration tests cover critical workflows",
                     ],
-                    "estimated_hours": 3,
                 },
             ],
         },
@@ -174,7 +164,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
             "title": "Security Review",
             "description": "Security audit, vulnerability assessment, and hardening",
             "purpose": "Identify and remediate security vulnerabilities",
-            "estimated_hours": 6,
             "tasks": [
                 {
                     "title": "Security audit",
@@ -183,7 +172,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Security findings are documented with severity",
                     ],
-                    "estimated_hours": 3,
                 },
                 {
                     "title": "Security remediation",
@@ -192,7 +180,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "Security findings are addressed or tracked",
                     ],
-                    "estimated_hours": 3,
                 },
             ],
         },
@@ -200,7 +187,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
             "title": "Documentation",
             "description": "Technical documentation and knowledge capture",
             "purpose": "Document the implementation for maintainability",
-            "estimated_hours": 4,
             "tasks": [
                 {
                     "title": "Write API documentation",
@@ -209,7 +195,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "API documentation is updated with current behavior",
                     ],
-                    "estimated_hours": 2,
                 },
                 {
                     "title": "Write user guide",
@@ -218,7 +203,6 @@ def get_phase_template_structure(template: str, category: str = "implementation"
                     "acceptance_criteria": [
                         "User guide includes usage examples",
                     ],
-                    "estimated_hours": 2,
                 },
             ],
         },
@@ -280,7 +264,6 @@ def apply_phase_template(
                 "description": task_def.get("description", ""),
                 "task_category": task_def.get("task_category", task_def.get("category", category)),
                 "acceptance_criteria": task_def.get("acceptance_criteria"),
-                "estimated_hours": task_def.get("estimated_hours", 1),
             }
         )
 
@@ -308,7 +291,6 @@ def apply_phase_template(
         specs_dir=specs_dir,
         phase_description=template_struct.get("description"),
         phase_purpose=template_struct.get("purpose"),
-        phase_estimated_hours=template_struct.get("estimated_hours"),
         position=position,
         link_previous=link_previous,
     )

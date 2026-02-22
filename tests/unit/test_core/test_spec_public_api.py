@@ -70,7 +70,6 @@ BASELINE_FUNCTIONS = sorted(
         "load_spec",
         "move_phase",
         "recalculate_actual_hours",
-        "recalculate_estimated_hours",
         "remove_phase",
         "resolve_spec_file",
         "rollback_spec",
@@ -145,7 +144,6 @@ CONSUMER_IMPORTS = {
         "list_specs",
         "load_spec",
         "recalculate_actual_hours",
-        "recalculate_estimated_hours",
     ],
     "foundry_mcp.tools.unified.authoring": [
         "CATEGORIES",
@@ -249,9 +247,9 @@ class TestSpecModulePublicAPI:
 
     def test_baseline_counts(self):
         """Baseline has expected counts."""
-        assert len(BASELINE_FUNCTIONS) == 33
+        assert len(BASELINE_FUNCTIONS) == 32
         assert len(BASELINE_CONSTANTS) == 10
-        assert len(BASELINE_ALL) == 43
+        assert len(BASELINE_ALL) == 42
 
 
 class TestCoreReexports:
